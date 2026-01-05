@@ -1,3 +1,5 @@
 import { ImageSourcePropType } from 'react-native';
 
-export const logo: ImageSourcePropType = require('../../assets/papzi-logo.jpg');
+const logoUrl = 'https://placehold.co/240x80/0f172a/f8fafc?text=PAPZI';
+
+export const logo: ImageSourcePropType = { uri: logoUrl };

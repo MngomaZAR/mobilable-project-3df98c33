@@ -1,40 +1,52 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { MapPreviewProps } from './mapTypes';
 
-type MarkerInput = {
-  id: string;
-  title: string;
-  description?: string;
-  latitude: number;
-  longitude: number;
-};
+export const MapPreview: React.FC<MapPreviewProps> = ({ markers }) => {
+  const photographerMarkers = markers.filter((marker) => marker.type !== 'user');
+  const userMarker = markers.find((marker) => marker.type === 'user');
 
-type Props = {
-  markers: MarkerInput[];
-};
-
-export const MapPreview: React.FC<Props> = ({ markers }) => (
-  <View style={styles.container}>
-    <View style={styles.banner}>
-      <Text style={styles.title}>Native map preview</Text>
-      <Text style={styles.subtitle}>OpenStreetMap tiles render on device; web shows fast-loading fallback.</Text>
-      <Text style={styles.count}>{markers.length} photographers pinned</Text>
-    </View>
-    <View style={styles.list}>
-      {markers.map((marker) => (
-        <View key={marker.id} style={styles.markerRow}>
-          <View>
-            <Text style={styles.markerTitle}>{marker.title}</Text>
-            <Text style={styles.markerMeta}>{marker.description}</Text>
-          </View>
-          <Text style={styles.markerCoords}>
-            {marker.latitude.toFixed(2)}, {marker.longitude.toFixed(2)}
+  return (
+    <>
+      <View style={styles.container}>
+        <View style={styles.banner}>
+          <Text style={styles.title}>Native map preview</Text>
+          <Text style={styles.subtitle}>
+            OpenStreetMap tiles render on device; web shows fast-loading fallback.
+          </Text>
+          <Text style={styles.count}>
+            {photographerMarkers.length} photographers pinned
+            {userMarker ? ' · your location included' : ''}
           </Text>
         </View>
-      ))}
-    </View>
-  </View>
-);
+        <View style={styles.list}>
+          {userMarker ? (
+            <View key={userMarker.id} style={[styles.markerRow, styles.markerRowHighlight]}>
+              <View>
+                <Text style={[styles.markerTitle, styles.markerTitleHighlight]}>{userMarker.title}</Text>
+                <Text style={styles.markerMeta}>{userMarker.description}</Text>
+              </View>
+              <Text style={[styles.markerCoords, styles.markerCoordsHighlight]}>
+                {userMarker.latitude.toFixed(2)}, {userMarker.longitude.toFixed(2)}
+              </Text>
+            </View>
+          ) : null}
+          {photographerMarkers.map((marker) => (
+            <View key={marker.id} style={styles.markerRow}>
+              <View>
+                <Text style={styles.markerTitle}>{marker.title}</Text>
+                <Text style={styles.markerMeta}>{marker.description}</Text>
+              </View>
+              <Text style={styles.markerCoords}>
+                {marker.latitude.toFixed(2)}, {marker.longitude.toFixed(2)}
+              </Text>
+            </View>
+          ))}
+        </View>
+      </View>
+    </>
+  );
+};
 
 const styles = StyleSheet.create({
   container: {
@@ -92,5 +104,16 @@ const styles = StyleSheet.create({
     color: '#0f172a',
     fontWeight: '700',
     fontSize: 12,
+  },
+  markerRowHighlight: {
+    backgroundColor: '#ecfeff',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+  },
+  markerTitleHighlight: {
+    color: '#0ea5e9',
+  },
+  markerCoordsHighlight: {
+    color: '#0ea5e9',
   },
 });

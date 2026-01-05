@@ -1,17 +1,30 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { FlatList, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { useAppData } from '../store/AppDataContext';
+import { RootStackParamList } from '../navigation/types';
+
+type Route = RouteProp<RootStackParamList, 'ChatThread'>;
 
 const ChatScreen: React.FC = () => {
+  const route = useRoute<Route>();
+  const navigation = useNavigation();
   const { state, sendMessage } = useAppData();
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
 
-  const conversationId = state.photographers[0]?.id ?? 'p1';
+  const conversationId = route.params?.conversationId ?? state.conversations[0]?.id ?? 'demo-conversation';
   const messages = useMemo(
     () => state.messages.filter((message) => message.conversationId === conversationId),
     [conversationId, state.messages]
   );
+
+  useEffect(() => {
+    if (route.params?.title) {
+      navigation.setOptions({ title: route.params.title });
+    }
+  }, [navigation, route.params?.title]);
 
   const handleSend = async () => {
     if (!text.trim()) return;
@@ -22,11 +35,12 @@ const ChatScreen: React.FC = () => {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={80}
-    >
+    <SafeAreaView style={styles.safeArea}>
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={80}
+      >
       <FlatList
         data={messages}
         keyExtractor={(item) => item.id}
@@ -59,11 +73,16 @@ const ChatScreen: React.FC = () => {
           <Text style={styles.sendText}>{sending ? '...' : 'Send'}</Text>
         </TouchableOpacity>
       </View>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#f7f7fb',
+  },
   container: {
     flex: 1,
     backgroundColor: '#f7f7fb',

@@ -1,185 +1,331 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   FlatList,
   Image,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
-  useWindowDimensions,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { useAppData } from '../store/AppDataContext';
-import { RootStackParamList } from '../navigation/types';
 import { supabase } from '../config/supabaseClient';
+import { RootStackParamList } from '../navigation/types';
 import { Post } from '../types';
 
 type Navigation = StackNavigationProp<RootStackParamList, 'PostDetail'>;
-type RpcPost = {
+
+type ProfileRow = {
+  id: string;
+  full_name: string | null;
+  city: string | null;
+  avatar_url: string | null;
+};
+
+type PostRow = {
   id: string;
   user_id: string;
   caption: string | null;
-  image_url: string | null;
   location: string | null;
-  likes: number | null;
   comment_count: number | null;
   created_at: string;
+  image_url: string | null;
+  likes_count: number | null;
+  profiles?: ProfileRow | null;
 };
 
-const PAGE_SIZE = 10;
+type FeedPost = {
+  id: string;
+  userId: string;
+  title: string;
+  location?: string;
+  createdAt: string;
+  imageUrl: string;
+  commentCount: number;
+  likes: number;
+  profile?: ProfileRow;
+};
+
 const PLACEHOLDER_IMAGE =
   'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=1200&q=80&sat=-20';
 
 const FeedScreen: React.FC = () => {
-  const { state, toggleLike, refresh } = useAppData();
   const navigation = useNavigation<Navigation>();
-  const { width } = useWindowDimensions();
+  const [profiles, setProfiles] = useState<ProfileRow[]>([]);
+  const [posts, setPosts] = useState<FeedPost[]>([]);
+  const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
-  const [remoteError, setRemoteError] = useState<string | null>(null);
-  const [recommendedPosts, setRecommendedPosts] = useState<Post[]>([]);
-  const loadingRef = useRef(false);
-  const pageRef = useRef(0);
+  const [error, setError] = useState<string | null>(null);
 
-  const cardSpacing = width > 720 ? 18 : 14;
-  const imageHeight = useMemo(() => {
-    if (width > 900) return 360;
-    if (width > 720) return 320;
-    if (width > 480) return 260;
-    return 220;
-  }, [width]);
-
-  const mapRpcPost = useCallback((payload: RpcPost): Post => {
-    const imageUri = payload.image_url ?? PLACEHOLDER_IMAGE;
+  const mapPostRow = useCallback((row: PostRow): FeedPost => {
+    const imageUrl = row.image_url ?? PLACEHOLDER_IMAGE;
     return {
-      id: payload.id,
-      userId: payload.user_id ?? 'unknown',
-      caption: payload.caption ?? '',
-      imageUri,
-      createdAt: payload.created_at,
-      likes: payload.likes ?? 0,
-      liked: false,
-      commentCount: payload.comment_count ?? 0,
-      location: payload.location ?? undefined,
+      id: row.id,
+      userId: row.user_id,
+      title: row.caption ?? 'Untitled post',
+      location: row.location ?? row.profiles?.city ?? undefined,
+      createdAt: row.created_at,
+      imageUrl,
+      commentCount: row.comment_count ?? 0,
+      likes: row.likes_count ?? 0,
+      profile: row.profiles ?? undefined,
     };
   }, []);
 
-  const handleLike = useCallback(
+  const fetchProfiles = useCallback(async () => {
+    const { data, error: profileError } = await supabase
+      .from('profiles')
+      .select('id, full_name, city, avatar_url')
+      .order('full_name', { ascending: true });
+
+    if (profileError) {
+      const message =
+        (profileError as any)?.code === '42P01'
+          ? 'profiles table is missing. Apply the latest Supabase migration.'
+          : profileError.message;
+      throw new Error(message);
+    }
+    setProfiles(data ?? []);
+  }, []);
+
+  const fetchPosts = useCallback(async () => {
+    const { data, error: postError } = await supabase
+      .from('posts')
+      .select(
+        `
+        id,
+        user_id,
+        caption,
+        location,
+        comment_count,
+        created_at,
+        image_url,
+        likes_count,
+        profiles:profiles(id, full_name, city, avatar_url)
+      `
+      )
+      .order('created_at', { ascending: false });
+
+    if (postError) {
+      throw new Error(postError.message);
+    }
+
+    const mapped = (data ?? []).map(mapPostRow);
+    setPosts(mapped);
+  }, [mapPostRow]);
+
+  const loadFeed = useCallback(async () => {
+    setError(null);
+    setLoading(true);
+    try {
+      await Promise.all([fetchProfiles(), fetchPosts()]);
+    } catch (err: any) {
+      setError(err.message ?? 'Unable to load the feed right now.');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [fetchPosts, fetchProfiles]);
+
+  useEffect(() => {
+    loadFeed();
+  }, [loadFeed]);
+
+  const fetchPostById = useCallback(
     async (postId: string) => {
-      const updated = await toggleLike(postId);
-      setRecommendedPosts((prev) =>
-        prev.map((post) =>
-          post.id === postId && updated
-            ? { ...post, liked: updated.liked, likes: updated.likes }
-            : post
+      const { data, error: postError } = await supabase
+        .from('posts')
+        .select(
+          `
+          id,
+          user_id,
+          caption,
+          location,
+          comment_count,
+          created_at,
+          image_url,
+          likes_count,
+          profiles:profiles(id, full_name, city, avatar_url)
+        `
         )
-      );
-    },
-    [toggleLike]
-  );
+        .eq('id', postId)
+        .maybeSingle();
 
-  const loadRecommendations = useCallback(
-    async (reset = false) => {
-      if (loadingRef.current && !reset) return;
-      loadingRef.current = true;
-      setLoadingMore(true);
-      setRemoteError(null);
-      const nextPage = reset ? 0 : pageRef.current;
-      if (reset) {
-        setHasMore(true);
-        pageRef.current = 0;
-      }
-      const { data, error } = await supabase.rpc('recommend_posts', {
-        limit_count: PAGE_SIZE,
-        offset_count: nextPage * PAGE_SIZE,
-      });
-
-      if (error) {
-        setRemoteError(error.message);
-        setHasMore(false);
-      } else if (data && Array.isArray(data)) {
-        const mapped = data.map(mapRpcPost);
-        setRecommendedPosts((prev) => {
-          const base = reset ? [] : prev;
-          const existing = new Set(base.map((p) => p.id));
-          const next = mapped.filter((p) => !existing.has(p.id));
-          return [...base, ...next];
-        });
-        setHasMore(mapped.length === PAGE_SIZE);
-        pageRef.current = nextPage + 1;
-      } else if (reset) {
-        setRecommendedPosts([]);
-        setHasMore(false);
+      if (postError) {
+        console.warn('Post hydrate failed', postError);
+        return null;
       }
 
-      setLoadingMore(false);
-      loadingRef.current = false;
+      return data ? mapPostRow(data as PostRow) : null;
     },
-    [mapRpcPost]
+    [mapPostRow]
   );
 
   useEffect(() => {
-    loadRecommendations(true);
-  }, [loadRecommendations]);
+    const channel = supabase
+      .channel('public:posts-feed')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, async (payload) => {
+        if (payload.eventType === 'DELETE') {
+          const deletedId = (payload.old as any)?.id;
+          if (!deletedId) return;
+          setPosts((prev) => prev.filter((post) => post.id !== deletedId));
+          return;
+        }
 
-  const handleRefresh = async () => {
+        const targetId = (payload.new as any)?.id ?? (payload.old as any)?.id;
+        if (!targetId) return;
+        const hydrated = await fetchPostById(targetId);
+        if (!hydrated) return;
+
+        setPosts((prev) => {
+          const exists = prev.some((post) => post.id === hydrated.id);
+          const next = exists
+            ? prev.map((post) => (post.id === hydrated.id ? hydrated : post))
+            : [hydrated, ...prev];
+          return next.sort(
+            (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          );
+        });
+      });
+
+    channel.subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [fetchPostById]);
+
+  const filteredPosts = useMemo(() => {
+    if (!selectedProfileId) return posts;
+    return posts.filter((post) => post.userId === selectedProfileId);
+  }, [posts, selectedProfileId]);
+
+  const onRefresh = async () => {
     setRefreshing(true);
-    await refresh();
-    await loadRecommendations(true);
-    setRefreshing(false);
+    await loadFeed();
   };
 
-  const handleLoadMore = () => {
-    if (!hasMore || loadingMore || recommendedPosts.length === 0) return;
-    loadRecommendations();
+  const handleViewPost = (item: FeedPost) => {
+    const payload: Post = {
+      id: item.id,
+      userId: item.userId,
+      caption: item.title,
+      imageUri: item.imageUrl,
+      createdAt: item.createdAt,
+      likes: item.likes,
+      liked: false,
+      commentCount: item.commentCount,
+      location: item.location,
+    };
+    navigation.navigate('PostDetail', { postId: item.id, post: payload });
   };
 
-  const data = recommendedPosts.length ? recommendedPosts : state.posts;
-
-  const renderItem = ({ item }: { item: Post }) => (
-    <TouchableOpacity
-      style={[styles.card, { marginBottom: cardSpacing }]}
-      onPress={() => navigation.navigate('PostDetail', { postId: item.id })}
-    >
-      <Image source={{ uri: item.imageUri }} style={[styles.image, { height: imageHeight }]} />
-      <View style={styles.cardContent}>
-        <Text style={styles.caption}>{item.caption}</Text>
-        {item.location ? <Text style={styles.meta}>{item.location}</Text> : null}
-        <View style={styles.actions}>
-          <TouchableOpacity onPress={() => handleLike(item.id)}>
-            <Text style={styles.action}>{item.liked ? '♥️' : '♡'} {item.likes}</Text>
+  const renderHeader = () => (
+    <View style={styles.listHeader}>
+      <View style={styles.headerRow}>
+        <View>
+          <Text style={styles.title}>Social feed</Text>
+          <Text style={styles.subtitle}>Live Supabase posts from every demo profile.</Text>
+        </View>
+        <TouchableOpacity style={styles.primaryButton} onPress={() => navigation.navigate('CreatePost')}>
+          <Text style={styles.primaryButtonText}>New Post</Text>
+        </TouchableOpacity>
+      </View>
+      <Text style={styles.helper}>Filter the feed by creator to scan the latest posts.</Text>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.profileRail}
+      >
+        <TouchableOpacity
+          style={[styles.profileChip, !selectedProfileId && styles.profileChipActive]}
+          onPress={() => setSelectedProfileId(null)}
+        >
+          <Image source={{ uri: PLACEHOLDER_IMAGE }} style={styles.profileAvatar} />
+          <View style={styles.profileText}>
+            <Text style={styles.profileName}>All profiles</Text>
+            <Text style={styles.profileMeta}>{posts.length} posts</Text>
+          </View>
+        </TouchableOpacity>
+        {profiles.map((profile, index) => (
+          <TouchableOpacity
+            key={profile.id}
+            style={[
+              styles.profileChip,
+              selectedProfileId === profile.id && styles.profileChipActive,
+              index === profiles.length - 1 ? null : styles.profileChipSpacer,
+            ]}
+            onPress={() => setSelectedProfileId(profile.id)}
+          >
+            <Image source={{ uri: profile.avatar_url ?? PLACEHOLDER_IMAGE }} style={styles.profileAvatar} />
+            <View style={styles.profileText}>
+              <Text style={styles.profileName}>{profile.full_name ?? 'Demo profile'}</Text>
+              <Text style={styles.profileMeta}>{profile.city ?? 'South Africa'}</Text>
+            </View>
           </TouchableOpacity>
-          <Text style={styles.action}>💬 {item.commentCount}</Text>
+        ))}
+      </ScrollView>
+      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+    </View>
+  );
+
+  const renderItem = ({ item }: { item: FeedPost }) => (
+    <View style={styles.card}>
+      <View style={styles.cardHeader}>
+        <TouchableOpacity
+          style={styles.authorRow}
+          onPress={() => navigation.navigate('UserProfile', { userId: item.userId })}
+        >
+          <Image
+            source={{ uri: item.profile?.avatar_url ?? PLACEHOLDER_IMAGE }}
+            style={styles.avatar}
+          />
+          <View style={styles.authorText}>
+            <Text style={styles.authorName}>{item.profile?.full_name ?? 'Demo photographer'}</Text>
+            <Text style={styles.authorMeta}>{item.location ?? item.profile?.city ?? 'Latest post'}</Text>
+          </View>
+        </TouchableOpacity>
+        <Text style={styles.timestamp}>{new Date(item.createdAt).toLocaleDateString()}</Text>
+      </View>
+
+      <TouchableOpacity activeOpacity={0.9} onPress={() => handleViewPost(item)}>
+        <Image source={{ uri: item.imageUrl }} style={styles.image} />
+      </TouchableOpacity>
+
+      <View style={styles.cardBody}>
+        <Text style={styles.postTitle}>{item.title}</Text>
+        {item.location ? <Text style={styles.postMeta}>{item.location}</Text> : null}
+        <View style={styles.actionRow}>
+          <Text style={styles.actionStat}>💬 {item.commentCount}</Text>
+          <Text style={styles.actionStat}>❤ {item.likes}</Text>
         </View>
       </View>
-    </TouchableOpacity>
+    </View>
   );
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Social feed</Text>
-        <TouchableOpacity style={styles.button} onPress={() => navigation.navigate('CreatePost')}>
-          <Text style={styles.buttonText}>New Post</Text>
-        </TouchableOpacity>
-      </View>
-      {remoteError ? <Text style={styles.errorText}>Falling back to local feed: {remoteError}</Text> : null}
-      <FlatList
-        data={data}
-        keyExtractor={(item) => item.id}
-        renderItem={renderItem}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
-        contentContainerStyle={[styles.listContent, { paddingBottom: imageHeight * 0.3 }]}
-        ListEmptyComponent={<Text style={styles.empty}>Share your first post.</Text>}
-        onEndReached={handleLoadMore}
-        onEndReachedThreshold={0.4}
-        ListFooterComponent={
-          loadingMore ? <Text style={styles.footer}>Loading recommendations...</Text> : !hasMore ? null : null
-        }
-      />
+      {loading && !refreshing ? (
+        <View style={styles.loading}>
+          <ActivityIndicator size="large" color="#0f172a" />
+          <Text style={styles.loadingText}>Loading the social feed...</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={filteredPosts}
+          keyExtractor={(item) => item.id}
+          renderItem={renderItem}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          contentContainerStyle={styles.listContent}
+          ListHeaderComponent={renderHeader}
+          ItemSeparatorComponent={() => <View style={styles.separator} />}
+          ListEmptyComponent={!loading ? <Text style={styles.empty}>You’re caught up for now.</Text> : null}
+        />
+      )}
     </View>
   );
 };
@@ -188,79 +334,160 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f7f7fb',
-    padding: 16,
   },
-  header: {
+  listContent: {
+    padding: 16,
+    paddingBottom: 80,
+  },
+  listHeader: {
+    marginBottom: 10,
+  },
+  headerRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    justifyContent: 'space-between',
   },
   title: {
     fontSize: 22,
     fontWeight: '800',
     color: '#0f172a',
   },
-  button: {
+  subtitle: {
+    color: '#475569',
+    marginTop: 4,
+    maxWidth: 280,
+  },
+  helper: {
+    color: '#6b7280',
+  },
+  primaryButton: {
     backgroundColor: '#0f172a',
+    borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    borderRadius: 12,
   },
-  buttonText: {
+  primaryButtonText: {
     color: '#fff',
     fontWeight: '700',
   },
-  listContent: {
-    paddingBottom: 120,
+  profileRail: {
+    paddingVertical: 4,
   },
-  card: {
+  profileChipSpacer: {
+    marginRight: 12,
+  },
+  profileChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#fff',
-    borderRadius: 16,
-    overflow: 'hidden',
+    borderRadius: 14,
+    padding: 10,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: '#e5e7eb',
   },
-  image: {
-    width: '100%',
-    height: 220,
+  profileText: {
+    marginLeft: 10,
   },
-  cardContent: {
-    padding: 12,
+  profileChipActive: {
+    borderColor: '#0f172a',
+    backgroundColor: '#0f172a08',
   },
-  caption: {
-    fontSize: 16,
+  profileAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#e5e7eb',
+  },
+  profileName: {
     fontWeight: '700',
     color: '#0f172a',
   },
-  meta: {
+  profileMeta: {
     color: '#6b7280',
-    marginTop: 2,
   },
-  actions: {
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: 18,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#e5e7eb',
+    overflow: 'hidden',
+  },
+  cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 10,
+    alignItems: 'center',
+    padding: 12,
   },
-  action: {
+  authorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  authorText: {
+    marginLeft: 10,
+  },
+  avatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: '#e5e7eb',
+  },
+  authorName: {
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  authorMeta: {
+    color: '#6b7280',
+  },
+  timestamp: {
+    color: '#6b7280',
+    fontSize: 12,
+  },
+  image: {
+    width: '100%',
+    height: 240,
+  },
+  cardBody: {
+    padding: 12,
+  },
+  postTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  postMeta: {
+    color: '#6b7280',
+  },
+  actionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 4,
+  },
+  actionStat: {
     fontWeight: '700',
     color: '#111827',
   },
   empty: {
     textAlign: 'center',
-    marginTop: 20,
     color: '#475569',
-  },
-  footer: {
-    textAlign: 'center',
-    paddingVertical: 12,
-    color: '#475569',
+    paddingVertical: 20,
     fontWeight: '600',
   },
   errorText: {
     color: '#b45309',
-    marginBottom: 8,
     fontWeight: '700',
+  },
+  loading: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    color: '#475569',
+    fontWeight: '600',
+    marginTop: 10,
+  },
+  separator: {
+    height: 14,
   },
 });
 

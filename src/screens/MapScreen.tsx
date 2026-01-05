@@ -1,5 +1,6 @@
 import React from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { StyleSheet, Text, View } from 'react-native';
 import { MapPreview } from '../components/MapPreview';
 import { useAppData } from '../store/AppDataContext';
 
@@ -14,27 +15,35 @@ const MapScreen: React.FC = () => {
   }));
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <View style={styles.headerRow}>
-        <View>
-          <Text style={styles.title}>Photographers nearby</Text>
-          <Text style={styles.subtitle}>
-            Native apps render OpenStreetMap tiles with live markers. Web shows a preview list.
-          </Text>
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.container}>
+        <View style={styles.headerRow}>
+          <View>
+            <Text style={styles.title}>Photographers nearby</Text>
+            <Text style={styles.subtitle}>
+              Native apps render OpenStreetMap tiles with live markers. Web shows a preview list.
+            </Text>
+          </View>
+          <View style={styles.countPill}>
+            <Text style={styles.countText}>{markers.length}</Text>
+            <Text style={styles.countLabel}>active</Text>
+          </View>
         </View>
-        <View style={styles.countPill}>
-          <Text style={styles.countText}>{markers.length}</Text>
-          <Text style={styles.countLabel}>active</Text>
+        <View style={styles.mapWrapper}>
+          <MapPreview markers={markers} />
         </View>
       </View>
-      <MapPreview markers={markers} />
-    </ScrollView>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
+    flex: 1,
     backgroundColor: '#f7f7fb',
+  },
+  container: {
+    flex: 1,
     padding: 16,
   },
   title: {
@@ -69,6 +78,11 @@ const styles = StyleSheet.create({
     color: '#e2e8f0',
     fontSize: 12,
     fontWeight: '700',
+  },
+  mapWrapper: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
   },
 });
 

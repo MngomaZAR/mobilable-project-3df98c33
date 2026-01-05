@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { Image, ImageSourcePropType } from 'react-native';
 import HomeScreen from '../screens/HomeScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import BookingFormScreen from '../screens/BookingFormScreen';
@@ -23,6 +24,10 @@ import { RootStackParamList, TabParamList } from './types';
 
 const Tab = createBottomTabNavigator<TabParamList>();
 const Stack = createStackNavigator<RootStackParamList>();
+
+type MainNavigatorProps = {
+  logoSource?: ImageSourcePropType;
+};
 
 const tabBarIcon = (routeName: keyof TabParamList, focused: boolean, color: string, size: number) => {
   const icons: Record<keyof TabParamList, { active: string; inactive: string }> = {
@@ -55,14 +60,22 @@ const TabsNavigator = () => (
   </Tab.Navigator>
 );
 
-export const MainNavigator = () => (
+export const MainNavigator: React.FC<MainNavigatorProps> = ({ logoSource }) => (
   <NavigationContainer
     theme={{
       ...DefaultTheme,
       colors: { ...DefaultTheme.colors, background: '#f7f7fb' },
     }}
   >
-    <Stack.Navigator>
+    <Stack.Navigator
+      screenOptions={{
+        headerTitle: () =>
+          logoSource ? (
+            <Image source={logoSource} style={{ width: 120, height: 40, resizeMode: 'contain' }} />
+          ) : undefined,
+        headerBackTitleVisible: false,
+      }}
+    >
       <Stack.Screen name="Root" component={TabsNavigator} options={{ headerShown: false }} />
       <Stack.Screen name="Profile" component={ProfileScreen} options={{ title: 'Photographer' }} />
       <Stack.Screen name="BookingForm" component={BookingFormScreen} options={{ title: 'Booking Request' }} />

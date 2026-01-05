@@ -7,6 +7,7 @@ import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { LoadingOverlay } from './src/components/LoadingOverlay';
 import { MainNavigator } from './src/navigation/MainNavigator';
 import { AppDataProvider, useAppData } from './src/store/AppDataContext';
+import Logo from './assets/logo.png';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -36,7 +37,7 @@ const AppContent = () => {
 
   return (
     <>
-      <MainNavigator />
+      <MainNavigator logoSource={Logo} />
       <StatusBar style="dark" />
     </>
   );

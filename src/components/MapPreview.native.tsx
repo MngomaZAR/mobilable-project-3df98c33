@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import MapView, { MapView as MapViewType, Marker, Region, UrlTile } from 'react-native-maps';
 import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 type MarkerInput = {
   id: string;
@@ -41,7 +42,7 @@ export const MapPreview: React.FC<Props> = ({ markers }) => {
   }, [markers]);
 
   return (
-    <View style={[styles.container, { height: Math.min(440, width < 480 ? 280 : 360) }]}>
+    <View style={[styles.container, { minHeight: Math.min(520, width < 480 ? 300 : 400) }]}>
       <MapView
         ref={mapRef}
         style={StyleSheet.absoluteFill}
@@ -58,8 +59,11 @@ export const MapPreview: React.FC<Props> = ({ markers }) => {
             title={marker.title}
             description={marker.description}
             tracksViewChanges={false}
-            pinColor="#0f172a"
-          />
+          >
+            <View style={styles.pin}>
+              <Ionicons name="camera" size={18} color="#fff" />
+            </View>
+          </Marker>
         ))}
       </MapView>
       <View style={styles.overlay}>
@@ -73,6 +77,9 @@ export const MapPreview: React.FC<Props> = ({ markers }) => {
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
     borderRadius: 16,
     overflow: 'hidden',
     borderWidth: StyleSheet.hairlineWidth,
@@ -101,5 +108,17 @@ const styles = StyleSheet.create({
     color: '#cbd5e1',
     fontSize: 12,
     marginTop: 2,
+  },
+  pin: {
+    backgroundColor: '#0f172a',
+    padding: 8,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#e2e8f0',
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.25,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+    elevation: 4,
   },
 });

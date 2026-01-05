@@ -38,6 +38,10 @@ export const MapPreview: React.FC<Props> = ({ markers }) => (
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+    minHeight: 280,
     backgroundColor: '#f9fafb',
     borderRadius: 16,
     overflow: 'hidden',

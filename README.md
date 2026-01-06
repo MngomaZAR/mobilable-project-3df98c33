@@ -316,3 +316,12 @@ Redirect to PayFast hosted page (WebView)
 Handle payment callback
 Update booking status on success
 Send confirmation email/SMS
+
+## Repository Analysis Script
+
+Generate the code health report described in the project brief with the following commands:
+
+- `npm run report`
+- `node scripts/analyzeRepo.js`
+
+The script scans the critical source directories, runs ESLint (with `import/no-unused-modules`) to flag unused exports, detects duplicate function/constant names, reports `useEffect` hooks missing dependency arrays, and checks which screens/components configure Supabase real-time subscriptions. The output includes detailed listings and a JSON payload that you can archive or feed into other tooling.

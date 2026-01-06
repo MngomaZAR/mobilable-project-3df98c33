@@ -6,9 +6,13 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "report": "node scripts/analyzeRepo.js"
   },
   "dependencies": {
+    "@typescript-eslint/parser": "latest",
+    "eslint": "latest",
+    "eslint-plugin-import": "latest",
     "expo": "~54.0.0",
     "expo-location": "latest",
     "react-native": "0.76.1",

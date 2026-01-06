@@ -1,37 +1,3 @@
- Screen Overlap & Navigation Issues
-Problem: Multiple screens are overlapping, causing UI collision and navigation confusion.
-Requirements:
-
-Implement proper z-index layering for modals and overlays
-Ensure navigation stack correctly pushes/pops screens
-Add proper screen transitions (slide, fade) to prevent visual overlap
-Test navigation flow: Login → Home → Detail → Back (no screen remnants)
-Implement proper safe area handling for notched devices
-
-
- 
-Must use real device GPS, not mock/static coordinates
-Request and handle location permissions properly
-Implement real-time location updates (location tracking every 10-30 seconds)
-Geofence to South Africa only - validate all coordinates are within:
-
-Latitude: -35° to -22°
-Longitude: 16° to 33°
-
-
-Calculate and display distance from user to each photographer in kilometers
-Show "X km away" on each photographer card
-Sort photographers by proximity (nearest first)
-Display user's blue dot on map with accuracy radius
-Show photographer pins with custom markers
-Handle location errors gracefully:
-
-GPS disabled → prompt user to enable
-Permission denied → show manual location selector
-Location unavailable → fallback to last known location
-
-
-
 Acceptance Criteria:
 
 User opens app → sees real location on map within 10 seconds

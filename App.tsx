@@ -1,7 +1,7 @@
 import 'react-native-gesture-handler';
 import React, { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as Notifications from 'expo-notifications';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
@@ -48,11 +48,13 @@ export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <ErrorBoundary>
-          <AppDataProvider>
-            <AppContent />
-          </AppDataProvider>
-        </ErrorBoundary>
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
+          <ErrorBoundary>
+            <AppDataProvider>
+              <AppContent />
+            </AppDataProvider>
+          </ErrorBoundary>
+        </SafeAreaView>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

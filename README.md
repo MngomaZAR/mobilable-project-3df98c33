@@ -1,4 +1,4 @@
-1. Screen Overlap & Navigation Issues
+ Screen Overlap & Navigation Issues
 Problem: Multiple screens are overlapping, causing UI collision and navigation confusion.
 Requirements:
 
@@ -9,7 +9,7 @@ Test navigation flow: Login → Home → Detail → Back (no screen remnants)
 Implement proper safe area handling for notched devices
 
 
-2. Location Services - CRITICAL
+ Location Services - CRITICAL
 Problem: Expo maps not displaying real user location; photographers showing locations in America instead of South Africa.
 Requirements:
 
@@ -43,7 +43,7 @@ Distance calculations are accurate within 100m
 Map centers on user's actual position
 
 
-3. Database Feed Function Error
+ Database Feed Function Error
 Problem: App falls back to local feed due to missing public.recommend_posts(limit_count, offset_count) function.
 Requirements:
 

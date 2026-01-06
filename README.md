@@ -9,10 +9,7 @@ Test navigation flow: Login → Home → Detail → Back (no screen remnants)
 Implement proper safe area handling for notched devices
 
 
- Location Services - CRITICAL
-Problem: Expo maps not displaying real user location; photographers showing locations in America instead of South Africa.
-Requirements:
-
+ 
 Must use real device GPS, not mock/static coordinates
 Request and handle location permissions properly
 Implement real-time location updates (location tracking every 10-30 seconds)

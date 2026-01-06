@@ -10,7 +10,6 @@
     "report": "node scripts/analyzeRepo.js"
   },
   "dependencies": {
-    "@typescript-eslint/parser": "latest",
     "eslint": "latest",
     "eslint-plugin-import": "latest",
     "expo": "~54.0.0",
@@ -45,6 +44,7 @@
   "devDependencies": {
     "@babel/core": "^7.20.0",
     "typescript": "latest",
+    "@typescript-eslint/parser": "latest",
     "@types/react": "latest",
     "@types/react-native": "latest"
   },

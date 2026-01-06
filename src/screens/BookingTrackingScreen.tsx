@@ -5,6 +5,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { MapTracker } from '../components/MapTracker';
 import { RootStackParamList } from '../navigation/types';
 import { useAppData } from '../store/AppDataContext';
+import { DEFAULT_CAPE_TOWN_COORDINATES, validateSouthAfricanLocation } from '../utils/geo';
 
 type Route = RouteProp<RootStackParamList, 'BookingTracking'>;
 type Navigation = StackNavigationProp<RootStackParamList, 'BookingTracking'>;
@@ -25,13 +26,26 @@ const BookingTrackingScreen: React.FC = () => {
 
   const clientLocation = useMemo(() => {
     if (photographer) {
-      return {
+      const coords = {
         latitude: photographer.latitude + 0.25,
         longitude: photographer.longitude + 0.12,
       };
+      validateSouthAfricanLocation(coords.latitude, coords.longitude);
+      return coords;
     }
-    return { latitude: 37.7749, longitude: -122.4194 };
+    const fallback = { ...DEFAULT_CAPE_TOWN_COORDINATES };
+    validateSouthAfricanLocation(fallback.latitude, fallback.longitude);
+    return fallback;
   }, [photographer]);
+
+  const photographerLocation = useMemo(() => {
+    const coords = {
+      latitude: photographer?.latitude ?? clientLocation.latitude - 0.1,
+      longitude: photographer?.longitude ?? clientLocation.longitude - 0.1,
+    };
+    validateSouthAfricanLocation(coords.latitude, coords.longitude);
+    return coords;
+  }, [clientLocation.latitude, clientLocation.longitude, photographer?.latitude, photographer?.longitude]);
 
   if (!booking) {
     return (
@@ -50,14 +64,7 @@ const BookingTrackingScreen: React.FC = () => {
       <Text style={styles.title}>Booking tracking</Text>
       <Text style={styles.subtitle}>Follow your photographer on OpenStreetMap tiles.</Text>
 
-      <MapTracker
-        client={clientLocation}
-        photographer={{
-          latitude: photographer?.latitude ?? clientLocation.latitude - 0.1,
-          longitude: photographer?.longitude ?? clientLocation.longitude - 0.1,
-        }}
-        status={booking.status}
-      />
+      <MapTracker client={clientLocation} photographer={photographerLocation} status={booking.status} />
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Status</Text>
@@ -177,4 +184,3 @@ const styles = StyleSheet.create({
 });
 
 export default BookingTrackingScreen;
-

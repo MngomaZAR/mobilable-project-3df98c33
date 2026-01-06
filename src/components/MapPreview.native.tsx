@@ -2,32 +2,25 @@ import React, { useEffect, useMemo, useRef } from 'react';
 import MapView, { MapView as MapViewType, Marker, Region, UrlTile } from 'react-native-maps';
 import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { MapMarker, MapPreviewProps } from './mapTypes';
+import { DEFAULT_CAPE_TOWN_COORDINATES, validateSouthAfricanLocation } from '../utils/geo';
 
-type MarkerInput = {
-  id: string;
-  title: string;
-  description?: string;
-  latitude: number;
-  longitude: number;
-};
-
-type Props = {
-  markers: MarkerInput[];
-};
-
-export const MapPreview: React.FC<Props> = ({ markers }) => {
+export const MapPreview: React.FC<MapPreviewProps> = ({ markers, onMapError }) => {
   const mapRef = useRef<MapViewType | null>(null);
   const { width } = useWindowDimensions();
 
-  const region: Region = useMemo(
-    () => ({
-      latitude: markers[0]?.latitude ?? 37.7749,
-      longitude: markers[0]?.longitude ?? -122.4194,
+  const region: Region = useMemo(() => {
+    const baseLatitude = markers[0]?.latitude ?? DEFAULT_CAPE_TOWN_COORDINATES.latitude;
+    const baseLongitude = markers[0]?.longitude ?? DEFAULT_CAPE_TOWN_COORDINATES.longitude;
+    validateSouthAfricanLocation(baseLatitude, baseLongitude);
+
+    return {
+      latitude: baseLatitude,
+      longitude: baseLongitude,
       latitudeDelta: markers.length > 1 ? 6 : 4,
       longitudeDelta: markers.length > 1 ? 6 : 4,
-    }),
-    [markers]
-  );
+    };
+  }, [markers]);
 
   useEffect(() => {
     if (!mapRef.current || markers.length === 0) return;
@@ -41,6 +34,13 @@ export const MapPreview: React.FC<Props> = ({ markers }) => {
     });
   }, [markers]);
 
+  const pinStyles = (marker: MapMarker) => ({
+    ...styles.pin,
+    backgroundColor: marker.type === 'user' ? '#2563eb' : '#0f172a',
+  });
+
+  const photographerCount = markers.filter((marker) => marker.type !== 'user').length;
+
   return (
     <View style={[styles.container, { minHeight: Math.min(520, width < 480 ? 300 : 400) }]}>
       <MapView
@@ -48,8 +48,9 @@ export const MapPreview: React.FC<Props> = ({ markers }) => {
         style={StyleSheet.absoluteFill}
         initialRegion={region}
         moveOnMarkerPress={false}
-        showsUserLocation={false}
+        showsUserLocation={markers.some((marker) => marker.type === 'user')}
         showsCompass={false}
+        onError={(event) => onMapError?.(event?.nativeEvent?.error ?? 'Map failed to render.')}
       >
         <UrlTile urlTemplate="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" maximumZ={19} />
         {markers.map((marker) => (
@@ -60,15 +61,18 @@ export const MapPreview: React.FC<Props> = ({ markers }) => {
             description={marker.description}
             tracksViewChanges={false}
           >
-            <View style={styles.pin}>
-              <Ionicons name="camera" size={18} color="#fff" />
+            <View style={pinStyles(marker)}>
+              <Ionicons name={marker.type === 'user' ? 'person' : 'camera'} size={18} color="#fff" />
             </View>
           </Marker>
         ))}
       </MapView>
       <View style={styles.overlay}>
         <Text style={styles.overlayLabel}>Live coverage</Text>
-        <Text style={styles.overlayValue}>{markers.length} photographers</Text>
+        <Text style={styles.overlayValue}>
+          {photographerCount} photographer{photographerCount === 1 ? '' : 's'}
+          {markers.some((marker) => marker.type === 'user') ? ' · you' : ''}
+        </Text>
         <Text style={styles.overlayMeta}>OpenStreetMap tiles via react-native-maps</Text>
       </View>
     </View>

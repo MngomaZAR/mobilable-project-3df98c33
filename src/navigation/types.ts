@@ -5,7 +5,7 @@ export type TabParamList = {
   Home: undefined;
   Bookings: undefined;
   Feed: undefined;
-  Chat: undefined;
+  Chat: { conversationId?: string; title?: string } | undefined;
   Map: undefined;
   Settings: undefined;
 };
@@ -22,6 +22,7 @@ export type RootStackParamList = {
   UserProfile: { userId: string; photographer?: Photographer };
   Auth: undefined;
   Compliance: undefined;
+  ChatThread: { conversationId: string; title?: string };
 };
 
 declare global {

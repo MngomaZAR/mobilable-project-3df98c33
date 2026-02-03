@@ -41,7 +41,7 @@ export interface Booking {
 
 export interface Message {
   id: string;
-  conversationId: string;
+  chatId: string;
   fromUser: boolean;
   text: string;
   timestamp: string;
@@ -67,9 +67,16 @@ export interface Comment {
   createdAt: string;
 }
 
+export interface ConversationSummary {
+  id: string;
+  title: string;
+  lastMessageAt: string | null;
+}
+
 export interface AppState {
   photographers: Photographer[];
   bookings: Booking[];
+  conversations: ConversationSummary[];
   messages: Message[];
   posts: Post[];
   comments: Comment[];

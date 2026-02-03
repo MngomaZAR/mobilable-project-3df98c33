@@ -73,17 +73,18 @@ export const initialState: AppState = {
       createdAt: new Date().toISOString(),
     },
   ],
+  conversations: [],
   messages: [
     {
       id: 'm1',
-      conversationId: 'p1',
+      chatId: 'p1',
       fromUser: true,
       text: 'Hi Ava! Can we focus on candid ceremony coverage?',
       timestamp: new Date().toISOString(),
     },
     {
       id: 'm2',
-      conversationId: 'p1',
+      chatId: 'p1',
       fromUser: false,
       text: 'Absolutely. I love capturing those quiet moments.',
       timestamp: new Date().toISOString(),

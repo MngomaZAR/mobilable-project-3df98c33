@@ -54,7 +54,7 @@ const TabsNavigator = () => (
     <Tab.Screen name="Home" component={HomeScreen} />
     <Tab.Screen name="Bookings" component={BookingsScreen} />
     <Tab.Screen name="Feed" component={FeedScreen} />
-    <Tab.Screen name="Chat" component={ChatScreen} />
+    <Tab.Screen name="Chat" component={ConversationsListScreen} />
     <Tab.Screen name="Map" component={MapScreen} />
     <Tab.Screen name="Settings" component={SettingsScreen} />
   </Tab.Navigator>
@@ -87,6 +87,7 @@ export const MainNavigator: React.FC<MainNavigatorProps> = ({ logoSource }) => (
       <Stack.Screen name="UserProfile" component={UserProfileScreen} options={{ title: 'Photographer Profile' }} />
       <Stack.Screen name="Auth" component={AuthScreen} options={{ title: 'Sign in' }} />
       <Stack.Screen name="Compliance" component={ComplianceScreen} options={{ title: 'Privacy & Permissions' }} />
+      <Stack.Screen name="ChatThread" component={ChatScreen} options={{ title: 'Chat' }} />
     </Stack.Navigator>
   </NavigationContainer>
 );

@@ -3,20 +3,20 @@ import { FlatList, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { useAppData } from '../store/AppDataContext';
-import { RootStackParamList } from '../navigation/types';
+import { RootStackParamList, TabParamList } from '../navigation/types';
 
-type Route = RouteProp<RootStackParamList, 'ChatThread'>;
+type Route = RouteProp<TabParamList, 'Chat'> | RouteProp<RootStackParamList, 'ChatThread'>;
 
 const ChatScreen: React.FC = () => {
   const route = useRoute<Route>();
   const navigation = useNavigation();
-  const { state, sendMessage } = useAppData();
+  const { state, sendMessage, fetchMessagesForChat } = useAppData();
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
 
-  const conversationId = route.params?.conversationId ?? state.conversations[0]?.id ?? 'demo-conversation';
+  const conversationId = route.params?.conversationId ?? state.conversations?.[0]?.id ?? 'demo-conversation';
   const messages = useMemo(
-    () => state.messages.filter((message) => message.conversationId === conversationId),
+    () => state.messages.filter((m) => m.chatId === conversationId),
     [conversationId, state.messages]
   );
 
@@ -26,12 +26,21 @@ const ChatScreen: React.FC = () => {
     }
   }, [navigation, route.params?.title]);
 
+  useEffect(() => {
+    if (conversationId && conversationId !== 'demo-conversation') {
+      fetchMessagesForChat(conversationId);
+    }
+  }, [conversationId, fetchMessagesForChat]);
+
   const handleSend = async () => {
     if (!text.trim()) return;
     setSending(true);
-    await sendMessage(conversationId, text);
-    setText('');
-    setSending(false);
+    try {
+      await sendMessage(conversationId, text);
+      setText('');
+    } finally {
+      setSending(false);
+    }
   };
 
   return (

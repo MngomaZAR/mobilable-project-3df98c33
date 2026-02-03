@@ -32,6 +32,7 @@ type AppDataContextValue = {
   createBooking: (payload: CreateBookingInput) => Promise<Booking>;
   updateBookingStatus: (bookingId: string) => Promise<Booking | undefined>;
   sendMessage: (chatId: string, text: string, fromUser?: boolean) => Promise<Message>;
+  fetchMessagesForChat: (chatId: string) => Promise<void>;
   addPost: (payload: CreatePostInput) => Promise<Post>;
   toggleLike: (postId: string) => Promise<Post | undefined>;
   addComment: (postId: string, text: string, userId?: string) => Promise<Comment>;
@@ -105,14 +106,14 @@ const mapPhotographerRow = (row: PhotographerRow): Photographer => {
   const fallbackLocation = profile?.city ? `${profile.city}, South Africa` : 'South Africa';
   return {
     id: row.id,
-    full_name: profile?.full_name ?? 'New photographer',
-    avatar_url: profile?.avatar_url ?? FALLBACK_AVATAR,
+    name: profile?.full_name ?? 'New photographer',
+    avatar: profile?.avatar_url ?? FALLBACK_AVATAR,
     rating: typeof row.rating === 'number' ? row.rating : 0,
     location: row.location ?? fallbackLocation,
-    latitude: row.latitude,
-    longitude: row.longitude,
-    style: row.style,
-    bio: row.bio,
+    latitude: row.latitude ?? 0,
+    longitude: row.longitude ?? 0,
+    style: row.style ?? '',
+    bio: row.bio ?? '',
     priceRange: row.price_range ?? 'R1500',
     tags: row.tags ?? [],
   };
@@ -207,6 +208,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
             ...parsed,
             photographers: initialState.photographers,
             currentUser: normalizeStoredUser(parsed.currentUser),
+            conversations: parsed.conversations ?? initialState.conversations,
           });
         }
         const { data } = await supabase.auth.getUser();
@@ -269,7 +271,12 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const stored = await AsyncStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed: AppState = JSON.parse(stored);
-        setState({ ...initialState, ...parsed, currentUser: normalizeStoredUser(parsed.currentUser) });
+        setState({
+          ...initialState,
+          ...parsed,
+          currentUser: normalizeStoredUser(parsed.currentUser),
+          conversations: parsed.conversations ?? initialState.conversations,
+        });
       } else {
         setState(initialState);
       }
@@ -375,7 +382,6 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const message: Message = {
           id: data?.id ?? uid('msg'),
           chatId: data?.chat_id ?? chatId,
-          senderId: data?.sender_id ?? senderId,
           fromUser,
           text: data?.body ?? trimmed,
           timestamp: data?.created_at ?? new Date().toISOString(),
@@ -388,6 +394,40 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const friendly = formatErrorMessage(err, 'Unable to send your message right now.');
         setError(friendly);
         throw new Error(friendly);
+      }
+    },
+    [state.currentUser?.id]
+  );
+
+  const fetchMessagesForChat = useCallback(
+    async (chatId: string) => {
+      try {
+        const { data, error: fetchError } = await supabase
+          .from('messages')
+          .select('id, chat_id, sender_id, body, created_at')
+          .eq('chat_id', chatId)
+          .order('created_at', { ascending: true });
+
+        if (fetchError) {
+          logError('fetch_messages_for_chat', fetchError);
+          return;
+        }
+
+        const currentUserId = state.currentUser?.id;
+        const mapped: Message[] = (data ?? []).map((row: any) => ({
+          id: row.id,
+          chatId: row.chat_id ?? chatId,
+          fromUser: row.sender_id === currentUserId,
+          text: row.body ?? '',
+          timestamp: row.created_at ?? new Date().toISOString(),
+        }));
+
+        setState((prev) => {
+          const others = prev.messages.filter((m) => m.chatId !== chatId);
+          return { ...prev, messages: [...others, ...mapped] };
+        });
+      } catch (err) {
+        logError('fetch_messages_for_chat', err);
       }
     },
     [state.currentUser?.id]
@@ -592,9 +632,11 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       error,
       currentUser: state.currentUser,
       refresh,
+      revalidateSession,
       createBooking,
       updateBookingStatus,
       sendMessage,
+      fetchMessagesForChat,
       addPost,
       toggleLike,
       addComment,
@@ -612,9 +654,11 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       authenticating,
       error,
       refresh,
+      revalidateSession,
       createBooking,
       updateBookingStatus,
       sendMessage,
+      fetchMessagesForChat,
       addPost,
       toggleLike,
       addComment,

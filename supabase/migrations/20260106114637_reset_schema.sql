@@ -33,7 +33,7 @@ begin
   end loop;
 end $$;
 
--- Profiles capture base user metadata mirrored from auth.users
+-- Profiles
 create table public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   full_name text,
@@ -63,16 +63,20 @@ end $$;
 
 alter table public.profiles enable row level security;
 
-create policy if not exists profiles_select_authenticated on public.profiles
+drop policy if exists profiles_select_authenticated on public.profiles;
+create policy profiles_select_authenticated on public.profiles
   for select using (auth.uid() is not null);
-create policy if not exists profiles_insert_self on public.profiles
+drop policy if exists profiles_insert_self on public.profiles;
+create policy profiles_insert_self on public.profiles
   for insert with check (auth.uid() = id);
-create policy if not exists profiles_update_self on public.profiles
+drop policy if exists profiles_update_self on public.profiles;
+create policy profiles_update_self on public.profiles
   for update using (auth.uid() = id);
-create policy if not exists profiles_delete_self on public.profiles
+drop policy if exists profiles_delete_self on public.profiles;
+create policy profiles_delete_self on public.profiles
   for delete using (auth.uid() = id);
 
--- Photographers drive the marketplace grid/cards in the client
+-- Photographers
 create table public.photographers (
   id uuid primary key references public.profiles(id) on delete cascade,
   rating numeric(3,2) not null default 4.80,
@@ -110,16 +114,20 @@ create index if not exists photographers_tags_idx on public.photographers using 
 
 alter table public.photographers enable row level security;
 
-create policy if not exists photographers_select_public on public.photographers
+drop policy if exists photographers_select_public on public.photographers;
+create policy photographers_select_public on public.photographers
   for select using (true);
-create policy if not exists photographers_insert_self on public.photographers
+drop policy if exists photographers_insert_self on public.photographers;
+create policy photographers_insert_self on public.photographers
   for insert with check (auth.uid() = id);
-create policy if not exists photographers_update_self on public.photographers
+drop policy if exists photographers_update_self on public.photographers;
+create policy photographers_update_self on public.photographers
   for update using (auth.uid() = id);
-create policy if not exists photographers_delete_self on public.photographers
+drop policy if exists photographers_delete_self on public.photographers;
+create policy photographers_delete_self on public.photographers
   for delete using (auth.uid() = id);
 
--- Conversations + messages power Realtime chat threads
+-- Conversations
 create table public.conversations (
   id uuid primary key default gen_random_uuid(),
   title text not null,
@@ -131,15 +139,20 @@ create table public.conversations (
 
 alter table public.conversations enable row level security;
 
-create policy if not exists conversations_select_authenticated on public.conversations
+drop policy if exists conversations_select_authenticated on public.conversations;
+create policy conversations_select_authenticated on public.conversations
   for select using (auth.uid() is not null);
-create policy if not exists conversations_insert_creator on public.conversations
+drop policy if exists conversations_insert_creator on public.conversations;
+create policy conversations_insert_creator on public.conversations
   for insert with check (auth.uid() = created_by or created_by is null);
-create policy if not exists conversations_update_creator on public.conversations
+drop policy if exists conversations_update_creator on public.conversations;
+create policy conversations_update_creator on public.conversations
   for update using (auth.uid() = created_by);
-create policy if not exists conversations_delete_creator on public.conversations
+drop policy if exists conversations_delete_creator on public.conversations;
+create policy conversations_delete_creator on public.conversations
   for delete using (auth.uid() = created_by);
 
+-- Messages
 create table public.messages (
   id uuid primary key default gen_random_uuid(),
   chat_id uuid not null references public.conversations(id) on delete cascade,
@@ -155,14 +168,17 @@ create index messages_conversation_idx on public.messages(conversation_id);
 
 alter table public.messages enable row level security;
 
-create policy if not exists messages_select_authenticated on public.messages
+drop policy if exists messages_select_authenticated on public.messages;
+create policy messages_select_authenticated on public.messages
   for select using (auth.uid() is not null);
-create policy if not exists messages_insert_self on public.messages
+drop policy if exists messages_insert_self on public.messages;
+create policy messages_insert_self on public.messages
   for insert with check (auth.uid() = sender_id);
-create policy if not exists messages_delete_self on public.messages
+drop policy if exists messages_delete_self on public.messages;
+create policy messages_delete_self on public.messages
   for delete using (auth.uid() = sender_id);
 
--- Social feed tables with counters + engagement helpers
+-- Posts
 create table public.posts (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references auth.users(id) on delete cascade,
@@ -174,6 +190,7 @@ create table public.posts (
   created_at timestamptz not null default now()
 );
 
+-- Comments
 create table public.comments (
   id uuid primary key default gen_random_uuid(),
   post_id uuid references public.posts(id) on delete cascade,
@@ -182,6 +199,7 @@ create table public.comments (
   created_at timestamptz not null default now()
 );
 
+-- Likes
 create table public.likes (
   id uuid primary key default gen_random_uuid(),
   post_id uuid references public.posts(id) on delete cascade,
@@ -195,19 +213,30 @@ alter table public.posts enable row level security;
 alter table public.comments enable row level security;
 alter table public.likes enable row level security;
 
-create policy if not exists posts_select_public on public.posts for select using (true);
-create policy if not exists posts_insert_owner on public.posts for insert with check (auth.uid() = user_id);
-create policy if not exists posts_update_owner on public.posts for update using (auth.uid() = user_id);
-create policy if not exists posts_delete_owner on public.posts for delete using (auth.uid() = user_id);
+drop policy if exists posts_select_public on public.posts;
+create policy posts_select_public on public.posts for select using (true);
+drop policy if exists posts_insert_owner on public.posts;
+create policy posts_insert_owner on public.posts for insert with check (auth.uid() = user_id);
+drop policy if exists posts_update_owner on public.posts;
+create policy posts_update_owner on public.posts for update using (auth.uid() = user_id);
+drop policy if exists posts_delete_owner on public.posts;
+create policy posts_delete_owner on public.posts for delete using (auth.uid() = user_id);
 
-create policy if not exists comments_select_public on public.comments for select using (true);
-create policy if not exists comments_insert_owner on public.comments for insert with check (auth.uid() = user_id);
-create policy if not exists comments_delete_owner on public.comments for delete using (auth.uid() = user_id);
+drop policy if exists comments_select_public on public.comments;
+create policy comments_select_public on public.comments for select using (true);
+drop policy if exists comments_insert_owner on public.comments;
+create policy comments_insert_owner on public.comments for insert with check (auth.uid() = user_id);
+drop policy if exists comments_delete_owner on public.comments;
+create policy comments_delete_owner on public.comments for delete using (auth.uid() = user_id);
 
-create policy if not exists likes_select_public on public.likes for select using (true);
-create policy if not exists likes_insert_owner on public.likes for insert with check (auth.uid() = user_id);
-create policy if not exists likes_delete_owner on public.likes for delete using (auth.uid() = user_id);
+drop policy if exists likes_select_public on public.likes;
+create policy likes_select_public on public.likes for select using (true);
+drop policy if exists likes_insert_owner on public.likes;
+create policy likes_insert_owner on public.likes for insert with check (auth.uid() = user_id);
+drop policy if exists likes_delete_owner on public.likes;
+create policy likes_delete_owner on public.likes for delete using (auth.uid() = user_id);
 
+-- Recommend posts function
 create or replace function public.recommend_posts(
   limit_count int default 20,
   offset_count int default 0,

@@ -7,6 +7,7 @@ import {
   Text,
   TouchableOpacity,
   View,
+  Image,
 } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useAppData } from '../store/AppDataContext';
@@ -232,16 +233,45 @@ const ConversationsListScreen: React.FC = () => {
     [creating, error, handleNewChat]
   );
 
+  const PLACEHOLDER_AVATAR = 'https://images.unsplash.com/photo-1508214751196-bcfd4ca60f91?auto=format&fit=crop&w=300&q=80';
+
+  const getConversationDisplayInfo = (item: Conversation) => {
+    const currentUserId = appState.currentUser?.id;
+    let displayTitle = item.title;
+    let avatarUrl = PLACEHOLDER_AVATAR;
+
+    if ((!displayTitle || displayTitle === 'Conversation') && item.participants && item.participants.length === 2 && currentUserId) {
+      const otherId = item.participants.find((id) => id !== currentUserId);
+      if (otherId) {
+        const found = appState.photographers.find((p) => p.id === otherId);
+        if (found) {
+          displayTitle = found.name;
+          avatarUrl = found.avatar;
+        }
+      }
+    }
+
+    return { displayTitle, avatarUrl };
+  };
+
+
+
   const renderItem = ({ item }: { item: Conversation }) => {
     const timestamp = item.lastMessageAt ?? item.createdAt;
     const formatted = timestamp ? new Date(timestamp).toLocaleString() : '';
+
+    const { displayTitle, avatarUrl } = require('../utils/conversations').getConversationDisplayInfo(item, appState as any);
+
     return (
       <TouchableOpacity
         style={styles.card}
-        onPress={() => navigation.navigate('Root', { screen: 'Chat', params: { conversationId: item.id, title: item.title } })}
+        onPress={() => navigation.navigate('Root', { screen: 'Chat', params: { conversationId: item.id, title: displayTitle } })}
       >
         <View style={styles.cardHeader}>
-          <Text style={styles.cardTitle}>{item.title}</Text>
+          <View style={styles.avatarRow}>
+            <Image source={{ uri: avatarUrl }} style={styles.convAvatar} />
+            <Text style={styles.cardTitle}>{displayTitle}</Text>
+          </View>
           <Text style={styles.cardTime}>{formatted}</Text>
         </View>
         <Text style={styles.cardMessage} numberOfLines={2}>
@@ -288,6 +318,17 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '800',
     color: '#0f172a',
+  },
+  avatarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  convAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: '#e5e7eb',
   },
   subtitle: {
     color: '#475569',

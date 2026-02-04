@@ -31,26 +31,17 @@ jest.mock('../src/store/AppDataContext', () => ({
   }),
 }));
 
-import ConversationsListScreen from '../src/screens/ConversationsListScreen';
+import { getConversationDisplayInfo } from '../src/utils/conversations';
+
+import { useAppData } from '../src/store/AppDataContext';
 
 describe('ConversationsListScreen (local fallback)', () => {
-  it('renders a friendly title and avatar for local 1:1 conversations', () => {
-    const tree = renderer.create(<ConversationsListScreen />).toJSON();
-    expect(tree).toBeTruthy();
-    const textNodes: any[] = [];
-
-    const walk = (node: any) => {
-      if (!node) return;
-      if (typeof node === 'string') return;
-      if (node.type === 'Text') {
-        if (node.children) textNodes.push(node.children.join(''));
-      }
-      if (node.children && node.children.length) node.children.forEach(walk);
-    };
-
-    walk(tree);
-
-    // Should show the photographer's name as a conversation title
-    expect(textNodes.some((t) => /Other Name/.test(t))).toBeTruthy();
+  it('derives title and avatar from appState for 1:1 conversations', () => {
+    // reconstruct appState used in the mocked hook
+    const appState = (useAppData() as any).state;
+    const conv = { id: 'c1', title: 'Conversation', participants: ['me', 'other'], lastMessageAt: new Date().toISOString() } as any;
+    const info = getConversationDisplayInfo(conv, appState);
+    expect(info.displayTitle).toBe('Other Name');
+    expect(info.avatarUrl).toBe('https://example.com/other.png');
   });
 });

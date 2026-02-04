@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState, useEffect } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -9,8 +9,10 @@ import {
   View,
 } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useAppData } from '../store/AppDataContext';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { supabase } from '../config/supabaseClient';
+import { supabase, hasSupabase } from '../config/supabaseClient';
+import { uid } from '../utils/id';
 import { RootStackParamList } from '../navigation/types';
 
 type Navigation = StackNavigationProp<RootStackParamList, 'Root'>;
@@ -34,6 +36,7 @@ type Conversation = {
 
 const ConversationsListScreen: React.FC = () => {
   const navigation = useNavigation<Navigation>();
+  const { state: appState } = useAppData();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -53,40 +56,57 @@ const ConversationsListScreen: React.FC = () => {
 
   const fetchConversations = useCallback(async () => {
     setError(null);
-    const { data, error: fetchError } = await supabase
-      .from('conversations')
-      .select('id, title, last_message, last_message_at, created_at')
-      .order('last_message_at', { ascending: false })
-      .order('created_at', { ascending: false });
 
-    // fetch participants for these conversations if the table exists
-    let participantsMap: Record<string, string[]> = {};
-    try {
-      const ids = (data ?? []).map((r: any) => r.id).filter(Boolean);
-      if (ids.length > 0) {
-        const { data: partData } = await supabase
-          .from('conversation_participants')
-          .select('conversation_id, user_id')
-          .in('conversation_id', ids as string[]);
-        (partData ?? []).forEach((p: any) => {
-          const cid = p.conversation_id as string;
-          participantsMap[cid] = participantsMap[cid] ? [...participantsMap[cid], p.user_id] : [p.user_id];
-        });
-      }
-    } catch (e) {
-      // table might not exist yet; ignore
-    }
-
-    if (fetchError) {
-      const message =
-        (fetchError as any)?.code === '42P01'
-          ? 'Conversations table missing. Apply the latest Supabase migration.'
-          : fetchError.message;
-      setError(message);
+    if (!hasSupabase) {
+      // Use local conversations from AppDataContext when Supabase is not configured
+      setError('Supabase is not configured — messages are local only. Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY to your .env to enable sync.');
+      setConversations(appState.conversations as any);
       return;
     }
 
-    const mapped = (data ?? []).map(mapConversation).map((c: Conversation) => ({ ...c, participants: participantsMap[c.id] ?? undefined }));
+    let data: any[] | null = null;
+    try {
+      const res = await supabase
+        .from('conversations')
+        .select('id, title, last_message, last_message_at, created_at')
+        .order('last_message_at', { ascending: false })
+        .order('created_at', { ascending: false });
+
+      data = res.data;
+      const fetchError = res.error;
+
+      // fetch participants for these conversations if the table exists
+      let participantsMap: Record<string, string[]> = {};
+      try {
+        const ids = (data ?? []).map((r: any) => r.id).filter(Boolean);
+        if (ids.length > 0) {
+          const { data: partData } = await supabase
+            .from('conversation_participants')
+            .select('conversation_id, user_id')
+            .in('conversation_id', ids as string[]);
+          (partData ?? []).forEach((p: any) => {
+            const cid = p.conversation_id as string;
+            participantsMap[cid] = participantsMap[cid] ? [...participantsMap[cid], p.user_id] : [p.user_id];
+          });
+        }
+      } catch (e) {
+        // table might not exist yet; ignore
+      }
+
+      if (fetchError) {
+        const raw = (fetchError as any)?.message ?? String(fetchError);
+        const lower = String(raw).toLowerCase();
+        const message =
+          (fetchError as any)?.code === '42P01'
+            ? 'Conversations table missing. Apply the latest Supabase migration.'
+            : /failed to fetch/i.test(raw) || lower.includes('network') || lower.includes('typeerror')
+            ? 'Network error contacting Supabase. Check your EXPO_PUBLIC_SUPABASE_URL and network connectivity.'
+            : raw;
+        setError(message);
+        return;
+      }
+
+      const mapped = (data ?? []).map(mapConversation).map((c: Conversation) => ({ ...c, participants: participantsMap[c.id] ?? undefined }));
     // If a conversation has no explicit title and exactly two participants, try to fetch the other participant name for a friendly title
     try {
       const convoWithoutTitleOtherIds: Record<string, string> = {};
@@ -119,6 +139,14 @@ const ConversationsListScreen: React.FC = () => {
     }
 
     setConversations(mapped);
+    } catch (err: any) {
+      const raw = String(err?.message ?? err);
+      const lower = raw.toLowerCase();
+      const message = /failed to fetch/i.test(raw) || lower.includes('network') || lower.includes('typeerror')
+        ? 'Network error contacting Supabase. Check your EXPO_PUBLIC_SUPABASE_URL and network connectivity.'
+        : raw;
+      setError(message);
+    }
   }, [mapConversation]);
 
   useFocusEffect(
@@ -131,11 +159,17 @@ const ConversationsListScreen: React.FC = () => {
         setRefreshing(false);
       };
       load();
+
       return () => {
         isActive = false;
       };
     }, [fetchConversations])
   );
+
+  // Keep local list in sync with context when Supabase is not configured
+  useEffect(() => {
+    if (!hasSupabase) setConversations(appState.conversations as any);
+  }, [appState.conversations]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -147,8 +181,17 @@ const ConversationsListScreen: React.FC = () => {
     setCreating(true);
     setError(null);
     try {
-      const { data: userData } = await supabase.auth.getUser();
       const title = `New chat · ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+
+      if (!hasSupabase) {
+        // local-only fallback
+        const newConv = { id: uid('conv'), title, lastMessage: 'Say hello 👋', lastMessageAt: new Date().toISOString(), createdAt: new Date().toISOString() };
+        setConversations((prev) => [newConv as Conversation, ...prev]);
+        navigation.navigate('Root', { screen: 'Chat', params: { conversationId: newConv.id, title: newConv.title } });
+        return;
+      }
+
+      const { data: userData } = await supabase.auth.getUser();
       const { data, error: insertError } = await supabase
         .from('conversations')
         .insert({

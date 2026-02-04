@@ -1,8 +1,8 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useReducer } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { initialState } from '../data/initialData';
 import { supabase, hasSupabase } from '../config/supabaseClient';
-import { hasHasura, hasuraGQL } from '../config/hasuraClient';
 import { AppState, AppUser, Booking, BookingStatus, Comment, Message, Photographer, Post, PrivacySettings } from '../types';
 import { uid } from '../utils/id';
 import { formatAuthError, formatErrorMessage, logError } from '../utils/errors';
@@ -48,35 +48,12 @@ type AppDataContextValue = {
   resetState: () => Promise<void>;
 };
 
-const STORAGE_KEY = 'movable-app-state-v1';
-const RESET_MARKER_KEY = 'movable-app-reset-applied';
-const RESET_MARKER_VALUE = 'schema-reset-2026-01';
+const STORAGE_KEY = 'movable-app-state-v2';
 
 const AppDataContext = createContext<AppDataContextValue | undefined>(undefined);
 
 type ProfileRow = { role?: AppUser['role']; verified?: boolean } | null;
 
-type PhotographerProfileRow = {
-  id: string;
-  full_name: string | null;
-  avatar_url: string | null;
-  city: string | null;
-} | null;
-
-type PhotographerRow = {
-  id: string;
-  rating: number | null;
-  location: string | null;
-  latitude: number | null;
-  longitude: number | null;
-  price_range: string | null;
-  style: string | null;
-  bio: string | null;
-  tags: string[] | null;
-  profiles: PhotographerProfileRow[] | null;
-};
-
-const FALLBACK_AVATAR = 'https://images.unsplash.com/photo-1508214751196-bcfd4ca60f91?auto=format&fit=crop&w=300&q=80';
 const PHOTOGRAPHER_SELECT = `
   id,
   rating,
@@ -90,49 +67,44 @@ const PHOTOGRAPHER_SELECT = `
   profiles:profiles(id, full_name, avatar_url, city)
 `;
 
+// REDUCER
 
+type Action = 
+  | { type: 'SET_STATE', payload: Partial<AppState> }
+  | { type: 'SET_LOADING', payload: boolean }
+  | { type: 'SET_SAVING', payload: boolean }
+  | { type: 'SET_AUTHENTICATING', payload: boolean }
+  | { type: 'SET_ERROR', payload: string | null };
 
-const normalizeStoredUser = (user: AppUser | null | undefined): AppUser | null =>
-  user
-    ? {
-        ...user,
-        verified: Boolean((user as any).verified),
-      }
-    : null;
-
-
+const appReducer = (state: AppState, action: Action): AppState => {
+  switch (action.type) {
+    case 'SET_STATE':
+      return { ...state, ...action.payload };
+    case 'SET_LOADING':
+      return { ...state, loading: action.payload };
+    case 'SET_SAVING':
+        return { ...state, saving: action.payload };
+    case 'SET_AUTHENTICATING':
+        return { ...state, authenticating: action.payload };
+    case 'SET_ERROR':
+        return { ...state, error: action.payload };
+    default:
+      return state;
+  }
+};
 
 export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [state, setState] = useState<AppState>(initialState);
-  const [hydrated, setHydrated] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [authenticating, setAuthenticating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [state, dispatch] = useReducer(appReducer, initialState);
 
-  const persistInitialSnapshot = useCallback(async () => {
-    await AsyncStorage.multiSet([
-      [RESET_MARKER_KEY, RESET_MARKER_VALUE],
-      [STORAGE_KEY, JSON.stringify(initialState)],
-    ]);
-  }, []);
-
-  const ensureFreshStorage = useCallback(async () => {
-    try {
-      const marker = await AsyncStorage.getItem(RESET_MARKER_KEY);
-      if (marker === RESET_MARKER_VALUE) return;
-      await AsyncStorage.clear();
-      await persistInitialSnapshot();
-      setState(initialState);
-    } catch (storageError) {
-      console.warn('Failed to clear AsyncStorage during reset', storageError);
-      setError('Unable to reset local data. Please restart the app.');
-    }
-  }, [persistInitialSnapshot]);
+  const setState = (payload: Partial<AppState>) => dispatch({ type: 'SET_STATE', payload });
+  const setLoading = (payload: boolean) => dispatch({ type: 'SET_LOADING', payload });
+  const setSaving = (payload: boolean) => dispatch({ type: 'SET_SAVING', payload });
+  const setAuthenticating = (payload: boolean) => dispatch({ type: 'SET_AUTHENTICATING', payload });
+  const setError = (payload: string | null) => dispatch({ type: 'SET_ERROR', payload });
 
   const fetchProfile = useCallback(async (userId: string): Promise<ProfileRow> => {
+    if (!hasSupabase) return null;
     try {
-      if (!hasSupabase) return null;
       const { data } = await supabase.from('profiles').select('role, verified').eq('id', userId).maybeSingle();
       return data ?? null;
     } catch (err) {
@@ -142,68 +114,37 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, []);
 
   const fetchPhotographers = useCallback(async () => {
+    if (!hasSupabase) return;
     try {
-      if (!hasSupabase) return; // use seeded photographers in local state
       const { data, error: photographerError } = await supabase
         .from('photographers')
         .select(PHOTOGRAPHER_SELECT)
         .order('rating', { ascending: false });
-      if (photographerError) {
-        throw photographerError;
-      }
-      const mapped = (data ?? []).map(mapPhotographerRow);
-      setState((prev) => ({ ...prev, photographers: mapped }));
+      if (photographerError) throw photographerError;
+      const photographers = (data ?? []).map(mapPhotographerRow);
+      setState({ photographers });
     } catch (err: any) {
       logError('fetch_photographers', err);
       setError(formatErrorMessage(err, 'Unable to load photographers right now.'));
     }
   }, []);
 
-  const hydratePhotographer = useCallback(
-    async (photographerId: string): Promise<Photographer | null> => {
-      if (!photographerId) return null;
-      try {
-        if (!hasSupabase) return null;
-        const { data, error: photographerError } = await supabase
-          .from('photographers')
-          .select(PHOTOGRAPHER_SELECT)
-          .eq('id', photographerId)
-          .maybeSingle();
-        if (photographerError) {
-          throw photographerError;
-        }
-        return data ? mapPhotographerRow(data as PhotographerRow) : null;
-      } catch (err) {
-        logError('hydrate_photographer', err);
-        return null;
-      }
-    },
-    []
-  );
-
+  
   useEffect(() => {
     const load = async () => {
       setLoading(true);
       try {
-        await ensureFreshStorage();
         const stored = await AsyncStorage.getItem(STORAGE_KEY);
         if (stored) {
           const parsed: AppState = JSON.parse(stored);
-          setState({
-            ...initialState,
-            ...parsed,
-            photographers: initialState.photographers,
-            currentUser: normalizeStoredUser(parsed.currentUser),
-            conversations: parsed.conversations ?? initialState.conversations,
-          });
+          setState({ ...initialState, ...parsed, currentUser: parsed.currentUser ? { ...parsed.currentUser, verified: Boolean((parsed.currentUser as any).verified) }: null });
         }
 
         if (hasSupabase) {
           const { data } = await supabase.auth.getUser();
           if (data.user) {
             const profile = await fetchProfile(data.user.id);
-            const hydratedUser = mapSupabaseUser(data.user, 'client', profile);
-            setState((prev) => ({ ...prev, currentUser: hydratedUser }));
+            setState({ currentUser: mapSupabaseUser(data.user, 'client', profile) });
           }
           await fetchPhotographers();
         }
@@ -211,39 +152,34 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         logError('load_state', err);
         setError('Unable to load saved data.');
       } finally {
-        setHydrated(true);
         setLoading(false);
       }
     };
 
     load();
-  }, [ensureFreshStorage, fetchPhotographers, fetchProfile]);
+  }, [fetchPhotographers, fetchProfile]);
 
   useEffect(() => {
+    if (!hasSupabase) return;
     const { data } = supabase.auth.onAuthStateChange(async (_, session) => {
       if (session?.user) {
         const profile = await fetchProfile(session.user.id);
-        setState((prev) => ({
-          ...prev,
-          currentUser: mapSupabaseUser(session.user, prev.currentUser?.role ?? 'client', profile),
-        }));
+        setState({ currentUser: mapSupabaseUser(session.user, state.currentUser?.role ?? 'client', profile)});
       } else {
-        setState((prev) => ({ ...prev, currentUser: null }));
+        setState({ currentUser: null });
       }
     });
 
     return () => {
       data.subscription?.unsubscribe();
     };
-  }, [fetchProfile]);
+  }, [fetchProfile, state.currentUser?.role]);
 
   useEffect(() => {
-    if (!hydrated) return;
     const persist = async () => {
       setSaving(true);
       try {
-        const stateToPersist: AppState = { ...state, photographers: initialState.photographers };
-        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(stateToPersist));
+        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(state));
       } catch (err) {
         console.warn('Failed to persist state', err);
         setError('Unable to save data locally.');
@@ -252,59 +188,13 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
     };
     persist();
-  }, [state, hydrated]);
+  }, [state]);
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    try {
-      const stored = await AsyncStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed: AppState = JSON.parse(stored);
-        setState({
-          ...initialState,
-          ...parsed,
-          currentUser: normalizeStoredUser(parsed.currentUser),
-          conversations: parsed.conversations ?? initialState.conversations,
-        });
-      } else {
-        setState(initialState);
-      }
-    } catch (err) {
-      logError('refresh_state', err);
-      setError('Unable to refresh data.');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const revalidateSession = useCallback(async () => {
-    setLoading(true);
-    try {
-      if (!hasSupabase) return null;
-      const { data, error: sessionError } = await supabase.auth.getUser();
-      if (sessionError) {
-        setError(formatAuthError(sessionError, 'Session could not be refreshed.'));
-        return null;
-      }
-      if (data.user) {
-        const profile = await fetchProfile(data.user.id);
-        const user = mapSupabaseUser(data.user, state.currentUser?.role ?? 'client', profile);
-        setState((prev) => ({ ...prev, currentUser: user }));
-        return user;
-      }
-      setState((prev) => ({ ...prev, currentUser: null }));
-      return null;
-    } catch (err: any) {
-      logError('revalidate_session', err);
-      setError(formatAuthError(err, 'Unable to revalidate session.'));
-      return null;
-    } finally {
-      setLoading(false);
-    }
-  }, [fetchProfile, state.currentUser?.role]);
-
-  const createBooking = useCallback(
+    const createBooking = useCallback(
     async (payload: CreateBookingInput) => {
+      if (!state.currentUser) {
+        throw new Error('You must be logged in to create a booking.');
+      }
       const booking: Booking = {
         id: uid('booking'),
         photographerId: payload.photographerId,
@@ -314,31 +204,80 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         status: 'pending',
         createdAt: new Date().toISOString(),
       };
-      setState((prev) => ({ ...prev, bookings: [booking, ...prev.bookings] }));
+
+      if(hasSupabase) {
+        const { error } = await supabase.from('bookings').insert([{
+          id: booking.id,
+          photographer_id: booking.photographerId,
+          user_id: state.currentUser.id,
+          date: booking.date,
+          package: booking.package,
+          notes: booking.notes,
+          status: booking.status,
+          created_at: booking.createdAt,
+        }]);
+        if (error) {
+          logError('createBooking', error);
+          setError(formatErrorMessage(error, 'Unable to create booking.'));
+          throw error;
+        }
+      }
+      setState({ bookings: [booking, ...state.bookings] });
       return booking;
     },
-    []
+    [state.currentUser, state.bookings]
   );
 
-  const updateBookingStatus = useCallback(async (bookingId: string) => {
+    const updateBookingStatus = useCallback(async (bookingId: string) => {
     const nextStatus = (current: BookingStatus): BookingStatus => {
       const order: BookingStatus[] = ['pending', 'accepted', 'completed', 'reviewed'];
       const index = order.indexOf(current);
       return order[Math.min(index + 1, order.length - 1)];
     };
 
+    const booking = state.bookings.find(b => b.id === bookingId);
+    if (!booking) {
+        logError('updateBookingStatus', new Error('Booking not found'));
+        return;
+    }
+
+    const newStatus = nextStatus(booking.status);
     let updatedBooking: Booking | undefined;
-    setState((prev) => {
-      const bookings = prev.bookings.map((booking) => {
-        if (booking.id !== bookingId) return booking;
-        const status = nextStatus(booking.status);
-        updatedBooking = { ...booking, status };
+
+    // Optimistic update
+    const bookings = state.bookings.map((b) => {
+        if (b.id !== bookingId) return b;
+        updatedBooking = { ...b, status: newStatus };
         return updatedBooking;
-      });
-      return { ...prev, bookings };
     });
+    setState({ bookings });
+
+
+    if (hasSupabase) {
+        try {
+            const { error } = await supabase
+                .from('bookings')
+                .update({ status: newStatus })
+                .eq('id', bookingId);
+            
+            if (error) {
+                // Revert optimistic update
+                setState({ bookings: state.bookings });
+                logError('updateBookingStatus', error);
+                setError(formatErrorMessage(error, 'Unable to update booking status.'));
+                throw error;
+            }
+        } catch(err) {
+             // Revert optimistic update
+             setState({ bookings: state.bookings });
+             logError('updateBookingStatus', err);
+             setError(formatErrorMessage(err, 'Unable to update booking status.'));
+             throw err;
+        }
+    }
+
     return updatedBooking;
-  }, []);
+  }, [state.bookings]);
 
   const sendMessage = useCallback(
     async (chatId: string, text: string, fromUser = true) => {
@@ -354,103 +293,63 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         throw new Error('Message text is required.');
       }
 
-      try {
-        if (hasHasura) {
-          const q = `mutation SendMessage($chatId: uuid!, $senderId: uuid!, $body: String!) {
-            insert_messages_one(object: { chat_id: $chatId, sender_id: $senderId, body: $body }) {
-              id chat_id sender_id body created_at
+      const message: Message = {
+        id: uid('msg'),
+        chatId,
+        fromUser,
+        text: trimmed,
+        timestamp: new Date().toISOString(),
+      };
+
+      // Optimistic update
+      setState({ messages: [...state.messages, message] });
+
+      if (hasSupabase) {
+        try {
+            const { data, error: insertError } = await supabase
+            .from('messages')
+            .insert({
+                chat_id: chatId,
+                body: trimmed,
+                sender_id: senderId,
+            })
+            .select('id, chat_id, sender_id, body, created_at')
+            .single();
+
+            if (insertError) {
+                throw insertError;
             }
-          }`;
-          const res = await hasuraGQL(q, { chatId, senderId, body: trimmed });
-          const row = res?.insert_messages_one;
-          const message: Message = {
-            id: row?.id ?? uid('msg'),
-            chatId: row?.chat_id ?? chatId,
-            fromUser,
-            text: row?.body ?? trimmed,
-            timestamp: row?.created_at ?? new Date().toISOString(),
-          };
-          setState((prev) => ({ ...prev, messages: [...prev.messages, message] }));
-          return message;
+
+            const newMessage = {
+                id: data?.id ?? message.id,
+                chatId: data?.chat_id ?? chatId,
+                fromUser,
+                text: data?.body ?? trimmed,
+                timestamp: data?.created_at ?? new Date().toISOString(),
+            };
+
+            // Replace optimistic message with the real one
+            setState({ messages: state.messages.map(m => m.id === message.id ? newMessage : m) });
+            return newMessage;
+
+        } catch (err: any) {
+            // Revert optimistic update
+            setState({ messages: state.messages.filter(m => m.id !== message.id) });
+            logError('send_message', err);
+            const friendly = formatErrorMessage(err, 'Unable to send your message right now.');
+            setError(friendly);
+            throw new Error(friendly);
         }
-
-        if (!hasSupabase) {
-          // Fallback to local-only message when Supabase isn't configured
-          const message: Message = {
-            id: uid('msg'),
-            chatId,
-            fromUser,
-            text: trimmed,
-            timestamp: new Date().toISOString(),
-          };
-          setState((prev) => ({ ...prev, messages: [...prev.messages, message] }));
-          return message;
-        }
-
-        const { data, error: insertError } = await supabase
-          .from('messages')
-          .insert({
-            chat_id: chatId,
-            body: trimmed,
-            sender_id: senderId,
-          })
-          .select('id, chat_id, sender_id, body, created_at')
-          .single();
-
-        if (insertError) {
-          throw insertError;
-        }
-
-        // Normalize DB row into app Message shape (use `chatId` internally)
-        const message: Message = {
-          id: data?.id ?? uid('msg'),
-          chatId: data?.chat_id ?? chatId,
-          fromUser,
-          text: data?.body ?? trimmed,
-          timestamp: data?.created_at ?? new Date().toISOString(),
-        };
-
-        setState((prev) => ({ ...prev, messages: [...prev.messages, message] }));
-        return message;
-      } catch (err: any) {
-        logError('send_message', err);
-        const friendly = formatErrorMessage(err, 'Unable to send your message right now.');
-        setError(friendly);
-        throw new Error(friendly);
       }
+
+      return message;
     },
-    [state.currentUser?.id]
+    [state.currentUser?.id, state.messages]
   );
 
   const fetchMessages = useCallback(async (chatId: string) => {
+    if (!hasSupabase) return;
     try {
-      if (hasHasura) {
-        const q = `query Messages($chatId: uuid!) {
-          messages(where: { chat_id: { _eq: $chatId } }, order_by: { created_at: asc }) {
-            id chat_id sender_id body created_at
-          }
-        }`;
-        const res = await hasuraGQL(q, { chatId });
-        const rows = res?.messages ?? [];
-        const mapped: Message[] = rows.map((row: any) => ({
-          id: row.id,
-          chatId: row.chat_id,
-          fromUser: row.sender_id === state.currentUser?.id,
-          text: row.body,
-          timestamp: row.created_at ?? new Date().toISOString(),
-        }));
-        setState((prev) => ({
-          ...prev,
-          messages: [...prev.messages.filter((m) => m.chatId !== chatId), ...mapped],
-        }));
-        return;
-      }
-
-      if (!hasSupabase) {
-        // nothing to do — local state already contains seeded messages
-        return;
-      }
-
       const { data, error: fetchError } = await supabase
         .from('messages')
         .select('id, chat_id, sender_id, body, created_at')
@@ -468,15 +367,12 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }));
 
       // Replace messages for this chat in local state but keep others
-      setState((prev) => ({
-        ...prev,
-        messages: [...prev.messages.filter((m) => m.chatId !== chatId), ...mapped],
-      }));
+      setState({ messages: [...state.messages.filter((m) => m.chatId !== chatId), ...mapped]});
     } catch (err) {
       logError('fetch_messages', err);
       setError('Unable to load messages for this chat.');
     }
-  }, [state.currentUser?.id]);
+  }, [state.currentUser?.id, state.messages]);
 
   const fetchMessagesForChat = useCallback(async (chatId: string) => {
     // backwards compatible alias
@@ -491,79 +387,64 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       throw new Error(msg);
     }
 
+    // Check if a conversation with this user already exists
+    const existingConversation = state.conversations.find(c => c.participants.includes(participantId));
+    if (existingConversation) {
+        return existingConversation;
+    }
+
     const convoTitle = title ?? `Chat with ${participantId}`;
 
-    try {
-      if (hasHasura) {
-        const q = `mutation CreateConversation($title: String!, $createdBy: uuid!) {
-          insert_conversations_one(object: { title: $title, created_by: $createdBy, last_message: "Say hello 👋", last_message_at: now() }) {
-            id title created_at last_message last_message_at
-          }
-        }`;
-        const res = await hasuraGQL(q, { title: convoTitle, createdBy: currentUserId });
-        const row = res?.insert_conversations_one;
-        const convo = {
-          id: row?.id ?? uid('conv'),
-          title: row?.title ?? convoTitle,
-        };
-        // After creating conversation in Hasura, insert participants (current user + recipient)
+    const convo = {
+        id: uid('conv'),
+        title: convoTitle,
+        participants: [currentUserId, participantId],
+        last_message: 'Say hello 👋',
+        last_message_at: new Date().toISOString(),
+    };
+
+    // Optimistic update
+    setState({ conversations: [convo as any, ...state.conversations] });
+
+
+    if (hasSupabase) {
         try {
-          await hasuraGQL(
-            `mutation InsertParticipants($conversationId: uuid!, $users: [conversation_participants_insert_input!]!) {
-              insert_conversation_participants(objects: $users, on_conflict: { constraint: conversation_participants_conversation_id_user_id_key, update_columns: conversation_id }) {
-                affected_rows
-              }
-            }`,
-            {
-              conversationId: convo.id,
-              users: [
-                { conversation_id: convo.id, user_id: currentUserId },
-                { conversation_id: convo.id, user_id: participantId },
-              ],
+            const { data, error: insertError } = await supabase
+            .from('conversations')
+            .insert({ title: convoTitle, created_by: currentUserId, last_message: 'Say hello 👋', last_message_at: new Date().toISOString() })
+            .select('id, title, created_at')
+            .single();
+
+            if (insertError) throw insertError;
+
+            const newConvo = { ...convo, id: data?.id ?? convo.id };
+
+            // insert participants into conversation_participants table
+            try {
+                await supabase.from('conversation_participants').insert([
+                { conversation_id: newConvo.id, user_id: currentUserId },
+                { conversation_id: newConvo.id, user_id: participantId },
+                ]);
+            } catch (e) {
+                // ignore participant insert failures for now
             }
-          );
-        } catch (e) {
-          // ignore participant insert failures; conversation exists
+            
+            // Replace optimistic conversation with the real one
+            setState({ conversations: state.conversations.map(c => c.id === convo.id ? newConvo : c) } as any);
+            return newConvo;
+
+        } catch(err: any) {
+            // Revert optimistic update
+            setState({ conversations: state.conversations.filter(c => c.id !== convo.id) });
+            logError('start_conversation', err);
+            const friendly = formatErrorMessage(err, 'Unable to start a chat right now.');
+            setError(friendly);
+            throw new Error(friendly);
         }
-        setState((prev) => ({ ...prev, conversations: [{ ...convo, participants: [currentUserId, participantId] as string[] } as any, ...prev.conversations] }));
-        return convo;
-      }
-
-      if (!hasSupabase) {
-        const convo = { id: uid('conv'), title: convoTitle, participants: [currentUserId, participantId] };
-        setState((prev) => ({ ...prev, conversations: [convo as any, ...prev.conversations] }));
-        return convo;
-      }
-
-      const { data, error: insertError } = await supabase
-        .from('conversations')
-        .insert({ title: convoTitle, created_by: currentUserId, last_message: 'Say hello 👋', last_message_at: new Date().toISOString() })
-        .select('id, title, created_at')
-        .single();
-
-      if (insertError) throw insertError;
-
-      const convo = { id: data?.id ?? uid('conv'), title: data?.title ?? convoTitle };
-
-      // insert participants into conversation_participants table
-      try {
-        await supabase.from('conversation_participants').insert([
-          { conversation_id: convo.id, user_id: currentUserId },
-          { conversation_id: convo.id, user_id: participantId },
-        ]);
-      } catch (e) {
-        // ignore participant insert failures for now
-      }
-
-      setState((prev) => ({ ...prev, conversations: [{ ...convo, participants: [currentUserId, participantId] as string[] } as any, ...prev.conversations] }));
-      return convo;
-    } catch (err: any) {
-      logError('start_conversation', err);
-      const friendly = formatErrorMessage(err, 'Unable to start a chat right now.');
-      setError(friendly);
-      throw new Error(friendly);
     }
-  }, [state.currentUser?.id]);
+
+    return convo;
+  }, [state.currentUser?.id, state.conversations]);
 
   const addPost = useCallback(
     async ({ caption, imageUri, location, userId }: CreatePostInput) => {
@@ -574,35 +455,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         throw new Error(message);
       }
 
-      try {
-        if (hasHasura) {
-          const q = `mutation AddPost($userId: uuid!, $caption: String, $location: String, $imageUrl: String) {
-            insert_posts_one(object: { user_id: $userId, caption: $caption, location: $location, image_url: $imageUrl }) {
-              id user_id caption image_url created_at likes_count comment_count
-              profiles { id full_name city avatar_url }
-            }
-          }`;
-
-          const res = await hasuraGQL(q, { userId: ownerId, caption, location, imageUrl: imageUri });
-          const d = res?.insert_posts_one;
-          const post: Post = {
-            id: d?.id ?? uid('post'),
-            userId: d?.user_id ?? ownerId,
-            caption: d?.caption ?? caption,
-            imageUri: d?.image_url ?? imageUri,
-            createdAt: d?.created_at ?? new Date().toISOString(),
-            likes: d?.likes_count ?? 0,
-            liked: false,
-            commentCount: d?.comment_count ?? 0,
-            location: d?.location ?? location,
-          };
-
-          setState((prev) => ({ ...prev, posts: [post, ...prev.posts] }));
-          return post;
-        }
-
-        if (!hasSupabase) {
-          const post: Post = {
+        const post: Post = {
             id: uid('post'),
             userId: ownerId,
             caption,
@@ -612,59 +465,53 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
             liked: false,
             commentCount: 0,
             location,
-          };
-          setState((prev) => ({ ...prev, posts: [post, ...prev.posts] }));
-          return post;
-        }
-
-        const { data, error: insertError } = await supabase
-          .from('posts')
-          .insert({
-            user_id: ownerId,
-            caption,
-            location,
-            image_url: imageUri,
-          })
-          .select(
-            `
-            id,
-            user_id,
-            caption,
-            location,
-            comment_count,
-            created_at,
-            image_url,
-            likes_count
-          `
-          )
-          .single();
-
-        if (insertError) {
-          throw insertError;
-        }
-
-        const post: Post = {
-          id: data?.id ?? uid('post'),
-          userId: data?.user_id ?? ownerId,
-          caption: data?.caption ?? caption,
-          imageUri: data?.image_url ?? imageUri,
-          createdAt: data?.created_at ?? new Date().toISOString(),
-          likes: data?.likes_count ?? 0,
-          liked: false,
-          commentCount: data?.comment_count ?? 0,
-          location: data?.location ?? location,
         };
 
-        setState((prev) => ({ ...prev, posts: [post, ...prev.posts] }));
-        return post;
-      } catch (err: any) {
-        logError('add_post', err);
-        const message = formatErrorMessage(err, 'Unable to publish your post right now.');
-        setError(message);
-        throw err;
-      }
+        // Optimistic update
+        setState({ posts: [post, ...state.posts] });
+
+        if (hasSupabase) {
+            try {
+                const { data, error: insertError } = await supabase
+                .from('posts')
+                .insert({
+                    user_id: ownerId,
+                    caption,
+                    location,
+                    image_url: imageUri,
+                })
+                .select('id, user_id, caption, location, comment_count, created_at, image_url, likes_count')
+                .single();
+
+                if (insertError) {
+                    throw insertError;
+                }
+
+                const newPost = {
+                    ...post,
+                    id: data?.id ?? post.id,
+                    likes: data?.likes_count ?? 0,
+                    commentCount: data?.comment_count ?? 0,
+                    createdAt: data?.created_at ?? new Date().toISOString(),
+                };
+
+                // Replace optimistic post with the real one
+                setState({ posts: state.posts.map(p => p.id === post.id ? newPost : p) });
+                return newPost;
+
+            } catch (err: any) {
+                // Revert optimistic update
+                setState({ posts: state.posts.filter(p => p.id !== post.id) });
+                logError('add_post', err);
+                const message = formatErrorMessage(err, 'Unable to publish your post right now.');
+                setError(message);
+                throw err;
+            }
+        }
+
+      return post;
     },
-    [state.currentUser?.id]
+    [state.currentUser?.id, state.posts]
   );
 
   const toggleLike = useCallback(async (postId: string) => {
@@ -677,102 +524,62 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     // Optimistic update locally
     let optimistic: Post | undefined;
-    setState((prev) => {
-      const posts = prev.posts.map((post) => {
+    const posts = state.posts.map((post) => {
         if (post.id !== postId) return post;
         const liked = !post.liked;
         optimistic = { ...post, liked, likes: liked ? post.likes + 1 : Math.max(0, post.likes - 1) };
         return optimistic;
-      });
-      return { ...prev, posts };
     });
+    setState({ posts });
 
-    try {
-      if (hasHasura) {
-        // check if like exists
-        const qExist = `query LikeExists($postId: uuid!, $userId: uuid!) { likes(where: { post_id: { _eq: $postId }, user_id: { _eq: $userId } }) { id } }`;
-        const existsRes = await hasuraGQL(qExist, { postId, userId });
-        const exists = (existsRes?.likes ?? []).length > 0;
+    if (hasSupabase) {
+        try {
+            // Check if like exists
+            const { data: existingLike, error: selErr } = await supabase
+                .from('likes')
+                .select('id')
+                .eq('post_id', postId)
+                .eq('user_id', userId)
+                .maybeSingle();
 
-        if (exists) {
-          // delete like
-          const del = `mutation DeleteLike($postId: uuid!, $userId: uuid!) { delete_likes(where: { post_id: { _eq: $postId }, user_id: { _eq: $userId } }) { affected_rows } }`;
-          await hasuraGQL(del, { postId, userId });
-        } else {
-          const ins = `mutation InsertLike($postId: uuid!, $userId: uuid!) { insert_likes_one(object: { post_id: $postId, user_id: $userId }) { id } }`;
-          await hasuraGQL(ins, { postId, userId });
+            if (selErr) throw selErr;
+
+            if (existingLike && existingLike.id) {
+                const { error: delErr } = await supabase.from('likes').delete().eq('id', existingLike.id);
+                if (delErr) throw delErr;
+            } else {
+                const { error: insertErr } = await supabase.from('likes').insert({ post_id: postId, user_id: userId });
+                if (insertErr) throw insertErr;
+            }
+
+            // Recount likes and persist to posts table to keep feed subscribers in sync
+            const { data: likesRows, error: likesErr } = await supabase.from('likes').select('id').eq('post_id', postId);
+            if (likesErr) throw likesErr;
+            const likesCount = (likesRows ?? []).length;
+
+            const { error: postUpdateErr } = await supabase.from('posts').update({ likes_count: likesCount }).eq('id', postId);
+            if (postUpdateErr) throw postUpdateErr;
+
+            // Ensure local state matches DB count
+            setState({ posts: state.posts.map((p) => (p.id === postId ? { ...p, likes: likesCount } : p)) });
+
+        } catch (err: any) {
+            // Roll back optimistic toggled like
+            setState({ posts: state.posts.map((post) =>
+                post.id === postId
+                    ? { ...post, liked: !post.liked, likes: post.liked ? Math.max(0, post.likes - 1) : post.likes + 1 }
+                    : post
+                ),
+            });
+            const message = formatErrorMessage(err, 'Unable to update like right now.');
+            setError(message);
+            logError('toggle_like', err);
+            throw err;
         }
-
-        // refresh count
-        const agg = `query Count($postId: uuid!) { likes_aggregate(where: { post_id: { _eq: $postId } }) { aggregate { count } } }`;
-        const cRes = await hasuraGQL(agg, { postId });
-        const likesCount = Number(cRes?.likes_aggregate?.aggregate?.count ?? 0);
-
-        const upd = `mutation UpdatePost($postId: uuid!, $likes: Int!) { update_posts_by_pk(pk_columns: { id: $postId }, _set: { likes_count: $likes }) { id likes_count } }`;
-        await hasuraGQL(upd, { postId, likes: likesCount });
-
-        setState((prev) => ({
-          ...prev,
-          posts: prev.posts.map((p) => (p.id === postId ? { ...p, likes: likesCount } : p)),
-        }));
-
-        return optimistic;
-      }
-
-      if (!hasSupabase) {
-        // No backend; keep optimistic update as the final state
-        return optimistic;
-      }
-
-      // Check if like exists
-      const { data: existingLike, error: selErr } = await supabase
-        .from('likes')
-        .select('id')
-        .eq('post_id', postId)
-        .eq('user_id', userId)
-        .maybeSingle();
-
-      if (selErr) throw selErr;
-
-      if (existingLike && existingLike.id) {
-        const { error: delErr } = await supabase.from('likes').delete().eq('id', existingLike.id);
-        if (delErr) throw delErr;
-      } else {
-        const { error: insertErr } = await supabase.from('likes').insert({ post_id: postId, user_id: userId });
-        if (insertErr) throw insertErr;
-      }
-
-      // Recount likes and persist to posts table to keep feed subscribers in sync
-      const { data: likesRows, error: likesErr } = await supabase.from('likes').select('id').eq('post_id', postId);
-      if (likesErr) throw likesErr;
-      const likesCount = (likesRows ?? []).length;
-
-      const { error: postUpdateErr } = await supabase.from('posts').update({ likes_count: likesCount }).eq('id', postId);
-      if (postUpdateErr) throw postUpdateErr;
-
-      // Ensure local state matches DB count
-      setState((prev) => ({
-        ...prev,
-        posts: prev.posts.map((p) => (p.id === postId ? { ...p, likes: likesCount } : p)),
-      }));
-
-      return optimistic;
-    } catch (err: any) {
-      // Roll back optimistic toggled like
-      setState((prev) => ({
-        ...prev,
-        posts: prev.posts.map((post) =>
-          post.id === postId
-            ? { ...post, liked: !post.liked, likes: post.liked ? Math.max(0, post.likes - 1) : post.likes + 1 }
-            : post
-        ),
-      }));
-      const message = formatErrorMessage(err, 'Unable to update like right now.');
-      setError(message);
-      logError('toggle_like', err);
-      throw err;
     }
-  }, [state.currentUser?.id]);
+
+    return optimistic;
+  }, [state.currentUser?.id, state.posts]);
 
   const addComment = useCallback(async (postId: string, text: string, userId = 'you') => {
     const comment: Comment = {
@@ -782,55 +589,41 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       text,
       createdAt: new Date().toISOString(),
     };
-    setState((prev) => {
-      const comments = [...prev.comments, comment];
-      const posts = prev.posts.map((post) =>
+
+    // Optimistic update
+    const posts = state.posts.map((post) =>
         post.id === postId ? { ...post, commentCount: post.commentCount + 1 } : post
-      );
-      return { ...prev, comments, posts };
-    });
-    return comment;
-  }, []);
+    );
+    setState({ comments: [...state.comments, comment], posts });
 
-  useEffect(() => {
-    if (!hydrated || !hasSupabase) return;
 
-    const messagesChannel = supabase
-      .channel('public:messages')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
-        const row = payload.new as any;
-        if (!row) return;
-        const message: Message = {
-          id: row.id,
-          chatId: row.chat_id ?? row.conversation_id ?? '',
-          fromUser: row.sender_id === state.currentUser?.id,
-          text: row.body,
-          timestamp: row.created_at ?? new Date().toISOString(),
-        };
-        setState((prev) => ({ ...prev, messages: [...prev.messages, message] }));
-      })
-      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'messages' }, (payload) => {
-        const deletedId = payload.old?.id;
-        setState((prev) => ({ ...prev, messages: prev.messages.filter((m) => m.id !== deletedId) }));
-      });
+    if (hasSupabase) {
+        try {
+            const { error } = await supabase.from('comments').insert([{
+                id: comment.id,
+                post_id: postId,
+                user_id: userId,
+                body: text,
+                created_at: comment.createdAt
+            }]);
+            if (error) {
+                throw error;
+            }
+        } catch (err: any) {
+            // Revert optimistic update
+            const posts = state.posts.map((post) =>
+                post.id === postId ? { ...post, commentCount: Math.max(0, post.commentCount - 1) } : post
+            );
+            setState({ comments: state.comments.filter(c => c.id !== comment.id), posts });
 
-    messagesChannel.subscribe();
-
-    return () => {
-      supabase.removeChannel(messagesChannel);
-    };
-  }, [hydrated, state.currentUser?.id]);
-
-  const resetState = useCallback(async () => {
-    try {
-      await AsyncStorage.clear();
-      await persistInitialSnapshot();
-      setState(initialState);
-    } catch (err) {
-      console.warn('Failed to reset state', err);
-      setError('Unable to reset data.');
+            logError('addComment', err);
+            setError(formatErrorMessage(err, 'Unable to add comment.'));
+            throw err;
+        }
     }
-  }, [persistInitialSnapshot]);
+
+    return comment;
+  }, [state.comments, state.posts]);
 
   const signUp = useCallback(
     async (email: string, password: string, /* role intentionally ignored for security; only server/admin may grant roles */ _role: AppUser['role'] = 'client') => {
@@ -857,7 +650,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           });
         }
         const user: AppUser | null = data.user ? mapSupabaseUser(data.user, 'client', { role: 'client', verified: false }) : null;
-        setState((prev) => ({ ...prev, currentUser: user }));
+        setState({ currentUser: user });
         return user;
       } catch (err: any) {
         logError('sign_up', err);
@@ -881,7 +674,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
       const profile = data.user ? await fetchProfile(data.user.id) : null;
       const user: AppUser | null = data.user ? mapSupabaseUser(data.user, 'client', profile) : null;
-      setState((prev) => ({ ...prev, currentUser: user }));
+      setState({ currentUser: user });
       return user;
     } catch (err: any) {
       setError(err.message ?? 'Unable to sign in.');
@@ -896,7 +689,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setError(null);
     try {
       await supabase.auth.signOut();
-      setState((prev) => ({ ...prev, currentUser: null }));
+      setState({ currentUser: null });
     } catch (err: any) {
       setError(err.message ?? 'Unable to sign out.');
     } finally {
@@ -905,27 +698,59 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, []);
 
   const updatePrivacy = useCallback(async (changes: Partial<PrivacySettings>) => {
-    setState((prev) => ({ ...prev, privacy: { ...prev.privacy, ...changes } }));
-  }, []);
+    const userId = state.currentUser?.id;
+    if (!userId) {
+      const msg = 'You need to be logged in to change your privacy settings';
+      setError(msg);
+      throw new Error(msg);
+    }
+
+    // Optimistic update
+    const privacy = { ...state.privacy, ...changes };
+    setState({ privacy });
+
+    if (hasSupabase) {
+        try {
+            const { error } = await supabase.from('privacy').update(changes).eq('user_id', userId);
+            if (error) throw error;
+        } catch(err: any) {
+            // Revert
+            setState({ privacy: state.privacy });
+            const msg = formatErrorMessage(err, 'Unable to update your privacy settings.');
+            setError(msg);
+            throw new Error(msg);
+        }
+    }
+  }, [state.currentUser?.id, state.privacy]);
 
   const requestDataDeletion = useCallback(async () => {
-    const timestamp = new Date().toISOString();
-    setState((prev) => ({
-      ...prev,
-      privacy: { ...prev.privacy, dataDeletionRequestedAt: timestamp },
-    }));
-  }, []);
+    const userId = state.currentUser?.id;
+    if (!userId) {
+      const msg = 'You need to be logged in to delete your data';
+      setError(msg);
+      throw new Error(msg);
+    }
 
-  const value = useMemo<AppDataContextValue>(
-    () => ({
+    if (hasSupabase) {
+        try {
+            // This is a placeholder; in a real app, this should trigger a server-side process
+            const { error } = await supabase.from('profiles').update({ data_deletion_requested_at: new Date().toISOString() }).eq('id', userId);
+            if (error) throw error;
+        } catch(err: any) {
+            const msg = formatErrorMessage(err, 'Unable to request data deletion.');
+            setError(msg);
+            throw new Error(msg);
+        }
+    }
+  }, [state.currentUser?.id]);
+
+  const value = useMemo<AppDataContextValue>(() => ({
       state,
-      loading,
-      saving,
-      authenticating,
-      error,
+      loading: state.loading,
+      saving: state.saving,
+      authenticating: state.authenticating,
+      error: state.error,
       currentUser: state.currentUser,
-      refresh,
-      revalidateSession,
       createBooking,
       updateBookingStatus,
       sendMessage,
@@ -940,32 +765,11 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       signOut,
       updatePrivacy,
       requestDataDeletion,
-      resetState,
-    }),
-    [
-      state,
-      loading,
-      saving,
-      authenticating,
-      error,
-      refresh,
-      revalidateSession,
-      createBooking,
-      updateBookingStatus,
-      sendMessage,
-      fetchMessages,
-      fetchMessagesForChat,
-      startConversationWithUser,
-      addPost,
-      toggleLike,
-      addComment,
-      signUp,
-      signIn,
-      signOut,
-      updatePrivacy,
-      requestDataDeletion,
-      resetState,
-    ]
+      // refresh,
+      // revalidateSession,
+      // resetState,
+    } as any),
+    [state, createBooking, updateBookingStatus, sendMessage, fetchMessages, fetchMessagesForChat, startConversationWithUser, addPost, toggleLike, addComment, signUp, signIn, signOut, updatePrivacy, requestDataDeletion]
   );
 
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>;

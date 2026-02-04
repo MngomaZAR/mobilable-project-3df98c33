@@ -1,5 +1,8 @@
-export const environment = {
-  env: process.env.EXPO_PUBLIC_ENV ?? 'development',
-  supportEmail: process.env.EXPO_PUBLIC_SUPPORT_EMAIL ?? 'support@example.com',
-  region: process.env.EXPO_PUBLIC_APP_REGION ?? 'us',
+import Constants from 'expo-constants';
+
+const ENV = {
+    EXPO_PUBLIC_SUPABASE_URL: process.env.EXPO_PUBLIC_SUPABASE_URL,
+    EXPO_PUBLIC_SUPABASE_ANON_KEY: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
 };
+
+export default ENV;

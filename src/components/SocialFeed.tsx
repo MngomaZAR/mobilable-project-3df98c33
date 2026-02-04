@@ -14,6 +14,9 @@ import { AnimatedHeart } from './AnimatedHeart';
 import { useAppData } from '../store/AppDataContext';
 import { supabase, hasSupabase } from '../config/supabaseClient';
 import { hasHasura, hasuraGQL } from '../config/hasuraClient';
+import { useNavigation } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
+import { RootStackParamList } from '../navigation/types';
 import { initialState } from '../data/initialData';
 import { FeedSkeleton } from '../components/Skeleton';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -480,6 +483,18 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
     </LinearGradient>
   );
 
+  const navigation = useNavigation<StackNavigationProp<RootStackParamList, 'Root'>>();
+  const { startConversationWithUser } = useAppData();
+
+  const handleMessageUser = async (userId: string, name?: string) => {
+    try {
+      const convo = await startConversationWithUser(userId, name);
+      navigation.navigate('Root', { screen: 'Chat', params: { conversationId: convo.id, title: convo.title } });
+    } catch (e) {
+      // handled by context
+    }
+  };
+
   const renderItem = ({ item }: { item: FeedPost }) => (
     <View style={styles.card}>
       <View style={styles.cardHeader}>
@@ -496,7 +511,12 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
             <Text style={styles.authorMeta}>{item.location ?? item.profile?.city ?? 'Latest post'}</Text>
           </View>
         </TouchableOpacity>
-        <Text style={styles.timestamp}>{new Date(item.createdAt).toLocaleDateString()}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <TouchableOpacity onPress={() => handleMessageUser(item.userId, item.profile?.full_name ?? undefined)} style={{ marginRight: 10 }}>
+            <Text style={{ color: '#0f172a', fontWeight: '700' }}>Message</Text>
+          </TouchableOpacity>
+          <Text style={styles.timestamp}>{new Date(item.createdAt).toLocaleDateString()}</Text>
+        </View>
       </View>
 
       <TouchableOpacity

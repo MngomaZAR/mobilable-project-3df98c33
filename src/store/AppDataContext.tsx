@@ -36,6 +36,7 @@ type AppDataContextValue = {
   sendMessage: (chatId: string, text: string, fromUser?: boolean) => Promise<Message>;
   fetchMessages: (chatId: string) => Promise<void>;
   fetchMessagesForChat: (chatId: string) => Promise<void>;
+  startConversationWithUser: (participantId: string, title?: string) => Promise<{ id: string; title: string }>;
   addPost: (payload: CreatePostInput) => Promise<Post>;
   toggleLike: (postId: string) => Promise<Post | undefined>;
   addComment: (postId: string, text: string, userId?: string) => Promise<Comment>;
@@ -482,6 +483,58 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return fetchMessages(chatId);
   }, [fetchMessages]);
 
+  const startConversationWithUser = useCallback(async (participantId: string, title?: string) => {
+    const currentUserId = state.currentUser?.id;
+    if (!currentUserId) {
+      const msg = 'You need to be signed in to message users.';
+      setError(msg);
+      throw new Error(msg);
+    }
+
+    const convoTitle = title ?? `Chat with ${participantId}`;
+
+    try {
+      if (hasHasura) {
+        const q = `mutation CreateConversation($title: String!, $createdBy: uuid!) {
+          insert_conversations_one(object: { title: $title, created_by: $createdBy, last_message: "Say hello 👋", last_message_at: now() }) {
+            id title created_at last_message last_message_at
+          }
+        }`;
+        const res = await hasuraGQL(q, { title: convoTitle, createdBy: currentUserId });
+        const row = res?.insert_conversations_one;
+        const convo = {
+          id: row?.id ?? uid('conv'),
+          title: row?.title ?? convoTitle,
+        };
+        setState((prev) => ({ ...prev, conversations: [convo as any, ...prev.conversations] }));
+        return convo;
+      }
+
+      if (!hasSupabase) {
+        const convo = { id: uid('conv'), title: convoTitle };
+        setState((prev) => ({ ...prev, conversations: [convo as any, ...prev.conversations] }));
+        return convo;
+      }
+
+      const { data, error: insertError } = await supabase
+        .from('conversations')
+        .insert({ title: convoTitle, created_by: currentUserId, last_message: 'Say hello 👋', last_message_at: new Date().toISOString() })
+        .select('id, title, created_at')
+        .single();
+
+      if (insertError) throw insertError;
+
+      const convo = { id: data?.id ?? uid('conv'), title: data?.title ?? convoTitle };
+      setState((prev) => ({ ...prev, conversations: [convo as any, ...prev.conversations] }));
+      return convo;
+    } catch (err: any) {
+      logError('start_conversation', err);
+      const friendly = formatErrorMessage(err, 'Unable to start a chat right now.');
+      setError(friendly);
+      throw new Error(friendly);
+    }
+  }, [state.currentUser?.id]);
+
   const addPost = useCallback(
     async ({ caption, imageUri, location, userId }: CreatePostInput) => {
       const ownerId = userId ?? state.currentUser?.id;
@@ -848,6 +901,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       sendMessage,
       fetchMessages,
       fetchMessagesForChat,
+      startConversationWithUser,
       addPost,
       toggleLike,
       addComment,
@@ -871,6 +925,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       sendMessage,
       fetchMessages,
       fetchMessagesForChat,
+      startConversationWithUser,
       addPost,
       toggleLike,
       addComment,

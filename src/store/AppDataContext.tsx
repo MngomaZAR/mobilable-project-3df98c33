@@ -6,6 +6,7 @@ import { hasHasura, hasuraGQL } from '../config/hasuraClient';
 import { AppState, AppUser, Booking, BookingStatus, Comment, Message, Photographer, Post, PrivacySettings } from '../types';
 import { uid } from '../utils/id';
 import { formatAuthError, formatErrorMessage, logError } from '../utils/errors';
+import { mapPhotographerRow, mapSupabaseUser } from '../utils/mappings';
 
 type CreateBookingInput = {
   photographerId: string;
@@ -33,11 +34,8 @@ type AppDataContextValue = {
   createBooking: (payload: CreateBookingInput) => Promise<Booking>;
   updateBookingStatus: (bookingId: string) => Promise<Booking | undefined>;
   sendMessage: (chatId: string, text: string, fromUser?: boolean) => Promise<Message>;
-<<<<<<< HEAD
-  fetchMessagesForChat: (chatId: string) => Promise<void>;
-=======
   fetchMessages: (chatId: string) => Promise<void>;
->>>>>>> 080ba05 (chore: save local changes)
+  fetchMessagesForChat: (chatId: string) => Promise<void>;
   addPost: (payload: CreatePostInput) => Promise<Post>;
   toggleLike: (postId: string) => Promise<Post | undefined>;
   addComment: (postId: string, text: string, userId?: string) => Promise<Comment>;
@@ -91,12 +89,7 @@ const PHOTOGRAPHER_SELECT = `
   profiles:profiles(id, full_name, avatar_url, city)
 `;
 
-export const mapSupabaseUser = (user: any, fallbackRole: AppUser['role'] = 'client', profile: ProfileRow = null): AppUser => ({
-  id: user.id,
-  email: user.email ?? 'unknown-user',
-  role: (profile?.role as AppUser['role']) ?? ((user.user_metadata as any)?.role as AppUser['role']) ?? fallbackRole,
-  verified: profile?.verified ?? Boolean((user.user_metadata as any)?.verified ?? false),
-});
+
 
 const normalizeStoredUser = (user: AppUser | null | undefined): AppUser | null =>
   user
@@ -106,23 +99,7 @@ const normalizeStoredUser = (user: AppUser | null | undefined): AppUser | null =
       }
     : null;
 
-export const mapPhotographerRow = (row: PhotographerRow): Photographer => {
-  const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
-  const fallbackLocation = profile?.city ? `${profile.city}, South Africa` : 'South Africa';
-  return {
-    id: row.id,
-    name: profile?.full_name ?? 'New photographer',
-    avatar: profile?.avatar_url ?? FALLBACK_AVATAR,
-    rating: typeof row.rating === 'number' ? row.rating : 0,
-    location: row.location ?? fallbackLocation,
-    latitude: row.latitude ?? 0,
-    longitude: row.longitude ?? 0,
-    style: row.style ?? '',
-    bio: row.bio ?? '',
-    priceRange: row.price_range ?? 'R1500',
-    tags: row.tags ?? [],
-  };
-};
+
 
 export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, setState] = useState<AppState>(initialState);
@@ -869,11 +846,8 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       createBooking,
       updateBookingStatus,
       sendMessage,
-<<<<<<< HEAD
-      fetchMessagesForChat,
-=======
       fetchMessages,
->>>>>>> 080ba05 (chore: save local changes)
+      fetchMessagesForChat,
       addPost,
       toggleLike,
       addComment,
@@ -895,11 +869,8 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       createBooking,
       updateBookingStatus,
       sendMessage,
-<<<<<<< HEAD
-      fetchMessagesForChat,
-=======
       fetchMessages,
->>>>>>> 080ba05 (chore: save local changes)
+      fetchMessagesForChat,
       addPost,
       toggleLike,
       addComment,

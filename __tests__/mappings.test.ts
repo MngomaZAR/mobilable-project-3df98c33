@@ -1,5 +1,5 @@
-import { mapPhotographerRow, mapSupabaseUser } from '../src/store/AppDataContext';
-import { mapPostRow } from '../src/components/SocialFeed';
+import { mapPhotographerRow, mapSupabaseUser } from '../src/utils/mappings';
+import { mapPostRow } from '../src/utils/feedMappings';
 
 describe('mapping helpers', () => {
   test('mapPhotographerRow maps DB row to Photographer', () => {

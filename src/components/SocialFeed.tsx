@@ -56,21 +56,7 @@ type PostRow = {
   profiles?: ProfileSummary[] | null;
 };
 
-export const mapPostRow = (row: PostRow): FeedPost => {
-  const imageUrl = row.image_url ?? PLACEHOLDER_IMAGE;
-  const profile = row.profiles && row.profiles.length > 0 ? row.profiles[0] : undefined;
-  return {
-    id: row.id,
-    userId: row.user_id,
-    title: row.caption ?? 'Untitled post',
-    location: row.location ?? profile?.city ?? undefined,
-    createdAt: row.created_at,
-    imageUrl,
-    commentCount: row.comment_count ?? 0,
-    likes: row.likes_count ?? 0,
-    profile: profile ?? undefined,
-  };
-};
+import { mapPostRow } from '../utils/feedMappings';
 
 const PLACEHOLDER_IMAGE =
   'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=1200&q=80&sat=-20';
@@ -105,20 +91,8 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
     }
   };
 
-  const mapPostRow = useCallback((row: PostRow): FeedPost => {
-    const imageUrl = row.image_url ?? PLACEHOLDER_IMAGE;
-    const profile = row.profiles && row.profiles.length > 0 ? row.profiles[0] : undefined;
-    return {
-      id: row.id,
-      userId: row.user_id,
-      title: row.caption ?? 'Untitled post',
-      location: row.location ?? profile?.city ?? undefined,
-      createdAt: row.created_at,
-      imageUrl,
-      commentCount: row.comment_count ?? 0,
-      likes: row.likes_count ?? 0,
-      profile: profile ?? undefined,
-    };
+  const mapRowToFeedPost = useCallback((row: PostRow): FeedPost => {
+    return mapPostRow(row);
   }, []);
 
   const fetchProfiles = useCallback(async () => {
@@ -188,7 +162,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
         profiles: r.profiles ? [r.profiles] : undefined,
       }));
 
-      const mapped = (items ?? []).map(mapPostRow);
+      const mapped = (items ?? []).map(mapRowToFeedPost);
 
       if (reset) {
         setPosts(mapped);
@@ -252,7 +226,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
       throw new Error(postError.message);
     }
 
-    const mapped = (data ?? []).map(mapPostRow);
+    const mapped = (data ?? []).map(mapRowToFeedPost);
 
     if (reset) {
       setPosts(mapped);
@@ -360,7 +334,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
         return null;
       }
 
-      return data ? mapPostRow(data as PostRow) : null;
+        return data ? mapRowToFeedPost(data as PostRow) : null;
     },
     [mapPostRow]
   );

@@ -12,6 +12,7 @@ import BookingsScreen from '../screens/BookingsScreen';
 import FeedScreen from '../screens/FeedScreen';
 import PostDetailScreen from '../screens/PostDetailScreen';
 import CreatePostScreen from '../screens/CreatePostScreen';
+import ConversationsListScreen from '../screens/ConversationsListScreen';
 import ChatScreen from '../screens/ChatScreen';
 import UserProfileScreen from '../screens/UserProfileScreen';
 import MapScreen from '../screens/MapScreen';

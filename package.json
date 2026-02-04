@@ -16,8 +16,9 @@
     "test:hasura": "EXPO_PUBLIC_HASURA_URL=http://localhost:8080/v1/graphql jest __tests__/hasura.e2e.test.ts --runInBand --detectOpenHandles",
     "hasura:up": "docker-compose -f docker/hasura/docker-compose.yml up -d",
     "hasura:down": "docker-compose -f docker/hasura/docker-compose.yml down",
-    "hasura:logs": "docker-compose -f docker/hasura/docker-compose.yml logs -f",
-  
+    "hasura:logs": "docker-compose -f docker/hasura/docker-compose.yml logs -f"
+  },
+
   "dependencies": {
     "@expo/vector-icons": "^14.0.4",
     "@react-native-async-storage/async-storage": "1.24.0",

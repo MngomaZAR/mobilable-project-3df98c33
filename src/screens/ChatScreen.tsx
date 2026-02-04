@@ -14,29 +14,16 @@ type Route = RouteProp<TabParamList, 'Chat'> | RouteProp<RootStackParamList, 'Ch
 const ChatScreen: React.FC = () => {
   const route = useRoute<Route>();
   const navigation = useNavigation();
-<<<<<<< HEAD
-  const { state, sendMessage, fetchMessagesForChat } = useAppData();
-=======
-  const { state, sendMessage, fetchMessages } = useAppData();
->>>>>>> 080ba05 (chore: save local changes)
+  const { state, sendMessage, fetchMessages, fetchMessagesForChat } = useAppData();
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [messagesLoading, setMessagesLoading] = useState(false);
 
-<<<<<<< HEAD
-  const conversationId = route.params?.conversationId ?? state.conversations?.[0]?.id ?? 'demo-conversation';
-  const messages = useMemo(
-    () => state.messages.filter((m) => m.chatId === conversationId),
-    [conversationId, state.messages]
-=======
   const listRef = useRef<FlatList<any> | null>(null);
 
-  const chatId = route.params?.conversationId ?? state.messages[0]?.chatId ?? 'demo-conversation';
-  const messages = useMemo(
-    () => state.messages.filter((message) => message.chatId === chatId),
-    [chatId, state.messages]
->>>>>>> 080ba05 (chore: save local changes)
-  );
+  const conversationId = route.params?.conversationId ?? state.conversations?.[0]?.id ?? 'demo-conversation';
+  const chatId = route.params?.conversationId ?? state.messages[0]?.chatId ?? conversationId;
+  const messages = useMemo(() => state.messages.filter((m) => m.chatId === chatId), [chatId, state.messages]);
 
   const PLACEHOLDER_IMAGE = 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=300&q=80';
 
@@ -74,27 +61,17 @@ const ChatScreen: React.FC = () => {
     }
   }, [navigation, route.params?.title]);
 
-  useEffect(() => {
-    if (conversationId && conversationId !== 'demo-conversation') {
-      fetchMessagesForChat(conversationId);
-    }
-  }, [conversationId, fetchMessagesForChat]);
+
 
   const handleSend = async () => {
     if (!text.trim()) return;
     setSending(true);
-<<<<<<< HEAD
     try {
-      await sendMessage(conversationId, text);
+      await sendMessage(chatId, text);
       setText('');
     } finally {
       setSending(false);
     }
-=======
-    await sendMessage(chatId, text);
-    setText('');
-    setSending(false);
->>>>>>> 080ba05 (chore: save local changes)
   };
 
   return (

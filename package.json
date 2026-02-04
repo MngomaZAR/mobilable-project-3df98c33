@@ -18,14 +18,13 @@
     "hasura:down": "docker-compose -f docker/hasura/docker-compose.yml down",
     "hasura:logs": "docker-compose -f docker/hasura/docker-compose.yml logs -f"
   },
-
   "dependencies": {
     "@expo/vector-icons": "^14.0.4",
     "@react-native-async-storage/async-storage": "1.24.0",
     "@react-navigation/bottom-tabs": "^7.3.3",
     "@react-navigation/material-top-tabs": "^7.3.3",
     "@react-navigation/native": "^7.1.10",
-    "@react-navigation/stack": "^7.3.3",
+    "@react-navigation/stack": "^7.7.1",
     "@supabase/supabase-js": "latest",
     "expo": "~54.0.0",
     "expo-image-manipulator": "latest",
@@ -55,9 +54,9 @@
   "devDependencies": {
     "@babel/core": "^7.20.0",
     "@babel/eslint-parser": "latest",
+    "@types/jest": "^29.5.3",
     "@types/react": "latest",
     "@types/react-native": "latest",
-    "@types/jest": "^29.5.3",
     "@typescript-eslint/parser": "latest",
     "babel-preset-expo": "^54.0.10",
     "eslint": "latest",
@@ -65,8 +64,9 @@
     "eslint-plugin-react-hooks": "latest",
     "eslint-plugin-react-native": "latest",
     "jest": "^29.6.1",
-    "ts-jest": "^29.1.0",
+    "react-test-renderer": "^19.2.4",
     "supabase": "^2.75.0",
+    "ts-jest": "^29.1.0",
     "typescript": "latest"
   },
   "private": true

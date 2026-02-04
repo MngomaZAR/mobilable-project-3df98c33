@@ -506,12 +506,31 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           id: row?.id ?? uid('conv'),
           title: row?.title ?? convoTitle,
         };
-        setState((prev) => ({ ...prev, conversations: [convo as any, ...prev.conversations] }));
+        // After creating conversation in Hasura, insert participants (current user + recipient)
+        try {
+          await hasuraGQL(
+            `mutation InsertParticipants($conversationId: uuid!, $users: [conversation_participants_insert_input!]!) {
+              insert_conversation_participants(objects: $users, on_conflict: { constraint: conversation_participants_conversation_id_user_id_key, update_columns: conversation_id }) {
+                affected_rows
+              }
+            }`,
+            {
+              conversationId: convo.id,
+              users: [
+                { conversation_id: convo.id, user_id: currentUserId },
+                { conversation_id: convo.id, user_id: participantId },
+              ],
+            }
+          );
+        } catch (e) {
+          // ignore participant insert failures; conversation exists
+        }
+        setState((prev) => ({ ...prev, conversations: [{ ...convo, participants: [currentUserId, participantId] as string[] } as any, ...prev.conversations] }));
         return convo;
       }
 
       if (!hasSupabase) {
-        const convo = { id: uid('conv'), title: convoTitle };
+        const convo = { id: uid('conv'), title: convoTitle, participants: [currentUserId, participantId] };
         setState((prev) => ({ ...prev, conversations: [convo as any, ...prev.conversations] }));
         return convo;
       }
@@ -525,7 +544,18 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (insertError) throw insertError;
 
       const convo = { id: data?.id ?? uid('conv'), title: data?.title ?? convoTitle };
-      setState((prev) => ({ ...prev, conversations: [convo as any, ...prev.conversations] }));
+
+      // insert participants into conversation_participants table
+      try {
+        await supabase.from('conversation_participants').insert([
+          { conversation_id: convo.id, user_id: currentUserId },
+          { conversation_id: convo.id, user_id: participantId },
+        ]);
+      } catch (e) {
+        // ignore participant insert failures for now
+      }
+
+      setState((prev) => ({ ...prev, conversations: [{ ...convo, participants: [currentUserId, participantId] as string[] } as any, ...prev.conversations] }));
       return convo;
     } catch (err: any) {
       logError('start_conversation', err);

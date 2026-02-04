@@ -72,6 +72,7 @@ export interface ConversationSummary {
   id: string;
   title: string;
   lastMessageAt: string | null;
+  participants?: string[]; // list of user IDs
 }
 
 export interface AppState {

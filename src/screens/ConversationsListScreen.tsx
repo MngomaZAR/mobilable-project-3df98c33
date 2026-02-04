@@ -29,6 +29,7 @@ type Conversation = {
   lastMessage: string | null;
   lastMessageAt: string | null;
   createdAt: string;
+  participants?: string[];
 };
 
 const ConversationsListScreen: React.FC = () => {
@@ -58,6 +59,24 @@ const ConversationsListScreen: React.FC = () => {
       .order('last_message_at', { ascending: false })
       .order('created_at', { ascending: false });
 
+    // fetch participants for these conversations if the table exists
+    let participantsMap: Record<string, string[]> = {};
+    try {
+      const ids = (data ?? []).map((r: any) => r.id).filter(Boolean);
+      if (ids.length > 0) {
+        const { data: partData } = await supabase
+          .from('conversation_participants')
+          .select('conversation_id, user_id')
+          .in('conversation_id', ids as string[]);
+        (partData ?? []).forEach((p: any) => {
+          const cid = p.conversation_id as string;
+          participantsMap[cid] = participantsMap[cid] ? [...participantsMap[cid], p.user_id] : [p.user_id];
+        });
+      }
+    } catch (e) {
+      // table might not exist yet; ignore
+    }
+
     if (fetchError) {
       const message =
         (fetchError as any)?.code === '42P01'
@@ -67,7 +86,39 @@ const ConversationsListScreen: React.FC = () => {
       return;
     }
 
-    setConversations((data ?? []).map(mapConversation));
+    const mapped = (data ?? []).map(mapConversation).map((c: Conversation) => ({ ...c, participants: participantsMap[c.id] ?? undefined }));
+    // If a conversation has no explicit title and exactly two participants, try to fetch the other participant name for a friendly title
+    try {
+      const convoWithoutTitleOtherIds: Record<string, string> = {};
+      const { data: userData } = await supabase.auth.getUser();
+      const currentUserId = userData?.user?.id ?? null;
+
+      (mapped ?? []).forEach((conv: Conversation) => {
+        if ((!conv.title || conv.title === 'Conversation') && conv.participants && conv.participants.length === 2 && currentUserId) {
+          // other participant id
+          const other = conv.participants.find((id) => id !== currentUserId) as any;
+          if (other) convoWithoutTitleOtherIds[conv.id] = other;
+        }
+      });
+
+      const otherIds = Object.values(convoWithoutTitleOtherIds);
+      if (otherIds.length > 0) {
+        const { data: profiles } = await supabase.from('profiles').select('id, full_name').in('id', otherIds);
+        const nameMap: Record<string, string> = {};
+        (profiles ?? []).forEach((p: any) => {
+          nameMap[p.id] = p.full_name ?? 'Creator';
+        });
+        // apply names
+        mapped.forEach((conv: any) => {
+          const otherId = convoWithoutTitleOtherIds[conv.id];
+          if (otherId && nameMap[otherId]) conv.title = nameMap[otherId];
+        });
+      }
+    } catch (e) {
+      // ignore friendly title fallback failures
+    }
+
+    setConversations(mapped);
   }, [mapConversation]);
 
   useFocusEffect(

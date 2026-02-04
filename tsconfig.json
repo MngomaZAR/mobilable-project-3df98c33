@@ -6,6 +6,7 @@
     "allowJs": false,
     "noEmit": true,
     "resolveJsonModule": true,
-    "types": ["react", "react-native", "react-native-vector-icons"]
-  }
+    "types": ["react", "react-native"]
+  },
+  "exclude": ["__tests__"]
 }

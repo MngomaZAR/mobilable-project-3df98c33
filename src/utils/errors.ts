@@ -1,28 +1,33 @@
 /**
- * Error formatting and logging for app/Supabase errors.
+ * Error formatting and logging helpers
  */
 
-export function logError(label: string, err: unknown): void {
-  const message = err instanceof Error ? err.message : String(err);
-  if (__DEV__) {
-    console.warn(`[${label}]`, message, err);
-  }
-}
-
-export function formatErrorMessage(err: unknown, fallback: string): string {
-  if (err && typeof err === 'object' && 'message' in err && typeof (err as any).message === 'string') {
-    return (err as any).message;
-  }
-  if (err instanceof Error) return err.message;
-  if (typeof err === 'string') return err;
-  return fallback;
-}
-
 export function formatAuthError(err: unknown, fallback = 'Authentication failed.'): string {
-  if (err && typeof err === 'object' && 'message' in err && typeof (err as any).message === 'string') {
-    return (err as any).message;
-  }
-  if (err instanceof Error) return err.message;
+  if (!err) return fallback;
   if (typeof err === 'string') return err;
+  // Supabase may return { message } or { error_description }
+  if ((err as any)?.message) return String((err as any).message);
+  if ((err as any)?.error_description) return String((err as any).error_description);
+  if ((err as any)?.error) return String((err as any).error);
   return fallback;
+}
+
+export function formatErrorMessage(err: unknown, fallback = 'Something went wrong.'): string {
+  if (!err) return fallback;
+  if (typeof err === 'string') return err;
+  if ((err as any)?.message) return String((err as any).message);
+  if ((err as any)?.error) return String((err as any).error);
+  if ((err as any)?.status && (err as any).statusText) return `${(err as any).status} ${(err as any).statusText}`;
+  return fallback;
+}
+
+export function logError(context: string, err: unknown): void {
+  try {
+    const message = (err as any)?.stack || (err as any)?.message || String(err);
+    // eslint-disable-next-line no-console
+    console.error(`[AppError] ${context}:`, message);
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error('[AppError] failed to log error', e);
+  }
 }

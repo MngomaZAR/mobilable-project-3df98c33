@@ -13,7 +13,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { supabase } from '../config/supabaseClient';
 import { RootStackParamList } from '../navigation/types';
 
-type Navigation = StackNavigationProp<RootStackParamList, 'ChatThread'>;
+type Navigation = StackNavigationProp<RootStackParamList, 'Root'>;
 
 type ConversationRow = {
   id: string;
@@ -55,7 +55,7 @@ const ConversationsListScreen: React.FC = () => {
     const { data, error: fetchError } = await supabase
       .from('conversations')
       .select('id, title, last_message, last_message_at, created_at')
-      .order('last_message_at', { ascending: false, nullsLast: true })
+      .order('last_message_at', { ascending: false })
       .order('created_at', { ascending: false });
 
     if (fetchError) {
@@ -113,7 +113,8 @@ const ConversationsListScreen: React.FC = () => {
 
       const mapped = mapConversation(data as ConversationRow);
       setConversations((prev) => [mapped, ...prev]);
-      navigation.navigate('ChatThread', { conversationId: mapped.id, title: mapped.title });
+      // Open the Chat tab and pass the conversation as params so the Chat screen can hydrate the thread
+      navigation.navigate('Root', { screen: 'Chat', params: { conversationId: mapped.id, title: mapped.title } });
     } catch (err: any) {
       setError(err.message ?? 'Unable to start a new chat right now.');
     } finally {
@@ -143,7 +144,7 @@ const ConversationsListScreen: React.FC = () => {
     return (
       <TouchableOpacity
         style={styles.card}
-        onPress={() => navigation.navigate('ChatThread', { conversationId: item.id, title: item.title })}
+        onPress={() => navigation.navigate('Root', { screen: 'Chat', params: { conversationId: item.id, title: item.title } })}
       >
         <View style={styles.cardHeader}>
           <Text style={styles.cardTitle}>{item.title}</Text>

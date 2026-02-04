@@ -3,8 +3,8 @@ import { StyleSheet, Text, View } from 'react-native';
 import { MapPreviewProps } from './mapTypes';
 
 export const MapPreview: React.FC<MapPreviewProps> = ({ markers }) => {
-  const photographerMarkers = markers.filter((marker) => marker.type !== 'user');
-  const userMarker = markers.find((marker) => marker.type === 'user');
+  const photographerMarkers = markers.filter((marker: any) => marker.type !== 'user');
+  const userMarker = markers.find((marker: any) => marker.type === 'user');
 
   return (
     <>

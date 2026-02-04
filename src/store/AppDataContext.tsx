@@ -1,7 +1,8 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { initialState } from '../data/initialData';
-import { supabase } from '../config/supabaseClient';
+import { supabase, hasSupabase } from '../config/supabaseClient';
+import { hasHasura, hasuraGQL } from '../config/hasuraClient';
 import { AppState, AppUser, Booking, BookingStatus, Comment, Message, Photographer, Post, PrivacySettings } from '../types';
 import { uid } from '../utils/id';
 import { formatAuthError, formatErrorMessage, logError } from '../utils/errors';
@@ -32,7 +33,11 @@ type AppDataContextValue = {
   createBooking: (payload: CreateBookingInput) => Promise<Booking>;
   updateBookingStatus: (bookingId: string) => Promise<Booking | undefined>;
   sendMessage: (chatId: string, text: string, fromUser?: boolean) => Promise<Message>;
+<<<<<<< HEAD
   fetchMessagesForChat: (chatId: string) => Promise<void>;
+=======
+  fetchMessages: (chatId: string) => Promise<void>;
+>>>>>>> 080ba05 (chore: save local changes)
   addPost: (payload: CreatePostInput) => Promise<Post>;
   toggleLike: (postId: string) => Promise<Post | undefined>;
   addComment: (postId: string, text: string, userId?: string) => Promise<Comment>;
@@ -69,7 +74,7 @@ type PhotographerRow = {
   style: string | null;
   bio: string | null;
   tags: string[] | null;
-  profiles: PhotographerProfileRow;
+  profiles: PhotographerProfileRow[] | null;
 };
 
 const FALLBACK_AVATAR = 'https://images.unsplash.com/photo-1508214751196-bcfd4ca60f91?auto=format&fit=crop&w=300&q=80';
@@ -86,7 +91,7 @@ const PHOTOGRAPHER_SELECT = `
   profiles:profiles(id, full_name, avatar_url, city)
 `;
 
-const mapSupabaseUser = (user: any, fallbackRole: AppUser['role'] = 'client', profile: ProfileRow = null): AppUser => ({
+export const mapSupabaseUser = (user: any, fallbackRole: AppUser['role'] = 'client', profile: ProfileRow = null): AppUser => ({
   id: user.id,
   email: user.email ?? 'unknown-user',
   role: (profile?.role as AppUser['role']) ?? ((user.user_metadata as any)?.role as AppUser['role']) ?? fallbackRole,
@@ -101,8 +106,8 @@ const normalizeStoredUser = (user: AppUser | null | undefined): AppUser | null =
       }
     : null;
 
-const mapPhotographerRow = (row: PhotographerRow): Photographer => {
-  const profile = row.profiles;
+export const mapPhotographerRow = (row: PhotographerRow): Photographer => {
+  const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
   const fallbackLocation = profile?.city ? `${profile.city}, South Africa` : 'South Africa';
   return {
     id: row.id,
@@ -149,6 +154,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const fetchProfile = useCallback(async (userId: string): Promise<ProfileRow> => {
     try {
+      if (!hasSupabase) return null;
       const { data } = await supabase.from('profiles').select('role, verified').eq('id', userId).maybeSingle();
       return data ?? null;
     } catch (err) {
@@ -159,6 +165,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const fetchPhotographers = useCallback(async () => {
     try {
+      if (!hasSupabase) return; // use seeded photographers in local state
       const { data, error: photographerError } = await supabase
         .from('photographers')
         .select(PHOTOGRAPHER_SELECT)
@@ -178,6 +185,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     async (photographerId: string): Promise<Photographer | null> => {
       if (!photographerId) return null;
       try {
+        if (!hasSupabase) return null;
         const { data, error: photographerError } = await supabase
           .from('photographers')
           .select(PHOTOGRAPHER_SELECT)
@@ -211,13 +219,16 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
             conversations: parsed.conversations ?? initialState.conversations,
           });
         }
-        const { data } = await supabase.auth.getUser();
-        if (data.user) {
-          const profile = await fetchProfile(data.user.id);
-          const hydratedUser = mapSupabaseUser(data.user, 'client', profile);
-          setState((prev) => ({ ...prev, currentUser: hydratedUser }));
+
+        if (hasSupabase) {
+          const { data } = await supabase.auth.getUser();
+          if (data.user) {
+            const profile = await fetchProfile(data.user.id);
+            const hydratedUser = mapSupabaseUser(data.user, 'client', profile);
+            setState((prev) => ({ ...prev, currentUser: hydratedUser }));
+          }
+          await fetchPhotographers();
         }
-        await fetchPhotographers();
       } catch (err) {
         logError('load_state', err);
         setError('Unable to load saved data.');
@@ -291,6 +302,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const revalidateSession = useCallback(async () => {
     setLoading(true);
     try {
+      if (!hasSupabase) return null;
       const { data, error: sessionError } = await supabase.auth.getUser();
       if (sessionError) {
         setError(formatAuthError(sessionError, 'Session could not be refreshed.'));
@@ -365,6 +377,38 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
 
       try {
+        if (hasHasura) {
+          const q = `mutation SendMessage($chatId: uuid!, $senderId: uuid!, $body: String!) {
+            insert_messages_one(object: { chat_id: $chatId, sender_id: $senderId, body: $body }) {
+              id chat_id sender_id body created_at
+            }
+          }`;
+          const res = await hasuraGQL(q, { chatId, senderId, body: trimmed });
+          const row = res?.insert_messages_one;
+          const message: Message = {
+            id: row?.id ?? uid('msg'),
+            chatId: row?.chat_id ?? chatId,
+            fromUser,
+            text: row?.body ?? trimmed,
+            timestamp: row?.created_at ?? new Date().toISOString(),
+          };
+          setState((prev) => ({ ...prev, messages: [...prev.messages, message] }));
+          return message;
+        }
+
+        if (!hasSupabase) {
+          // Fallback to local-only message when Supabase isn't configured
+          const message: Message = {
+            id: uid('msg'),
+            chatId,
+            fromUser,
+            text: trimmed,
+            timestamp: new Date().toISOString(),
+          };
+          setState((prev) => ({ ...prev, messages: [...prev.messages, message] }));
+          return message;
+        }
+
         const { data, error: insertError } = await supabase
           .from('messages')
           .insert({
@@ -379,6 +423,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           throw insertError;
         }
 
+        // Normalize DB row into app Message shape (use `chatId` internally)
         const message: Message = {
           id: data?.id ?? uid('msg'),
           chatId: data?.chat_id ?? chatId,
@@ -399,39 +444,66 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     [state.currentUser?.id]
   );
 
-  const fetchMessagesForChat = useCallback(
-    async (chatId: string) => {
-      try {
-        const { data, error: fetchError } = await supabase
-          .from('messages')
-          .select('id, chat_id, sender_id, body, created_at')
-          .eq('chat_id', chatId)
-          .order('created_at', { ascending: true });
-
-        if (fetchError) {
-          logError('fetch_messages_for_chat', fetchError);
-          return;
-        }
-
-        const currentUserId = state.currentUser?.id;
-        const mapped: Message[] = (data ?? []).map((row: any) => ({
+  const fetchMessages = useCallback(async (chatId: string) => {
+    try {
+      if (hasHasura) {
+        const q = `query Messages($chatId: uuid!) {
+          messages(where: { chat_id: { _eq: $chatId } }, order_by: { created_at: asc }) {
+            id chat_id sender_id body created_at
+          }
+        }`;
+        const res = await hasuraGQL(q, { chatId });
+        const rows = res?.messages ?? [];
+        const mapped: Message[] = rows.map((row: any) => ({
           id: row.id,
-          chatId: row.chat_id ?? chatId,
-          fromUser: row.sender_id === currentUserId,
-          text: row.body ?? '',
+          chatId: row.chat_id,
+          fromUser: row.sender_id === state.currentUser?.id,
+          text: row.body,
           timestamp: row.created_at ?? new Date().toISOString(),
         }));
-
-        setState((prev) => {
-          const others = prev.messages.filter((m) => m.chatId !== chatId);
-          return { ...prev, messages: [...others, ...mapped] };
-        });
-      } catch (err) {
-        logError('fetch_messages_for_chat', err);
+        setState((prev) => ({
+          ...prev,
+          messages: [...prev.messages.filter((m) => m.chatId !== chatId), ...mapped],
+        }));
+        return;
       }
-    },
-    [state.currentUser?.id]
-  );
+
+      if (!hasSupabase) {
+        // nothing to do — local state already contains seeded messages
+        return;
+      }
+
+      const { data, error: fetchError } = await supabase
+        .from('messages')
+        .select('id, chat_id, sender_id, body, created_at')
+        .eq('chat_id', chatId)
+        .order('created_at', { ascending: true });
+
+      if (fetchError) throw fetchError;
+
+      const mapped: Message[] = (data ?? []).map((row: any) => ({
+        id: row.id,
+        chatId: row.chat_id,
+        fromUser: row.sender_id === state.currentUser?.id,
+        text: row.body,
+        timestamp: row.created_at ?? new Date().toISOString(),
+      }));
+
+      // Replace messages for this chat in local state but keep others
+      setState((prev) => ({
+        ...prev,
+        messages: [...prev.messages.filter((m) => m.chatId !== chatId), ...mapped],
+      }));
+    } catch (err) {
+      logError('fetch_messages', err);
+      setError('Unable to load messages for this chat.');
+    }
+  }, [state.currentUser?.id]);
+
+  const fetchMessagesForChat = useCallback(async (chatId: string) => {
+    // backwards compatible alias
+    return fetchMessages(chatId);
+  }, [fetchMessages]);
 
   const addPost = useCallback(
     async ({ caption, imageUri, location, userId }: CreatePostInput) => {
@@ -443,6 +515,48 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
 
       try {
+        if (hasHasura) {
+          const q = `mutation AddPost($userId: uuid!, $caption: String, $location: String, $imageUrl: String) {
+            insert_posts_one(object: { user_id: $userId, caption: $caption, location: $location, image_url: $imageUrl }) {
+              id user_id caption image_url created_at likes_count comment_count
+              profiles { id full_name city avatar_url }
+            }
+          }`;
+
+          const res = await hasuraGQL(q, { userId: ownerId, caption, location, imageUrl: imageUri });
+          const d = res?.insert_posts_one;
+          const post: Post = {
+            id: d?.id ?? uid('post'),
+            userId: d?.user_id ?? ownerId,
+            caption: d?.caption ?? caption,
+            imageUri: d?.image_url ?? imageUri,
+            createdAt: d?.created_at ?? new Date().toISOString(),
+            likes: d?.likes_count ?? 0,
+            liked: false,
+            commentCount: d?.comment_count ?? 0,
+            location: d?.location ?? location,
+          };
+
+          setState((prev) => ({ ...prev, posts: [post, ...prev.posts] }));
+          return post;
+        }
+
+        if (!hasSupabase) {
+          const post: Post = {
+            id: uid('post'),
+            userId: ownerId,
+            caption,
+            imageUri,
+            createdAt: new Date().toISOString(),
+            likes: 0,
+            liked: false,
+            commentCount: 0,
+            location,
+          };
+          setState((prev) => ({ ...prev, posts: [post, ...prev.posts] }));
+          return post;
+        }
+
         const { data, error: insertError } = await supabase
           .from('posts')
           .insert({
@@ -494,22 +608,111 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   );
 
   const toggleLike = useCallback(async (postId: string) => {
-    let updated: Post | undefined;
+    const userId = state.currentUser?.id;
+    if (!userId) {
+      const msg = 'You need to be signed in to like posts.';
+      setError(msg);
+      throw new Error(msg);
+    }
+
+    // Optimistic update locally
+    let optimistic: Post | undefined;
     setState((prev) => {
       const posts = prev.posts.map((post) => {
         if (post.id !== postId) return post;
         const liked = !post.liked;
-        updated = {
-          ...post,
-          liked,
-          likes: liked ? post.likes + 1 : Math.max(0, post.likes - 1),
-        };
-        return updated;
+        optimistic = { ...post, liked, likes: liked ? post.likes + 1 : Math.max(0, post.likes - 1) };
+        return optimistic;
       });
       return { ...prev, posts };
     });
-    return updated;
-  }, []);
+
+    try {
+      if (hasHasura) {
+        // check if like exists
+        const qExist = `query LikeExists($postId: uuid!, $userId: uuid!) { likes(where: { post_id: { _eq: $postId }, user_id: { _eq: $userId } }) { id } }`;
+        const existsRes = await hasuraGQL(qExist, { postId, userId });
+        const exists = (existsRes?.likes ?? []).length > 0;
+
+        if (exists) {
+          // delete like
+          const del = `mutation DeleteLike($postId: uuid!, $userId: uuid!) { delete_likes(where: { post_id: { _eq: $postId }, user_id: { _eq: $userId } }) { affected_rows } }`;
+          await hasuraGQL(del, { postId, userId });
+        } else {
+          const ins = `mutation InsertLike($postId: uuid!, $userId: uuid!) { insert_likes_one(object: { post_id: $postId, user_id: $userId }) { id } }`;
+          await hasuraGQL(ins, { postId, userId });
+        }
+
+        // refresh count
+        const agg = `query Count($postId: uuid!) { likes_aggregate(where: { post_id: { _eq: $postId } }) { aggregate { count } } }`;
+        const cRes = await hasuraGQL(agg, { postId });
+        const likesCount = Number(cRes?.likes_aggregate?.aggregate?.count ?? 0);
+
+        const upd = `mutation UpdatePost($postId: uuid!, $likes: Int!) { update_posts_by_pk(pk_columns: { id: $postId }, _set: { likes_count: $likes }) { id likes_count } }`;
+        await hasuraGQL(upd, { postId, likes: likesCount });
+
+        setState((prev) => ({
+          ...prev,
+          posts: prev.posts.map((p) => (p.id === postId ? { ...p, likes: likesCount } : p)),
+        }));
+
+        return optimistic;
+      }
+
+      if (!hasSupabase) {
+        // No backend; keep optimistic update as the final state
+        return optimistic;
+      }
+
+      // Check if like exists
+      const { data: existingLike, error: selErr } = await supabase
+        .from('likes')
+        .select('id')
+        .eq('post_id', postId)
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (selErr) throw selErr;
+
+      if (existingLike && existingLike.id) {
+        const { error: delErr } = await supabase.from('likes').delete().eq('id', existingLike.id);
+        if (delErr) throw delErr;
+      } else {
+        const { error: insertErr } = await supabase.from('likes').insert({ post_id: postId, user_id: userId });
+        if (insertErr) throw insertErr;
+      }
+
+      // Recount likes and persist to posts table to keep feed subscribers in sync
+      const { data: likesRows, error: likesErr } = await supabase.from('likes').select('id').eq('post_id', postId);
+      if (likesErr) throw likesErr;
+      const likesCount = (likesRows ?? []).length;
+
+      const { error: postUpdateErr } = await supabase.from('posts').update({ likes_count: likesCount }).eq('id', postId);
+      if (postUpdateErr) throw postUpdateErr;
+
+      // Ensure local state matches DB count
+      setState((prev) => ({
+        ...prev,
+        posts: prev.posts.map((p) => (p.id === postId ? { ...p, likes: likesCount } : p)),
+      }));
+
+      return optimistic;
+    } catch (err: any) {
+      // Roll back optimistic toggled like
+      setState((prev) => ({
+        ...prev,
+        posts: prev.posts.map((post) =>
+          post.id === postId
+            ? { ...post, liked: !post.liked, likes: post.liked ? Math.max(0, post.likes - 1) : post.likes + 1 }
+            : post
+        ),
+      }));
+      const message = formatErrorMessage(err, 'Unable to update like right now.');
+      setError(message);
+      logError('toggle_like', err);
+      throw err;
+    }
+  }, [state.currentUser?.id]);
 
   const addComment = useCallback(async (postId: string, text: string, userId = 'you') => {
     const comment: Comment = {
@@ -529,6 +732,35 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return comment;
   }, []);
 
+  useEffect(() => {
+    if (!hydrated || !hasSupabase) return;
+
+    const messagesChannel = supabase
+      .channel('public:messages')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
+        const row = payload.new as any;
+        if (!row) return;
+        const message: Message = {
+          id: row.id,
+          chatId: row.chat_id ?? row.conversation_id ?? '',
+          fromUser: row.sender_id === state.currentUser?.id,
+          text: row.body,
+          timestamp: row.created_at ?? new Date().toISOString(),
+        };
+        setState((prev) => ({ ...prev, messages: [...prev.messages, message] }));
+      })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'messages' }, (payload) => {
+        const deletedId = payload.old?.id;
+        setState((prev) => ({ ...prev, messages: prev.messages.filter((m) => m.id !== deletedId) }));
+      });
+
+    messagesChannel.subscribe();
+
+    return () => {
+      supabase.removeChannel(messagesChannel);
+    };
+  }, [hydrated, state.currentUser?.id]);
+
   const resetState = useCallback(async () => {
     try {
       await AsyncStorage.clear();
@@ -541,15 +773,16 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [persistInitialSnapshot]);
 
   const signUp = useCallback(
-    async (email: string, password: string, role: AppUser['role'] = 'client') => {
+    async (email: string, password: string, /* role intentionally ignored for security; only server/admin may grant roles */ _role: AppUser['role'] = 'client') => {
       setAuthenticating(true);
       setError(null);
       try {
+        // Do not allow client-controlled role assignments via auth metadata
         const { data, error: signUpError } = await supabase.auth.signUp({
           email,
           password,
           options: {
-            data: { role, verified: false },
+            data: { verified: false },
           },
         });
         if (signUpError) {
@@ -557,13 +790,13 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           return null;
         }
         if (data.user) {
+          // Upsert profile without allowing client to decide role. Default DB role is 'client'.
           await supabase.from('profiles').upsert({
             id: data.user.id,
-            role,
             verified: false,
           });
         }
-        const user: AppUser | null = data.user ? mapSupabaseUser(data.user, role, { role, verified: false }) : null;
+        const user: AppUser | null = data.user ? mapSupabaseUser(data.user, 'client', { role: 'client', verified: false }) : null;
         setState((prev) => ({ ...prev, currentUser: user }));
         return user;
       } catch (err: any) {
@@ -636,7 +869,11 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       createBooking,
       updateBookingStatus,
       sendMessage,
+<<<<<<< HEAD
       fetchMessagesForChat,
+=======
+      fetchMessages,
+>>>>>>> 080ba05 (chore: save local changes)
       addPost,
       toggleLike,
       addComment,
@@ -658,7 +895,11 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       createBooking,
       updateBookingStatus,
       sendMessage,
+<<<<<<< HEAD
       fetchMessagesForChat,
+=======
+      fetchMessages,
+>>>>>>> 080ba05 (chore: save local changes)
       addPost,
       toggleLike,
       addComment,

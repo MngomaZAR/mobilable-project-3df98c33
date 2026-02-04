@@ -59,19 +59,7 @@ const AuthScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
 
-      {mode === 'signup' ? (
-        <View style={styles.roleRow}>
-          {(['client', 'photographer', 'admin'] as AppUser['role'][]).map((value) => (
-            <TouchableOpacity
-              key={value}
-              style={[styles.roleChip, role === value && styles.roleChipActive]}
-              onPress={() => setRole(value)}
-            >
-              <Text style={[styles.roleText, role === value && styles.roleTextActive]}>{value}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      ) : null}
+      {/* For security, role selection is hidden from signup. Photographer/admin roles must be granted by an admin. */}
 
       <View style={styles.form}>
         <Text style={styles.label}>Email</Text>

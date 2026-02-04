@@ -6,6 +6,7 @@ export interface AppUser {
   id: string;
   email: string;
   role: UserRole;
+  verified?: boolean;
 }
 
 export interface PrivacySettings {

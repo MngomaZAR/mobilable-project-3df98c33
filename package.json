@@ -11,8 +11,13 @@
     "supabase:login": "npx supabase login",
     "supabase:link": "npx supabase link --project-ref luxppjfrlsnvtslundfz",
     "supabase:push": "npx supabase db push",
-    "db:migrate": "npx supabase db push"
-  },
+    "db:migrate": "npx supabase db push",
+    "test": "jest --passWithNoTests",
+    "test:hasura": "EXPO_PUBLIC_HASURA_URL=http://localhost:8080/v1/graphql jest __tests__/hasura.e2e.test.ts --runInBand --detectOpenHandles",
+    "hasura:up": "docker-compose -f docker/hasura/docker-compose.yml up -d",
+    "hasura:down": "docker-compose -f docker/hasura/docker-compose.yml down",
+    "hasura:logs": "docker-compose -f docker/hasura/docker-compose.yml logs -f",
+  
   "dependencies": {
     "@expo/vector-icons": "^14.0.4",
     "@react-native-async-storage/async-storage": "1.24.0",
@@ -29,6 +34,8 @@
     "expo-notifications": "latest",
     "expo-status-bar": "~1.12.1",
     "moment": "2.30.1",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
     "react-native": "0.76.1",
     "react-native-chart-kit": "6.12.0",
     "react-native-gesture-handler": "~2.18.1",
@@ -41,6 +48,7 @@
     "react-native-screens": "~3.34.0",
     "react-native-svg": "^15.8.0",
     "react-native-tab-view": "^4.0.12",
+    "react-native-web": "^0.21.0",
     "react-native-webview": "latest"
   },
   "devDependencies": {
@@ -48,11 +56,15 @@
     "@babel/eslint-parser": "latest",
     "@types/react": "latest",
     "@types/react-native": "latest",
+    "@types/jest": "^29.5.3",
     "@typescript-eslint/parser": "latest",
+    "babel-preset-expo": "^54.0.10",
     "eslint": "latest",
     "eslint-plugin-react": "latest",
     "eslint-plugin-react-hooks": "latest",
     "eslint-plugin-react-native": "latest",
+    "jest": "^29.6.1",
+    "ts-jest": "^29.1.0",
     "supabase": "^2.75.0",
     "typescript": "latest"
   },

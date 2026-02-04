@@ -107,7 +107,6 @@ const MapScreen: React.FC = () => {
 
       const position = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.Highest,
-        maximumAge: 60000,
         mayShowUserSettingsDialog: true,
       });
 

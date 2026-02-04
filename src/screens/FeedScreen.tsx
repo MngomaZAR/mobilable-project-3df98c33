@@ -21,7 +21,7 @@ const FeedScreen: React.FC = () => {
       commentCount: item.commentCount,
       location: item.location,
     };
-    navigation.navigate('PostDetail', { postId: item.id, post: payload });
+    navigation.navigate('PostDetail', { postId: item.id });
   };
 
   return (

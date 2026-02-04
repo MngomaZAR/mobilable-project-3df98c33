@@ -12,14 +12,14 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppData } from '../store/AppDataContext';
-import { RootStackParamList } from '../navigation/types';
+import { TabParamList } from '../navigation/types';
 import { Photographer } from '../types';
 import { AppLogo } from '../components/AppLogo';
 
-type Navigation = StackNavigationProp<RootStackParamList, 'Root'>;
+type Navigation = BottomTabNavigationProp<TabParamList, 'Home'>;
 
 const HomeScreen: React.FC = () => {
   const { state, loading, error, refresh } = useAppData();
@@ -57,11 +57,13 @@ const HomeScreen: React.FC = () => {
   }, [state.photographers, category, priceRange, sort, location]);
 
   const openProfile = (photographer: Photographer) => {
-    navigation.navigate('Profile', { photographerId: photographer.id });
+    const parent = navigation.getParent?.();
+    parent?.navigate('Profile', { photographerId: photographer.id });
   };
 
   const startBooking = (photographer: Photographer) => {
-    navigation.navigate('BookingForm', { photographerId: photographer.id });
+    const parent = navigation.getParent?.();
+    parent?.navigate('BookingForm', { photographerId: photographer.id });
   };
 
   const renderCard = (item: Photographer) => (
@@ -125,10 +127,10 @@ const HomeScreen: React.FC = () => {
           <Text style={styles.brandName}>SnapBook</Text>
         </View>
         <View style={styles.navActions}>
-          <TouchableOpacity style={styles.linkPill} onPress={() => navigation.navigate('Auth')}>
+          <TouchableOpacity style={styles.linkPill} onPress={() => navigation.getParent?.()?.navigate('Auth')}>
             <Text style={styles.linkText}>Sign In</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.linkPill, styles.linkFilled]} onPress={() => navigation.navigate('Auth')}>
+          <TouchableOpacity style={[styles.linkPill, styles.linkFilled]} onPress={() => navigation.getParent?.()?.navigate('Auth')}>
             <Text style={[styles.linkText, styles.linkFilledText]}>Sign Up</Text>
           </TouchableOpacity>
         </View>
@@ -223,7 +225,7 @@ const HomeScreen: React.FC = () => {
           <Text style={styles.sectionTitle}>Available Photographers</Text>
           <Text style={styles.sectionSubtitle}>{filteredPhotographers.length} options in your area</Text>
         </View>
-        <TouchableOpacity style={styles.lightButton} onPress={() => navigation.navigate('Bookings')}>
+        <TouchableOpacity style={styles.lightButton} onPress={() => (navigation as any).navigate('Bookings')}>
           <Ionicons name="calendar-outline" size={16} color="#0f172a" />
           <Text style={styles.lightButtonText}>View Dashboard</Text>
         </TouchableOpacity>
@@ -246,7 +248,7 @@ const HomeScreen: React.FC = () => {
             <Text style={styles.featureCopy}>Detailed pages with portfolios, reviews, and booking.</Text>
             <TouchableOpacity
               style={styles.outlineButton}
-              onPress={() => navigation.navigate('Profile', { photographerId: state.photographers[0]?.id ?? 'p1' })}
+              onPress={() => navigation.getParent?.()?.navigate('Profile', { photographerId: state.photographers[0]?.id ?? 'p1' })}
             >
               <Text style={styles.outlineText}>View Demo</Text>
             </TouchableOpacity>

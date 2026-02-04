@@ -57,7 +57,7 @@ const PhotographerDashboardScreen: React.FC = () => {
             <Text style={styles.title}>You are live for new requests</Text>
             <Text style={styles.subtitle}>Track assignments, chat with clients, and move jobs forward.</Text>
           </View>
-          <TouchableOpacity style={styles.actionPill} onPress={() => navigation.navigate('Bookings')}>
+          <TouchableOpacity style={styles.actionPill} onPress={() => navigation.navigate('Root', { screen: 'Bookings' })}>
             <Ionicons name="calendar" size={18} color="#fff" />
             <Text style={styles.actionPillText}>View schedule</Text>
           </TouchableOpacity>
@@ -90,7 +90,7 @@ const PhotographerDashboardScreen: React.FC = () => {
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <Text style={styles.cardTitle}>Requests queue</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Chat')} style={styles.smallLink}>
+            <TouchableOpacity onPress={() => navigation.navigate('Root', { screen: 'Chat' })} style={styles.smallLink}>
               <Text style={styles.smallLinkText}>Open chat</Text>
             </TouchableOpacity>
           </View>
@@ -115,11 +115,11 @@ const PhotographerDashboardScreen: React.FC = () => {
 
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Next steps</Text>
-          <TouchableOpacity style={styles.secondaryButton} onPress={() => navigation.navigate('Payment')}>
+          <TouchableOpacity style={styles.secondaryButton} onPress={() => navigation.navigate('Payment', { bookingId: undefined })}>
             <Ionicons name="card-outline" size={16} color="#0f172a" />
             <Text style={styles.secondaryText}>Collect payment</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.secondaryButton} onPress={() => navigation.navigate('Map')}>
+          <TouchableOpacity style={styles.secondaryButton} onPress={() => navigation.navigate('Root', { screen: 'Map' })}>
             <Ionicons name="navigate-outline" size={16} color="#0f172a" />
             <Text style={styles.secondaryText}>Map to client</Text>
           </TouchableOpacity>

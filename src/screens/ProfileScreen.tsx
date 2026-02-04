@@ -70,6 +70,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 24,
   },
+  muted: {
+    color: '#475569',
+  },
   hero: {
     width: '100%',
     height: 260,

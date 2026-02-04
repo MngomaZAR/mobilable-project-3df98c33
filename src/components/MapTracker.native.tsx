@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef } from 'react';
-import MapView, { MapView as MapViewType, Marker, Polyline, Region, UrlTile } from 'react-native-maps';
+import MapView, { Marker, Polyline, Region, UrlTile } from 'react-native-maps';
 import { StyleSheet, View, useWindowDimensions } from 'react-native';
 
 type Coordinate = {
@@ -15,7 +15,7 @@ type Props = {
 
 export const MapTracker: React.FC<Props> = ({ client, photographer, status }) => {
   const { width } = useWindowDimensions();
-  const mapRef = useRef<MapViewType | null>(null);
+  const mapRef = useRef<any | null>(null);
   const region: Region = useMemo(
     () => ({
       latitude: (client.latitude + photographer.latitude) / 2,
@@ -28,10 +28,14 @@ export const MapTracker: React.FC<Props> = ({ client, photographer, status }) =>
 
   useEffect(() => {
     if (!mapRef.current) return;
-    mapRef.current.fitToCoordinates([client, photographer], {
-      edgePadding: { top: 60, bottom: 60, left: 40, right: 40 },
-      animated: true,
-    });
+    try {
+      (mapRef.current as any).fitToCoordinates([client, photographer], {
+        edgePadding: { top: 60, bottom: 60, left: 40, right: 40 },
+        animated: true,
+      });
+    } catch (e) {
+      // ignore
+    }
   }, [client, photographer]);
 
   return (

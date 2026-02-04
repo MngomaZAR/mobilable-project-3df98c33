@@ -73,7 +73,6 @@ export const MainNavigator: React.FC<MainNavigatorProps> = ({ logoSource }) => (
           logoSource ? (
             <Image source={logoSource} style={{ width: 120, height: 40, resizeMode: 'contain' }} />
           ) : undefined,
-        headerBackTitleVisible: false,
       }}
     >
       <Stack.Screen name="Root" component={TabsNavigator} options={{ headerShown: false }} />

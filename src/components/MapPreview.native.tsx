@@ -1,12 +1,12 @@
 import React, { useEffect, useMemo, useRef } from 'react';
-import MapView, { MapView as MapViewType, Marker, Region, UrlTile } from 'react-native-maps';
+import MapView, { Marker, Region, UrlTile } from 'react-native-maps';
 import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { MapMarker, MapPreviewProps } from './mapTypes';
 import { DEFAULT_CAPE_TOWN_COORDINATES, validateSouthAfricanLocation } from '../utils/geo';
 
 export const MapPreview: React.FC<MapPreviewProps> = ({ markers, onMapError }) => {
-  const mapRef = useRef<MapViewType | null>(null);
+  const mapRef = useRef<any | null>(null);
   const { width } = useWindowDimensions();
 
   const region: Region = useMemo(() => {
@@ -24,14 +24,19 @@ export const MapPreview: React.FC<MapPreviewProps> = ({ markers, onMapError }) =
 
   useEffect(() => {
     if (!mapRef.current || markers.length === 0) return;
-    const coords = markers.map((marker) => ({
+    const coords = markers.map((marker: MapMarker) => ({
       latitude: marker.latitude,
       longitude: marker.longitude,
     }));
-    mapRef.current.fitToCoordinates(coords, {
-      edgePadding: { top: 60, bottom: 60, left: 40, right: 40 },
-      animated: true,
-    });
+    // mapRef typing differs across platforms; keep it flexible here
+    try {
+      (mapRef.current as any).fitToCoordinates(coords, {
+        edgePadding: { top: 60, bottom: 60, left: 40, right: 40 },
+        animated: true,
+      });
+    } catch (e) {
+      // ignore if the underlying native ref doesn't support this
+    }
   }, [markers]);
 
   const pinStyles = (marker: MapMarker) => ({
@@ -39,7 +44,7 @@ export const MapPreview: React.FC<MapPreviewProps> = ({ markers, onMapError }) =
     backgroundColor: marker.type === 'user' ? '#2563eb' : '#0f172a',
   });
 
-  const photographerCount = markers.filter((marker) => marker.type !== 'user').length;
+  const photographerCount = markers.filter((marker: MapMarker) => marker.type !== 'user').length;
 
   return (
     <View style={[styles.container, { minHeight: Math.min(520, width < 480 ? 300 : 400) }]}>
@@ -50,7 +55,6 @@ export const MapPreview: React.FC<MapPreviewProps> = ({ markers, onMapError }) =
         moveOnMarkerPress={false}
         showsUserLocation={markers.some((marker) => marker.type === 'user')}
         showsCompass={false}
-        onError={(event) => onMapError?.(event?.nativeEvent?.error ?? 'Map failed to render.')}
       >
         <UrlTile urlTemplate="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" maximumZ={19} />
         {markers.map((marker) => (

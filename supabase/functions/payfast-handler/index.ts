@@ -34,6 +34,7 @@ const textHeaders = {
 
 const payfastBaseUrl =
   Deno.env.get("PAYFAST_BASE_URL")?.trim() || "https://sandbox.payfast.co.za";
+const payfastValidateUrl = `${payfastBaseUrl}/eng/query/validate`;
 const merchantId = Deno.env.get("PAYFAST_MERCHANT_ID")?.trim() || "10046407";
 const merchantKey = Deno.env.get("PAYFAST_MERCHANT_KEY")?.trim() || "zuimv2w7udhu3";
 const passphrase = Deno.env.get("PAYFAST_PASSPHRASE")?.trim() || "";
@@ -77,6 +78,25 @@ const asNumber = (value: string | null | undefined) => {
   if (!value) return null;
   const parsed = Number.parseFloat(value);
   return Number.isFinite(parsed) ? parsed : null;
+};
+
+const validateItnWithPayfast = async (rawBody: string): Promise<boolean> => {
+  try {
+    const response = await fetch(payfastValidateUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: rawBody,
+    });
+    if (!response.ok) {
+      console.warn("payfast-handler: validation endpoint returned non-2xx", response.status);
+      return false;
+    }
+    const validationResult = (await response.text()).trim().toUpperCase();
+    return validationResult === "VALID";
+  } catch (error) {
+    console.warn("payfast-handler: ITN validation request failed", error);
+    return false;
+  }
 };
 
 const loadOrCreatePayment = async (bookingId: string, fallbackAmount = 1200) => {
@@ -164,13 +184,17 @@ const handleCreateCheckoutLink = async (req: Request) => {
 const handleItn = async (req: Request) => {
   // PayFast requires a plain 200 response body/header to acknowledge ITN delivery.
   const body = await req.text().catch(() => "");
+  if (!body) {
+    console.warn("payfast-handler: empty ITN body");
+    return textOk("OK");
+  }
   const payload = Object.fromEntries(new URLSearchParams(body).entries());
 
   const remoteIp = (req.headers.get("x-forwarded-for") || "")
     .split(",")[0]
     ?.trim();
-  if (allowedIps.length > 0 && remoteIp && !allowedIps.includes(remoteIp)) {
-    console.warn("payfast-handler: rejected ITN by IP allowlist", remoteIp);
+  if (allowedIps.length > 0 && (!remoteIp || !allowedIps.includes(remoteIp))) {
+    console.warn("payfast-handler: rejected ITN by IP allowlist", remoteIp || "unknown");
     return textOk("OK");
   }
 
@@ -178,6 +202,17 @@ const handleItn = async (req: Request) => {
   const expectedSignature = createSignature(payload, passphrase);
   if (!receivedSignature || expectedSignature !== receivedSignature) {
     console.warn("payfast-handler: invalid signature");
+    return textOk("OK");
+  }
+
+  if (payload.merchant_id !== merchantId) {
+    console.warn("payfast-handler: merchant mismatch");
+    return textOk("OK");
+  }
+
+  const isValidItn = await validateItnWithPayfast(body);
+  if (!isValidItn) {
+    console.warn("payfast-handler: upstream ITN validation failed");
     return textOk("OK");
   }
 

@@ -126,8 +126,12 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const photographers = (data ?? []).map(mapPhotographerRow).slice(0, MAX_PHOTOGRAPHERS);
       setState({ photographers });
     } catch (err: any) {
-      logError('fetch_photographers', err);
-      setError(formatErrorMessage(err, 'Unable to load photographers right now.'));
+      const message = formatErrorMessage(err, 'Unable to load photographers right now.');
+      // Do not spam device overlays for common connectivity errors in development.
+      if (!/failed to fetch|network/i.test(message)) {
+        logError('fetch_photographers', err);
+      }
+      setError(message);
     }
   }, []);
 

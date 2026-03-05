@@ -17,7 +17,7 @@ const FeedScreen: React.FC = () => {
       imageUri: item.imageUrl,
       createdAt: item.createdAt,
       likes: item.likes,
-      liked: false,
+      liked: Boolean(item.liked),
       commentCount: item.commentCount,
       location: item.location,
     };

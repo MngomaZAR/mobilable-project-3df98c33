@@ -3,14 +3,13 @@ import { ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 're
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useNavigation } from '@react-navigation/native';
 import { useAppData } from '../store/AppDataContext';
-import { environment } from '../config/environment';
 import { RootStackParamList } from '../navigation/types';
 import { AppLogo } from '../components/AppLogo';
 
 type Navigation = StackNavigationProp<RootStackParamList, 'Root'>;
 
 const SettingsScreen: React.FC = () => {
-  const { resetState, saving } = useAppData();
+  const { resetState, saving, currentUser, signOut } = useAppData();
   const navigation = useNavigation<Navigation>();
   const [notificationsEnabled, setNotificationsEnabled] = React.useState(true);
 
@@ -27,34 +26,47 @@ const SettingsScreen: React.FC = () => {
         <Text style={styles.label}>Notifications</Text>
         <Switch value={notificationsEnabled} onValueChange={setNotificationsEnabled} />
       </View>
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Environment</Text>
-        <Text style={styles.meta}>Env: {environment.env}</Text>
-        <Text style={styles.meta}>Region: {environment.region}</Text>
-        <Text style={styles.meta}>Support: {environment.supportEmail}</Text>
-      </View>
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Terms of Service</Text>
-        <Text style={styles.paragraph}>
-          Placeholder terms: booking requests remain local on your device. Add your own terms when you connect your
-          backend and legal copy.
-        </Text>
-      </View>
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Privacy Policy</Text>
-        <Text style={styles.paragraph}>
-          Placeholder privacy policy: this demo stores data in AsyncStorage on your device only. No external services
-          are contacted.
-        </Text>
-      </View>
+      <TouchableOpacity style={styles.linkCard} onPress={() => navigation.navigate('Support')}>
+        <Text style={styles.linkTitle}>Support</Text>
+        <Text style={styles.linkMeta}>Open a ticket or request help from the Papzi team.</Text>
+      </TouchableOpacity>
+      <TouchableOpacity style={styles.linkCard} onPress={() => navigation.navigate('PrivacyPolicy')}>
+        <Text style={styles.linkTitle}>Privacy policy</Text>
+        <Text style={styles.linkMeta}>Learn how Papzi handles your data.</Text>
+      </TouchableOpacity>
+      <TouchableOpacity style={styles.linkCard} onPress={() => navigation.navigate('Terms')}>
+        <Text style={styles.linkTitle}>Terms of service</Text>
+        <Text style={styles.linkMeta}>Review the Papzi terms of service.</Text>
+      </TouchableOpacity>
       <TouchableOpacity style={styles.linkCard} onPress={() => navigation.navigate('Auth')}>
         <Text style={styles.linkTitle}>Account & Auth</Text>
-        <Text style={styles.linkMeta}>Email/password login and signup with Supabase.</Text>
+        <Text style={styles.linkMeta}>Manage sign-in options and account access.</Text>
       </TouchableOpacity>
+      {currentUser?.role === 'photographer' ? (
+        <TouchableOpacity style={styles.linkCard} onPress={() => navigation.navigate('PhotographerDashboard')}>
+          <Text style={styles.linkTitle}>Photographer dashboard</Text>
+          <Text style={styles.linkMeta}>Manage requests, track jobs, and chat with clients.</Text>
+        </TouchableOpacity>
+      ) : null}
+      {currentUser?.role === 'admin' ? (
+        <TouchableOpacity style={styles.linkCard} onPress={() => navigation.navigate('AdminDashboard')}>
+          <Text style={styles.linkTitle}>Admin dashboard</Text>
+          <Text style={styles.linkMeta}>Monitor platform activity and data health.</Text>
+        </TouchableOpacity>
+      ) : null}
       <TouchableOpacity style={styles.linkCard} onPress={() => navigation.navigate('Compliance')}>
         <Text style={styles.linkTitle}>Privacy & Permissions</Text>
         <Text style={styles.linkMeta}>Location toggle, privacy controls, data deletion request.</Text>
       </TouchableOpacity>
+      <TouchableOpacity style={styles.linkCard} onPress={() => navigation.navigate('AccountDelete')}>
+        <Text style={styles.linkTitle}>Account deletion</Text>
+        <Text style={styles.linkMeta}>Submit a deletion request for your account.</Text>
+      </TouchableOpacity>
+      {currentUser ? (
+        <TouchableOpacity style={styles.signOutButton} onPress={signOut}>
+          <Text style={styles.signOutButtonText}>Sign out</Text>
+        </TouchableOpacity>
+      ) : null}
       <TouchableOpacity style={styles.reset} onPress={resetState} disabled={saving}>
         <Text style={styles.resetText}>{saving ? 'Resetting...' : 'Reset local data'}</Text>
       </TouchableOpacity>
@@ -94,24 +106,20 @@ const styles = StyleSheet.create({
     color: '#111827',
     fontWeight: '600',
   },
-  section: {
-    paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: '#e5e7eb',
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#0f172a',
-    marginBottom: 6,
-  },
-  paragraph: {
-    color: '#475569',
-    lineHeight: 20,
-  },
   meta: {
     color: '#475569',
     marginTop: 2,
+  },
+  signOutButton: {
+    backgroundColor: '#0f172a',
+    padding: 14,
+    borderRadius: 14,
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  signOutButtonText: {
+    color: '#fff',
+    fontWeight: '700',
   },
   reset: {
     backgroundColor: '#dc2626',

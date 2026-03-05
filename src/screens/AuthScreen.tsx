@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Linking, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { AppLogo } from '../components/AppLogo';
 import { useAppData } from '../store/AppDataContext';
 import { AppUser } from '../types';
+import { supabase } from '../config/supabaseClient';
 
 type Mode = 'signin' | 'signup';
 
@@ -32,6 +33,29 @@ const AuthScreen: React.FC = () => {
     Alert.alert('Signed out', 'You have been signed out securely.');
   };
 
+  const handleOAuthSignIn = async (provider: 'google' | 'apple') => {
+    try {
+      const redirectTo = 'papzi://auth/callback';
+      const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo,
+          skipBrowserRedirect: true,
+        },
+      });
+      if (oauthError) {
+        throw oauthError;
+      }
+      if (data?.url) {
+        await Linking.openURL(data.url);
+      } else {
+        Alert.alert('Sign in unavailable', 'Unable to start sign in. Please try again.');
+      }
+    } catch (err: any) {
+      Alert.alert('Sign in failed', err?.message ?? 'Unable to sign in right now.');
+    }
+  };
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -41,7 +65,7 @@ const AuthScreen: React.FC = () => {
       <View style={styles.header}>
         <AppLogo size={88} />
         <Text style={styles.title}>Papzi</Text>
-        <Text style={styles.subtitle}>Email & password auth powered by Supabase.</Text>
+        <Text style={styles.subtitle}>Sign in to book your photographer.</Text>
       </View>
 
       <View style={styles.switcher}>
@@ -96,6 +120,16 @@ const AuthScreen: React.FC = () => {
         <TouchableOpacity style={styles.submit} onPress={submit} disabled={authenticating}>
           <Text style={styles.submitText}>{authenticating ? 'Submitting...' : mode === 'signin' ? 'Sign in' : 'Sign up'}</Text>
         </TouchableOpacity>
+        <View style={styles.oauthRow}>
+          <TouchableOpacity style={styles.oauthButton} onPress={() => handleOAuthSignIn('google')} disabled={authenticating}>
+            <Text style={styles.oauthText}>Continue with Google</Text>
+          </TouchableOpacity>
+          {Platform.OS === 'ios' ? (
+            <TouchableOpacity style={styles.oauthButton} onPress={() => handleOAuthSignIn('apple')} disabled={authenticating}>
+              <Text style={styles.oauthText}>Continue with Apple</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
         {currentUser ? (
           <TouchableOpacity style={styles.secondary} onPress={handleSignOut} disabled={authenticating}>
             <Text style={styles.secondaryText}>Sign out ({currentUser.email})</Text>
@@ -209,6 +243,22 @@ const styles = StyleSheet.create({
   },
   submitText: {
     color: '#fff',
+    fontWeight: '700',
+  },
+  oauthRow: {
+    marginTop: 10,
+    gap: 8,
+  },
+  oauthButton: {
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#cbd5e1',
+    backgroundColor: '#fff',
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  oauthText: {
+    color: '#0f172a',
     fontWeight: '700',
   },
   secondary: {

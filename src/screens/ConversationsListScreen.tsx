@@ -11,6 +11,7 @@ import {
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { supabase } from '../config/supabaseClient';
+import { useAppData } from '../store/AppDataContext';
 import { RootStackParamList } from '../navigation/types';
 
 type Navigation = StackNavigationProp<RootStackParamList, 'ChatThread'>;
@@ -23,23 +24,31 @@ type ConversationRow = {
   created_at: string | null;
 };
 
+type ParticipantRow = {
+  conversation: ConversationRow | ConversationRow[] | null;
+  last_read_at: string | null;
+};
+
 type Conversation = {
   id: string;
   title: string;
   lastMessage: string | null;
   lastMessageAt: string | null;
   createdAt: string;
+  lastReadAt: string | null;
+  unreadCount: number;
 };
 
 const ConversationsListScreen: React.FC = () => {
   const navigation = useNavigation<Navigation>();
+  const { currentUser } = useAppData();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const mapConversation = useCallback((row: ConversationRow): Conversation => {
+  const mapConversation = useCallback((row: ConversationRow, lastReadAt: string | null): Conversation => {
     const createdAt = row.created_at ?? new Date().toISOString();
     return {
       id: row.id,
@@ -47,16 +56,23 @@ const ConversationsListScreen: React.FC = () => {
       lastMessage: row.last_message,
       lastMessageAt: row.last_message_at ?? row.created_at,
       createdAt,
+      lastReadAt,
+      unreadCount: 0,
     };
   }, []);
 
   const fetchConversations = useCallback(async () => {
     setError(null);
+    const userId = currentUser?.id;
+    if (!userId) {
+      setConversations([]);
+      return;
+    }
+
     const { data, error: fetchError } = await supabase
-      .from('conversations')
-      .select('id, title, last_message, last_message_at, created_at')
-      .order('last_message_at', { ascending: false, nullsLast: true })
-      .order('created_at', { ascending: false });
+      .from('conversation_participants')
+      .select('conversation:conversations(id, title, last_message, last_message_at, created_at), last_read_at')
+      .eq('user_id', userId);
 
     if (fetchError) {
       const message =
@@ -67,8 +83,33 @@ const ConversationsListScreen: React.FC = () => {
       return;
     }
 
-    setConversations((data ?? []).map(mapConversation));
-  }, [mapConversation]);
+    const mapped = (data ?? [])
+      .map((row: ParticipantRow) => {
+        const conversation = Array.isArray(row.conversation) ? row.conversation[0] : row.conversation;
+        return conversation ? mapConversation(conversation, row.last_read_at ?? null) : null;
+      })
+      .filter(Boolean) as Conversation[];
+
+    const withCounts = await Promise.all(
+      mapped.map(async (conversation) => {
+        if (!conversation.lastReadAt) return conversation;
+        const { count } = await supabase
+          .from('messages')
+          .select('id', { count: 'exact', head: true })
+          .eq('chat_id', conversation.id)
+          .gt('created_at', conversation.lastReadAt);
+        return { ...conversation, unreadCount: count ?? 0 };
+      })
+    );
+
+    setConversations(
+      withCounts.sort((a, b) => {
+        const aTime = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
+        const bTime = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
+        return bTime - aTime;
+      })
+    );
+  }, [currentUser?.id, mapConversation]);
 
   useFocusEffect(
     useCallback(() => {
@@ -96,13 +137,15 @@ const ConversationsListScreen: React.FC = () => {
     setCreating(true);
     setError(null);
     try {
-      const { data: userData } = await supabase.auth.getUser();
+      if (!currentUser?.id) {
+        throw new Error('You need to be signed in to start a new chat.');
+      }
       const title = `New chat · ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
       const { data, error: insertError } = await supabase
         .from('conversations')
         .insert({
           title,
-          created_by: userData?.user?.id ?? null,
+          created_by: currentUser.id,
           last_message: 'Say hello 👋',
           last_message_at: new Date().toISOString(),
         })
@@ -111,7 +154,14 @@ const ConversationsListScreen: React.FC = () => {
 
       if (insertError) throw insertError;
 
-      const mapped = mapConversation(data as ConversationRow);
+      if (data?.id) {
+        await supabase.from('conversation_participants').insert({
+          conversation_id: data.id,
+          user_id: currentUser.id,
+        });
+      }
+
+      const mapped = mapConversation(data as ConversationRow, new Date().toISOString());
       setConversations((prev) => [mapped, ...prev]);
       navigation.navigate('ChatThread', { conversationId: mapped.id, title: mapped.title });
     } catch (err: any) {
@@ -119,14 +169,14 @@ const ConversationsListScreen: React.FC = () => {
     } finally {
       setCreating(false);
     }
-  }, [mapConversation, navigation]);
+  }, [currentUser?.id, mapConversation, navigation]);
 
   const listHeader = useMemo(
     () => (
       <View style={styles.header}>
         <View>
           <Text style={styles.title}>Conversations</Text>
-          <Text style={styles.subtitle}>Synced from Supabase so you can keep the chat flowing.</Text>
+          <Text style={styles.subtitle}>Your conversations with photographers.</Text>
         </View>
         <TouchableOpacity style={styles.primaryButton} onPress={handleNewChat} disabled={creating}>
           <Text style={styles.primaryButtonText}>{creating ? 'Creating...' : 'New Chat'}</Text>
@@ -147,7 +197,14 @@ const ConversationsListScreen: React.FC = () => {
       >
         <View style={styles.cardHeader}>
           <Text style={styles.cardTitle}>{item.title}</Text>
-          <Text style={styles.cardTime}>{formatted}</Text>
+          <View style={styles.cardMeta}>
+            {item.unreadCount > 0 ? (
+              <View style={styles.unreadBadge}>
+                <Text style={styles.unreadText}>{item.unreadCount}</Text>
+              </View>
+            ) : null}
+            <Text style={styles.cardTime}>{formatted}</Text>
+          </View>
         </View>
         <Text style={styles.cardMessage} numberOfLines={2}>
           {item.lastMessage ?? 'Start the conversation'}
@@ -225,6 +282,25 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 6,
+  },
+  cardMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  unreadBadge: {
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#ef4444',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+  },
+  unreadText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 12,
   },
   cardTitle: {
     fontSize: 16,

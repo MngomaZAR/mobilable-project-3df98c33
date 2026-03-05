@@ -18,11 +18,12 @@ import { useAppData } from '../store/AppDataContext';
 import { RootStackParamList } from '../navigation/types';
 import { Photographer } from '../types';
 import { AppLogo } from '../components/AppLogo';
+import { rankPhotographers } from '../utils/recommendation';
 
 type Navigation = StackNavigationProp<RootStackParamList, 'Root'>;
 
 const HomeScreen: React.FC = () => {
-  const { state, loading, error, refresh } = useAppData();
+  const { state, loading, error, refresh, currentUser } = useAppData();
   const navigation = useNavigation<Navigation>();
   const { width } = useWindowDimensions();
   const [category, setCategory] = useState('All Categories');
@@ -30,8 +31,22 @@ const HomeScreen: React.FC = () => {
   const [sort, setSort] = useState('Highest Rated');
   const [location, setLocation] = useState('');
 
+  const parseCoordinates = (value: string) => {
+    const parts = value.split(',').map((chunk) => chunk.trim());
+    if (parts.length !== 2) return null;
+    const lat = Number(parts[0]);
+    const lng = Number(parts[1]);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    return { latitude: lat, longitude: lng };
+  };
+
   const columns = width > 900 ? 3 : width > 700 ? 2 : 1;
   const isWideHero = width > 820;
+  const avgRating = useMemo(() => {
+    if (!state.photographers.length) return '0.0';
+    const total = state.photographers.reduce((sum, item) => sum + item.rating, 0);
+    return (total / state.photographers.length).toFixed(1);
+  }, [state.photographers]);
 
   const filteredPhotographers = useMemo(() => {
     let list = [...state.photographers];
@@ -41,7 +56,7 @@ const HomeScreen: React.FC = () => {
     }
 
     if (priceRange !== 'Any budget') {
-      list = list.filter((item) => item.priceRange.includes(priceRange.replace(/[^$]/g, '')));
+      list = list.filter((item) => item.priceRange.includes('R'));
     }
 
     if (location.trim().length > 0) {
@@ -51,6 +66,11 @@ const HomeScreen: React.FC = () => {
 
     if (sort === 'Highest Rated') {
       list = list.sort((a, b) => b.rating - a.rating);
+    }
+
+    const coordinates = parseCoordinates(location);
+    if (coordinates) {
+      return rankPhotographers(coordinates, list).map((item) => item.photographer);
     }
 
     return list;
@@ -97,7 +117,7 @@ const HomeScreen: React.FC = () => {
           ))}
         </View>
         <View style={styles.metaRow}>
-          <Text style={styles.price}>${(item.priceRange.match(/\$/g) || []).length * 50 + 50}/hr</Text>
+          <Text style={styles.price}>{item.priceRange}/session</Text>
           <Text style={styles.dot}>•</Text>
           <Text style={styles.duration}>~1 hour</Text>
         </View>
@@ -122,21 +142,28 @@ const HomeScreen: React.FC = () => {
       <View style={styles.topBar}>
         <View style={styles.brandRow}>
           <AppLogo size={48} />
-          <Text style={styles.brandName}>SnapBook</Text>
+          <Text style={styles.brandName}>Papzi</Text>
         </View>
         <View style={styles.navActions}>
-          <TouchableOpacity style={styles.linkPill} onPress={() => navigation.navigate('Auth')}>
-            <Text style={styles.linkText}>Sign In</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.linkPill, styles.linkFilled]} onPress={() => navigation.navigate('Auth')}>
-            <Text style={[styles.linkText, styles.linkFilledText]}>Sign Up</Text>
-          </TouchableOpacity>
+          {currentUser ? (
+            <TouchableOpacity style={styles.linkPill} onPress={() => navigation.navigate('Root', { screen: 'Settings' })}>
+              <Text style={styles.linkText}>Settings</Text>
+            </TouchableOpacity>
+          ) : (
+            <>
+              <TouchableOpacity style={styles.linkPill} onPress={() => navigation.navigate('Auth')}>
+                <Text style={styles.linkText}>Sign In</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.linkPill, styles.linkFilled]} onPress={() => navigation.navigate('Auth')}>
+                <Text style={[styles.linkText, styles.linkFilledText]}>Sign Up</Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
       </View>
 
       <View style={[styles.hero, !isWideHero && styles.heroStacked]}>
         <View style={[styles.heroText, !isWideHero && styles.heroTextCentered]}>
-          <Text style={styles.eyebrow}>Preview</Text>
           <Text style={[styles.title, !isWideHero && styles.titleCentered]}>Find the Perfect Photographer for Your Moments</Text>
           <Text style={[styles.subtitle, !isWideHero && styles.subtitleCentered]}>
             Connect with professional photographers in your area. Browse, compare, and book in minutes.
@@ -174,15 +201,15 @@ const HomeScreen: React.FC = () => {
           </View>
           <View style={[styles.metricsRow, !isWideHero && styles.metricsRowStacked]}>
             <View style={[styles.metric, styles.metricPrimary]}>
-              <Text style={styles.metricValue}>500+</Text>
+              <Text style={styles.metricValue}>{state.photographers.length}</Text>
               <Text style={styles.metricLabel}>Photographers</Text>
             </View>
             <View style={[styles.metric, styles.metricSecondary]}>
-              <Text style={styles.metricValue}>10k+</Text>
-              <Text style={styles.metricLabel}>Happy Customers</Text>
+              <Text style={styles.metricValue}>{state.bookings.length}</Text>
+              <Text style={styles.metricLabel}>Bookings</Text>
             </View>
             <View style={[styles.metric, styles.metricTertiary]}>
-              <Text style={styles.metricValue}>4.9</Text>
+              <Text style={styles.metricValue}>{avgRating}</Text>
               <Text style={styles.metricLabel}>Average Rating</Text>
             </View>
           </View>
@@ -207,9 +234,9 @@ const HomeScreen: React.FC = () => {
           ))}
         </View>
         <View style={styles.filtersGrid}>
-          <TouchableOpacity style={styles.filterBox} onPress={() => setPriceRange(priceRange === 'Any budget' ? '$$' : 'Any budget')}>
+          <TouchableOpacity style={styles.filterBox} onPress={() => setPriceRange(priceRange === 'Any budget' ? 'R budget' : 'Any budget')}>
             <Text style={styles.filterLabel}>Price Range</Text>
-            <Text style={styles.filterValue}>{priceRange === 'Any budget' ? '$50+' : priceRange}</Text>
+            <Text style={styles.filterValue}>{priceRange === 'Any budget' ? 'R500+' : priceRange}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.filterBox} onPress={() => setSort(sort === 'Highest Rated' ? 'Nearest' : 'Highest Rated')}>
             <Text style={styles.filterLabel}>Sort By</Text>
@@ -223,7 +250,7 @@ const HomeScreen: React.FC = () => {
           <Text style={styles.sectionTitle}>Available Photographers</Text>
           <Text style={styles.sectionSubtitle}>{filteredPhotographers.length} options in your area</Text>
         </View>
-        <TouchableOpacity style={styles.lightButton} onPress={() => navigation.navigate('Bookings')}>
+        <TouchableOpacity style={styles.lightButton} onPress={() => navigation.navigate('Root', { screen: 'Bookings' })}>
           <Ionicons name="calendar-outline" size={16} color="#0f172a" />
           <Text style={styles.lightButtonText}>View Dashboard</Text>
         </TouchableOpacity>
@@ -236,39 +263,6 @@ const HomeScreen: React.FC = () => {
         <Text style={styles.empty}>{error ? error : 'No photographers match your filters yet.'}</Text>
       ) : null}
 
-      <View style={styles.featureSection}>
-        <Text style={styles.sectionTitle}>Explore More Features</Text>
-        <Text style={styles.sectionSubtitle}>Discover additional components and functionality of our platform.</Text>
-        <View style={styles.featuresRow}>
-          <View style={styles.featureCard}>
-            <Ionicons name="person-circle-outline" size={32} color="#0f172a" />
-            <Text style={styles.featureTitle}>Photographer Profile</Text>
-            <Text style={styles.featureCopy}>Detailed pages with portfolios, reviews, and booking.</Text>
-            <TouchableOpacity
-              style={styles.outlineButton}
-              onPress={() => navigation.navigate('Profile', { photographerId: state.photographers[0]?.id ?? 'p1' })}
-            >
-              <Text style={styles.outlineText}>View Demo</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.featureCard}>
-            <Ionicons name="calendar-outline" size={32} color="#0f172a" />
-            <Text style={styles.featureTitle}>User Dashboard</Text>
-            <Text style={styles.featureCopy}>Manage bookings, view history, and adjust account settings.</Text>
-            <TouchableOpacity style={styles.outlineButton} onPress={() => navigation.navigate('Bookings')}>
-              <Text style={styles.outlineText}>View Demo</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.featureCard}>
-            <Ionicons name="color-palette-outline" size={32} color="#0f172a" />
-            <Text style={styles.featureTitle}>Design System</Text>
-            <Text style={styles.featureCopy}>Consistent components and tokens across the experience.</Text>
-            <TouchableOpacity style={styles.outlineButton} onPress={() => navigation.navigate('Settings')}>
-              <Text style={styles.outlineText}>View Demo</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
     </ScrollView>
   );
 };
@@ -340,15 +334,6 @@ const styles = StyleSheet.create({
   heroTextCentered: {
     alignItems: 'center',
     paddingRight: 0,
-  },
-  eyebrow: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#fff',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-    fontWeight: '700',
-    color: '#0f172a',
   },
   title: {
     fontSize: 30,
@@ -751,47 +736,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 16,
     color: '#475569',
-  },
-  featureSection: {
-    marginTop: 20,
-  },
-  featuresRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginHorizontal: -6,
-  },
-  featureCard: {
-    flex: 1,
-    minWidth: 240,
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    padding: 14,
-    margin: 6,
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-  },
-  featureTitle: {
-    fontWeight: '800',
-    color: '#0f172a',
-    fontSize: 16,
-  },
-  featureCopy: {
-    color: '#475569',
-    lineHeight: 20,
-  },
-  outlineButton: {
-    marginTop: 4,
-    paddingVertical: 10,
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#0f172a',
-    alignItems: 'center',
-  },
-  outlineText: {
-    color: '#0f172a',
-    fontWeight: '800',
   },
 });
 

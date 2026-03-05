@@ -1,17 +1,24 @@
-import React, { useMemo, useState } from 'react';
-import { Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { RouteProp, useRoute } from '@react-navigation/native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Image, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/types';
+import { StackNavigationProp } from '@react-navigation/stack';
 import { useAppData } from '../store/AppDataContext';
 
 type Route = RouteProp<RootStackParamList, 'PostDetail'>;
+type Navigation = StackNavigationProp<RootStackParamList, 'PostDetail'>;
 
 const PostDetailScreen: React.FC = () => {
   const { params } = useRoute<Route>();
-  const { state, toggleLike, addComment } = useAppData();
+  const navigation = useNavigation<Navigation>();
+  const { state, toggleLike, addComment, fetchCommentsForPost } = useAppData();
   const [comment, setComment] = useState('');
+  const [zoomOpen, setZoomOpen] = useState(false);
 
-  const post = useMemo(() => state.posts.find((p) => p.id === params.postId), [params.postId, state.posts]);
+  const post = useMemo(
+    () => params.post ?? state.posts.find((p) => p.id === params.postId),
+    [params.post, params.postId, state.posts]
+  );
   const comments = useMemo(
     () => state.comments.filter((c) => c.postId === params.postId),
     [params.postId, state.comments]
@@ -25,6 +32,13 @@ const PostDetailScreen: React.FC = () => {
     );
   }
 
+  useEffect(() => {
+    fetchCommentsForPost(params.postId);
+  }, [fetchCommentsForPost, params.postId]);
+
+  const resolvedImage =
+    (post as any).imageUri ?? (post as any).imageUrl ?? (post as any).image_url ?? '';
+
   const submitComment = async () => {
     if (!comment.trim()) return;
     await addComment(post.id, comment);
@@ -32,8 +46,11 @@ const PostDetailScreen: React.FC = () => {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Image source={{ uri: post.imageUri }} style={styles.image} />
+    <>
+      <ScrollView contentContainerStyle={styles.container}>
+      <TouchableOpacity activeOpacity={0.9} onPress={() => setZoomOpen(true)}>
+        <Image source={{ uri: resolvedImage }} style={styles.image} />
+      </TouchableOpacity>
       <View style={styles.content}>
         <View style={styles.row}>
           <Text style={styles.title}>{post.caption}</Text>
@@ -67,8 +84,36 @@ const PostDetailScreen: React.FC = () => {
             <Text style={styles.sendText}>Post</Text>
           </TouchableOpacity>
         </View>
+        <TouchableOpacity
+          style={styles.reportButton}
+          onPress={() =>
+            navigation.navigate('Report', {
+              targetType: 'post',
+              targetId: post.id,
+              title: post.caption,
+            })
+          }
+        >
+          <Text style={styles.reportText}>Report post</Text>
+        </TouchableOpacity>
       </View>
-    </ScrollView>
+      </ScrollView>
+      <Modal visible={zoomOpen} animationType="fade" transparent={false}>
+        <View style={styles.zoomContainer}>
+          <ScrollView
+            contentContainerStyle={styles.zoomScrollContent}
+            maximumZoomScale={4}
+            minimumZoomScale={1}
+            centerContent
+          >
+            <Image source={{ uri: resolvedImage }} style={styles.zoomImage} resizeMode="contain" />
+          </ScrollView>
+          <TouchableOpacity style={styles.zoomClose} onPress={() => setZoomOpen(false)}>
+            <Text style={styles.zoomCloseText}>Close</Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
+    </>
   );
 };
 
@@ -89,6 +134,32 @@ const styles = StyleSheet.create({
   image: {
     width: '100%',
     height: 320,
+  },
+  zoomContainer: {
+    flex: 1,
+    backgroundColor: '#000',
+  },
+  zoomScrollContent: {
+    flexGrow: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  zoomImage: {
+    width: '100%',
+    height: '100%',
+  },
+  zoomClose: {
+    position: 'absolute',
+    top: 48,
+    right: 20,
+    backgroundColor: '#111827cc',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  zoomCloseText: {
+    color: '#fff',
+    fontWeight: '700',
   },
   content: {
     padding: 16,
@@ -157,6 +228,18 @@ const styles = StyleSheet.create({
   },
   sendText: {
     color: '#fff',
+    fontWeight: '700',
+  },
+  reportButton: {
+    marginTop: 14,
+    backgroundColor: '#fee2e2',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  reportText: {
+    color: '#991b1b',
     fontWeight: '700',
   },
 });

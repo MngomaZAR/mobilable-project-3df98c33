@@ -13,12 +13,13 @@ type Navigation = StackNavigationProp<RootStackParamList, 'Payment'>;
 const PaymentScreen: React.FC = () => {
   const { params } = useRoute<Route>();
   const navigation = useNavigation<Navigation>();
-  const { state, updateBookingStatus } = useAppData();
+  const { state, updateBookingStatus, trackEvent } = useAppData();
   const booking = useMemo(
     () => (params?.bookingId ? state.bookings.find((item) => item.id === params.bookingId) : undefined),
     [params?.bookingId, state.bookings]
   );
   const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
+  const [paymentId, setPaymentId] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState('Create a signed link to start PayFast checkout.');
   const [itemName, setItemName] = useState('Photography booking');
   const [amount, setAmount] = useState('1200');
@@ -28,7 +29,10 @@ const PaymentScreen: React.FC = () => {
 
   const handleSuccess = async () => {
     setStatusMessage('Payment succeeded. Updating booking...');
-    if (bookingId) await updateBookingStatus(bookingId);
+    if (paymentId) {
+      await supabase.from('payments').update({ status: 'paid' }).eq('id', paymentId);
+    }
+    if (bookingId) await updateBookingStatus(bookingId, 'accepted');
     Alert.alert('Payment confirmed', 'Booking status advanced after PayFast callback.');
   };
 
@@ -51,30 +55,63 @@ const PaymentScreen: React.FC = () => {
     if (booking?.date) {
       setStatusMessage(`Payment requested for ${booking.date}`);
     }
+    if (typeof booking?.priceTotal === 'number' && Number.isFinite(booking.priceTotal)) {
+      setAmount(booking.priceTotal.toFixed(2));
+    }
   }, [booking]);
 
   const generatePaymentLink = async () => {
-    if (!amount || Number.isNaN(Number(amount))) {
+    const amountValue = typeof booking?.priceTotal === 'number' ? booking.priceTotal : Number(amount);
+    if (!Number.isFinite(amountValue)) {
       Alert.alert('Amount required', 'Enter a valid amount in your currency.');
       return;
     }
+    const amountString = amountValue.toFixed(2);
 
     setLoadingLink(true);
     setStatusMessage('Creating signed PayFast URL...');
+    let nextPaymentId: string | null = paymentId;
+    if (bookingId && !nextPaymentId) {
+      const { data: paymentRow, error: paymentError } = await supabase
+        .from('payments')
+        .insert({
+          booking_id: bookingId,
+          provider: 'payfast',
+          amount: Number(amountString),
+          status: 'initiated',
+        })
+        .select('id')
+        .single();
+      if (paymentError) {
+        setStatusMessage('Unable to create payment record.');
+        Alert.alert('Payment error', paymentError.message);
+        setLoadingLink(false);
+        return;
+      }
+      nextPaymentId = paymentRow?.id ?? null;
+      setPaymentId(nextPaymentId);
+    }
+
     const { data, error } = await supabase.functions.invoke('payfast-handler', {
       body: {
-        amount,
+        amount: amountString,
         item_name: itemName,
         return_url: returnUrl,
         cancel_url: cancelUrl,
         notify_url: notifyUrl,
+        booking_id: bookingId,
+        payment_id: nextPaymentId,
       },
     });
     if (error || !data?.paymentUrl) {
       setStatusMessage('Could not create a signed link.');
       Alert.alert('PayFast error', error?.message ?? 'Unable to sign the request.');
     } else {
+      if (nextPaymentId) {
+        await supabase.from('payments').update({ status: 'pending' }).eq('id', nextPaymentId);
+      }
       setPaymentUrl(data.paymentUrl);
+      await trackEvent('payment_link_generated', { bookingId });
       setStatusMessage('Signed PayFast link ready. Complete checkout to advance booking.');
     }
     setLoadingLink(false);
@@ -113,6 +150,7 @@ const PaymentScreen: React.FC = () => {
             style={styles.input}
             keyboardType="numeric"
             placeholder="1200"
+            editable={typeof booking?.priceTotal !== 'number'}
           />
         </View>
       </View>
@@ -158,9 +196,11 @@ const PaymentScreen: React.FC = () => {
         <Text style={styles.statusValue}>{statusMessage}</Text>
       </View>
 
-      <TouchableOpacity style={styles.cta} onPress={handleSuccess}>
-        <Text style={styles.ctaText}>Mark as paid</Text>
-      </TouchableOpacity>
+      {Platform.OS === 'web' ? (
+        <Text style={styles.helper}>
+          Complete the PayFast checkout in the new tab to update the booking status.
+        </Text>
+      ) : null}
     </ScrollView>
   );
 };
@@ -283,6 +323,12 @@ const styles = StyleSheet.create({
   ctaText: {
     color: '#fff',
     fontWeight: '700',
+  },
+  helper: {
+    marginTop: 12,
+    color: '#475569',
+    fontWeight: '600',
+    textAlign: 'center',
   },
   secondary: {
     marginTop: 10,

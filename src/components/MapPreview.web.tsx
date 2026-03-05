@@ -10,10 +10,7 @@ export const MapPreview: React.FC<MapPreviewProps> = ({ markers }) => {
     <>
       <View style={styles.container}>
         <View style={styles.banner}>
-          <Text style={styles.title}>Native map preview</Text>
-          <Text style={styles.subtitle}>
-            OpenStreetMap tiles render on device; web shows fast-loading fallback.
-          </Text>
+          <Text style={styles.title}>Nearby photographers</Text>
           <Text style={styles.count}>
             {photographerMarkers.length} photographers pinned
             {userMarker ? ' · your location included' : ''}
@@ -26,9 +23,6 @@ export const MapPreview: React.FC<MapPreviewProps> = ({ markers }) => {
                 <Text style={[styles.markerTitle, styles.markerTitleHighlight]}>{userMarker.title}</Text>
                 <Text style={styles.markerMeta}>{userMarker.description}</Text>
               </View>
-              <Text style={[styles.markerCoords, styles.markerCoordsHighlight]}>
-                {userMarker.latitude.toFixed(2)}, {userMarker.longitude.toFixed(2)}
-              </Text>
             </View>
           ) : null}
           {photographerMarkers.map((marker) => (
@@ -37,9 +31,6 @@ export const MapPreview: React.FC<MapPreviewProps> = ({ markers }) => {
                 <Text style={styles.markerTitle}>{marker.title}</Text>
                 <Text style={styles.markerMeta}>{marker.description}</Text>
               </View>
-              <Text style={styles.markerCoords}>
-                {marker.latitude.toFixed(2)}, {marker.longitude.toFixed(2)}
-              </Text>
             </View>
           ))}
         </View>
@@ -69,12 +60,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#fff',
   },
-  subtitle: {
-    fontSize: 14,
-    color: '#cbd5e1',
-    marginTop: 4,
-    marginBottom: 12,
-  },
   count: {
     color: '#e2e8f0',
     fontWeight: '700',
@@ -100,20 +85,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#6b7280',
   },
-  markerCoords: {
-    color: '#0f172a',
-    fontWeight: '700',
-    fontSize: 12,
-  },
   markerRowHighlight: {
     backgroundColor: '#ecfeff',
     borderRadius: 12,
     paddingHorizontal: 12,
   },
   markerTitleHighlight: {
-    color: '#0ea5e9',
-  },
-  markerCoordsHighlight: {
     color: '#0ea5e9',
   },
 });

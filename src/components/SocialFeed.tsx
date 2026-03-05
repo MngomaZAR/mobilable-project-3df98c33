@@ -1,16 +1,17 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
   Image,
   RefreshControl,
-  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../config/supabaseClient';
+import { useAppData } from '../store/AppDataContext';
 
 export type ProfileSummary = {
   id: string;
@@ -28,6 +29,7 @@ export type FeedPost = {
   imageUrl: string;
   commentCount: number;
   likes: number;
+  liked?: boolean;
   profile?: ProfileSummary;
 };
 
@@ -46,49 +48,51 @@ type PostRow = {
   created_at: string;
   image_url: string | null;
   likes_count: number | null;
-  profiles?: ProfileSummary | null;
+  profiles?: ProfileSummary | ProfileSummary[] | null;
 };
 
 const PLACEHOLDER_IMAGE =
   'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=1200&q=80&sat=-20';
+const TEST_POST_TITLES = new Set(['qa testing', 'test post', 'demo post']);
 
 export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost, onViewProfile }) => {
-  const [profiles, setProfiles] = useState<ProfileSummary[]>([]);
+  const { currentUser } = useAppData();
   const [posts, setPosts] = useState<FeedPost[]>([]);
-  const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const mapPostRow = useCallback((row: PostRow): FeedPost => {
+    const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
     const imageUrl = row.image_url ?? PLACEHOLDER_IMAGE;
     return {
       id: row.id,
       userId: row.user_id,
       title: row.caption ?? 'Untitled post',
-      location: row.location ?? row.profiles?.city ?? undefined,
+      location: row.location ?? profile?.city ?? undefined,
       createdAt: row.created_at,
       imageUrl,
       commentCount: row.comment_count ?? 0,
       likes: row.likes_count ?? 0,
-      profile: row.profiles ?? undefined,
+      profile: profile ?? undefined,
     };
   }, []);
 
-  const fetchProfiles = useCallback(async () => {
-    const { data, error: profileError } = await supabase
-      .from('profiles')
-      .select('id, full_name, city, avatar_url')
-      .order('full_name', { ascending: true });
-
-    if (profileError) {
-      const message =
-        (profileError as any)?.code === '42P01'
-          ? 'profiles table is missing. Apply the latest Supabase migration.'
-          : profileError.message;
-      throw new Error(message);
+  const getSignedImageUrl = useCallback(async (imageUrl: string) => {
+    if (!imageUrl) return imageUrl;
+    const isHttp = imageUrl.startsWith('http');
+    if (!isHttp) {
+      const { data, error } = await supabase.storage.from('post-images').createSignedUrl(imageUrl, 60 * 60);
+      if (error || !data?.signedUrl) return imageUrl;
+      return data.signedUrl;
     }
-    setProfiles(data ?? []);
+    if (!imageUrl.includes('/storage/v1/object/')) return imageUrl;
+    const match = imageUrl.match(/\/storage\/v1\/object\/public\/post-images\/(.+)$/);
+    if (!match) return imageUrl;
+    const path = match[1];
+    const { data, error } = await supabase.storage.from('post-images').createSignedUrl(path, 60 * 60);
+    if (error || !data?.signedUrl) return imageUrl;
+    return data.signedUrl;
   }, []);
 
   const fetchPosts = useCallback(async () => {
@@ -104,7 +108,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
         created_at,
         image_url,
         likes_count,
-        profiles:profiles(id, full_name, city, avatar_url)
+        profiles:profiles!posts_user_id_fkey(id, full_name, city, avatar_url)
       `
       )
       .order('created_at', { ascending: false });
@@ -113,26 +117,53 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
       throw new Error(postError.message);
     }
 
-    const mapped = (data ?? []).map(mapPostRow);
-    setPosts(mapped);
-  }, [mapPostRow]);
+    const mapped = (data ?? [])
+      .map(mapPostRow)
+      .filter((post) => !TEST_POST_TITLES.has(post.title.trim().toLowerCase()));
+    const withSignedUrls = await Promise.all(
+      mapped.map(async (post) => ({
+        ...post,
+        imageUrl: await getSignedImageUrl(post.imageUrl),
+      }))
+    );
+    if (currentUser?.id) {
+      const { data: likesData } = await supabase
+        .from('post_likes')
+        .select('post_id')
+        .in(
+          'post_id',
+          withSignedUrls.map((post) => post.id)
+        )
+        .eq('user_id', currentUser.id);
+      const likedSet = new Set((likesData ?? []).map((row: any) => row.post_id));
+      setPosts(withSignedUrls.map((post) => ({ ...post, liked: likedSet.has(post.id) })));
+    } else {
+      setPosts(withSignedUrls);
+    }
+  }, [currentUser?.id, getSignedImageUrl, mapPostRow]);
 
   const loadFeed = useCallback(async () => {
     setError(null);
     setLoading(true);
     try {
-      await Promise.all([fetchProfiles(), fetchPosts()]);
+      await fetchPosts();
     } catch (err: any) {
       setError(err.message ?? 'Unable to load the feed right now.');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [fetchPosts, fetchProfiles]);
+  }, [fetchPosts]);
 
   useEffect(() => {
     loadFeed();
   }, [loadFeed]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadFeed();
+    }, [loadFeed])
+  );
 
   const fetchPostById = useCallback(
     async (postId: string) => {
@@ -148,7 +179,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
           created_at,
           image_url,
           likes_count,
-          profiles:profiles(id, full_name, city, avatar_url)
+          profiles:profiles!posts_user_id_fkey(id, full_name, city, avatar_url)
         `
         )
         .eq('id', postId)
@@ -159,9 +190,14 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
         return null;
       }
 
-      return data ? mapPostRow(data as PostRow) : null;
+      if (!data) return null;
+      const mapped = mapPostRow(data as PostRow);
+      return {
+        ...mapped,
+        imageUrl: await getSignedImageUrl(mapped.imageUrl),
+      };
     },
-    [mapPostRow]
+    [getSignedImageUrl, mapPostRow]
   );
 
   useEffect(() => {
@@ -198,11 +234,6 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
     };
   }, [fetchPostById]);
 
-  const filteredPosts = useMemo(() => {
-    if (!selectedProfileId) return posts;
-    return posts.filter((post) => post.userId === selectedProfileId);
-  }, [posts, selectedProfileId]);
-
   const onRefresh = async () => {
     setRefreshing(true);
     await loadFeed();
@@ -213,7 +244,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
       <View style={styles.headerRow}>
         <View>
           <Text style={styles.title}>Social feed</Text>
-          <Text style={styles.subtitle}>Live Supabase posts from every demo profile.</Text>
+          <Text style={styles.subtitle}>See what the community is sharing.</Text>
         </View>
         <TouchableOpacity
           style={[styles.primaryButton, !onCreatePost && styles.primaryButtonDisabled]}
@@ -223,40 +254,6 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
           <Text style={styles.primaryButtonText}>New Post</Text>
         </TouchableOpacity>
       </View>
-      <Text style={styles.helper}>Filter the feed by creator to scan the latest posts.</Text>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.profileRail}
-      >
-        <TouchableOpacity
-          style={[styles.profileChip, !selectedProfileId && styles.profileChipActive]}
-          onPress={() => setSelectedProfileId(null)}
-        >
-          <Image source={{ uri: PLACEHOLDER_IMAGE }} style={styles.profileAvatar} />
-          <View style={styles.profileText}>
-            <Text style={styles.profileName}>All profiles</Text>
-            <Text style={styles.profileMeta}>{posts.length} posts</Text>
-          </View>
-        </TouchableOpacity>
-        {profiles.map((profile, index) => (
-          <TouchableOpacity
-            key={profile.id}
-            style={[
-              styles.profileChip,
-              selectedProfileId === profile.id && styles.profileChipActive,
-              index === profiles.length - 1 ? null : styles.profileChipSpacer,
-            ]}
-            onPress={() => setSelectedProfileId(profile.id)}
-          >
-            <Image source={{ uri: profile.avatar_url ?? PLACEHOLDER_IMAGE }} style={styles.profileAvatar} />
-            <View style={styles.profileText}>
-              <Text style={styles.profileName}>{profile.full_name ?? 'Demo profile'}</Text>
-              <Text style={styles.profileMeta}>{profile.city ?? 'South Africa'}</Text>
-            </View>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
     </View>
   );
@@ -304,7 +301,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
         </View>
       ) : (
         <FlatList
-          data={filteredPosts}
+          data={posts}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
@@ -332,8 +329,9 @@ const styles = StyleSheet.create({
   },
   headerRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
+    gap: 10,
   },
   title: {
     fontSize: 22,
@@ -343,16 +341,14 @@ const styles = StyleSheet.create({
   subtitle: {
     color: '#475569',
     marginTop: 4,
-    maxWidth: 280,
-  },
-  helper: {
-    color: '#6b7280',
+    maxWidth: 240,
   },
   primaryButton: {
     backgroundColor: '#0f172a',
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
+    alignSelf: 'flex-start',
   },
   primaryButtonDisabled: {
     opacity: 0.5,
@@ -360,41 +356,6 @@ const styles = StyleSheet.create({
   primaryButtonText: {
     color: '#fff',
     fontWeight: '700',
-  },
-  profileRail: {
-    paddingVertical: 4,
-  },
-  profileChipSpacer: {
-    marginRight: 12,
-  },
-  profileChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    padding: 10,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#e5e7eb',
-  },
-  profileText: {
-    marginLeft: 10,
-  },
-  profileChipActive: {
-    borderColor: '#0f172a',
-    backgroundColor: '#0f172a08',
-  },
-  profileAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: '#e5e7eb',
-  },
-  profileName: {
-    fontWeight: '700',
-    color: '#0f172a',
-  },
-  profileMeta: {
-    color: '#6b7280',
   },
   card: {
     backgroundColor: '#fff',

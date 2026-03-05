@@ -19,19 +19,44 @@ const BookingsScreen: React.FC = () => {
   const { state } = useAppData();
   const navigation = useNavigation<Navigation>();
 
+  const formatDateTime = (value: string) => {
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return value;
+    return parsed.toLocaleString(undefined, {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  };
+
+  const formatShortDate = (value: string) => {
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return value;
+    return parsed.toLocaleDateString(undefined, {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
+  };
+
   const renderItem = ({ item }: { item: Booking }) => (
     <TouchableOpacity
       style={styles.card}
       onPress={() => navigation.navigate('BookingDetail', { bookingId: item.id })}
     >
       <View style={styles.cardHeader}>
-        <Text style={styles.cardTitle}>{item.package}</Text>
+        <Text style={styles.cardTitle} numberOfLines={1} ellipsizeMode="tail">
+          {item.package}
+        </Text>
         <View style={[styles.statusBadge, { backgroundColor: statusColors[item.status] }]}>
           <Text style={styles.statusText}>{item.status}</Text>
         </View>
       </View>
-      <Text style={styles.meta}>{item.date}</Text>
-      <Text style={styles.meta}>Created {new Date(item.createdAt).toLocaleDateString()}</Text>
+      <Text style={styles.meta}>{formatDateTime(item.date)}</Text>
+      <Text style={styles.meta}>Created {formatShortDate(item.createdAt)}</Text>
     </TouchableOpacity>
   );
 
@@ -84,6 +109,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#0f172a',
+    flex: 1,
+    marginRight: 10,
   },
   statusBadge: {
     paddingHorizontal: 10,

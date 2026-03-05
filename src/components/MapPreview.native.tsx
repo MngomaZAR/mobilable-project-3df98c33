@@ -3,7 +3,7 @@ import MapView, { MapView as MapViewType, Marker, Region, UrlTile } from 'react-
 import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { MapMarker, MapPreviewProps } from './mapTypes';
-import { DEFAULT_CAPE_TOWN_COORDINATES, validateSouthAfricanLocation } from '../utils/geo';
+import { DEFAULT_CAPE_TOWN_COORDINATES } from '../utils/geo';
 
 export const MapPreview: React.FC<MapPreviewProps> = ({ markers, onMapError }) => {
   const mapRef = useRef<MapViewType | null>(null);
@@ -12,15 +12,13 @@ export const MapPreview: React.FC<MapPreviewProps> = ({ markers, onMapError }) =
   const region: Region = useMemo(() => {
     const baseLatitude = markers[0]?.latitude ?? DEFAULT_CAPE_TOWN_COORDINATES.latitude;
     const baseLongitude = markers[0]?.longitude ?? DEFAULT_CAPE_TOWN_COORDINATES.longitude;
-    validateSouthAfricanLocation(baseLatitude, baseLongitude);
-
     return {
       latitude: baseLatitude,
       longitude: baseLongitude,
       latitudeDelta: markers.length > 1 ? 6 : 4,
       longitudeDelta: markers.length > 1 ? 6 : 4,
     };
-  }, [markers]);
+  }, [markers, onMapError]);
 
   useEffect(() => {
     if (!mapRef.current || markers.length === 0) return;
@@ -50,10 +48,17 @@ export const MapPreview: React.FC<MapPreviewProps> = ({ markers, onMapError }) =
         moveOnMarkerPress={false}
         showsUserLocation={markers.some((marker) => marker.type === 'user')}
         showsCompass={false}
+        zoomEnabled
+        zoomTapEnabled
+        scrollEnabled
+        pitchEnabled
+        rotateEnabled
         onError={(event) => onMapError?.(event?.nativeEvent?.error ?? 'Map failed to render.')}
       >
         <UrlTile urlTemplate="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" maximumZ={19} />
-        {markers.map((marker) => (
+        {markers
+          .filter((marker) => Number.isFinite(marker.latitude) && Number.isFinite(marker.longitude))
+          .map((marker) => (
           <Marker
             key={marker.id}
             coordinate={{ latitude: marker.latitude, longitude: marker.longitude }}
@@ -68,12 +73,11 @@ export const MapPreview: React.FC<MapPreviewProps> = ({ markers, onMapError }) =
         ))}
       </MapView>
       <View style={styles.overlay}>
-        <Text style={styles.overlayLabel}>Live coverage</Text>
+        <Text style={styles.overlayLabel}>Nearby photographers</Text>
         <Text style={styles.overlayValue}>
           {photographerCount} photographer{photographerCount === 1 ? '' : 's'}
           {markers.some((marker) => marker.type === 'user') ? ' · you' : ''}
         </Text>
-        <Text style={styles.overlayMeta}>OpenStreetMap tiles via react-native-maps</Text>
       </View>
     </View>
   );
@@ -107,11 +111,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '800',
-  },
-  overlayMeta: {
-    color: '#cbd5e1',
-    fontSize: 12,
-    marginTop: 2,
   },
   pin: {
     backgroundColor: '#0f172a',

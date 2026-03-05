@@ -83,8 +83,8 @@ export const BookingCalendar: React.FC<Props> = ({ value, onChange, timeSlot, on
       </View>
 
       <View style={styles.weekdays}>
-        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day) => (
-          <Text key={day} style={styles.weekday}>
+        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => (
+          <Text key={`${day}-${index}`} style={styles.weekday}>
             {day}
           </Text>
         ))}

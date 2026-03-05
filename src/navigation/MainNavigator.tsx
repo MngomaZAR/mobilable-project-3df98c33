@@ -13,6 +13,7 @@ import FeedScreen from '../screens/FeedScreen';
 import PostDetailScreen from '../screens/PostDetailScreen';
 import CreatePostScreen from '../screens/CreatePostScreen';
 import ChatScreen from '../screens/ChatScreen';
+import ConversationsListScreen from '../screens/ConversationsListScreen';
 import UserProfileScreen from '../screens/UserProfileScreen';
 import MapScreen from '../screens/MapScreen';
 import SettingsScreen from '../screens/SettingsScreen';
@@ -20,13 +21,27 @@ import AuthScreen from '../screens/AuthScreen';
 import BookingTrackingScreen from '../screens/BookingTrackingScreen';
 import PaymentScreen from '../screens/PaymentScreen';
 import ComplianceScreen from '../screens/ComplianceScreen';
+import SupportScreen from '../screens/SupportScreen';
+import ReportScreen from '../screens/ReportScreen';
+import PrivacyPolicyScreen from '../screens/PrivacyPolicyScreen';
+import TermsScreen from '../screens/TermsScreen';
+import AccountDeleteScreen from '../screens/AccountDeleteScreen';
+import PhotographerDashboardScreen from '../screens/PhotographerDashboardScreen';
+import AdminDashboardScreen from '../screens/AdminDashboardScreen';
+import PhotographerRequestsScreen from '../screens/PhotographerRequestsScreen';
+import PhotographerEarningsScreen from '../screens/PhotographerEarningsScreen';
+import PhotographerPortfolioScreen from '../screens/PhotographerPortfolioScreen';
+import PhotographerCalendarScreen from '../screens/PhotographerCalendarScreen';
 import { RootStackParamList, TabParamList } from './types';
+import { UserRole } from '../types';
 
 const Tab = createBottomTabNavigator<TabParamList>();
 const Stack = createStackNavigator<RootStackParamList>();
 
 type MainNavigatorProps = {
   logoSource?: ImageSourcePropType;
+  isAuthenticated: boolean;
+  role?: UserRole | null;
 };
 
 const tabBarIcon = (routeName: keyof TabParamList, focused: boolean, color: string, size: number) => {
@@ -36,13 +51,18 @@ const tabBarIcon = (routeName: keyof TabParamList, focused: boolean, color: stri
     Feed: { active: 'images', inactive: 'images-outline' },
     Chat: { active: 'chatbubble', inactive: 'chatbubble-outline' },
     Map: { active: 'map', inactive: 'map-outline' },
+    Requests: { active: 'mail', inactive: 'mail-outline' },
+    Earnings: { active: 'cash', inactive: 'cash-outline' },
+    Portfolio: { active: 'images', inactive: 'images-outline' },
+    Calendar: { active: 'calendar', inactive: 'calendar-outline' },
+    AdminOps: { active: 'grid', inactive: 'grid-outline' },
     Settings: { active: 'settings', inactive: 'settings-outline' },
   };
   const name = focused ? icons[routeName].active : icons[routeName].inactive;
   return <Ionicons name={name as any} size={size} color={color} />;
 };
 
-const TabsNavigator = () => (
+const ClientTabsNavigator = () => (
   <Tab.Navigator
     screenOptions={({ route }) => ({
       tabBarIcon: ({ focused, color, size }) => tabBarIcon(route.name, focused, color, size),
@@ -60,7 +80,41 @@ const TabsNavigator = () => (
   </Tab.Navigator>
 );
 
-export const MainNavigator: React.FC<MainNavigatorProps> = ({ logoSource }) => (
+const PhotographerTabsNavigator = () => (
+  <Tab.Navigator
+    screenOptions={({ route }) => ({
+      tabBarIcon: ({ focused, color, size }) => tabBarIcon(route.name, focused, color, size),
+      tabBarActiveTintColor: '#111827',
+      tabBarInactiveTintColor: '#9ca3af',
+      headerShown: false,
+    })}
+  >
+    <Tab.Screen name="Requests" component={PhotographerRequestsScreen} />
+    <Tab.Screen name="Earnings" component={PhotographerEarningsScreen} />
+    <Tab.Screen name="Portfolio" component={PhotographerPortfolioScreen} />
+    <Tab.Screen name="Calendar" component={PhotographerCalendarScreen} />
+    <Tab.Screen name="Chat" component={ConversationsListScreen} />
+    <Tab.Screen name="Map" component={MapScreen} />
+    <Tab.Screen name="Settings" component={SettingsScreen} />
+  </Tab.Navigator>
+);
+
+const AdminTabsNavigator = () => (
+  <Tab.Navigator
+    screenOptions={({ route }) => ({
+      tabBarIcon: ({ focused, color, size }) => tabBarIcon(route.name, focused, color, size),
+      tabBarActiveTintColor: '#111827',
+      tabBarInactiveTintColor: '#9ca3af',
+      headerShown: false,
+    })}
+  >
+    <Tab.Screen name="AdminOps" component={AdminDashboardScreen} />
+    <Tab.Screen name="Chat" component={ConversationsListScreen} />
+    <Tab.Screen name="Settings" component={SettingsScreen} />
+  </Tab.Navigator>
+);
+
+export const MainNavigator: React.FC<MainNavigatorProps> = ({ logoSource, isAuthenticated, role }) => (
   <NavigationContainer
     theme={{
       ...DefaultTheme,
@@ -73,21 +127,44 @@ export const MainNavigator: React.FC<MainNavigatorProps> = ({ logoSource }) => (
           logoSource ? (
             <Image source={logoSource} style={{ width: 120, height: 40, resizeMode: 'contain' }} />
           ) : undefined,
-        headerBackTitleVisible: false,
+        headerBackTitle: 'Back',
+        headerBackButtonDisplayMode: 'default',
       }}
     >
-      <Stack.Screen name="Root" component={TabsNavigator} options={{ headerShown: false }} />
-      <Stack.Screen name="Profile" component={ProfileScreen} options={{ title: 'Photographer' }} />
-      <Stack.Screen name="BookingForm" component={BookingFormScreen} options={{ title: 'Booking Request' }} />
-      <Stack.Screen name="BookingDetail" component={BookingDetailScreen} options={{ title: 'Booking Detail' }} />
-      <Stack.Screen name="BookingTracking" component={BookingTrackingScreen} options={{ title: 'Track Booking' }} />
-      <Stack.Screen name="Payment" component={PaymentScreen} options={{ title: 'Payments' }} />
-      <Stack.Screen name="PostDetail" component={PostDetailScreen} options={{ title: 'Post' }} />
-      <Stack.Screen name="CreatePost" component={CreatePostScreen} options={{ title: 'New Post' }} />
-      <Stack.Screen name="UserProfile" component={UserProfileScreen} options={{ title: 'Photographer Profile' }} />
-      <Stack.Screen name="Auth" component={AuthScreen} options={{ title: 'Sign in' }} />
-      <Stack.Screen name="Compliance" component={ComplianceScreen} options={{ title: 'Privacy & Permissions' }} />
-      <Stack.Screen name="ChatThread" component={ChatScreen} options={{ title: 'Chat' }} />
+      {isAuthenticated ? (
+        <>
+          <Stack.Screen
+            name="Root"
+            component={role === 'photographer' ? PhotographerTabsNavigator : role === 'admin' ? AdminTabsNavigator : ClientTabsNavigator}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen name="Profile" component={ProfileScreen} options={{ title: 'Photographer' }} />
+          <Stack.Screen name="BookingForm" component={BookingFormScreen} options={{ title: 'Booking Request' }} />
+          <Stack.Screen name="BookingDetail" component={BookingDetailScreen} options={{ title: 'Booking Detail' }} />
+          <Stack.Screen name="BookingTracking" component={BookingTrackingScreen} options={{ title: 'Track Booking' }} />
+          <Stack.Screen name="Payment" component={PaymentScreen} options={{ title: 'Payments' }} />
+          <Stack.Screen name="PostDetail" component={PostDetailScreen} options={{ title: 'Post' }} />
+          <Stack.Screen name="CreatePost" component={CreatePostScreen} options={{ title: 'New Post' }} />
+          <Stack.Screen name="UserProfile" component={UserProfileScreen} options={{ title: 'Photographer Profile' }} />
+          <Stack.Screen name="Compliance" component={ComplianceScreen} options={{ title: 'Privacy & Permissions' }} />
+          <Stack.Screen name="Support" component={SupportScreen} options={{ title: 'Support' }} />
+          <Stack.Screen name="Report" component={ReportScreen} options={{ title: 'Report' }} />
+          <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} options={{ title: 'Privacy Policy' }} />
+          <Stack.Screen name="Terms" component={TermsScreen} options={{ title: 'Terms of Service' }} />
+          <Stack.Screen name="AccountDelete" component={AccountDeleteScreen} options={{ title: 'Account deletion' }} />
+          <Stack.Screen name="ChatThread" component={ChatScreen} options={{ title: 'Chat' }} />
+          <Stack.Screen name="PhotographerDashboard" component={PhotographerDashboardScreen} options={{ title: 'Photographer' }} />
+          <Stack.Screen name="AdminDashboard" component={AdminDashboardScreen} options={{ title: 'Admin' }} />
+        </>
+      ) : (
+        <>
+          <Stack.Screen name="Auth" component={AuthScreen} options={{ title: 'Sign in' }} />
+          <Stack.Screen name="Compliance" component={ComplianceScreen} options={{ title: 'Privacy & Permissions' }} />
+          <Stack.Screen name="Support" component={SupportScreen} options={{ title: 'Support' }} />
+          <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} options={{ title: 'Privacy Policy' }} />
+          <Stack.Screen name="Terms" component={TermsScreen} options={{ title: 'Terms of Service' }} />
+        </>
+      )}
     </Stack.Navigator>
   </NavigationContainer>
 );

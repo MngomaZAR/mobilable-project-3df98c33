@@ -2,6 +2,66 @@ export type BookingStatus = 'pending' | 'accepted' | 'completed' | 'reviewed';
 
 export type UserRole = 'client' | 'photographer' | 'admin';
 
+export type PricingMode = 'paparazzi' | 'event';
+
+export type EventPackage = {
+  id: string;
+  label: string;
+  basePrice: number;
+  durationHours: number;
+};
+
+export type CommissionBreakdown = {
+  gross: number;
+  commissionRate: number;
+  commissionAmount: number;
+  photographerPayout: number;
+};
+
+export type PricingQuote = {
+  mode: PricingMode;
+  photographerId: string;
+  distanceKm: number;
+  rating: number;
+  basePrice: number;
+  distanceFee: number;
+  ratingMultiplier: number;
+  subtotal: number;
+  commission: CommissionBreakdown;
+  total: number;
+  currency: string;
+  metadata?: Record<string, string | number | boolean>;
+};
+
+export type RecommendationScore = {
+  photographerId: string;
+  distanceKm: number;
+  ratingScore: number;
+  availabilityScore: number;
+  responseScore: number;
+  totalScore: number;
+};
+
+export const PRICING_CONFIG = {
+  currency: 'ZAR',
+  commissionRate: 0.3,
+  paparazzi: {
+    basePerPhoto: 10,
+    distanceFeePerKm: 0.75,
+    ratingMultiplier: {
+      low: 0.9,
+      mid: 1.0,
+      high: 1.15,
+      elite: 1.3,
+    },
+  },
+  eventPackages: [
+    { id: 'birthday', label: 'Birthday', basePrice: 250, durationHours: 2 },
+    { id: 'wedding', label: 'Wedding', basePrice: 900, durationHours: 6 },
+    { id: 'corporate', label: 'Corporate', basePrice: 600, durationHours: 4 },
+  ] as EventPackage[],
+};
+
 export interface AppUser {
   id: string;
   email: string;
@@ -27,6 +87,7 @@ export interface Photographer {
   rating: number;
   priceRange: string;
   tags: string[];
+  isAvailable?: boolean;
 }
 
 export interface Booking {
@@ -37,6 +98,11 @@ export interface Booking {
   notes?: string;
   status: BookingStatus;
   createdAt: string;
+  pricingMode?: PricingMode;
+  priceTotal?: number;
+  currency?: string;
+  userLatitude?: number;
+  userLongitude?: number;
 }
 
 export interface Message {

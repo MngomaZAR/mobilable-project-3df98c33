@@ -3,6 +3,7 @@ import { FlatList, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { useAppData } from '../store/AppDataContext';
+import { supabase } from '../config/supabaseClient';
 import { RootStackParamList, TabParamList } from '../navigation/types';
 
 type Route = RouteProp<TabParamList, 'Chat'> | RouteProp<RootStackParamList, 'ChatThread'>;
@@ -10,7 +11,7 @@ type Route = RouteProp<TabParamList, 'Chat'> | RouteProp<RootStackParamList, 'Ch
 const ChatScreen: React.FC = () => {
   const route = useRoute<Route>();
   const navigation = useNavigation();
-  const { state, sendMessage, fetchMessagesForChat } = useAppData();
+  const { state, sendMessage, fetchMessagesForChat, markConversationRead } = useAppData();
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
 
@@ -29,7 +30,26 @@ const ChatScreen: React.FC = () => {
   useEffect(() => {
     if (conversationId && conversationId !== 'demo-conversation') {
       fetchMessagesForChat(conversationId);
+      markConversationRead(conversationId);
     }
+  }, [conversationId, fetchMessagesForChat, markConversationRead]);
+
+  useEffect(() => {
+    if (!conversationId || conversationId === 'demo-conversation') return;
+    const channel = supabase
+      .channel(`public:messages:${conversationId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'messages', filter: `chat_id=eq.${conversationId}` },
+        () => {
+          fetchMessagesForChat(conversationId);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [conversationId, fetchMessagesForChat]);
 
   const handleSend = async () => {

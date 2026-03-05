@@ -1,18 +1,21 @@
 {
   "expo": {
-    "name": "my-simple-expo",
-    "slug": "my-simple-expo",
+    "name": "Papzi",
+    "slug": "papzi",
+    "scheme": "papzi",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "plugins": [
+      "expo-font",
+      "@sentry/react-native",
       "expo-notifications",
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Allow my-simple-expo to use your location to find nearby photographers."
+          "locationAlwaysAndWhenInUsePermission": "Allow Papzi to use your location to find nearby photographers."
         }
       ]
     ],
@@ -24,8 +27,11 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "my-simple-expo needs your location to show nearby photographers.",
-        "NSLocationAlwaysUsageDescription": "my-simple-expo needs your location to show nearby photographers."
+        "NSLocationWhenInUseUsageDescription": "Papzi needs your location to show nearby photographers.",
+        "NSLocationAlwaysUsageDescription": "Papzi needs your location to show nearby photographers.",
+        "NSPhotoLibraryUsageDescription": "Papzi needs photo access so you can upload high-quality posts.",
+        "NSPhotoLibraryAddUsageDescription": "Papzi needs permission to save edited photos when requested.",
+        "NSCameraUsageDescription": "Papzi needs camera access for capturing and sharing photos."
       }
     },
     "android": {

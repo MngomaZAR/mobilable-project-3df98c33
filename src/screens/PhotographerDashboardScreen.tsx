@@ -5,15 +5,22 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { MapTracker } from '../components/MapTracker';
+import { MapPreview } from '../components/MapPreview';
+import { MapMarker } from '../components/mapTypes';
 import { useAppData } from '../store/AppDataContext';
 import { RootStackParamList } from '../navigation/types';
 import { DEFAULT_CAPE_TOWN_COORDINATES, validateSouthAfricanLocation } from '../utils/geo';
+import { distanceKm } from '../utils/recommendation';
+import { quotePaparazziSession } from '../utils/pricing';
+import { formatCurrency, getCurrencyForLocale } from '../utils/format';
 
 type Navigation = StackNavigationProp<RootStackParamList, 'Root'>;
 
 const PhotographerDashboardScreen: React.FC = () => {
   const navigation = useNavigation<Navigation>();
   const { state, updateBookingStatus } = useAppData();
+
+  const localeCurrency = useMemo(() => getCurrencyForLocale(), []);
 
   const activeBooking = useMemo(
     () => state.bookings.find((booking) => booking.status === 'pending' || booking.status === 'accepted') ?? state.bookings[0],
@@ -42,6 +49,35 @@ const PhotographerDashboardScreen: React.FC = () => {
     validateSouthAfricanLocation(coords.latitude, coords.longitude);
     return coords;
   }, [photographerProfile?.latitude, photographerProfile?.longitude]);
+
+  const pricingTier = useMemo(() => {
+    const rating = photographerProfile?.rating ?? 0;
+    if (rating >= 4.8) return 'Elite';
+    if (rating >= 4.4) return 'High';
+    if (rating >= 4.0) return 'Standard';
+    return 'Starter';
+  }, [photographerProfile?.rating]);
+
+  const heatMarkers = useMemo<MapMarker[]>(
+    () =>
+      state.bookings
+        .filter((booking) => Number.isFinite(booking.userLatitude) && Number.isFinite(booking.userLongitude))
+        .map((booking) => ({
+          id: booking.id,
+          title: 'Hotspot',
+          description: booking.package ?? 'Booking',
+          latitude: booking.userLatitude as number,
+          longitude: booking.userLongitude as number,
+          type: 'user',
+        })),
+    [state.bookings]
+  );
+
+  const estimatedQuote = useMemo(() => {
+    if (!photographerProfile) return null;
+    const km = distanceKm(clientLocation, photographerLocation);
+    return quotePaparazziSession(photographerProfile, km, 4, localeCurrency);
+  }, [clientLocation, photographerLocation, photographerProfile, localeCurrency]);
 
   const advanceActive = async () => {
     if (!activeBooking) return;
@@ -72,8 +108,37 @@ const PhotographerDashboardScreen: React.FC = () => {
           <View style={styles.statCard}>
             <Text style={styles.statLabel}>Inbox</Text>
             <Text style={styles.statValue}>{state.messages.length}</Text>
-            <Text style={styles.statMeta}>Realtime chat powered by Supabase</Text>
+            <Text style={styles.statMeta}>Stay in touch with your clients</Text>
           </View>
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Pricing tier</Text>
+          <Text style={styles.cardMeta}>Current tier: {pricingTier}</Text>
+          {estimatedQuote ? (
+            <>
+              <Text style={styles.cardMeta}>
+                Estimated rate: {formatCurrency(estimatedQuote.total, estimatedQuote.currency)} per session
+              </Text>
+              <Text style={styles.cardMeta}>
+                Payout: {formatCurrency(estimatedQuote.commission.photographerPayout, estimatedQuote.currency)}
+              </Text>
+            </>
+          ) : (
+            <Text style={styles.cardMeta}>Pricing estimate unavailable.</Text>
+          )}
+        </View>
+
+        <View style={styles.mapCard}>
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardTitle}>Heat map</Text>
+            <Text style={styles.cardMeta}>Based on recent booking locations</Text>
+          </View>
+          {heatMarkers.length > 0 ? (
+            <MapPreview markers={heatMarkers} />
+          ) : (
+            <Text style={styles.cardMeta}>No hotspots yet. New bookings will appear here.</Text>
+          )}
         </View>
 
         <View style={styles.mapCard}>

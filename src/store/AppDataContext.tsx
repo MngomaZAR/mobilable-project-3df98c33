@@ -11,6 +11,14 @@ type CreateBookingInput = {
   date: string;
   package: string;
   notes?: string;
+  pricingMode?: 'paparazzi' | 'event';
+  photoCount?: number;
+  eventPackageId?: string;
+  distanceKm?: number;
+  priceTotal?: number;
+  currency?: string;
+  userLatitude?: number;
+  userLongitude?: number;
 };
 
 type CreatePostInput = {
@@ -30,17 +38,21 @@ type AppDataContextValue = {
   refresh: () => Promise<void>;
   revalidateSession: () => Promise<AppUser | null>;
   createBooking: (payload: CreateBookingInput) => Promise<Booking>;
-  updateBookingStatus: (bookingId: string) => Promise<Booking | undefined>;
+  updateBookingStatus: (bookingId: string, forcedStatus?: BookingStatus) => Promise<Booking | undefined>;
   sendMessage: (chatId: string, text: string, fromUser?: boolean) => Promise<Message>;
   fetchMessagesForChat: (chatId: string) => Promise<void>;
+  markConversationRead: (chatId: string) => Promise<void>;
+  getOrCreateBookingConversation: (bookingId: string, photographerId: string) => Promise<string>;
   addPost: (payload: CreatePostInput) => Promise<Post>;
   toggleLike: (postId: string) => Promise<Post | undefined>;
   addComment: (postId: string, text: string, userId?: string) => Promise<Comment>;
+  fetchCommentsForPost: (postId: string) => Promise<Comment[]>;
+  trackEvent: (name: string, metadata?: Record<string, any>) => Promise<void>;
   signUp: (email: string, password: string, role?: AppUser['role']) => Promise<AppUser | null>;
   signIn: (email: string, password: string) => Promise<AppUser | null>;
   signOut: () => Promise<void>;
   updatePrivacy: (changes: Partial<PrivacySettings>) => Promise<void>;
-  requestDataDeletion: () => Promise<void>;
+  requestDataDeletion: (reason?: string) => Promise<void>;
   resetState: () => Promise<void>;
 };
 
@@ -65,11 +77,12 @@ type PhotographerRow = {
   location: string | null;
   latitude: number | null;
   longitude: number | null;
+  is_available: boolean | null;
   price_range: string | null;
   style: string | null;
   bio: string | null;
   tags: string[] | null;
-  profiles: PhotographerProfileRow;
+  profiles: PhotographerProfileRow | PhotographerProfileRow[];
 };
 
 const FALLBACK_AVATAR = 'https://images.unsplash.com/photo-1508214751196-bcfd4ca60f91?auto=format&fit=crop&w=300&q=80';
@@ -79,6 +92,7 @@ const PHOTOGRAPHER_SELECT = `
   location,
   latitude,
   longitude,
+  is_available,
   price_range,
   style,
   bio,
@@ -102,7 +116,7 @@ const normalizeStoredUser = (user: AppUser | null | undefined): AppUser | null =
     : null;
 
 const mapPhotographerRow = (row: PhotographerRow): Photographer => {
-  const profile = row.profiles;
+  const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
   const fallbackLocation = profile?.city ? `${profile.city}, South Africa` : 'South Africa';
   return {
     id: row.id,
@@ -112,6 +126,7 @@ const mapPhotographerRow = (row: PhotographerRow): Photographer => {
     location: row.location ?? fallbackLocation,
     latitude: row.latitude ?? 0,
     longitude: row.longitude ?? 0,
+    isAvailable: row.is_available ?? true,
     style: row.style ?? '',
     bio: row.bio ?? '',
     priceRange: row.price_range ?? 'R1500',
@@ -174,6 +189,39 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   }, []);
 
+  const fetchBookings = useCallback(async () => {
+    try {
+      const { data, error: bookingError } = await supabase
+        .from('bookings')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (bookingError) {
+        throw bookingError;
+      }
+
+      const mapped: Booking[] = (data ?? []).map((row: any) => ({
+        id: row.id,
+        photographerId: row.photographer_id ?? row.photographerId ?? '',
+        date: row.requested_date ?? row.date ?? row.booking_date ?? '',
+        package: row.package ?? row.package_name ?? 'Booking',
+        notes: row.notes ?? undefined,
+        status: (row.status ?? 'pending') as BookingStatus,
+        createdAt: row.created_at ?? row.createdAt ?? new Date().toISOString(),
+        pricingMode: row.pricing_mode ?? undefined,
+        priceTotal: row.price_total ?? undefined,
+        currency: row.currency ?? undefined,
+        userLatitude: row.user_latitude ?? undefined,
+        userLongitude: row.user_longitude ?? undefined,
+      }));
+
+      setState((prev) => ({ ...prev, bookings: mapped }));
+    } catch (err: any) {
+      logError('fetch_bookings', err);
+      setError(formatErrorMessage(err, 'Unable to load bookings right now.'));
+    }
+  }, []);
+
   const hydratePhotographer = useCallback(
     async (photographerId: string): Promise<Photographer | null> => {
       if (!photographerId) return null;
@@ -201,7 +249,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       try {
         await ensureFreshStorage();
         const stored = await AsyncStorage.getItem(STORAGE_KEY);
-        if (stored) {
+      if (stored) {
           const parsed: AppState = JSON.parse(stored);
           setState({
             ...initialState,
@@ -216,6 +264,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           const profile = await fetchProfile(data.user.id);
           const hydratedUser = mapSupabaseUser(data.user, 'client', profile);
           setState((prev) => ({ ...prev, currentUser: hydratedUser }));
+          await fetchBookings();
         }
         await fetchPhotographers();
       } catch (err) {
@@ -228,7 +277,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
 
     load();
-  }, [ensureFreshStorage, fetchPhotographers, fetchProfile]);
+  }, [ensureFreshStorage, fetchPhotographers, fetchProfile, fetchBookings]);
 
   useEffect(() => {
     const { data } = supabase.auth.onAuthStateChange(async (_, session) => {
@@ -313,42 +362,146 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   }, [fetchProfile, state.currentUser?.role]);
 
-  const createBooking = useCallback(
-    async (payload: CreateBookingInput) => {
-      const booking: Booking = {
-        id: uid('booking'),
-        photographerId: payload.photographerId,
-        date: payload.date,
-        package: payload.package,
-        notes: payload.notes,
-        status: 'pending',
-        createdAt: new Date().toISOString(),
-      };
-      setState((prev) => ({ ...prev, bookings: [booking, ...prev.bookings] }));
-      return booking;
+  const trackEvent = useCallback(
+    async (name: string, metadata?: Record<string, any>) => {
+      try {
+        await supabase.from('analytics_events').insert({
+          name,
+          created_by: state.currentUser?.id ?? null,
+          metadata: metadata ?? null,
+        });
+      } catch (err) {
+        logError('track_event', err);
+      }
     },
-    []
+    [state.currentUser?.id]
   );
 
-  const updateBookingStatus = useCallback(async (bookingId: string) => {
+  const refreshPostMetrics = useCallback(async (postId: string) => {
+    try {
+      const { data, error: metricError } = await supabase
+        .from('posts')
+        .select('id, likes_count, comment_count')
+        .eq('id', postId)
+        .maybeSingle();
+      if (metricError || !data) return;
+      setState((prev) => ({
+        ...prev,
+        posts: prev.posts.map((post) =>
+          post.id === postId
+            ? {
+                ...post,
+                likes: data.likes_count ?? post.likes,
+                commentCount: data.comment_count ?? post.commentCount,
+              }
+            : post
+        ),
+      }));
+    } catch (err) {
+      logError('refresh_post_metrics', err);
+    }
+  }, []);
+
+
+  const createBooking = useCallback(
+    async (payload: CreateBookingInput) => {
+      const clientId = state.currentUser?.id;
+      if (!clientId) {
+        const message = 'You need to be signed in to create a booking.';
+        setError(message);
+        throw new Error(message);
+      }
+
+      try {
+        const { data, error: insertError } = await supabase
+          .from('bookings')
+          .insert({
+            client_id: clientId,
+            photographer_id: payload.photographerId,
+            requested_date: payload.date,
+            package: payload.package,
+            notes: payload.notes ?? null,
+            pricing_mode: payload.pricingMode ?? null,
+            photo_count: payload.photoCount ?? null,
+            event_package_id: payload.eventPackageId ?? null,
+            distance_km: payload.distanceKm ?? null,
+            price_total: payload.priceTotal ?? null,
+            currency: payload.currency ?? null,
+            user_latitude: payload.userLatitude ?? null,
+            user_longitude: payload.userLongitude ?? null,
+            status: 'pending',
+          })
+          .select('id, client_id, photographer_id, requested_date, package, notes, status, created_at')
+          .single();
+
+        if (insertError) throw insertError;
+
+        const booking: Booking = {
+          id: data?.id ?? uid('booking'),
+          photographerId: data?.photographer_id ?? payload.photographerId,
+          date: data?.requested_date ?? payload.date,
+          package: data?.package ?? payload.package,
+          notes: data?.notes ?? payload.notes,
+          status: (data?.status ?? 'pending') as BookingStatus,
+          createdAt: data?.created_at ?? new Date().toISOString(),
+        };
+
+        setState((prev) => ({ ...prev, bookings: [booking, ...prev.bookings] }));
+        await trackEvent('booking_created', { bookingId: booking.id });
+        return booking;
+      } catch (err: any) {
+        logError('create_booking', err);
+        const message = formatErrorMessage(err, 'Unable to create your booking right now.');
+        setError(message);
+        throw new Error(message);
+      }
+    },
+    [state.currentUser?.id, trackEvent]
+  );
+
+  const updateBookingStatus = useCallback(async (bookingId: string, forcedStatus?: BookingStatus) => {
     const nextStatus = (current: BookingStatus): BookingStatus => {
       const order: BookingStatus[] = ['pending', 'accepted', 'completed', 'reviewed'];
       const index = order.indexOf(current);
       return order[Math.min(index + 1, order.length - 1)];
     };
 
-    let updatedBooking: Booking | undefined;
-    setState((prev) => {
-      const bookings = prev.bookings.map((booking) => {
-        if (booking.id !== bookingId) return booking;
-        const status = nextStatus(booking.status);
-        updatedBooking = { ...booking, status };
-        return updatedBooking;
-      });
-      return { ...prev, bookings };
-    });
-    return updatedBooking;
-  }, []);
+    const target = state.bookings.find((booking) => booking.id === bookingId);
+    if (!target) return undefined;
+
+    const status = forcedStatus ?? nextStatus(target.status);
+    if (status === target.status) return target;
+    try {
+      const { data, error: updateError } = await supabase
+        .from('bookings')
+        .update({ status })
+        .eq('id', bookingId)
+        .select('id, client_id, photographer_id, requested_date, package, notes, status, created_at')
+        .single();
+
+      if (updateError) throw updateError;
+
+      const updatedBooking: Booking = {
+        id: data?.id ?? bookingId,
+        photographerId: data?.photographer_id ?? target.photographerId,
+        date: data?.requested_date ?? target.date,
+        package: data?.package ?? target.package,
+        notes: data?.notes ?? target.notes,
+        status: (data?.status ?? status) as BookingStatus,
+        createdAt: data?.created_at ?? target.createdAt,
+      };
+
+      setState((prev) => ({
+        ...prev,
+        bookings: prev.bookings.map((booking) => (booking.id === bookingId ? updatedBooking : booking)),
+      }));
+      return updatedBooking;
+    } catch (err: any) {
+      logError('update_booking_status', err);
+      setError(formatErrorMessage(err, 'Unable to update booking status.'));
+      return undefined;
+    }
+  }, [state.bookings]);
 
   const sendMessage = useCallback(
     async (chatId: string, text: string, fromUser = true) => {
@@ -387,7 +540,13 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           timestamp: data?.created_at ?? new Date().toISOString(),
         };
 
+        await supabase
+          .from('conversations')
+          .update({ last_message: trimmed, last_message_at: new Date().toISOString() })
+          .eq('id', chatId);
+
         setState((prev) => ({ ...prev, messages: [...prev.messages, message] }));
+        await trackEvent('message_sent', { chatId });
         return message;
       } catch (err: any) {
         logError('send_message', err);
@@ -396,7 +555,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         throw new Error(friendly);
       }
     },
-    [state.currentUser?.id]
+    [state.currentUser?.id, trackEvent]
   );
 
   const fetchMessagesForChat = useCallback(
@@ -433,6 +592,65 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     [state.currentUser?.id]
   );
 
+  const markConversationRead = useCallback(
+    async (chatId: string) => {
+      const userId = state.currentUser?.id;
+      if (!userId) return;
+      try {
+        await supabase
+          .from('conversation_participants')
+          .update({ last_read_at: new Date().toISOString() })
+          .eq('conversation_id', chatId)
+          .eq('user_id', userId);
+      } catch (err) {
+        logError('mark_conversation_read', err);
+      }
+    },
+    [state.currentUser?.id]
+  );
+
+  const getOrCreateBookingConversation = useCallback(
+    async (bookingId: string, photographerId: string) => {
+      const userId = state.currentUser?.id;
+      if (!userId) {
+        throw new Error('You must be signed in to start a chat.');
+      }
+
+      const { data: existing } = await supabase
+        .from('conversations')
+        .select('id')
+        .eq('booking_id', bookingId)
+        .maybeSingle();
+
+      if (existing?.id) return existing.id;
+
+      const title = `Booking chat · ${new Date().toLocaleDateString()}`;
+      const { data: conversation, error: insertError } = await supabase
+        .from('conversations')
+        .insert({
+          title,
+          created_by: userId,
+          booking_id: bookingId,
+          last_message: 'Say hello 👋',
+          last_message_at: new Date().toISOString(),
+        })
+        .select('id')
+        .single();
+
+      if (insertError || !conversation?.id) {
+        throw insertError ?? new Error('Unable to create a conversation.');
+      }
+
+      await supabase.from('conversation_participants').insert([
+        { conversation_id: conversation.id, user_id: userId },
+        { conversation_id: conversation.id, user_id: photographerId },
+      ]);
+
+      return conversation.id;
+    },
+    [state.currentUser?.id]
+  );
+
   const addPost = useCallback(
     async ({ caption, imageUri, location, userId }: CreatePostInput) => {
       const ownerId = userId ?? state.currentUser?.id;
@@ -443,27 +661,45 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
 
       try {
-        const { data, error: insertError } = await supabase
-          .from('posts')
-          .insert({
-            user_id: ownerId,
-            caption,
-            location,
-            image_url: imageUri,
-          })
-          .select(
+        const insertPost = async () =>
+          supabase
+            .from('posts')
+            .insert({
+              user_id: ownerId,
+              caption,
+              location,
+              image_url: imageUri,
+            })
+            .select(
+              `
+              id,
+              user_id,
+              caption,
+              location,
+              comment_count,
+              created_at,
+              image_url,
+              likes_count
             `
-            id,
-            user_id,
-            caption,
-            location,
-            comment_count,
-            created_at,
-            image_url,
-            likes_count
-          `
-          )
-          .single();
+            )
+            .single();
+
+        let { data, error: insertError } = await insertPost();
+
+        if (insertError) {
+          const message = String((insertError as any)?.message ?? '');
+          const isForeignKey = (insertError as any)?.code === '23503' || message.includes('foreign key');
+          if (isForeignKey) {
+            await supabase.from('profiles').upsert({
+              id: ownerId,
+              role: state.currentUser?.role ?? 'client',
+              verified: false,
+            });
+            const retry = await insertPost();
+            data = retry.data;
+            insertError = retry.error;
+          }
+        }
 
         if (insertError) {
           throw insertError;
@@ -482,51 +718,124 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         };
 
         setState((prev) => ({ ...prev, posts: [post, ...prev.posts] }));
+        await trackEvent('post_created', { postId: post.id });
         return post;
       } catch (err: any) {
         logError('add_post', err);
-        const message = formatErrorMessage(err, 'Unable to publish your post right now.');
+        const details =
+          err && typeof err === 'object' && 'message' in err && typeof (err as any).message === 'string'
+            ? (err as any).message
+            : JSON.stringify(err);
+        const message = formatErrorMessage(details, 'Unable to publish your post right now.');
         setError(message);
         throw err;
       }
     },
-    [state.currentUser?.id]
+    [state.currentUser?.id, trackEvent]
   );
 
-  const toggleLike = useCallback(async (postId: string) => {
-    let updated: Post | undefined;
-    setState((prev) => {
-      const posts = prev.posts.map((post) => {
-        if (post.id !== postId) return post;
-        const liked = !post.liked;
-        updated = {
-          ...post,
-          liked,
-          likes: liked ? post.likes + 1 : Math.max(0, post.likes - 1),
-        };
-        return updated;
-      });
-      return { ...prev, posts };
-    });
-    return updated;
-  }, []);
+  const toggleLike = useCallback(
+    async (postId: string) => {
+      const userId = state.currentUser?.id;
+      if (!userId) {
+        throw new Error('You need to be signed in to like a post.');
+      }
+      try {
+        const { data: existing } = await supabase
+          .from('post_likes')
+          .select('id')
+          .eq('post_id', postId)
+          .eq('user_id', userId)
+          .maybeSingle();
 
-  const addComment = useCallback(async (postId: string, text: string, userId = 'you') => {
-    const comment: Comment = {
-      id: uid('comment'),
-      postId,
-      userId,
-      text,
-      createdAt: new Date().toISOString(),
-    };
-    setState((prev) => {
-      const comments = [...prev.comments, comment];
-      const posts = prev.posts.map((post) =>
-        post.id === postId ? { ...post, commentCount: post.commentCount + 1 } : post
-      );
-      return { ...prev, comments, posts };
-    });
-    return comment;
+        if (existing?.id) {
+          await supabase.from('post_likes').delete().eq('id', existing.id);
+          setState((prev) => ({
+            ...prev,
+            posts: prev.posts.map((post) =>
+              post.id === postId ? { ...post, liked: false } : post
+            ),
+          }));
+          await trackEvent('post_unliked', { postId });
+        } else {
+          await supabase.from('post_likes').insert({ post_id: postId, user_id: userId });
+          setState((prev) => ({
+            ...prev,
+            posts: prev.posts.map((post) =>
+              post.id === postId ? { ...post, liked: true } : post
+            ),
+          }));
+          await trackEvent('post_liked', { postId });
+        }
+        await refreshPostMetrics(postId);
+      } catch (err: any) {
+        logError('toggle_like', err);
+        throw err;
+      }
+      return state.posts.find((post) => post.id === postId);
+    },
+    [refreshPostMetrics, state.currentUser?.id, state.posts, trackEvent]
+  );
+
+  const addComment = useCallback(
+    async (postId: string, text: string, userId = state.currentUser?.id ?? 'you') => {
+      const trimmed = text.trim();
+      if (!trimmed) {
+        throw new Error('Comment text is required.');
+      }
+      if (!state.currentUser?.id) {
+        throw new Error('You need to be signed in to comment.');
+      }
+      const { data, error: insertError } = await supabase
+        .from('post_comments')
+        .insert({ post_id: postId, user_id: state.currentUser.id, body: trimmed })
+        .select('id, post_id, user_id, body, created_at')
+        .single();
+      if (insertError) {
+        throw insertError;
+      }
+      const comment: Comment = {
+        id: data?.id ?? uid('comment'),
+        postId: data?.post_id ?? postId,
+        userId: data?.user_id ?? userId,
+        text: data?.body ?? trimmed,
+        createdAt: data?.created_at ?? new Date().toISOString(),
+      };
+      setState((prev) => ({
+        ...prev,
+        comments: [...prev.comments, comment],
+      }));
+      await refreshPostMetrics(postId);
+      await trackEvent('post_commented', { postId });
+      return comment;
+    },
+    [refreshPostMetrics, state.currentUser?.id, trackEvent]
+  );
+
+  const fetchCommentsForPost = useCallback(async (postId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('post_comments')
+        .select('id, post_id, user_id, body, created_at')
+        .eq('post_id', postId)
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      const mapped: Comment[] = (data ?? []).map((row: any) => ({
+        id: row.id,
+        postId: row.post_id ?? postId,
+        userId: row.user_id ?? 'user',
+        text: row.body ?? '',
+        createdAt: row.created_at ?? new Date().toISOString(),
+      }));
+      setState((prev) => ({
+        ...prev,
+        comments: [...prev.comments.filter((c) => c.postId !== postId), ...mapped],
+      }));
+      return mapped;
+    } catch (err) {
+      logError('fetch_comments_for_post', err);
+      return [];
+    }
   }, []);
 
   const resetState = useCallback(async () => {
@@ -615,13 +924,25 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setState((prev) => ({ ...prev, privacy: { ...prev.privacy, ...changes } }));
   }, []);
 
-  const requestDataDeletion = useCallback(async () => {
+  const requestDataDeletion = useCallback(async (reason?: string) => {
     const timestamp = new Date().toISOString();
-    setState((prev) => ({
-      ...prev,
-      privacy: { ...prev.privacy, dataDeletionRequestedAt: timestamp },
-    }));
-  }, []);
+    try {
+      if (state.currentUser?.id) {
+        await supabase.from('account_deletion_requests').insert({
+          created_by: state.currentUser.id,
+          reason: reason ?? null,
+        });
+        await trackEvent('account_deletion_requested');
+      }
+    } catch (err) {
+      logError('request_data_deletion', err);
+    } finally {
+      setState((prev) => ({
+        ...prev,
+        privacy: { ...prev.privacy, dataDeletionRequestedAt: timestamp },
+      }));
+    }
+  }, [state.currentUser?.id, trackEvent]);
 
   const value = useMemo<AppDataContextValue>(
     () => ({
@@ -637,9 +958,13 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       updateBookingStatus,
       sendMessage,
       fetchMessagesForChat,
+      markConversationRead,
+      getOrCreateBookingConversation,
       addPost,
       toggleLike,
       addComment,
+      fetchCommentsForPost,
+      trackEvent,
       signUp,
       signIn,
       signOut,
@@ -659,9 +984,13 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       updateBookingStatus,
       sendMessage,
       fetchMessagesForChat,
+      markConversationRead,
+      getOrCreateBookingConversation,
       addPost,
       toggleLike,
       addComment,
+      fetchCommentsForPost,
+      trackEvent,
       signUp,
       signIn,
       signOut,

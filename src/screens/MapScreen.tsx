@@ -1,69 +1,46 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
 import * as Location from 'expo-location';
 import { MapPreview } from '../components/MapPreview';
 import { MapMarker } from '../components/mapTypes';
 import { useAppData } from '../store/AppDataContext';
+import { rankPhotographers } from '../utils/recommendation';
+import { quotePaparazziSession } from '../utils/pricing';
+import { formatCurrency, getCurrencyForLocale } from '../utils/format';
+import { RootStackParamList } from '../navigation/types';
 
-const SA_BOUNDS = {
-  minLat: -35,
-  maxLat: -22,
-  minLng: 16,
-  maxLng: 33,
-};
-
-const isWithinSouthAfrica = (latitude: number, longitude: number) =>
-  latitude >= SA_BOUNDS.minLat &&
-  latitude <= SA_BOUNDS.maxLat &&
-  longitude >= SA_BOUNDS.minLng &&
-  longitude <= SA_BOUNDS.maxLng;
-
-const formatAccuracy = (accuracy?: number | null) => {
-  if (!accuracy) return 'Approximate position';
-  if (accuracy > 250) return `Weak GPS (~${Math.round(accuracy)}m)`;
-  if (accuracy > 75) return `Accurate to ~${Math.round(accuracy)}m`;
-  return 'High accuracy lock';
-};
-
-type UserCoordinates = {
-  lat: number;
-  lng: number;
-  timestamp: number;
-};
-
-const formatTimestamp = (timestamp: number) => {
-  try {
-    return new Date(timestamp).toLocaleTimeString();
-  } catch (err) {
-    console.warn('Failed to format timestamp', err);
-    return 'recently';
-  }
-};
+type Navigation = StackNavigationProp<RootStackParamList>;
 
 const MapScreen: React.FC = () => {
+  const navigation = useNavigation<Navigation>();
   const { state } = useAppData();
   const [userMarker, setUserMarker] = useState<MapMarker | null>(null);
-  const [userCoordinates, setUserCoordinates] = useState<UserCoordinates | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
-  const [locationWarning, setLocationWarning] = useState<string | null>(null);
-  const [mapError, setMapError] = useState<string | null>(null);
   const [requesting, setRequesting] = useState(false);
-  const [usingManual, setUsingManual] = useState(false);
-  const [manualLocation, setManualLocation] = useState({ label: '', latitude: '', longitude: '' });
-  const [gpsEnabled, setGpsEnabled] = useState<boolean | null>(null);
-  const lastRequestRef = useRef<number>(0);
+  const [searching, setSearching] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [resolvedLocation, setResolvedLocation] = useState<string | null>(null);
+  const localeCurrency = useMemo(() => getCurrencyForLocale(), []);
 
   const baseMarkers: MapMarker[] = useMemo(
     () =>
-      state.photographers.map((photographer) => ({
-        id: photographer.id,
-        title: photographer.name,
-        description: photographer.location,
-        latitude: photographer.latitude,
-        longitude: photographer.longitude,
-        type: 'photographer',
-      })),
+      state.photographers
+        .filter(
+          (photographer) =>
+            Number.isFinite(photographer.latitude) && Number.isFinite(photographer.longitude)
+        )
+        .map((photographer) => ({
+          id: photographer.id,
+          title: photographer.name,
+          description: photographer.location,
+          latitude: photographer.latitude,
+          longitude: photographer.longitude,
+          type: 'photographer',
+        })),
     [state.photographers]
   );
 
@@ -72,199 +49,166 @@ const MapScreen: React.FC = () => {
     [baseMarkers, userMarker]
   );
 
-  const handleLocationFailure = useCallback((message: string) => {
-    setLocationError(message);
-    setUserMarker(null);
-    setUserCoordinates(null);
-  }, []);
+  const recommendations = useMemo(() => {
+    if (!userMarker) return [];
+    const ranked = rankPhotographers(
+      { latitude: userMarker.latitude, longitude: userMarker.longitude },
+      state.photographers
+    );
+    if (!searchQuery.trim()) return ranked.slice(0, 8);
+    const needle = searchQuery.trim().toLowerCase();
+    return ranked
+      .filter(({ photographer }) => {
+        return (
+          photographer.name.toLowerCase().includes(needle) ||
+          photographer.location.toLowerCase().includes(needle) ||
+          photographer.tags.some((tag) => tag.toLowerCase().includes(needle))
+        );
+      })
+      .slice(0, 8);
+  }, [searchQuery, state.photographers, userMarker]);
 
   const requestLocation = useCallback(async () => {
-    const now = Date.now();
-    if (now - lastRequestRef.current < 750) return; // debounce rapid taps
-    lastRequestRef.current = now;
-
     setRequesting(true);
     setLocationError(null);
-    setLocationWarning(null);
-    setUsingManual(false);
-
     try {
       const servicesEnabled = await Location.hasServicesEnabledAsync();
-      setGpsEnabled(servicesEnabled);
       if (!servicesEnabled) {
-        handleLocationFailure('Location services are off. Enable GPS or enter your location manually.');
+        setLocationError('Enable location services to see nearby photographers.');
         return;
       }
-
-      const { status, canAskAgain } = await Location.requestForegroundPermissionsAsync();
+      const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        const message = canAskAgain
-          ? 'Location permission is required to show nearby photographers.'
-          : 'Location permission denied. Please enable it in settings or enter your location manually.';
-        handleLocationFailure(message);
+        setLocationError('Allow location access to find photographers near you.');
         return;
       }
-
       const position = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Highest,
-        maximumAge: 60000,
-        mayShowUserSettingsDialog: true,
+        accuracy: Location.Accuracy.Balanced,
       });
-
-      const { latitude, longitude, accuracy } = position.coords;
-      if (!isWithinSouthAfrica(latitude, longitude)) {
-        handleLocationFailure('We currently support South African locations only. Enter a supported location manually.');
-        return;
-      }
-
-      if (accuracy && accuracy > 120) {
-        setLocationWarning('GPS signal is weak; location is approximate.');
-      }
-
+      const { latitude, longitude } = position.coords;
       setUserMarker({
         id: 'user-location',
         title: 'You',
-        description: formatAccuracy(accuracy),
+        description: 'Current location',
         latitude,
         longitude,
         type: 'user',
       });
-      setUserCoordinates({ lat: latitude, lng: longitude, timestamp: position.timestamp });
+      const geocode = await Location.reverseGeocodeAsync({ latitude, longitude });
+      const place = geocode[0];
+      if (place) {
+        const label = [place.subregion, place.city, place.region].filter(Boolean).join(', ');
+        setResolvedLocation(label || 'Location updated');
+      } else {
+        setResolvedLocation('Location updated');
+      }
     } catch (err) {
       console.warn('Location request failed', err);
-      handleLocationFailure('Unable to fetch GPS. Check connectivity or enter your location manually.');
+      setLocationError('Unable to get your location right now. Try again.');
     } finally {
       setRequesting(false);
     }
-  }, [handleLocationFailure]);
+  }, []);
 
   useEffect(() => {
     requestLocation();
   }, [requestLocation]);
 
-  const applyManualLocation = useCallback(() => {
-    const latitude = parseFloat(manualLocation.latitude);
-    const longitude = parseFloat(manualLocation.longitude);
-    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-      Alert.alert('Invalid coordinates', 'Please enter numeric latitude and longitude values.');
-      return;
-    }
-    if (!isWithinSouthAfrica(latitude, longitude)) {
-      Alert.alert(
-        'Out of bounds',
-        'Coordinates must be inside South Africa (lat -35 to -22, lng 16 to 33).'
-      );
-      return;
-    }
-
+  const searchArea = useCallback(async () => {
+    const query = searchQuery.trim();
+    if (!query) return;
+    setSearching(true);
     setLocationError(null);
-    setMapError(null);
-    setUsingManual(true);
-    setUserMarker({
-      id: 'manual-location',
-      title: manualLocation.label || 'Manual location',
-      description: 'Pinned manually',
-      latitude,
-      longitude,
-      type: 'user',
-    });
-    setUserCoordinates(null);
-  }, [manualLocation.label, manualLocation.latitude, manualLocation.longitude]);
-
-  const statusLabel = useMemo(() => {
-    if (mapError) return 'Map offline · using manual entry';
-    if (locationError) return 'Location needed';
-    if (usingManual) return 'Manual location active';
-    if (userMarker) return 'GPS locked';
-    if (gpsEnabled === false) return 'GPS disabled';
-    return 'Requesting location...';
-  }, [gpsEnabled, locationError, mapError, userMarker, usingManual]);
+    try {
+      const results = await Location.geocodeAsync(query);
+      const best = results[0];
+      if (!best) {
+        setLocationError('No matching area found. Try a different suburb or city.');
+        return;
+      }
+      setUserMarker({
+        id: 'search-location',
+        title: 'Search area',
+        description: query,
+        latitude: best.latitude,
+        longitude: best.longitude,
+        type: 'user',
+      });
+      setResolvedLocation(query);
+    } catch (err) {
+      console.warn('Search location failed', err);
+      setLocationError('Unable to search area right now.');
+    } finally {
+      setSearching(false);
+    }
+  }, [searchQuery]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
-        <View style={styles.headerRow}>
-          <View>
-            <Text style={styles.title}>Photographers nearby</Text>
-            <Text style={styles.subtitle}>
-              Native apps render OpenStreetMap tiles with live markers. Web shows a preview list.
-            </Text>
-            <Text style={styles.status}>{statusLabel}</Text>
-            <Text style={styles.coordsLabel}>
-              {userCoordinates
-                ? `Lat ${userCoordinates.lat.toFixed(5)}, Lng ${userCoordinates.lng.toFixed(5)} · Updated ${formatTimestamp(
-                    userCoordinates.timestamp
-                  )}`
-                : 'Awaiting live GPS coordinates'}
-            </Text>
-            {locationWarning ? <Text style={styles.warning}>{locationWarning}</Text> : null}
-            {locationError ? <Text style={styles.errorText}>{locationError}</Text> : null}
-            {mapError ? <Text style={styles.errorText}>{mapError}</Text> : null}
-          </View>
-          <View style={styles.countPill}>
-            <Text style={styles.countText}>{baseMarkers.length}</Text>
-            <Text style={styles.countLabel}>active</Text>
-          </View>
-        </View>
-
-        <View style={styles.actionRow}>
-          <TouchableOpacity style={styles.primaryButton} onPress={requestLocation} disabled={requesting}>
-            <Text style={styles.primaryButtonText}>{requesting ? 'Requesting...' : 'Retry GPS'}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.secondaryButton, usingManual && styles.secondaryButtonActive]}
-            onPress={() => setUsingManual(true)}
-          >
-            <Text style={[styles.secondaryButtonText, usingManual && styles.secondaryButtonTextActive]}>
-              Manual location
-            </Text>
-          </TouchableOpacity>
-        </View>
-
         <View style={styles.mapWrapper}>
-          <MapPreview markers={markers} onMapError={(message) => setMapError(message)} />
-        </View>
-
-        <View style={styles.manualCard}>
-          <Text style={styles.manualTitle}>Manual fallback</Text>
-          <Text style={styles.manualSubtitle}>
-            If GPS or map tiles fail, enter a South Africa coordinate. We only accept lat -35 to -22 and lng 16
-            to 33.
-          </Text>
-          <View style={styles.inputRow}>
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Label</Text>
-              <TextInput
-                placeholder="Cape Town CBD"
-                value={manualLocation.label}
-                onChangeText={(text) => setManualLocation((prev) => ({ ...prev, label: text }))}
-                style={styles.input}
-              />
-            </View>
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Latitude</Text>
-              <TextInput
-                placeholder="-33.92"
-                value={manualLocation.latitude}
-                onChangeText={(text) => setManualLocation((prev) => ({ ...prev, latitude: text }))}
-                style={styles.input}
-                keyboardType="numeric"
-              />
-            </View>
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Longitude</Text>
-              <TextInput
-                placeholder="18.42"
-                value={manualLocation.longitude}
-                onChangeText={(text) => setManualLocation((prev) => ({ ...prev, longitude: text }))}
-                style={styles.input}
-                keyboardType="numeric"
-              />
-            </View>
+          <MapPreview markers={markers} />
+          <View style={styles.searchOverlay}>
+            <Ionicons name="search" size={18} color="#475569" />
+            <TextInput
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholder="Search your area..."
+              style={styles.searchInput}
+              placeholderTextColor="#94a3b8"
+              returnKeyType="search"
+              onSubmitEditing={searchArea}
+            />
+            <TouchableOpacity onPress={searchArea} disabled={searching}>
+              <Text style={styles.searchCta}>{searching ? '...' : 'Go'}</Text>
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity style={styles.applyButton} onPress={applyManualLocation}>
-            <Text style={styles.applyButtonText}>Pin manual location</Text>
+          <TouchableOpacity style={styles.locationFab} onPress={requestLocation} disabled={requesting}>
+            <Ionicons name="locate" size={22} color="#0f172a" />
           </TouchableOpacity>
+          <View style={styles.bottomSheet}>
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>Photographers near you</Text>
+              {resolvedLocation ? <Text style={styles.sheetMeta}>{resolvedLocation}</Text> : null}
+            </View>
+            {locationError ? <Text style={styles.errorText}>{locationError}</Text> : null}
+            {recommendations.length === 0 ? (
+              <Text style={styles.emptyText}>No nearby photographers yet. Try another area.</Text>
+            ) : (
+              <FlatList
+                horizontal
+                data={recommendations}
+                keyExtractor={({ photographer }) => photographer.id}
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.cardRow}
+                renderItem={({ item }) => {
+                  const estimate = quotePaparazziSession(
+                    item.photographer,
+                    item.score.distanceKm,
+                    4,
+                    localeCurrency
+                  );
+                  return (
+                    <TouchableOpacity
+                      style={styles.photographerCard}
+                      onPress={() => navigation.navigate('Profile', { photographerId: item.photographer.id })}
+                    >
+                      <Text style={styles.recommendName} numberOfLines={1}>
+                        {item.photographer.name}
+                      </Text>
+                      <Text style={styles.recommendMeta} numberOfLines={1}>
+                        {item.photographer.location}
+                      </Text>
+                      <Text style={styles.recommendMeta}>⭐ {item.photographer.rating.toFixed(1)}</Text>
+                      <Text style={styles.recommendPrice}>
+                        {formatCurrency(estimate.total, estimate.currency)}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                }}
+              />
+            )}
+          </View>
         </View>
       </View>
     </SafeAreaView>
@@ -278,148 +222,111 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    padding: 16,
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#0f172a',
-  },
-  subtitle: {
-    marginTop: 4,
-    marginBottom: 12,
-    color: '#475569',
-  },
-  status: {
-    color: '#0f172a',
-    fontWeight: '700',
-  },
-  coordsLabel: {
-    marginTop: 4,
-    color: '#334155',
-    fontFamily: 'monospace',
-  },
-  warning: {
-    color: '#b45309',
-    fontWeight: '700',
-    marginTop: 4,
-  },
-  errorText: {
-    color: '#dc2626',
-    fontWeight: '700',
-    marginTop: 4,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-    gap: 12,
-  },
-  countPill: {
-    backgroundColor: '#0f172a',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    alignItems: 'center',
-  },
-  countText: {
-    color: '#fff',
-    fontWeight: '800',
-    fontSize: 16,
-  },
-  countLabel: {
-    color: '#e2e8f0',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  actionRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 12,
-  },
-  primaryButton: {
-    backgroundColor: '#0f172a',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  primaryButtonText: {
-    color: '#fff',
-    fontWeight: '700',
-  },
-  secondaryButton: {
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#cbd5e1',
-    backgroundColor: '#fff',
-  },
-  secondaryButtonActive: {
-    borderColor: '#0ea5e9',
-    backgroundColor: '#ecfeff',
-  },
-  secondaryButtonText: {
-    color: '#0f172a',
-    fontWeight: '700',
-  },
-  secondaryButtonTextActive: {
-    color: '#0ea5e9',
   },
   mapWrapper: {
     flex: 1,
     width: '100%',
-    height: '100%',
+    minHeight: 480,
   },
-  manualCard: {
-    marginTop: 12,
-    backgroundColor: '#fff',
+  searchOverlay: {
+    position: 'absolute',
+    top: 6,
+    left: 12,
+    right: 12,
     borderRadius: 14,
-    padding: 12,
+    backgroundColor: '#fff',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: '#e5e7eb',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
-  manualTitle: {
+  searchInput: {
+    flex: 1,
+    color: '#0f172a',
+    fontWeight: '600',
+  },
+  searchCta: {
+    color: '#0f172a',
+    fontWeight: '800',
+  },
+  locationFab: {
+    position: 'absolute',
+    right: 14,
+    bottom: 208,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#fff',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#e5e7eb',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bottomSheet: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    backgroundColor: '#fff',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#e5e7eb',
+    paddingTop: 12,
+    paddingBottom: 14,
+  },
+  sheetHeader: {
+    paddingHorizontal: 14,
+    marginBottom: 6,
+  },
+  sheetTitle: {
     fontWeight: '800',
     color: '#0f172a',
+    fontSize: 16,
   },
-  manualSubtitle: {
+  sheetMeta: {
     color: '#475569',
-    marginTop: 4,
-    marginBottom: 10,
+    marginTop: 2,
   },
-  inputRow: {
-    flexDirection: 'row',
-    gap: 8,
-    flexWrap: 'wrap',
+  cardRow: {
+    paddingHorizontal: 14,
+    gap: 10,
   },
-  inputGroup: {
-    flex: 1,
-    minWidth: 110,
-  },
-  label: {
-    fontWeight: '700',
-    color: '#0f172a',
-    marginBottom: 4,
-  },
-  input: {
+  photographerCard: {
+    width: 210,
+    borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#e2e8f0',
-    borderRadius: 10,
-    padding: 10,
+    borderColor: '#e5e7eb',
+    padding: 12,
     backgroundColor: '#f8fafc',
   },
-  applyButton: {
-    marginTop: 10,
-    backgroundColor: '#0ea5e9',
-    paddingVertical: 12,
-    borderRadius: 12,
-    alignItems: 'center',
+  recommendName: {
+    fontWeight: '700',
+    color: '#0f172a',
+    fontSize: 15,
   },
-  applyButtonText: {
-    color: '#fff',
+  recommendMeta: {
+    color: '#475569',
+    marginTop: 2,
+  },
+  recommendPrice: {
     fontWeight: '800',
+    color: '#0f172a',
+    marginTop: 8,
+  },
+  errorText: {
+    color: '#dc2626',
+    fontWeight: '700',
+    marginHorizontal: 14,
+    marginBottom: 4,
+  },
+  emptyText: {
+    color: '#475569',
+    marginHorizontal: 14,
+    marginTop: 6,
   },
 });
 

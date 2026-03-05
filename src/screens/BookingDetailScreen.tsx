@@ -14,7 +14,7 @@ const steps: BookingStatus[] = ['pending', 'accepted', 'completed', 'reviewed'];
 const BookingDetailScreen: React.FC = () => {
   const { params } = useRoute<Route>();
   const navigation = useNavigation<Navigation>();
-  const { state, updateBookingStatus } = useAppData();
+  const { state, updateBookingStatus, getOrCreateBookingConversation } = useAppData();
   const [updating, setUpdating] = useState(false);
 
   const booking = useMemo(
@@ -75,7 +75,18 @@ const BookingDetailScreen: React.FC = () => {
 
       <TouchableOpacity
         style={styles.secondary}
-        onPress={() => navigation.navigate('Root', { screen: 'Chat' })}
+        onPress={async () => {
+          try {
+            if (!booking?.id || !booking.photographerId) {
+              navigation.navigate('Root', { screen: 'Chat' });
+              return;
+            }
+            const conversationId = await getOrCreateBookingConversation(booking.id, booking.photographerId);
+            navigation.navigate('ChatThread', { conversationId, title: 'Booking chat' });
+          } catch (err) {
+            navigation.navigate('Root', { screen: 'Chat' });
+          }
+        }}
       >
         <Text style={styles.secondaryText}>Open chat</Text>
       </TouchableOpacity>

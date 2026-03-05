@@ -5,6 +5,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { useAppData } from '../store/AppDataContext';
 import { RootStackParamList } from '../navigation/types';
 import { Photographer } from '../types';
+import { supabase } from '../config/supabaseClient';
 
 type Navigation = StackNavigationProp<RootStackParamList, 'Profile'>;
 type Route = RouteProp<RootStackParamList, 'Profile'>;
@@ -12,7 +13,7 @@ type Route = RouteProp<RootStackParamList, 'Profile'>;
 const ProfileScreen: React.FC = () => {
   const { params } = useRoute<Route>();
   const navigation = useNavigation<Navigation>();
-  const { state } = useAppData();
+  const { state, currentUser } = useAppData();
   const photographer = useMemo(
     () => state.photographers.find((item) => item.id === params.photographerId),
     [params.photographerId, state.photographers]
@@ -27,6 +28,51 @@ const ProfileScreen: React.FC = () => {
   }
 
   const openBooking = () => navigation.navigate('BookingForm', { photographerId: photographer.id });
+  const openChat = async () => {
+    if (!currentUser?.id) return;
+    const title = `Chat · ${photographer.name}`;
+    const { data: existing } = await supabase
+      .from('conversation_participants')
+      .select('conversation_id')
+      .eq('user_id', currentUser.id)
+      .limit(20);
+    if (existing?.length) {
+      const ids = existing.map((row: any) => row.conversation_id);
+      const { data: candidate } = await supabase
+        .from('conversation_participants')
+        .select('conversation_id')
+        .in('conversation_id', ids)
+        .eq('user_id', photographer.id)
+        .maybeSingle();
+      if (candidate?.conversation_id) {
+        navigation.navigate('ChatThread', { conversationId: candidate.conversation_id, title });
+        return;
+      }
+    }
+    const { data: convo } = await supabase
+      .from('conversations')
+      .insert({
+        title,
+        created_by: currentUser.id,
+        last_message: 'Say hello 👋',
+        last_message_at: new Date().toISOString(),
+      })
+      .select('id')
+      .single();
+    if (convo?.id) {
+      await supabase.from('conversation_participants').insert([
+        { conversation_id: convo.id, user_id: currentUser.id },
+        { conversation_id: convo.id, user_id: photographer.id },
+      ]);
+      navigation.navigate('ChatThread', { conversationId: convo.id, title });
+    }
+  };
+  const openReport = () =>
+    navigation.navigate('Report', {
+      targetType: 'user',
+      targetId: photographer.id,
+      title: photographer.name,
+    });
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -54,6 +100,12 @@ const ProfileScreen: React.FC = () => {
       </View>
       <TouchableOpacity style={styles.cta} onPress={openBooking}>
         <Text style={styles.ctaText}>Request booking</Text>
+      </TouchableOpacity>
+      <TouchableOpacity style={styles.chatButton} onPress={openChat}>
+        <Text style={styles.chatButtonText}>Message photographer</Text>
+      </TouchableOpacity>
+      <TouchableOpacity style={styles.reportButton} onPress={openReport}>
+        <Text style={styles.reportText}>Report user</Text>
       </TouchableOpacity>
     </ScrollView>
   );
@@ -152,6 +204,28 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '700',
     fontSize: 16,
+  },
+  reportButton: {
+    marginTop: 10,
+    backgroundColor: '#fee2e2',
+    borderRadius: 14,
+    padding: 12,
+    alignItems: 'center',
+  },
+  reportText: {
+    color: '#991b1b',
+    fontWeight: '700',
+  },
+  chatButton: {
+    marginTop: 10,
+    backgroundColor: '#e2e8f0',
+    borderRadius: 14,
+    padding: 12,
+    alignItems: 'center',
+  },
+  chatButtonText: {
+    color: '#0f172a',
+    fontWeight: '700',
   },
 });
 

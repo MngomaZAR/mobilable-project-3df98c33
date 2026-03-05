@@ -14,7 +14,7 @@ const ComplianceScreen: React.FC = () => {
   const togglePersonalizedAds = (value: boolean) => updatePrivacy({ personalizedAds: value });
 
   const deleteRequest = async () => {
-    await requestDataDeletion();
+    await requestDataDeletion(notes.trim() || undefined);
     Alert.alert('Request logged', 'We recorded your deletion request with timestamp for audit.');
   };
 

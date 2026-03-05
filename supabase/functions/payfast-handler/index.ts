@@ -75,6 +75,34 @@ const jsonResponse = (status: number, body: JsonRecord) =>
 const textOk = (message = "OK") =>
   new Response(message, { status: 200, headers: textHeaders });
 
+const validateItnWithPayfast = async (encodedBody: string): Promise<boolean> => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 8000);
+  try {
+    const response = await fetch(`${payfastBaseUrl}/eng/query/validate`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: encodedBody,
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      console.warn("payfast-handler: ITN validation HTTP error", response.status);
+      return false;
+    }
+
+    const responseText = (await response.text()).trim().toUpperCase();
+    return responseText === "VALID";
+  } catch (error) {
+    console.warn("payfast-handler: ITN validation request failed", error);
+    return false;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+};
+
 const asNumber = (value: string | null | undefined) => {
   if (!value) return null;
   const parsed = Number.parseFloat(value);
@@ -183,8 +211,14 @@ const handleItn = async (req: Request) => {
   const remoteIp = (req.headers.get("x-forwarded-for") || "")
     .split(",")[0]
     ?.trim();
-  if (allowedIps.length > 0 && remoteIp && !allowedIps.includes(remoteIp)) {
+  if (allowedIps.length > 0 && (!remoteIp || !allowedIps.includes(remoteIp))) {
     console.warn("payfast-handler: rejected ITN by IP allowlist", remoteIp);
+    return textOk("OK");
+  }
+
+  const incomingMerchantId = (payload.merchant_id || "").trim();
+  if (!incomingMerchantId || incomingMerchantId !== merchantId) {
+    console.warn("payfast-handler: merchant mismatch");
     return textOk("OK");
   }
 
@@ -192,6 +226,12 @@ const handleItn = async (req: Request) => {
   const expectedSignature = createSignature(payload, passphrase);
   if (!receivedSignature || expectedSignature !== receivedSignature) {
     console.warn("payfast-handler: invalid signature");
+    return textOk("OK");
+  }
+
+  const itnValidated = await validateItnWithPayfast(body);
+  if (!itnValidated) {
+    console.warn("payfast-handler: ITN validation failed");
     return textOk("OK");
   }
 

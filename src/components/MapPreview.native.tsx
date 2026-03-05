@@ -3,20 +3,21 @@ import MapView, { Marker, Region, UrlTile } from 'react-native-maps';
 import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { MapMarker, MapPreviewProps } from './mapTypes';
-import { DEFAULT_CAPE_TOWN_COORDINATES, validateSouthAfricanLocation } from '../utils/geo';
+import { DEFAULT_CAPE_TOWN_COORDINATES, ensureSouthAfricanCoordinates } from '../utils/geo';
 
 export const MapPreview: React.FC<MapPreviewProps> = ({ markers, onMapError }) => {
   const mapRef = useRef<any | null>(null);
   const { width } = useWindowDimensions();
 
   const region: Region = useMemo(() => {
-    const baseLatitude = markers[0]?.latitude ?? DEFAULT_CAPE_TOWN_COORDINATES.latitude;
-    const baseLongitude = markers[0]?.longitude ?? DEFAULT_CAPE_TOWN_COORDINATES.longitude;
-    validateSouthAfricanLocation(baseLatitude, baseLongitude);
+    const base = ensureSouthAfricanCoordinates({
+      latitude: markers[0]?.latitude ?? DEFAULT_CAPE_TOWN_COORDINATES.latitude,
+      longitude: markers[0]?.longitude ?? DEFAULT_CAPE_TOWN_COORDINATES.longitude,
+    });
 
     return {
-      latitude: baseLatitude,
-      longitude: baseLongitude,
+      latitude: base.latitude,
+      longitude: base.longitude,
       latitudeDelta: markers.length > 1 ? 6 : 4,
       longitudeDelta: markers.length > 1 ? 6 : 4,
     };

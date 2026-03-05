@@ -7,7 +7,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { MapTracker } from '../components/MapTracker';
 import { useAppData } from '../store/AppDataContext';
 import { RootStackParamList } from '../navigation/types';
-import { DEFAULT_CAPE_TOWN_COORDINATES, validateSouthAfricanLocation } from '../utils/geo';
+import { DEFAULT_CAPE_TOWN_COORDINATES, ensureSouthAfricanCoordinates } from '../utils/geo';
 
 type Navigation = StackNavigationProp<RootStackParamList, 'Root'>;
 
@@ -29,18 +29,14 @@ const PhotographerDashboardScreen: React.FC = () => {
   );
 
   const clientLocation = useMemo(() => {
-    const coords = { ...DEFAULT_CAPE_TOWN_COORDINATES };
-    validateSouthAfricanLocation(coords.latitude, coords.longitude);
-    return coords;
+    return { ...DEFAULT_CAPE_TOWN_COORDINATES };
   }, []);
 
   const photographerLocation = useMemo(() => {
-    const coords = {
+    return ensureSouthAfricanCoordinates({
       latitude: photographerProfile?.latitude ?? -26.2041,
       longitude: photographerProfile?.longitude ?? 28.0473,
-    };
-    validateSouthAfricanLocation(coords.latitude, coords.longitude);
-    return coords;
+    });
   }, [photographerProfile?.latitude, photographerProfile?.longitude]);
 
   const advanceActive = async () => {

@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "my-simple-expo",
-    "slug": "my-simple-expo",
+    "name": "Papzi",
+    "slug": "papzi",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -12,7 +12,7 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Allow my-simple-expo to use your location to find nearby photographers."
+          "locationAlwaysAndWhenInUsePermission": "Allow Papzi to use your location to find nearby photographers."
         }
       ]
     ],
@@ -26,8 +26,8 @@
       "bundleIdentifier": "com.papzi.mobile",
       "buildNumber": "1",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "my-simple-expo needs your location to show nearby photographers.",
-        "NSLocationAlwaysUsageDescription": "my-simple-expo needs your location to show nearby photographers."
+        "NSLocationWhenInUseUsageDescription": "Papzi needs your location to show nearby photographers.",
+        "NSLocationAlwaysUsageDescription": "Papzi needs your location to show nearby photographers."
       }
     },
     "android": {

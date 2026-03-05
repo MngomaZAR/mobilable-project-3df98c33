@@ -5,7 +5,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { MapTracker } from '../components/MapTracker';
 import { RootStackParamList } from '../navigation/types';
 import { useAppData } from '../store/AppDataContext';
-import { DEFAULT_CAPE_TOWN_COORDINATES, validateSouthAfricanLocation } from '../utils/geo';
+import { DEFAULT_CAPE_TOWN_COORDINATES, ensureSouthAfricanCoordinates } from '../utils/geo';
 
 type Route = RouteProp<RootStackParamList, 'BookingTracking'>;
 type Navigation = StackNavigationProp<RootStackParamList, 'BookingTracking'>;
@@ -26,25 +26,19 @@ const BookingTrackingScreen: React.FC = () => {
 
   const clientLocation = useMemo(() => {
     if (photographer) {
-      const coords = {
+      return ensureSouthAfricanCoordinates({
         latitude: photographer.latitude + 0.25,
         longitude: photographer.longitude + 0.12,
-      };
-      validateSouthAfricanLocation(coords.latitude, coords.longitude);
-      return coords;
+      });
     }
-    const fallback = { ...DEFAULT_CAPE_TOWN_COORDINATES };
-    validateSouthAfricanLocation(fallback.latitude, fallback.longitude);
-    return fallback;
+    return { ...DEFAULT_CAPE_TOWN_COORDINATES };
   }, [photographer]);
 
   const photographerLocation = useMemo(() => {
-    const coords = {
+    return ensureSouthAfricanCoordinates({
       latitude: photographer?.latitude ?? clientLocation.latitude - 0.1,
       longitude: photographer?.longitude ?? clientLocation.longitude - 0.1,
-    };
-    validateSouthAfricanLocation(coords.latitude, coords.longitude);
-    return coords;
+    });
   }, [clientLocation.latitude, clientLocation.longitude, photographer?.latitude, photographer?.longitude]);
 
   if (!booking) {

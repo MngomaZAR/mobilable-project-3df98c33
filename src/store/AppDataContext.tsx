@@ -812,8 +812,39 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     if (hasSupabase) {
         try {
-            const { error } = await supabase.from('privacy').update(changes).eq('user_id', userId);
-            if (error) throw error;
+            const consentTypeBySetting: Record<'marketingOptIn' | 'personalizedAds' | 'locationEnabled', string> = {
+              marketingOptIn: 'marketing',
+              personalizedAds: 'personalized_ads',
+              locationEnabled: 'location_tracking',
+            };
+
+            const consentEntries = (Object.entries(changes) as Array<[keyof PrivacySettings, unknown]>)
+              .filter(([key, value]) =>
+                (key === 'marketingOptIn' || key === 'personalizedAds' || key === 'locationEnabled') &&
+                typeof value === 'boolean'
+              ) as Array<['marketingOptIn' | 'personalizedAds' | 'locationEnabled', boolean]>;
+
+            for (const [setting, enabled] of consentEntries) {
+              const consentType = consentTypeBySetting[setting];
+              if (enabled) {
+                const { error } = await supabase.from('user_consents').upsert(
+                  {
+                    user_id: userId,
+                    consent_type: consentType,
+                    accepted_at: new Date().toISOString(),
+                  },
+                  { onConflict: 'user_id,consent_type' }
+                );
+                if (error) throw error;
+              } else {
+                const { error } = await supabase
+                  .from('user_consents')
+                  .delete()
+                  .eq('user_id', userId)
+                  .eq('consent_type', consentType);
+                if (error) throw error;
+              }
+            }
         } catch(err: any) {
             // Revert
             setState({ privacy: state.privacy });

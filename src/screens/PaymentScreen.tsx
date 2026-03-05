@@ -5,7 +5,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { PaymentWebView } from '../components/PaymentWebView';
 import { RootStackParamList } from '../navigation/types';
 import { useAppData } from '../store/AppDataContext';
-import { supabase } from '../config/supabaseClient';
+import { createPayfastCheckoutLink } from '../services/paymentService';
 
 type Route = RouteProp<RootStackParamList, 'Payment'>;
 type Navigation = StackNavigationProp<RootStackParamList, 'Payment'>;
@@ -71,35 +71,22 @@ const PaymentScreen: React.FC = () => {
 
     setLoadingLink(true);
     setStatusMessage('Creating signed PayFast URL...');
-    const { data, error } = await supabase.functions.invoke('payfast-handler', {
-      body: {
-        booking_id: bookingId,
-        return_url: returnUrl,
-        cancel_url: cancelUrl,
-        notify_url: notifyUrl,
-      },
-    });
-    if (error || !data?.paymentUrl) {
+    try {
+      const { paymentUrl: signedPaymentUrl } = await createPayfastCheckoutLink({
+        bookingId,
+        returnUrl,
+        cancelUrl,
+        notifyUrl,
+      });
+      setPaymentUrl(signedPaymentUrl);
+      setStatusMessage('Signed PayFast link ready. Complete checkout to continue.');
+    } catch (error: any) {
+      const message = error?.message ?? 'Unable to sign the request.';
       setStatusMessage('Could not create a signed link.');
-      Alert.alert('PayFast error', error?.message ?? 'Unable to sign the request.');
-    } else {
-      try {
-        const parsed = new URL(data.paymentUrl);
-        const signature = parsed.searchParams.get('signature');
-        if (!signature || signature.includes('[object Object]')) {
-          setStatusMessage('Payment setup error: invalid signature from payment service.');
-          Alert.alert('Payment unavailable', 'Payment service returned an invalid signature. Update your PayFast server configuration.');
-          setLoadingLink(false);
-          return;
-        }
-        setPaymentUrl(data.paymentUrl);
-        setStatusMessage('Signed PayFast link ready. Complete checkout to continue.');
-      } catch (_parseError) {
-        setStatusMessage('Payment setup error: malformed payment URL.');
-        Alert.alert('Payment unavailable', 'Payment service returned an invalid checkout link.');
-      }
+      Alert.alert('Payment unavailable', message);
+    } finally {
+      setLoadingLink(false);
     }
-    setLoadingLink(false);
   };
 
   return (

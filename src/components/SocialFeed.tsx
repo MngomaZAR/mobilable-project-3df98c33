@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   FlatList,
   Image,
+  Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -66,6 +67,9 @@ const PLACEHOLDER_IMAGE =
 const PAGE_SIZE = 10;
 const PROFILE_PAGE_SIZE = 80;
 const MAX_FEED_ITEMS = 200;
+const WEB_PROFILE_PAGE_SIZE = 24;
+const WEB_FEED_PAGE_SIZE = 6;
+const WEB_VISIBLE_FEED_ITEMS = 40;
 
 const appendDebugLog = (
   hypothesisId: string,
@@ -91,7 +95,16 @@ const appendDebugLog = (
   }
 };
 
+const optimizeImageUriForWeb = (uri: string) => {
+  if (!uri || !uri.includes('images.unsplash.com')) return uri;
+  const withWidth = uri.includes('w=') ? uri.replace(/w=\d+/i, 'w=900') : `${uri}${uri.includes('?') ? '&' : '?'}w=900`;
+  return withWidth.includes('q=')
+    ? withWidth.replace(/q=\d+/i, 'q=70')
+    : `${withWidth}${withWidth.includes('?') ? '&' : '?'}q=70`;
+};
+
 export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost, onViewProfile }) => {
+  const isWeb = Platform.OS === 'web';
   const [profiles, setProfiles] = useState<ProfileSummary[]>([]);
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
@@ -111,15 +124,17 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
   const loadMoreInFlightRef = useRef(false);
 
   const normalizeProfiles = useCallback((rows: ProfileSummary[]) => {
+    const maxProfiles = isWeb ? WEB_PROFILE_PAGE_SIZE : PROFILE_PAGE_SIZE;
     const unique = new Map<string, ProfileSummary>();
     rows.forEach((profile) => {
       if (!profile?.id || unique.has(profile.id)) return;
       unique.set(profile.id, profile);
     });
-    return Array.from(unique.values()).slice(0, PROFILE_PAGE_SIZE);
-  }, []);
+    return Array.from(unique.values()).slice(0, maxProfiles);
+  }, [isWeb]);
 
   const appendUniquePosts = useCallback((prev: FeedPost[], incoming: FeedPost[]) => {
+    const maxFeedItems = isWeb ? WEB_VISIBLE_FEED_ITEMS : MAX_FEED_ITEMS;
     const seen = new Set(prev.map((post) => post.id));
     const merged = [...prev];
     incoming.forEach((post) => {
@@ -127,14 +142,21 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
       seen.add(post.id);
       merged.push(post);
     });
-    return merged.slice(0, MAX_FEED_ITEMS);
-  }, []);
+    return merged.slice(0, maxFeedItems);
+  }, [isWeb]);
+
+  const visibleProfiles = useMemo(
+    () => (isWeb ? profiles.slice(0, WEB_PROFILE_PAGE_SIZE) : profiles),
+    [isWeb, profiles]
+  );
 
   const handleToggleLike = async (postId: string) => {
     try {
       // show a quick heart animation on double-tap
-      setLikedAnimPostId(postId);
-      setTimeout(() => setLikedAnimPostId(null), 700);
+      if (!isWeb) {
+        setLikedAnimPostId(postId);
+        setTimeout(() => setLikedAnimPostId(null), 700);
+      }
 
       setPosts((prev) => prev.map((p) => (p.id === postId ? { ...p, liked: !p.liked, likes: !p.liked ? p.likes + 1 : Math.max(0, p.likes - 1) } : p)));
       await toggleLike(postId);
@@ -148,10 +170,11 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
   }, []);
 
   const fetchProfiles = useCallback(async () => {
+    const profileLimit = isWeb ? WEB_PROFILE_PAGE_SIZE : PROFILE_PAGE_SIZE;
     // Prefer Hasura if configured
     if (hasHasura) {
       const q = `query Profiles($limit:Int!) { profiles(order_by: { full_name: asc }, limit: $limit) { id full_name city avatar_url } }`;
-      const data = await hasuraGQL(q, { limit: PROFILE_PAGE_SIZE });
+      const data = await hasuraGQL(q, { limit: profileLimit });
       setProfiles(normalizeProfiles(data?.profiles ?? []));
       return;
     }
@@ -171,7 +194,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
     const { data, error: profileError } = await supabase
       .from('profiles')
       .select('id, full_name, city, avatar_url')
-      .limit(PROFILE_PAGE_SIZE)
+      .limit(profileLimit)
       .order('full_name', { ascending: true });
 
     if (profileError) {
@@ -182,20 +205,23 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
       throw new Error(message);
     }
     setProfiles(normalizeProfiles(data ?? []));
-  }, [normalizeProfiles]);
+  }, [isWeb, normalizeProfiles]);
 
   const fetchPosts = useCallback(async ({ reset = true }: { reset?: boolean } = { reset: true }) => {
+    const effectivePageSize = isWeb ? WEB_FEED_PAGE_SIZE : PAGE_SIZE;
+    const maxFeedItems = isWeb ? WEB_VISIBLE_FEED_ITEMS : MAX_FEED_ITEMS;
     // #region agent log
     appendDebugLog('H1', 'SocialFeed.tsx:fetchPosts', 'Fetch posts start', {
       reset,
       start: reset ? 0 : paginationOffsetRef.current,
-      pageSize: PAGE_SIZE,
+      pageSize: effectivePageSize,
+      isWeb,
     });
     // #endregion
     // Hasura GraphQL fetch
     if (hasHasura) {
       const start = reset ? 0 : paginationOffsetRef.current;
-      const limit = PAGE_SIZE;
+      const limit = effectivePageSize;
       const q = `query Posts($offset:Int!, $limit:Int!) {
         posts(order_by: { created_at: desc }, offset: $offset, limit: $limit) {
           id
@@ -225,7 +251,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
       const mapped = (items ?? []).map(mapRowToFeedPost);
 
       if (reset) {
-        const nextPosts = mapped.slice(0, MAX_FEED_ITEMS);
+        const nextPosts = mapped.slice(0, maxFeedItems);
         setPosts(nextPosts);
         paginationOffsetRef.current = mapped.length;
       } else {
@@ -233,7 +259,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
         paginationOffsetRef.current += mapped.length;
       }
 
-      setHasMore((items ?? []).length === PAGE_SIZE);
+      setHasMore((items ?? []).length === effectivePageSize);
       return;
     }
 
@@ -253,7 +279,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
       }));
 
       if (reset) {
-        const nextPosts = mapped.slice(0, MAX_FEED_ITEMS);
+        const nextPosts = mapped.slice(0, maxFeedItems);
         setPosts(nextPosts);
         paginationOffsetRef.current = mapped.length;
       } else {
@@ -265,7 +291,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
     }
 
     const start = reset ? 0 : paginationOffsetRef.current;
-    const end = start + PAGE_SIZE - 1;
+    const end = start + effectivePageSize - 1;
     const { data, error: postError } = await supabase
       .from('posts')
       .select(
@@ -291,7 +317,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
     const mapped = (data ?? []).map(mapRowToFeedPost);
 
     if (reset) {
-      const nextPosts = mapped.slice(0, MAX_FEED_ITEMS);
+      const nextPosts = mapped.slice(0, maxFeedItems);
       setPosts(nextPosts);
       paginationOffsetRef.current = mapped.length;
     } else {
@@ -299,18 +325,20 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
       paginationOffsetRef.current += mapped.length;
     }
 
-    setHasMore((data ?? []).length === PAGE_SIZE);
+    setHasMore((data ?? []).length === effectivePageSize);
     // #region agent log
     appendDebugLog('H1', 'SocialFeed.tsx:fetchPosts', 'Fetch posts complete (Supabase)', {
       reset,
       fetchedCount: mapped.length,
       nextOffset: paginationOffsetRef.current,
-      hasMore: (data ?? []).length === PAGE_SIZE,
+      hasMore: (data ?? []).length === effectivePageSize,
+      isWeb,
     });
     // #endregion
-  }, [appendUniquePosts, mapRowToFeedPost]);
+  }, [appendUniquePosts, isWeb, mapRowToFeedPost]);
 
   const loadFeed = useCallback(async () => {
+    const maxFeedItems = isWeb ? WEB_VISIBLE_FEED_ITEMS : MAX_FEED_ITEMS;
     setError(null);
     setLoading(true);
     paginationOffsetRef.current = 0;
@@ -341,7 +369,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
           likes: p.likes ?? 0,
           profile: undefined,
         }));
-        const nextPosts = mapped.slice(0, MAX_FEED_ITEMS);
+        const nextPosts = mapped.slice(0, maxFeedItems);
         setPosts(nextPosts);
         paginationOffsetRef.current = nextPosts.length;
         setHasMore(false);
@@ -364,7 +392,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
             likes: p.likes ?? 0,
             profile: undefined,
           }));
-          const nextPosts = mapped.slice(0, MAX_FEED_ITEMS);
+          const nextPosts = mapped.slice(0, maxFeedItems);
           paginationOffsetRef.current = nextPosts.length;
           setHasMore(false);
           return nextPosts;
@@ -376,7 +404,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
       setLoading(false);
       setRefreshing(false);
     }
-  }, [fetchPosts, fetchProfiles]);
+  }, [fetchPosts, fetchProfiles, isWeb]);
 
   useEffect(() => {
     if (!mountLoggedRef.current) {
@@ -390,18 +418,6 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
     }
     loadFeed();
   }, [loadFeed]);
-
-  useEffect(() => {
-    if (loading || hydrationLogCountRef.current >= 3) return;
-    // #region agent log
-    appendDebugLog('H3', 'SocialFeed.tsx:hydration', 'Feed state snapshot', {
-      profileCount: profiles.length,
-      postCount: posts.length,
-      selectedProfileId,
-    });
-    // #endregion
-    hydrationLogCountRef.current += 1;
-  }, [loading, posts.length, profiles.length, selectedProfileId]);
 
   const fetchPostById = useCallback(
     async (postId: string) => {
@@ -434,7 +450,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
   );
 
   useEffect(() => {
-    if (!hasSupabase) return;
+    if (!hasSupabase || isWeb) return;
 
     const channel = supabase
       .channel('public:posts-feed')
@@ -469,12 +485,32 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [fetchPostById]);
+  }, [fetchPostById, isWeb]);
 
   const filteredPosts = useMemo(() => {
     if (!selectedProfileId) return posts;
     return posts.filter((post) => post.userId === selectedProfileId);
   }, [posts, selectedProfileId]);
+
+  const visiblePosts = useMemo(
+    () => (isWeb ? filteredPosts.slice(0, WEB_VISIBLE_FEED_ITEMS) : filteredPosts),
+    [filteredPosts, isWeb]
+  );
+
+  useEffect(() => {
+    if (loading || hydrationLogCountRef.current >= 3) return;
+    // #region agent log
+    appendDebugLog('H3', 'SocialFeed.tsx:hydration', 'Feed state snapshot', {
+      profileCount: profiles.length,
+      postCount: posts.length,
+      visibleProfiles: visibleProfiles.length,
+      visiblePosts: visiblePosts.length,
+      selectedProfileId,
+      isWeb,
+    });
+    // #endregion
+    hydrationLogCountRef.current += 1;
+  }, [isWeb, loading, posts.length, profiles.length, selectedProfileId, visiblePosts.length, visibleProfiles.length]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -490,10 +526,11 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
       loadingMore,
       postCount: posts.length,
       offset: paginationOffsetRef.current,
+      isWeb,
     });
     // #endregion
     // prevent duplicate/fast repeat triggers
-    if (!hasMore || loadingMore || loadMoreInFlightRef.current) return;
+    if (isWeb || !hasMore || loadingMore || loadMoreInFlightRef.current) return;
     if (lastLoadAtRef.current && Date.now() - lastLoadAtRef.current < 800) return;
     loadMoreInFlightRef.current = true;
     setLoadingMore(true);
@@ -522,8 +559,9 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
     }
   }, [error, hasSupabase]);
 
-  const renderHeader = () => (
-    <LinearGradient colors={["#f8fafc", "#eef2ff"]} style={styles.headerContainer}>
+  const renderHeader = () => {
+    const headerContent = (
+      <>
       {error && hasSupabase ? (
         <View style={styles.errorBanner}>
           <Text style={styles.errorBannerText} numberOfLines={2} ellipsizeMode="tail">{error}</Text>
@@ -565,13 +603,13 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
             <Text style={styles.profileMeta}>{posts.length} posts</Text>
           </View>
         </TouchableOpacity>
-        {profiles.map((profile, index) => (
+        {visibleProfiles.map((profile, index) => (
           <TouchableOpacity
             key={profile.id}
             style={[
               styles.profileChip,
               selectedProfileId === profile.id && styles.profileChipActive,
-              index === profiles.length - 1 ? null : styles.profileChipSpacer,
+              index === visibleProfiles.length - 1 ? null : styles.profileChipSpacer,
             ]}
             onPress={() => setSelectedProfileId(profile.id)}
           >
@@ -583,8 +621,17 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
           </TouchableOpacity>
         ))}
       </ScrollView>
-    </LinearGradient>
-  );
+      </>
+    );
+
+    return isWeb ? (
+      <View style={[styles.headerContainer, styles.headerContainerWeb]}>{headerContent}</View>
+    ) : (
+      <LinearGradient colors={["#f8fafc", "#eef2ff"]} style={styles.headerContainer}>
+        {headerContent}
+      </LinearGradient>
+    );
+  };
 
   const navigation = useNavigation<StackNavigationProp<RootStackParamList, 'Root'>>();
   const { startConversationWithUser } = useAppData();
@@ -625,6 +672,10 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
       <TouchableOpacity
         activeOpacity={0.9}
         onPress={() => {
+          if (isWeb) {
+            onViewPost?.(item);
+            return;
+          }
           const now = Date.now();
           if (lastTapRef.current && now - lastTapRef.current < 300) {
             // double-tap -> like + small animation
@@ -640,8 +691,8 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
         }}
       >
         <View style={styles.imageWrapper}>
-          <Image source={{ uri: item.imageUrl }} style={styles.image} />
-          <AnimatedHeart visible={likedAnimPostId === item.id} />
+          <Image source={{ uri: isWeb ? optimizeImageUriForWeb(item.imageUrl) : item.imageUrl }} style={[styles.image, isWeb && styles.imageWeb]} />
+          {!isWeb ? <AnimatedHeart visible={likedAnimPostId === item.id} /> : null}
         </View>
       </TouchableOpacity>
 
@@ -662,7 +713,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
 
   return (
     <View style={styles.container}>
-      {lightboxUri ? (
+      {!isWeb && lightboxUri ? (
         <View style={styles.lightboxOverlay}>
           <TouchableOpacity style={styles.lightboxClose} onPress={() => setLightboxUri(null)}>
             <Text style={styles.lightboxCloseText}>Close</Text>
@@ -685,18 +736,22 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
         <FeedSkeleton />
       ) : (
         <FlatList
-          data={filteredPosts}
+          data={visiblePosts}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           contentContainerStyle={styles.listContent}
           ListHeaderComponent={renderHeader}
-          stickyHeaderIndices={[0]}
+          stickyHeaderIndices={isWeb ? undefined : [0]}
           ItemSeparatorComponent={() => <View style={styles.separator} />}
           ListEmptyComponent={!loading ? <Text style={styles.empty}>You're caught up for now.</Text> : null}
-          onEndReached={loadMore}
-          onEndReachedThreshold={0.6}
-          ListFooterComponent={loadingMore ? <View style={styles.footer}><ActivityIndicator size="small" /></View> : null}
+          onEndReached={isWeb ? undefined : loadMore}
+          onEndReachedThreshold={isWeb ? undefined : 0.6}
+          ListFooterComponent={!isWeb && loadingMore ? <View style={styles.footer}><ActivityIndicator size="small" /></View> : null}
+          initialNumToRender={isWeb ? 4 : 8}
+          maxToRenderPerBatch={isWeb ? 4 : 8}
+          windowSize={isWeb ? 4 : 8}
+          removeClippedSubviews={isWeb}
         />
       )}
     </View>
@@ -826,6 +881,9 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 320,
     resizeMode: 'cover',
+  },
+  imageWeb: {
+    height: 240,
   },
 
   cardBody: {
@@ -1007,6 +1065,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#e6eef8',
+  },
+  headerContainerWeb: {
+    backgroundColor: '#f8fafc',
   },
   headerInner: {
     flexDirection: 'row',

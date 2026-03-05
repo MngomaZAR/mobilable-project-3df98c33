@@ -221,33 +221,53 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         createdAt: new Date().toISOString(),
       };
 
-      if(hasSupabase) {
-        const { error } = await supabase.from('bookings').insert([{
-          id: booking.id,
-          photographer_id: booking.photographerId,
-          user_id: state.currentUser.id,
-          date: booking.date,
-          package: booking.package,
-          notes: booking.notes,
-          status: booking.status,
-          created_at: booking.createdAt,
-        }]);
+      let persistedBooking = booking;
+
+      if (hasSupabase) {
+        const bookingDate = payload.date.split('|')[0]?.trim().slice(0, 10);
+        const { data, error } = await supabase
+          .from('bookings')
+          .insert([
+            {
+              client_id: state.currentUser.id,
+              photographer_id: booking.photographerId,
+              booking_date: bookingDate || null,
+              package_type: booking.package,
+              notes: booking.notes,
+              status: booking.status,
+            },
+          ])
+          .select('id, photographer_id, booking_date, package_type, notes, status, created_at')
+          .single();
+
         if (error) {
           logError('createBooking', error);
           setError(formatErrorMessage(error, 'Unable to create booking.'));
           throw error;
         }
+
+        persistedBooking = {
+          id: data?.id ?? booking.id,
+          photographerId: data?.photographer_id ?? booking.photographerId,
+          date: data?.booking_date ? new Date(data.booking_date).toISOString() : booking.date,
+          package: data?.package_type ?? booking.package,
+          notes: data?.notes ?? booking.notes,
+          status: (data?.status as BookingStatus) ?? booking.status,
+          createdAt: data?.created_at ?? booking.createdAt,
+        };
       }
-      setState({ bookings: [booking, ...state.bookings] });
-      return booking;
+
+      setState({ bookings: [persistedBooking, ...state.bookings] });
+      return persistedBooking;
     },
     [state.currentUser, state.bookings]
   );
 
     const updateBookingStatus = useCallback(async (bookingId: string) => {
     const nextStatus = (current: BookingStatus): BookingStatus => {
-      const order: BookingStatus[] = ['pending', 'accepted', 'completed', 'reviewed'];
+      const order: BookingStatus[] = ['pending', 'accepted', 'completed'];
       const index = order.indexOf(current);
+      if (index < 0) return current;
       return order[Math.min(index + 1, order.length - 1)];
     };
 
@@ -565,7 +585,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         try {
             // Check if like exists
             const { data: existingLike, error: selErr } = await supabase
-                .from('likes')
+                .from('post_likes')
                 .select('id')
                 .eq('post_id', postId)
                 .eq('user_id', userId)
@@ -574,15 +594,15 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
             if (selErr) throw selErr;
 
             if (existingLike && existingLike.id) {
-                const { error: delErr } = await supabase.from('likes').delete().eq('id', existingLike.id);
+                const { error: delErr } = await supabase.from('post_likes').delete().eq('id', existingLike.id);
                 if (delErr) throw delErr;
             } else {
-                const { error: insertErr } = await supabase.from('likes').insert({ post_id: postId, user_id: userId });
+                const { error: insertErr } = await supabase.from('post_likes').insert({ post_id: postId, user_id: userId });
                 if (insertErr) throw insertErr;
             }
 
             // Recount likes and persist to posts table to keep feed subscribers in sync
-            const { data: likesRows, error: likesErr } = await supabase.from('likes').select('id').eq('post_id', postId);
+            const { data: likesRows, error: likesErr } = await supabase.from('post_likes').select('id').eq('post_id', postId);
             if (likesErr) throw likesErr;
             const likesCount = (likesRows ?? []).length;
 
@@ -628,7 +648,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     if (hasSupabase) {
         try {
-            const { error } = await supabase.from('comments').insert([{
+            const { error } = await supabase.from('post_comments').insert([{
                 id: comment.id,
                 post_id: postId,
                 user_id: userId,
@@ -812,18 +832,25 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       throw new Error(msg);
     }
 
+    const previousPrivacy = state.privacy;
+    const requestedAt = new Date().toISOString();
+    setState({ privacy: { ...previousPrivacy, dataDeletionRequestedAt: requestedAt } });
+
     if (hasSupabase) {
         try {
-            // This is a placeholder; in a real app, this should trigger a server-side process
-            const { error } = await supabase.from('profiles').update({ data_deletion_requested_at: new Date().toISOString() }).eq('id', userId);
+            const { error } = await supabase.from('account_deletion_requests').insert({
+              created_by: userId,
+              reason: 'Requested from mobile app settings',
+            });
             if (error) throw error;
         } catch(err: any) {
+            setState({ privacy: previousPrivacy });
             const msg = formatErrorMessage(err, 'Unable to request data deletion.');
             setError(msg);
             throw new Error(msg);
         }
     }
-  }, [state.currentUser?.id]);
+  }, [state.currentUser?.id, state.privacy]);
 
   const value = useMemo<AppDataContextValue>(() => ({
       state,

@@ -54,7 +54,7 @@ const BookingFormScreen: React.FC = () => {
         package: packageType,
         notes,
       });
-      Alert.alert('Request sent', 'Your booking was saved locally and is ready to review.', [
+      Alert.alert('Request sent', 'Your booking request was submitted and is ready to review.', [
         {
           text: 'View booking',
           onPress: () => navigation.replace('BookingDetail', { bookingId: booking.id }),

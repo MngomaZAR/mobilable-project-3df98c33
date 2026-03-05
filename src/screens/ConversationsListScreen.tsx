@@ -60,7 +60,7 @@ const ConversationsListScreen: React.FC = () => {
 
     if (!hasSupabase) {
       // Use local conversations from AppDataContext when Supabase is not configured
-      setError('Supabase is not configured — messages are local only. Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY to your .env to enable sync.');
+      setError('Messages are currently stored locally on this device.');
       setConversations(appState.conversations as any);
       return;
     }
@@ -101,7 +101,7 @@ const ConversationsListScreen: React.FC = () => {
           (fetchError as any)?.code === '42P01'
             ? 'Conversations table missing. Apply the latest Supabase migration.'
             : /failed to fetch/i.test(raw) || lower.includes('network') || lower.includes('typeerror')
-            ? 'Network error contacting Supabase. Check your EXPO_PUBLIC_SUPABASE_URL and network connectivity.'
+            ? 'Unable to connect to chat right now. Check your connection and try again.'
             : raw;
         setError(message);
         return;
@@ -144,7 +144,7 @@ const ConversationsListScreen: React.FC = () => {
       const raw = String(err?.message ?? err);
       const lower = raw.toLowerCase();
       const message = /failed to fetch/i.test(raw) || lower.includes('network') || lower.includes('typeerror')
-        ? 'Network error contacting Supabase. Check your EXPO_PUBLIC_SUPABASE_URL and network connectivity.'
+        ? 'Unable to connect to chat right now. Check your connection and try again.'
         : raw;
       setError(message);
     }
@@ -222,7 +222,7 @@ const ConversationsListScreen: React.FC = () => {
       <View style={styles.header}>
         <View>
           <Text style={styles.title}>Conversations</Text>
-          <Text style={styles.subtitle}>Synced from Supabase so you can keep the chat flowing.</Text>
+          <Text style={styles.subtitle}>Keep your conversations in one place.</Text>
         </View>
         <TouchableOpacity style={styles.primaryButton} onPress={handleNewChat} disabled={creating}>
           <Text style={styles.primaryButtonText}>{creating ? 'Creating...' : 'New Chat'}</Text>

@@ -35,8 +35,7 @@ type UserCoordinates = {
 const formatTimestamp = (timestamp: number) => {
   try {
     return new Date(timestamp).toLocaleTimeString();
-  } catch (err) {
-    console.warn('Failed to format timestamp', err);
+  } catch (_err) {
     return 'recently';
   }
 };
@@ -129,8 +128,7 @@ const MapScreen: React.FC = () => {
         type: 'user',
       });
       setUserCoordinates({ lat: latitude, lng: longitude, timestamp: position.timestamp });
-    } catch (err) {
-      console.warn('Location request failed', err);
+    } catch (_err) {
       handleLocationFailure('Unable to fetch GPS. Check connectivity or enter your location manually.');
     } finally {
       setRequesting(false);

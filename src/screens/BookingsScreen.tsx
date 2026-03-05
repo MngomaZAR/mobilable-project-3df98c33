@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -18,22 +18,35 @@ const statusColors: Record<Booking['status'], string> = {
 const BookingsScreen: React.FC = () => {
   const { state } = useAppData();
   const navigation = useNavigation<Navigation>();
-
-  const renderItem = ({ item }: { item: Booking }) => (
-    <TouchableOpacity
-      style={styles.card}
-      onPress={() => navigation.navigate('BookingDetail', { bookingId: item.id })}
-    >
-      <View style={styles.cardHeader}>
-        <Text style={styles.cardTitle}>{item.package}</Text>
-        <View style={[styles.statusBadge, { backgroundColor: statusColors[item.status] }]}>
-          <Text style={styles.statusText}>{item.status}</Text>
-        </View>
-      </View>
-      <Text style={styles.meta}>{item.date}</Text>
-      <Text style={styles.meta}>Created {new Date(item.createdAt).toLocaleDateString()}</Text>
-    </TouchableOpacity>
+  const photographerById = useMemo(
+    () => new Map(state.photographers.map((photographer) => [photographer.id, photographer])),
+    [state.photographers]
   );
+
+  const formatDateTime = (value: string) => {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+  };
+
+  const renderItem = ({ item }: { item: Booking }) => {
+    const photographer = photographerById.get(item.photographerId);
+    return (
+      <TouchableOpacity
+        style={styles.card}
+        onPress={() => navigation.navigate('BookingDetail', { bookingId: item.id })}
+      >
+        <View style={styles.cardHeader}>
+          <Text style={styles.cardTitle}>{item.package}</Text>
+          <View style={[styles.statusBadge, { backgroundColor: statusColors[item.status] }]}>
+            <Text style={styles.statusText}>{item.status}</Text>
+          </View>
+        </View>
+        <Text style={styles.meta}>{formatDateTime(item.date)}</Text>
+        {photographer ? <Text style={styles.meta}>Photographer: {photographer.name}</Text> : null}
+        <Text style={styles.meta}>Created {new Date(item.createdAt).toLocaleDateString()}</Text>
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <View style={styles.container}>

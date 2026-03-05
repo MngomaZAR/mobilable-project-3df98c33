@@ -301,7 +301,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
     paginationOffsetRef.current = 0;
     try {
       if (!hasSupabase) {
-        setError('Supabase is not configured — showing demo posts. Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY to your .env to enable live data.');
+        setError('Live feed is unavailable right now. Showing demo posts.');
       }
       await Promise.all([fetchProfiles(), fetchPosts({ reset: true })]);
     } catch (err: any) {
@@ -310,7 +310,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
       const lower = (raw || '').toLowerCase();
       const isNetworkError = /failed to fetch/i.test(raw) || lower.includes('network') || lower.includes('typeerror');
       const message = isNetworkError
-        ? 'Network error: unable to reach Supabase. Check EXPO_PUBLIC_SUPABASE_URL, your anon key, and Allowed origins in the Supabase dashboard.'
+        ? 'Unable to refresh the feed right now. Check your connection and try again.'
         : raw;
       setError(message);
 
@@ -388,7 +388,6 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
         .maybeSingle();
 
       if (postError) {
-        console.warn('Post hydrate failed', postError);
         return null;
       }
 
@@ -498,7 +497,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
       <View style={styles.headerInner}>
         <View>
           <Text style={styles.headerTitle}>Social feed</Text>
-          <Text style={styles.headerSubtitle}>Browse posts from the community — updated in realtime.</Text>
+          <Text style={styles.headerSubtitle}>Browse recent work from photographers near you.</Text>
         </View>
         <TouchableOpacity
           style={[styles.primaryButton, styles.headerCTA, !onCreatePost && styles.primaryButtonDisabled]}

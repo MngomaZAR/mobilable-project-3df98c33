@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { AppLogo } from '../components/AppLogo';
 import { useAppData } from '../store/AppDataContext';
-import { AppUser } from '../types';
 
 type Mode = 'signin' | 'signup';
 
@@ -11,7 +10,6 @@ const AuthScreen: React.FC = () => {
   const [mode, setMode] = useState<Mode>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState<AppUser['role']>('client');
 
   const submit = async () => {
     if (!email || !password) {
@@ -22,7 +20,7 @@ const AuthScreen: React.FC = () => {
       const user = await signIn(email, password);
       if (user) Alert.alert('Signed in', `Welcome back, ${user.email}.`);
     } else {
-      const user = await signUp(email, password, role);
+      const user = await signUp(email, password);
       if (user) Alert.alert('Account created', 'We emailed a confirmation link to verify your address.');
     }
   };
@@ -41,7 +39,7 @@ const AuthScreen: React.FC = () => {
       <View style={styles.header}>
         <AppLogo size={88} />
         <Text style={styles.title}>Papzi</Text>
-        <Text style={styles.subtitle}>Email & password auth powered by Supabase.</Text>
+        <Text style={styles.subtitle}>Find and book talented photographers across South Africa.</Text>
       </View>
 
       <View style={styles.switcher}>

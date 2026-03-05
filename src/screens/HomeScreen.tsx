@@ -61,6 +61,7 @@ const HomeScreen: React.FC = () => {
     () => filteredPhotographers.slice(0, MAX_HOME_CARDS),
     [filteredPhotographers]
   );
+  const featuredPhotographer = visiblePhotographers[0] ?? state.photographers[0] ?? null;
 
   const openProfile = (photographer: Photographer) => {
     const parent = navigation.getParent?.();
@@ -130,13 +131,16 @@ const HomeScreen: React.FC = () => {
       <View style={styles.topBar}>
         <View style={styles.brandRow}>
           <AppLogo size={48} />
-          <Text style={styles.brandName}>SnapBook</Text>
+          <Text style={styles.brandName}>Papzi</Text>
         </View>
         <View style={styles.navActions}>
           <TouchableOpacity style={styles.linkPill} onPress={() => navigation.getParent?.()?.navigate('Auth')}>
             <Text style={styles.linkText}>Sign In</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.linkPill, styles.linkFilled]} onPress={() => navigation.getParent?.()?.navigate('Auth')}>
+          <TouchableOpacity
+            style={[styles.linkPill, styles.linkFilled, styles.navActionSpacer]}
+            onPress={() => navigation.getParent?.()?.navigate('Auth')}
+          >
             <Text style={[styles.linkText, styles.linkFilledText]}>Sign Up</Text>
           </TouchableOpacity>
         </View>
@@ -144,7 +148,6 @@ const HomeScreen: React.FC = () => {
 
       <View style={[styles.hero, !isWideHero && styles.heroStacked]}>
         <View style={[styles.heroText, !isWideHero && styles.heroTextCentered]}>
-          <Text style={styles.eyebrow}>Preview</Text>
           <Text style={[styles.title, !isWideHero && styles.titleCentered]}>Find the Perfect Photographer for Your Moments</Text>
           <Text style={[styles.subtitle, !isWideHero && styles.subtitleCentered]}>
             Connect with professional photographers in your area. Browse, compare, and book in minutes.
@@ -196,8 +199,24 @@ const HomeScreen: React.FC = () => {
           </View>
         </View>
         <View style={[styles.heroCard, !isWideHero && styles.heroCardWide]}>
-          <Ionicons name="search" size={54} color="#0f172a" />
-          <Text style={styles.heroCardTitle}>Find Your Perfect Photographer</Text>
+          {featuredPhotographer ? (
+            <>
+              <Image source={{ uri: featuredPhotographer.avatar }} style={styles.heroCardImage} />
+              <View style={styles.heroCardOverlay}>
+                <Text style={styles.heroCardName}>{featuredPhotographer.name}</Text>
+                <Text style={styles.heroCardMeta}>{featuredPhotographer.location}</Text>
+                <View style={styles.heroCardRatingRow}>
+                  <Ionicons name="star" size={14} color="#fbbf24" />
+                  <Text style={styles.heroCardRatingText}>{featuredPhotographer.rating.toFixed(1)} rating</Text>
+                </View>
+              </View>
+            </>
+          ) : (
+            <>
+              <Ionicons name="camera-outline" size={44} color="#0f172a" />
+              <Text style={styles.heroCardTitle}>Top photographers updated daily</Text>
+            </>
+          )}
         </View>
       </View>
 
@@ -215,7 +234,10 @@ const HomeScreen: React.FC = () => {
           ))}
         </View>
         <View style={styles.filtersGrid}>
-          <TouchableOpacity style={styles.filterBox} onPress={() => setPriceRange(priceRange === 'Any budget' ? '$$' : 'Any budget')}>
+          <TouchableOpacity
+            style={[styles.filterBox, styles.filterBoxSpacer]}
+            onPress={() => setPriceRange(priceRange === 'Any budget' ? '$$' : 'Any budget')}
+          >
             <Text style={styles.filterLabel}>Price Range</Text>
             <Text style={styles.filterValue}>{priceRange === 'Any budget' ? '$50+' : priceRange}</Text>
           </TouchableOpacity>
@@ -246,40 +268,6 @@ const HomeScreen: React.FC = () => {
       {!visiblePhotographers.length ? (
         <Text style={styles.empty}>{error ? error : 'No photographers match your filters yet.'}</Text>
       ) : null}
-
-      <View style={styles.featureSection}>
-        <Text style={styles.sectionTitle}>Explore More Features</Text>
-        <Text style={styles.sectionSubtitle}>Discover additional components and functionality of our platform.</Text>
-        <View style={styles.featuresRow}>
-          <View style={styles.featureCard}>
-            <Ionicons name="person-circle-outline" size={32} color="#0f172a" />
-            <Text style={styles.featureTitle}>Photographer Profile</Text>
-            <Text style={styles.featureCopy}>Detailed pages with portfolios, reviews, and booking.</Text>
-            <TouchableOpacity
-              style={styles.outlineButton}
-              onPress={() => navigation.getParent?.()?.navigate('Profile', { photographerId: state.photographers[0]?.id ?? 'p1' })}
-            >
-              <Text style={styles.outlineText}>View Demo</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.featureCard}>
-            <Ionicons name="calendar-outline" size={32} color="#0f172a" />
-            <Text style={styles.featureTitle}>User Dashboard</Text>
-            <Text style={styles.featureCopy}>Manage bookings, view history, and adjust account settings.</Text>
-            <TouchableOpacity style={styles.outlineButton} onPress={() => navigation.navigate('Bookings')}>
-              <Text style={styles.outlineText}>View Demo</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.featureCard}>
-            <Ionicons name="color-palette-outline" size={32} color="#0f172a" />
-            <Text style={styles.featureTitle}>Design System</Text>
-            <Text style={styles.featureCopy}>Consistent components and tokens across the experience.</Text>
-            <TouchableOpacity style={styles.outlineButton} onPress={() => navigation.navigate('Settings')}>
-              <Text style={styles.outlineText}>View Demo</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
     </ScrollView>
   );
 };
@@ -312,6 +300,9 @@ const styles = StyleSheet.create({
   navActions: {
     flexDirection: 'row',
     marginLeft: 10,
+  },
+  navActionSpacer: {
+    marginLeft: 8,
   },
   linkPill: {
     paddingHorizontal: 14,
@@ -351,15 +342,6 @@ const styles = StyleSheet.create({
   heroTextCentered: {
     alignItems: 'center',
     paddingRight: 0,
-  },
-  eyebrow: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#fff',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-    fontWeight: '700',
-    color: '#0f172a',
   },
   title: {
     fontSize: 30,
@@ -542,6 +524,39 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: '#e2e8f0',
+    overflow: 'hidden',
+  },
+  heroCardImage: {
+    width: '100%',
+    height: 220,
+    resizeMode: 'cover',
+  },
+  heroCardOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    padding: 12,
+    backgroundColor: 'rgba(15, 23, 42, 0.72)',
+  },
+  heroCardName: {
+    color: '#fff',
+    fontWeight: '800',
+    fontSize: 16,
+  },
+  heroCardMeta: {
+    color: '#cbd5e1',
+    marginTop: 2,
+  },
+  heroCardRatingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 6,
+  },
+  heroCardRatingText: {
+    color: '#fff',
+    marginLeft: 6,
+    fontWeight: '700',
   },
   heroCardWide: {
     width: '100%',
@@ -600,6 +615,9 @@ const styles = StyleSheet.create({
     borderColor: '#e2e8f0',
     padding: 12,
     backgroundColor: '#f8fafc',
+  },
+  filterBoxSpacer: {
+    marginRight: 10,
   },
   filterLabel: {
     color: '#94a3b8',
@@ -734,6 +752,7 @@ const styles = StyleSheet.create({
   actions: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    gap: 8,
     marginTop: 8,
   },
   buttonPrimary: {
@@ -762,47 +781,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 16,
     color: '#475569',
-  },
-  featureSection: {
-    marginTop: 20,
-  },
-  featuresRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginHorizontal: -6,
-  },
-  featureCard: {
-    flex: 1,
-    minWidth: 240,
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    padding: 14,
-    margin: 6,
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-  },
-  featureTitle: {
-    fontWeight: '800',
-    color: '#0f172a',
-    fontSize: 16,
-  },
-  featureCopy: {
-    color: '#475569',
-    lineHeight: 20,
-  },
-  outlineButton: {
-    marginTop: 4,
-    paddingVertical: 10,
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#0f172a',
-    alignItems: 'center',
-  },
-  outlineText: {
-    color: '#0f172a',
-    fontWeight: '800',
   },
 });
 

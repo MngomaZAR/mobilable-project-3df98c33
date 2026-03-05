@@ -68,7 +68,7 @@ const PhotographerDashboardScreen: React.FC = () => {
           <View style={styles.statCard}>
             <Text style={styles.statLabel}>Inbox</Text>
             <Text style={styles.statValue}>{state.messages.length}</Text>
-            <Text style={styles.statMeta}>Realtime chat powered by Supabase</Text>
+            <Text style={styles.statMeta}>Unread messages</Text>
           </View>
         </View>
 

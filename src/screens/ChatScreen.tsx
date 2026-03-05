@@ -5,7 +5,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { useAppData } from '../store/AppDataContext';
 import { ChatSkeleton } from '../components/Skeleton';
-import { hasSupabase } from '../config/supabaseClient';
 import { RootStackParamList, TabParamList } from '../navigation/types';
 
 type Route = RouteProp<TabParamList, 'Chat'> | RouteProp<RootStackParamList, 'ChatThread'>;
@@ -91,12 +90,8 @@ const ChatScreen: React.FC = () => {
           contentContainerStyle={styles.listContent}
           ListHeaderComponent={
             <View style={styles.banner}>
-              <Text style={styles.bannerTitle}>Realtime chat</Text>
-              <Text style={styles.bannerText}>
-                {hasSupabase
-                  ? 'Connect this screen to Supabase Realtime with a booking_id channel to sync messages across devices.'
-                  : 'Supabase is not configured — messages are local only. Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY to your .env to enable realtime sync.'}
-              </Text>
+              <Text style={styles.bannerTitle}>Conversations</Text>
+              <Text style={styles.bannerText}>Messages stay synced to your account and booking activity.</Text>
             </View>
           }
           renderItem={({ item, index }) => {

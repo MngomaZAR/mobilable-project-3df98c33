@@ -6,6 +6,7 @@ import md5 from "npm:blueimp-md5@2.19.0";
 type BookingRow = {
   id: string;
   package_type: string | null;
+  client_id: string | null;
 };
 
 type PaymentRow = {
@@ -32,8 +33,9 @@ const textHeaders = {
   "Content-Type": "text/plain; charset=utf-8",
 };
 
-const payfastBaseUrl =
+const payfastBaseUrlRaw =
   Deno.env.get("PAYFAST_BASE_URL")?.trim() || "https://sandbox.payfast.co.za";
+const payfastBaseUrl = payfastBaseUrlRaw.replace(/\/eng\/process\/?$/i, "");
 const merchantId = Deno.env.get("PAYFAST_MERCHANT_ID")?.trim() || "10046407";
 const merchantKey = Deno.env.get("PAYFAST_MERCHANT_KEY")?.trim() || "zuimv2w7udhu3";
 const passphrase = Deno.env.get("PAYFAST_PASSPHRASE")?.trim() || "";
@@ -79,7 +81,12 @@ const asNumber = (value: string | null | undefined) => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
-const loadOrCreatePayment = async (bookingId: string, fallbackAmount = 1200) => {
+const loadOrCreatePayment = async (
+  bookingId: string,
+  customerId: string | null,
+  description: string,
+  fallbackAmount = 1200
+) => {
   const { data: existing, error: loadError } = await supabase
     .from("payments")
     .select("id, booking_id, amount, currency, status")
@@ -95,6 +102,8 @@ const loadOrCreatePayment = async (bookingId: string, fallbackAmount = 1200) => 
     .from("payments")
     .insert({
       booking_id: bookingId,
+      customer_id: customerId,
+      description,
       amount: fallbackAmount,
       currency: "ZAR",
       provider: "payfast",
@@ -124,7 +133,7 @@ const handleCreateCheckoutLink = async (req: Request) => {
 
   const { data: booking, error: bookingError } = await supabase
     .from("bookings")
-    .select("id, package_type")
+    .select("id, package_type, client_id")
     .eq("id", bookingId)
     .maybeSingle<BookingRow>();
 
@@ -135,7 +144,12 @@ const handleCreateCheckoutLink = async (req: Request) => {
     return jsonResponse(404, { error: "Booking not found" });
   }
 
-  const payment = await loadOrCreatePayment(bookingId);
+  const itemName = booking.package_type?.trim() || "Photography booking";
+  const payment = await loadOrCreatePayment(
+    bookingId,
+    booking.client_id ?? null,
+    itemName
+  );
   const amount = Number.isFinite(payment.amount ?? NaN)
     ? Number(payment.amount)
     : 1200;
@@ -150,7 +164,7 @@ const handleCreateCheckoutLink = async (req: Request) => {
       `${supabaseUrl}/functions/v1/payfast-handler/notify`,
     m_payment_id: payment.id,
     amount: amount.toFixed(2),
-    item_name: booking.package_type?.trim() || "Photography booking",
+    item_name: itemName,
     custom_str2: bookingId,
   };
 

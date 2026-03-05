@@ -23,12 +23,16 @@
     },
     "ios": {
       "supportsTablet": true,
+      "bundleIdentifier": "com.papzi.mobile",
+      "buildNumber": "1",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "my-simple-expo needs your location to show nearby photographers.",
         "NSLocationAlwaysUsageDescription": "my-simple-expo needs your location to show nearby photographers."
       }
     },
     "android": {
+      "package": "com.papzi.mobile",
+      "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"

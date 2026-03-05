@@ -71,7 +71,9 @@ export interface Comment {
 export interface ConversationSummary {
   id: string;
   title: string;
+  lastMessage?: string | null;
   lastMessageAt: string | null;
+  createdAt?: string | null;
   participants?: string[]; // list of user IDs
 }
 
@@ -84,4 +86,8 @@ export interface AppState {
   comments: Comment[];
   currentUser: AppUser | null;
   privacy: PrivacySettings;
+  loading: boolean;
+  saving: boolean;
+  authenticating: boolean;
+  error: string | null;
 }

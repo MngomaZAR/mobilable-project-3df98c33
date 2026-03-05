@@ -2,6 +2,10 @@ import { AppState } from '../types';
 
 export const initialState: AppState = {
   currentUser: null,
+  loading: false,
+  saving: false,
+  authenticating: false,
+  error: null,
   privacy: {
     marketingOptIn: false,
     personalizedAds: false,

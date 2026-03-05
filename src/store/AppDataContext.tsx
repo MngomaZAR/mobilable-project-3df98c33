@@ -388,7 +388,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
 
     // Check if a conversation with this user already exists
-    const existingConversation = state.conversations.find(c => c.participants.includes(participantId));
+    const existingConversation = state.conversations.find(c => c.participants?.includes(participantId));
     if (existingConversation) {
         return existingConversation;
     }
@@ -744,6 +744,47 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   }, [state.currentUser?.id]);
 
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    try {
+      if (hasSupabase) {
+        await fetchPhotographers();
+      }
+    } catch (err) {
+      logError('refresh', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchPhotographers]);
+
+  const revalidateSession = useCallback(async (): Promise<AppUser | null> => {
+    if (!hasSupabase) return null;
+    try {
+      const { data } = await supabase.auth.getUser();
+      if (data.user) {
+        const profile = await fetchProfile(data.user.id);
+        const user = mapSupabaseUser(data.user, state.currentUser?.role ?? 'client', profile);
+        setState({ currentUser: user });
+        return user;
+      }
+    } catch (err) {
+      logError('revalidateSession', err);
+    }
+    return null;
+  }, [fetchProfile, state.currentUser?.role]);
+
+  const resetState = useCallback(async () => {
+    setSaving(true);
+    try {
+      await AsyncStorage.removeItem(STORAGE_KEY);
+      setState(initialState);
+    } catch (err) {
+      logError('resetState', err);
+    } finally {
+      setSaving(false);
+    }
+  }, []);
+
   const value = useMemo<AppDataContextValue>(() => ({
       state,
       loading: state.loading,
@@ -751,6 +792,9 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       authenticating: state.authenticating,
       error: state.error,
       currentUser: state.currentUser,
+      refresh,
+      revalidateSession,
+      resetState,
       createBooking,
       updateBookingStatus,
       sendMessage,
@@ -765,11 +809,8 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       signOut,
       updatePrivacy,
       requestDataDeletion,
-      // refresh,
-      // revalidateSession,
-      // resetState,
-    } as any),
-    [state, createBooking, updateBookingStatus, sendMessage, fetchMessages, fetchMessagesForChat, startConversationWithUser, addPost, toggleLike, addComment, signUp, signIn, signOut, updatePrivacy, requestDataDeletion]
+    }),
+    [state, refresh, revalidateSession, resetState, createBooking, updateBookingStatus, sendMessage, fetchMessages, fetchMessagesForChat, startConversationWithUser, addPost, toggleLike, addComment, signUp, signIn, signOut, updatePrivacy, requestDataDeletion]
   );
 
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>;

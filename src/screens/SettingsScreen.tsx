@@ -33,20 +33,14 @@ const SettingsScreen: React.FC = () => {
         <Text style={styles.meta}>Region: {environment.region}</Text>
         <Text style={styles.meta}>Support: {environment.supportEmail}</Text>
       </View>
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Terms of Service</Text>
-        <Text style={styles.paragraph}>
-          Placeholder terms: booking requests remain local on your device. Add your own terms when you connect your
-          backend and legal copy.
-        </Text>
-      </View>
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Privacy Policy</Text>
-        <Text style={styles.paragraph}>
-          Placeholder privacy policy: this demo stores data in AsyncStorage on your device only. No external services
-          are contacted.
-        </Text>
-      </View>
+      <TouchableOpacity style={styles.linkCard} onPress={() => navigation.navigate('Terms')}>
+        <Text style={styles.linkTitle}>Terms of Service</Text>
+        <Text style={styles.linkMeta}>Read the full terms governing your use of Papzi.</Text>
+      </TouchableOpacity>
+      <TouchableOpacity style={styles.linkCard} onPress={() => navigation.navigate('PrivacyPolicy')}>
+        <Text style={styles.linkTitle}>Privacy Policy</Text>
+        <Text style={styles.linkMeta}>Learn how we collect, use, and protect your data.</Text>
+      </TouchableOpacity>
       <TouchableOpacity style={styles.linkCard} onPress={() => navigation.navigate('Auth')}>
         <Text style={styles.linkTitle}>Account & Auth</Text>
         <Text style={styles.linkMeta}>Email/password login and signup with Supabase.</Text>

@@ -84,4 +84,8 @@ export interface AppState {
   comments: Comment[];
   currentUser: AppUser | null;
   privacy: PrivacySettings;
+  loading: boolean;
+  saving: boolean;
+  authenticating: boolean;
+  error: string | null;
 }

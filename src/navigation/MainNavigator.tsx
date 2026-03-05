@@ -21,6 +21,8 @@ import AuthScreen from '../screens/AuthScreen';
 import BookingTrackingScreen from '../screens/BookingTrackingScreen';
 import PaymentScreen from '../screens/PaymentScreen';
 import ComplianceScreen from '../screens/ComplianceScreen';
+import TermsScreen from '../screens/TermsScreen';
+import PrivacyPolicyScreen from '../screens/PrivacyPolicyScreen';
 import { RootStackParamList, TabParamList } from './types';
 
 const Tab = createBottomTabNavigator<TabParamList>();
@@ -87,6 +89,8 @@ export const MainNavigator: React.FC<MainNavigatorProps> = ({ logoSource }) => (
       <Stack.Screen name="UserProfile" component={UserProfileScreen} options={{ title: 'Photographer Profile' }} />
       <Stack.Screen name="Auth" component={AuthScreen} options={{ title: 'Sign in' }} />
       <Stack.Screen name="Compliance" component={ComplianceScreen} options={{ title: 'Privacy & Permissions' }} />
+      <Stack.Screen name="Terms" component={TermsScreen} options={{ title: 'Terms of Service' }} />
+      <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} options={{ title: 'Privacy Policy' }} />
       <Stack.Screen name="ChatThread" component={ChatScreen} options={{ title: 'Chat' }} />
     </Stack.Navigator>
   </NavigationContainer>

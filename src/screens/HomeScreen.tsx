@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Image,
   Pressable,
@@ -20,6 +20,31 @@ import { Photographer } from '../types';
 import { AppLogo } from '../components/AppLogo';
 
 type Navigation = BottomTabNavigationProp<TabParamList, 'Home'>;
+const MAX_HOME_CARDS = 120;
+
+const appendDebugLog = (
+  hypothesisId: string,
+  location: string,
+  message: string,
+  data: Record<string, unknown> = {}
+) => {
+  const payload = { hypothesisId, location, message, data, timestamp: Date.now() };
+  try {
+    const nodeRequire =
+      (globalThis as any).__non_webpack_require__ ?? (typeof require === 'function' ? require : null);
+    if (nodeRequire) {
+      try {
+        nodeRequire('fs').appendFileSync('/opt/cursor/logs/debug.log', JSON.stringify(payload) + '\n');
+        return;
+      } catch {
+        // fallback to console
+      }
+    }
+  } catch {}
+  if (typeof console !== 'undefined') {
+    console.log('[agent-debug]', JSON.stringify(payload));
+  }
+};
 
 const HomeScreen: React.FC = () => {
   const { state, loading, error, refresh } = useAppData();
@@ -55,6 +80,22 @@ const HomeScreen: React.FC = () => {
 
     return list;
   }, [state.photographers, category, priceRange, sort, location]);
+
+  const visiblePhotographers = useMemo(
+    () => filteredPhotographers.slice(0, MAX_HOME_CARDS),
+    [filteredPhotographers]
+  );
+
+  useEffect(() => {
+    // #region agent log
+    appendDebugLog('H6', 'HomeScreen.tsx:render', 'Home photographers snapshot', {
+      totalPhotographers: state.photographers.length,
+      filteredPhotographers: filteredPhotographers.length,
+      visiblePhotographers: visiblePhotographers.length,
+      columns,
+    });
+    // #endregion
+  }, [state.photographers.length, filteredPhotographers.length, visiblePhotographers.length, columns]);
 
   const openProfile = (photographer: Photographer) => {
     const parent = navigation.getParent?.();
@@ -223,7 +264,10 @@ const HomeScreen: React.FC = () => {
       <View style={styles.sectionHeader}>
         <View>
           <Text style={styles.sectionTitle}>Available Photographers</Text>
-          <Text style={styles.sectionSubtitle}>{filteredPhotographers.length} options in your area</Text>
+          <Text style={styles.sectionSubtitle}>
+            {filteredPhotographers.length} options in your area
+            {filteredPhotographers.length > MAX_HOME_CARDS ? ` (showing top ${MAX_HOME_CARDS})` : ''}
+          </Text>
         </View>
         <TouchableOpacity style={styles.lightButton} onPress={() => (navigation as any).navigate('Bookings')}>
           <Ionicons name="calendar-outline" size={16} color="#0f172a" />
@@ -232,9 +276,9 @@ const HomeScreen: React.FC = () => {
       </View>
 
       <View style={styles.grid}> 
-        {filteredPhotographers.map(renderCard)}
+        {visiblePhotographers.map(renderCard)}
       </View>
-      {!filteredPhotographers.length ? (
+      {!visiblePhotographers.length ? (
         <Text style={styles.empty}>{error ? error : 'No photographers match your filters yet.'}</Text>
       ) : null}
 

@@ -1,5 +1,5 @@
 {
-  "name": "my-simple-expo",
+  "name": "papzi-app",
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
@@ -56,7 +56,6 @@
     "@babel/eslint-parser": "latest",
     "@types/jest": "^29.5.3",
     "@types/react": "~19.1.0",
-    "@types/react-native": "latest",
     "@types/react-test-renderer": "~19.1.0",
     "@typescript-eslint/parser": "latest",
     "babel-preset-expo": "~54.0.10",
@@ -68,7 +67,7 @@
     "react-test-renderer": "19.1.0",
     "supabase": "^2.75.0",
     "ts-jest": "^29.1.0",
-    "typescript": "~5.9.2"
+    "typescript": "~5.8.3"
   },
   "private": true
 }

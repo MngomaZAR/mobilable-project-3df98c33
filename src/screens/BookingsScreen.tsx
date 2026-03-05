@@ -1,6 +1,6 @@
-import React, { useMemo } from 'react';
-import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useAppData } from '../store/AppDataContext';
 import { RootStackParamList } from '../navigation/types';
@@ -16,12 +16,34 @@ const statusColors: Record<Booking['status'], string> = {
 };
 
 const BookingsScreen: React.FC = () => {
-  const { state } = useAppData();
+  const { state, refreshBookings } = useAppData();
   const navigation = useNavigation<Navigation>();
+  const [refreshing, setRefreshing] = useState(false);
   const photographerById = useMemo(
     () => new Map(state.photographers.map((photographer) => [photographer.id, photographer])),
     [state.photographers]
   );
+
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      const sync = async () => {
+        setRefreshing(true);
+        await refreshBookings();
+        if (active) setRefreshing(false);
+      };
+      sync();
+      return () => {
+        active = false;
+      };
+    }, [refreshBookings])
+  );
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await refreshBookings();
+    setRefreshing(false);
+  }, [refreshBookings]);
 
   const formatDateTime = (value: string) => {
     const date = new Date(value);
@@ -55,6 +77,7 @@ const BookingsScreen: React.FC = () => {
         data={state.bookings}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={<Text style={styles.empty}>No bookings yet. Start one from a profile.</Text>}
       />

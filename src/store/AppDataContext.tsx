@@ -30,6 +30,7 @@ type AppDataContextValue = {
   error: string | null;
   currentUser: AppUser | null;
   refresh: () => Promise<void>;
+  refreshBookings: () => Promise<Booking[]>;
   revalidateSession: () => Promise<AppUser | null>;
   createBooking: (payload: CreateBookingInput) => Promise<Booking>;
   updateBookingStatus: (bookingId: string) => Promise<Booking | undefined>;
@@ -54,6 +55,15 @@ const MAX_PHOTOGRAPHERS = 120;
 const AppDataContext = createContext<AppDataContextValue | undefined>(undefined);
 
 type ProfileRow = { role?: AppUser['role']; verified?: boolean } | null;
+type BookingRow = {
+  id: string;
+  photographer_id: string | null;
+  booking_date: string | null;
+  package_type: string | null;
+  notes: string | null;
+  status: BookingStatus | null;
+  created_at: string | null;
+};
 
 const PHOTOGRAPHER_SELECT = `
   id,
@@ -140,6 +150,48 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   }, []);
 
+  const mapBookingRow = useCallback((row: BookingRow): Booking => ({
+    id: row.id,
+    photographerId: row.photographer_id ?? '',
+    date: row.booking_date ? new Date(row.booking_date).toISOString() : new Date().toISOString(),
+    package: row.package_type ?? 'Photography booking',
+    notes: row.notes ?? undefined,
+    status: (row.status as BookingStatus) ?? 'pending',
+    createdAt: row.created_at ?? new Date().toISOString(),
+  }), []);
+
+  const syncBookings = useCallback(async (userIdOverride?: string): Promise<Booking[]> => {
+    if (!hasSupabase) {
+      return stateRef.current.bookings;
+    }
+
+    const userId = userIdOverride ?? stateRef.current.currentUser?.id;
+    if (!userId) {
+      return stateRef.current.bookings;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('bookings')
+        .select('id, photographer_id, booking_date, package_type, notes, status, created_at')
+        .eq('client_id', userId)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+
+      const bookings = (data ?? []).map((row: any) => mapBookingRow(row as BookingRow));
+      setState({ bookings });
+      return bookings;
+    } catch (err) {
+      logError('refresh_bookings', err);
+      setError(formatErrorMessage(err, 'Unable to sync bookings right now.'));
+      return stateRef.current.bookings;
+    }
+  }, [mapBookingRow]);
+
+  const refreshBookings = useCallback(async (): Promise<Booking[]> => {
+    return syncBookings();
+  }, [syncBookings]);
+
   
   useEffect(() => {
     const load = async () => {
@@ -156,6 +208,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           if (data.user) {
             const profile = await fetchProfile(data.user.id);
             setState({ currentUser: mapSupabaseUser(data.user, 'client', profile) });
+            await syncBookings(data.user.id);
           }
           await fetchPhotographers();
         }
@@ -176,6 +229,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (session?.user) {
         const profile = await fetchProfile(session.user.id);
         setState({ currentUser: mapSupabaseUser(session.user, state.currentUser?.role ?? 'client', profile)});
+        await syncBookings(session.user.id);
       } else {
         setState({ currentUser: null });
       }
@@ -184,7 +238,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return () => {
       data.subscription?.unsubscribe();
     };
-  }, [fetchProfile, state.currentUser?.role]);
+  }, [fetchProfile, state.currentUser?.role, syncBookings]);
 
   useEffect(() => {
     const persist = async () => {
@@ -724,6 +778,9 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const profile = data.user ? await fetchProfile(data.user.id) : null;
       const user: AppUser | null = data.user ? mapSupabaseUser(data.user, 'client', profile) : null;
       setState({ currentUser: user });
+      if (data.user) {
+        await syncBookings(data.user.id);
+      }
       return user;
     } catch (err: any) {
       setError(err.message ?? 'Unable to sign in.');
@@ -731,7 +788,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     } finally {
       setAuthenticating(false);
     }
-  }, [fetchProfile]);
+  }, [fetchProfile, syncBookings]);
 
   const signOut = useCallback(async () => {
     setAuthenticating(true);
@@ -765,23 +822,24 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const profile = await fetchProfile(data.user.id);
       const user = mapSupabaseUser(data.user, state.currentUser?.role ?? 'client', profile);
       setState({ currentUser: user });
+      await syncBookings(data.user.id);
       return user;
     } catch (err) {
       logError('revalidate_session', err);
       setError(formatErrorMessage(err, 'Unable to validate your current session.'));
       return null;
     }
-  }, [fetchProfile, state.currentUser]);
+  }, [fetchProfile, state.currentUser, syncBookings]);
 
   const refresh = useCallback(async () => {
     setError(null);
     setLoading(true);
     try {
-      await Promise.all([revalidateSession(), fetchPhotographers()]);
+      await Promise.all([revalidateSession(), fetchPhotographers(), refreshBookings()]);
     } finally {
       setLoading(false);
     }
-  }, [fetchPhotographers, revalidateSession]);
+  }, [fetchPhotographers, refreshBookings, revalidateSession]);
 
   const resetState = useCallback(async () => {
     setSaving(true);
@@ -874,10 +932,11 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       updatePrivacy,
       requestDataDeletion,
       refresh,
+      refreshBookings,
       revalidateSession,
       resetState,
     }),
-    [state, createBooking, updateBookingStatus, sendMessage, fetchMessages, fetchMessagesForChat, startConversationWithUser, addPost, toggleLike, addComment, signUp, signIn, signOut, updatePrivacy, requestDataDeletion, refresh, revalidateSession, resetState]
+    [state, createBooking, updateBookingStatus, sendMessage, fetchMessages, fetchMessagesForChat, startConversationWithUser, addPost, toggleLike, addComment, signUp, signIn, signOut, updatePrivacy, requestDataDeletion, refresh, refreshBookings, revalidateSession, resetState]
   );
 
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>;

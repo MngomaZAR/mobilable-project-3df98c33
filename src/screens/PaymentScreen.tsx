@@ -13,7 +13,7 @@ type Navigation = StackNavigationProp<RootStackParamList, 'Payment'>;
 const PaymentScreen: React.FC = () => {
   const { params } = useRoute<Route>();
   const navigation = useNavigation<Navigation>();
-  const { state } = useAppData();
+  const { state, refreshBookings } = useAppData();
   const booking = useMemo(
     () => (params?.bookingId ? state.bookings.find((item) => item.id === params.bookingId) : undefined),
     [params?.bookingId, state.bookings]
@@ -26,9 +26,33 @@ const PaymentScreen: React.FC = () => {
   const checkoutItemName = booking?.package ?? 'Photography booking';
   const checkoutAmount = '1200';
 
-  const handleSuccess = () => {
-    setStatusMessage('Payment completed. Waiting for secure confirmation...');
-    Alert.alert('Payment received', 'Checkout completed. Your booking status will update after confirmation.');
+  const handleSuccess = async () => {
+    setStatusMessage('Payment completed. Verifying booking status...');
+
+    if (!bookingId) {
+      Alert.alert('Payment received', 'Checkout completed. Booking confirmation is pending.');
+      return;
+    }
+
+    let latestStatus = booking?.status ?? 'pending';
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const synced = await refreshBookings();
+      const latest = synced.find((item) => item.id === bookingId);
+      latestStatus = latest?.status ?? latestStatus;
+      if (latestStatus !== 'pending') {
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+    }
+
+    if (latestStatus !== 'pending') {
+      setStatusMessage(`Payment confirmed. Booking status is ${latestStatus}.`);
+      Alert.alert('Payment received', `Checkout completed and your booking is now ${latestStatus}.`);
+      return;
+    }
+
+    setStatusMessage('Payment completed. Confirmation is still pending from the server.');
+    Alert.alert('Payment received', 'Checkout completed. Booking confirmation is pending and should update shortly.');
   };
 
   const handleError = (message: string) => {

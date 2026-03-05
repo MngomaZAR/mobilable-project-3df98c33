@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import MapView, { Marker, Polyline, Region, UrlTile } from 'react-native-maps';
 import { StyleSheet, View, useWindowDimensions } from 'react-native';
+import { BookingStatus } from '../types';
 
 type Coordinate = {
   latitude: number;
@@ -10,7 +11,7 @@ type Coordinate = {
 type Props = {
   client: Coordinate;
   photographer: Coordinate;
-  status: string;
+  status: BookingStatus;
 };
 
 export const MapTracker: React.FC<Props> = ({ client, photographer, status }) => {

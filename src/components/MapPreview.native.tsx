@@ -25,6 +25,14 @@ export const MapPreview: React.FC<MapPreviewProps> = ({ markers, onMapError }) =
 
   useEffect(() => {
     if (!mapRef.current || markers.length === 0) return;
+    const invalidMarker = markers.find(
+      (marker) => !Number.isFinite(marker.latitude) || !Number.isFinite(marker.longitude)
+    );
+    if (invalidMarker) {
+      onMapError?.('Unable to render one or more map pins.');
+      return;
+    }
+
     const coords = markers.map((marker: MapMarker) => ({
       latitude: marker.latitude,
       longitude: marker.longitude,
@@ -35,10 +43,10 @@ export const MapPreview: React.FC<MapPreviewProps> = ({ markers, onMapError }) =
         edgePadding: { top: 60, bottom: 60, left: 40, right: 40 },
         animated: true,
       });
-    } catch (e) {
-      // ignore if the underlying native ref doesn't support this
+    } catch (_e) {
+      onMapError?.('Unable to center the map preview.');
     }
-  }, [markers]);
+  }, [markers, onMapError]);
 
   const pinStyles = (marker: MapMarker) => ({
     ...styles.pin,

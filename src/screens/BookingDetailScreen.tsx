@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useMemo } from 'react';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
@@ -14,8 +14,7 @@ const steps: BookingStatus[] = ['pending', 'accepted', 'completed', 'reviewed'];
 const BookingDetailScreen: React.FC = () => {
   const { params } = useRoute<Route>();
   const navigation = useNavigation<Navigation>();
-  const { state, updateBookingStatus } = useAppData();
-  const [updating, setUpdating] = useState(false);
+  const { state, startConversationWithUser } = useAppData();
 
   const booking = useMemo(
     () => state.bookings.find((item) => item.id === params.bookingId),
@@ -34,15 +33,20 @@ const BookingDetailScreen: React.FC = () => {
     );
   }
 
-  const advanceStatus = async () => {
-    if (booking.status === 'reviewed') return;
-    setUpdating(true);
-    await updateBookingStatus(booking.id);
-    setUpdating(false);
-    Alert.alert('Status updated', 'Booking moved to the next state locally.');
-  };
-
   const currentIndex = steps.indexOf(booking.status);
+  const openChatThread = async () => {
+    if (!photographer) {
+      navigation.navigate('Root', { screen: 'Chat' });
+      return;
+    }
+
+    try {
+      const convo = await startConversationWithUser(photographer.id, photographer.name);
+      navigation.navigate('ChatThread', { conversationId: convo.id, title: convo.title });
+    } catch (_err) {
+      navigation.navigate('Root', { screen: 'Chat' });
+    }
+  };
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -63,19 +67,16 @@ const BookingDetailScreen: React.FC = () => {
         })}
       </View>
 
-      <TouchableOpacity
-        style={[styles.cta, booking.status === 'reviewed' && styles.ctaDisabled]}
-        onPress={advanceStatus}
-        disabled={booking.status === 'reviewed' || updating}
-      >
-        <Text style={styles.ctaText}>
-          {booking.status === 'reviewed' ? 'Review complete' : updating ? 'Updating...' : 'Advance status'}
+      <View style={styles.noticeCard}>
+        <Text style={styles.noticeTitle}>Status updates</Text>
+        <Text style={styles.noticeText}>
+          Booking progress updates automatically after secure confirmation from payments and operations.
         </Text>
-      </TouchableOpacity>
+      </View>
 
       <TouchableOpacity
         style={styles.secondary}
-        onPress={() => navigation.navigate('Root', { screen: 'Chat' })}
+        onPress={openChatThread}
       >
         <Text style={styles.secondaryText}>Open chat</Text>
       </TouchableOpacity>
@@ -160,20 +161,21 @@ const styles = StyleSheet.create({
   stepLabelActive: {
     color: '#0f172a',
   },
-  cta: {
+  noticeCard: {
     marginTop: 16,
-    backgroundColor: '#0f172a',
-    padding: 14,
-    borderRadius: 14,
-    alignItems: 'center',
+    backgroundColor: '#eff6ff',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#dbeafe',
   },
-  ctaDisabled: {
-    backgroundColor: '#9ca3af',
-  },
-  ctaText: {
-    color: '#fff',
+  noticeTitle: {
+    color: '#1e3a8a',
     fontWeight: '700',
-    fontSize: 16,
+  },
+  noticeText: {
+    marginTop: 4,
+    color: '#1e40af',
   },
   row: {
     flexDirection: 'row',

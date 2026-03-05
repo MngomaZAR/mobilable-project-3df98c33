@@ -1,8 +1,17 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { MapPreviewProps } from './mapTypes';
 
-export const MapPreview: React.FC<MapPreviewProps> = ({ markers }) => {
+export const MapPreview: React.FC<MapPreviewProps> = ({ markers, onMapError }) => {
+  useEffect(() => {
+    const invalidMarker = markers.find(
+      (marker) => !Number.isFinite(marker.latitude) || !Number.isFinite(marker.longitude)
+    );
+    if (invalidMarker) {
+      onMapError?.('Unable to render one or more map pins.');
+    }
+  }, [markers, onMapError]);
+
   const photographerMarkers = markers.filter((marker: any) => marker.type !== 'user');
   const userMarker = markers.find((marker: any) => marker.type === 'user');
 

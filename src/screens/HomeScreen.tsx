@@ -13,9 +13,10 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import { StackNavigationProp } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppData } from '../store/AppDataContext';
-import { TabParamList } from '../navigation/types';
+import { RootStackParamList, TabParamList } from '../navigation/types';
 import { Photographer } from '../types';
 import { AppLogo } from '../components/AppLogo';
 
@@ -25,6 +26,7 @@ const MAX_HOME_CARDS = 120;
 const HomeScreen: React.FC = () => {
   const { state, loading, error, refresh } = useAppData();
   const navigation = useNavigation<Navigation>();
+  const parentNavigation = navigation.getParent<StackNavigationProp<RootStackParamList>>();
   const { width } = useWindowDimensions();
   const [category, setCategory] = useState('All Categories');
   const [priceRange, setPriceRange] = useState('Any budget');
@@ -64,13 +66,11 @@ const HomeScreen: React.FC = () => {
   const featuredPhotographer = visiblePhotographers[0] ?? state.photographers[0] ?? null;
 
   const openProfile = (photographer: Photographer) => {
-    const parent = navigation.getParent?.();
-    parent?.navigate('Profile', { photographerId: photographer.id });
+    parentNavigation?.navigate('Profile', { photographerId: photographer.id });
   };
 
   const startBooking = (photographer: Photographer) => {
-    const parent = navigation.getParent?.();
-    parent?.navigate('BookingForm', { photographerId: photographer.id });
+    parentNavigation?.navigate('BookingForm', { photographerId: photographer.id });
   };
 
   const renderCard = (item: Photographer) => (
@@ -134,12 +134,12 @@ const HomeScreen: React.FC = () => {
           <Text style={styles.brandName}>Papzi</Text>
         </View>
         <View style={styles.navActions}>
-          <TouchableOpacity style={styles.linkPill} onPress={() => navigation.getParent?.()?.navigate('Auth')}>
+          <TouchableOpacity style={styles.linkPill} onPress={() => parentNavigation?.navigate('Auth')}>
             <Text style={styles.linkText}>Sign In</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.linkPill, styles.linkFilled, styles.navActionSpacer]}
-            onPress={() => navigation.getParent?.()?.navigate('Auth')}
+            onPress={() => parentNavigation?.navigate('Auth')}
           >
             <Text style={[styles.linkText, styles.linkFilledText]}>Sign Up</Text>
           </TouchableOpacity>
@@ -256,7 +256,7 @@ const HomeScreen: React.FC = () => {
             {filteredPhotographers.length > MAX_HOME_CARDS ? ` (showing top ${MAX_HOME_CARDS})` : ''}
           </Text>
         </View>
-        <TouchableOpacity style={styles.lightButton} onPress={() => (navigation as any).navigate('Bookings')}>
+        <TouchableOpacity style={styles.lightButton} onPress={() => navigation.navigate('Bookings')}>
           <Ionicons name="calendar-outline" size={16} color="#0f172a" />
           <Text style={styles.lightButtonText}>View Dashboard</Text>
         </TouchableOpacity>

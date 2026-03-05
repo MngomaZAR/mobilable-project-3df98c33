@@ -1,5 +1,5 @@
 
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useReducer } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { initialState } from '../data/initialData';
 import { supabase, hasSupabase } from '../config/supabaseClient';
@@ -96,6 +96,11 @@ const appReducer = (state: AppState, action: Action): AppState => {
 
 export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(appReducer, initialState);
+  const stateRef = useRef(state);
+
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
   const setState = (payload: Partial<AppState>) => dispatch({ type: 'SET_STATE', payload });
   const setLoading = (payload: boolean) => dispatch({ type: 'SET_LOADING', payload });
@@ -313,7 +318,9 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       };
 
       // Optimistic update
-      setState({ messages: [...state.messages, message] });
+      const previousMessages = stateRef.current.messages;
+      const optimisticMessages = [...previousMessages, message];
+      setState({ messages: optimisticMessages });
 
       if (hasSupabase) {
         try {
@@ -340,12 +347,17 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
             };
 
             // Replace optimistic message with the real one
-            setState({ messages: state.messages.map(m => m.id === message.id ? newMessage : m) });
+            const latestMessages = stateRef.current.messages;
+            const hasOptimistic = latestMessages.some((m) => m.id === message.id);
+            const nextMessages = hasOptimistic
+              ? latestMessages.map((m) => (m.id === message.id ? newMessage : m))
+              : [...latestMessages, newMessage];
+            setState({ messages: nextMessages });
             return newMessage;
 
         } catch (err: any) {
             // Revert optimistic update
-            setState({ messages: state.messages.filter(m => m.id !== message.id) });
+            setState({ messages: stateRef.current.messages.filter((m) => m.id !== message.id) });
             logError('send_message', err);
             const friendly = formatErrorMessage(err, 'Unable to send your message right now.');
             setError(friendly);
@@ -355,7 +367,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
       return message;
     },
-    [state.currentUser?.id, state.messages]
+    [state.currentUser?.id]
   );
 
   const fetchMessages = useCallback(async (chatId: string) => {
@@ -378,12 +390,13 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }));
 
       // Replace messages for this chat in local state but keep others
-      setState({ messages: [...state.messages.filter((m) => m.chatId !== chatId), ...mapped]});
+      const latestMessages = stateRef.current.messages;
+      setState({ messages: [...latestMessages.filter((m) => m.chatId !== chatId), ...mapped]});
     } catch (err) {
       logError('fetch_messages', err);
       setError('Unable to load messages for this chat.');
     }
-  }, [state.currentUser?.id, state.messages]);
+  }, [state.currentUser?.id]);
 
   const fetchMessagesForChat = useCallback(async (chatId: string) => {
     // backwards compatible alias

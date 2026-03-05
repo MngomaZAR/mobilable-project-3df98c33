@@ -13,7 +13,7 @@ type Navigation = StackNavigationProp<RootStackParamList, 'BookingTracking'>;
 const BookingTrackingScreen: React.FC = () => {
   const { params } = useRoute<Route>();
   const navigation = useNavigation<Navigation>();
-  const { state, updateBookingStatus } = useAppData();
+  const { state, startConversationWithUser } = useAppData();
 
   const booking = useMemo(
     () => state.bookings.find((item) => item.id === params.bookingId),
@@ -49,8 +49,18 @@ const BookingTrackingScreen: React.FC = () => {
     );
   }
 
-  const advance = async () => {
-    await updateBookingStatus(booking.id);
+  const openChatThread = async () => {
+    if (!photographer) {
+      navigation.navigate('Root', { screen: 'Chat' });
+      return;
+    }
+
+    try {
+      const convo = await startConversationWithUser(photographer.id, photographer.name);
+      navigation.navigate('ChatThread', { conversationId: convo.id, title: convo.title });
+    } catch (_err) {
+      navigation.navigate('Root', { screen: 'Chat' });
+    }
   };
 
   return (
@@ -63,10 +73,7 @@ const BookingTrackingScreen: React.FC = () => {
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Status</Text>
         <Text style={styles.cardValue}>{booking.status.toUpperCase()}</Text>
-        <Text style={styles.cardMeta}>Tap to advance locally as webhooks confirm payments.</Text>
-        <TouchableOpacity style={styles.cta} onPress={advance}>
-          <Text style={styles.ctaText}>Advance status</Text>
-        </TouchableOpacity>
+        <Text style={styles.cardMeta}>Status updates automatically after secure booking and payment confirmation.</Text>
       </View>
 
       <View style={styles.row}>
@@ -86,7 +93,7 @@ const BookingTrackingScreen: React.FC = () => {
 
       <TouchableOpacity
         style={styles.secondary}
-        onPress={() => navigation.navigate('Root', { screen: 'Chat' })}
+        onPress={openChatThread}
       >
         <Text style={styles.secondaryText}>Open chat</Text>
       </TouchableOpacity>
@@ -144,17 +151,6 @@ const styles = StyleSheet.create({
   cardMeta: {
     marginTop: 4,
     color: '#475569',
-  },
-  cta: {
-    marginTop: 10,
-    backgroundColor: '#0f172a',
-    padding: 12,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  ctaText: {
-    color: '#fff',
-    fontWeight: '700',
   },
   row: {
     flexDirection: 'row',

@@ -13,7 +13,7 @@ type Navigation = StackNavigationProp<RootStackParamList, 'Root'>;
 
 const PhotographerDashboardScreen: React.FC = () => {
   const navigation = useNavigation<Navigation>();
-  const { state, updateBookingStatus } = useAppData();
+  const { state, startConversationWithUser } = useAppData();
 
   const activeBooking = useMemo(
     () => state.bookings.find((booking) => booking.status === 'pending' || booking.status === 'accepted') ?? state.bookings[0],
@@ -39,9 +39,18 @@ const PhotographerDashboardScreen: React.FC = () => {
     });
   }, [photographerProfile?.latitude, photographerProfile?.longitude]);
 
-  const advanceActive = async () => {
-    if (!activeBooking) return;
-    await updateBookingStatus(activeBooking.id);
+  const openChatThread = async () => {
+    if (!photographerProfile) {
+      navigation.navigate('Root', { screen: 'Chat' });
+      return;
+    }
+
+    try {
+      const convo = await startConversationWithUser(photographerProfile.id, photographerProfile.name);
+      navigation.navigate('ChatThread', { conversationId: convo.id, title: convo.title });
+    } catch (_err) {
+      navigation.navigate('Root', { screen: 'Chat' });
+    }
   };
 
   return (
@@ -78,15 +87,15 @@ const PhotographerDashboardScreen: React.FC = () => {
             {activeBooking ? <Text style={styles.cardMeta}>Status: {activeBooking.status}</Text> : null}
           </View>
           <MapTracker client={clientLocation} photographer={photographerLocation} status={activeBooking?.status ?? 'pending'} />
-          <TouchableOpacity style={styles.primaryButton} onPress={advanceActive} disabled={!activeBooking}>
-            <Text style={styles.primaryButtonText}>{activeBooking ? 'Advance status' : 'Awaiting booking'}</Text>
-          </TouchableOpacity>
+          <View style={styles.infoCallout}>
+            <Text style={styles.infoCalloutText}>Status updates are confirmed through secure booking and payment workflows.</Text>
+          </View>
         </View>
 
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <Text style={styles.cardTitle}>Requests queue</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Root', { screen: 'Chat' })} style={styles.smallLink}>
+            <TouchableOpacity onPress={openChatThread} style={styles.smallLink}>
               <Text style={styles.smallLinkText}>Open chat</Text>
             </TouchableOpacity>
           </View>
@@ -111,9 +120,13 @@ const PhotographerDashboardScreen: React.FC = () => {
 
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Next steps</Text>
-          <TouchableOpacity style={styles.secondaryButton} onPress={() => navigation.navigate('Payment', { bookingId: undefined })}>
+          <TouchableOpacity
+            style={[styles.secondaryButton, !activeBooking && styles.secondaryButtonDisabled]}
+            disabled={!activeBooking}
+            onPress={() => activeBooking && navigation.navigate('Payment', { bookingId: activeBooking.id })}
+          >
             <Ionicons name="card-outline" size={16} color="#0f172a" />
-            <Text style={styles.secondaryText}>Collect payment</Text>
+            <Text style={styles.secondaryText}>{activeBooking ? 'Collect payment' : 'No booking selected'}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.secondaryButton} onPress={() => navigation.navigate('Root', { screen: 'Map' })}>
             <Ionicons name="navigate-outline" size={16} color="#0f172a" />
@@ -228,16 +241,18 @@ const styles = StyleSheet.create({
   cardMeta: {
     color: '#475569',
   },
-  primaryButton: {
+  infoCallout: {
     marginTop: 12,
-    backgroundColor: '#0f172a',
-    padding: 12,
     borderRadius: 12,
-    alignItems: 'center',
+    backgroundColor: '#eff6ff',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#dbeafe',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
   },
-  primaryButtonText: {
-    color: '#fff',
-    fontWeight: '800',
+  infoCalloutText: {
+    color: '#1e40af',
+    fontWeight: '600',
   },
   smallLink: {
     padding: 6,
@@ -272,6 +287,9 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  secondaryButtonDisabled: {
+    opacity: 0.5,
   },
   secondaryText: {
     color: '#0f172a',

@@ -12,7 +12,7 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Allow Papzi to use your location to find nearby photographers."
+          "locationWhenInUsePermission": "Allow Papzi to use your location to find nearby photographers."
         }
       ]
     ],
@@ -26,8 +26,7 @@
       "bundleIdentifier": "com.papzi.mobile",
       "buildNumber": "1",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Papzi needs your location to show nearby photographers.",
-        "NSLocationAlwaysUsageDescription": "Papzi needs your location to show nearby photographers."
+        "NSLocationWhenInUseUsageDescription": "Papzi needs your location to show nearby photographers."
       }
     },
     "android": {

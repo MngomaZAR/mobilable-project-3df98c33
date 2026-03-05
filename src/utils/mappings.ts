@@ -27,8 +27,8 @@ const FALLBACK_AVATAR = 'https://images.unsplash.com/photo-1508214751196-bcfd4ca
 export const mapSupabaseUser = (user: any, fallbackRole: AppUser['role'] = 'client', profile: ProfileRow = null): AppUser => ({
   id: user.id,
   email: user.email ?? 'unknown-user',
-  role: (profile?.role as AppUser['role']) ?? ((user.user_metadata as any)?.role as AppUser['role']) ?? fallbackRole,
-  verified: profile?.verified ?? Boolean((user.user_metadata as any)?.verified ?? false),
+  role: (profile?.role as AppUser['role']) ?? fallbackRole,
+  verified: profile?.verified ?? false,
 });
 
 export const mapPhotographerRow = (row: PhotographerRow): Photographer => {

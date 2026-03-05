@@ -3,25 +3,26 @@ import { FlatList, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, 
 import { AnimatedBubble } from '../components/AnimatedBubble';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
 import { useAppData } from '../store/AppDataContext';
 import { ChatSkeleton } from '../components/Skeleton';
-import { RootStackParamList, TabParamList } from '../navigation/types';
+import { RootStackParamList } from '../navigation/types';
 
-type Route = RouteProp<TabParamList, 'Chat'> | RouteProp<RootStackParamList, 'ChatThread'>;
+type Route = RouteProp<RootStackParamList, 'ChatThread'>;
+type Navigation = StackNavigationProp<RootStackParamList, 'ChatThread'>;
 
 
 const ChatScreen: React.FC = () => {
   const route = useRoute<Route>();
-  const navigation = useNavigation();
-  const { state, sendMessage, fetchMessages, fetchMessagesForChat } = useAppData();
+  const navigation = useNavigation<Navigation>();
+  const { state, sendMessage, fetchMessages } = useAppData();
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [messagesLoading, setMessagesLoading] = useState(false);
 
   const listRef = useRef<FlatList<any> | null>(null);
 
-  const conversationId = route.params?.conversationId ?? state.conversations?.[0]?.id ?? 'demo-conversation';
-  const chatId = route.params?.conversationId ?? state.messages[0]?.chatId ?? conversationId;
+  const chatId = route.params.conversationId;
   const messages = useMemo(() => state.messages.filter((m) => m.chatId === chatId), [chatId, state.messages]);
 
   const PLACEHOLDER_IMAGE = 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=300&q=80';

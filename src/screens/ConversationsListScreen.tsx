@@ -13,7 +13,6 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useAppData } from '../store/AppDataContext';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { supabase, hasSupabase } from '../config/supabaseClient';
-import { uid } from '../utils/id';
 import { RootStackParamList } from '../navigation/types';
 
 type Navigation = StackNavigationProp<RootStackParamList, 'Root'>;
@@ -41,7 +40,6 @@ const ConversationsListScreen: React.FC = () => {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const mapConversation = useCallback((row: ConversationRow): Conversation => {
@@ -60,7 +58,7 @@ const ConversationsListScreen: React.FC = () => {
 
     if (!hasSupabase) {
       // Use local conversations from AppDataContext when Supabase is not configured
-      setError('Messages are currently stored locally on this device.');
+      setError('Chat is temporarily unavailable. Please try again later.');
       setConversations(appState.conversations as any);
       return;
     }
@@ -99,7 +97,7 @@ const ConversationsListScreen: React.FC = () => {
         const lower = String(raw).toLowerCase();
         const message =
           (fetchError as any)?.code === '42P01'
-            ? 'Conversations table missing. Apply the latest Supabase migration.'
+            ? 'Chat is temporarily unavailable. Please try again shortly.'
             : /failed to fetch/i.test(raw) || lower.includes('network') || lower.includes('typeerror')
             ? 'Unable to connect to chat right now. Check your connection and try again.'
             : raw;
@@ -148,7 +146,7 @@ const ConversationsListScreen: React.FC = () => {
         : raw;
       setError(message);
     }
-  }, [mapConversation]);
+  }, [appState.conversations, mapConversation]);
 
   useFocusEffect(
     useCallback(() => {
@@ -178,44 +176,10 @@ const ConversationsListScreen: React.FC = () => {
     setRefreshing(false);
   }, [fetchConversations]);
 
-  const handleNewChat = useCallback(async () => {
-    setCreating(true);
-    setError(null);
-    try {
-      const title = `New chat · ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-
-      if (!hasSupabase) {
-        // local-only fallback
-        const newConv = { id: uid('conv'), title, lastMessage: 'Say hello 👋', lastMessageAt: new Date().toISOString(), createdAt: new Date().toISOString() };
-        setConversations((prev) => [newConv as Conversation, ...prev]);
-        navigation.navigate('Root', { screen: 'Chat', params: { conversationId: newConv.id, title: newConv.title } });
-        return;
-      }
-
-      const { data: userData } = await supabase.auth.getUser();
-      const { data, error: insertError } = await supabase
-        .from('conversations')
-        .insert({
-          title,
-          created_by: userData?.user?.id ?? null,
-          last_message: 'Say hello 👋',
-          last_message_at: new Date().toISOString(),
-        })
-        .select('id, title, last_message, last_message_at, created_at')
-        .single();
-
-      if (insertError) throw insertError;
-
-      const mapped = mapConversation(data as ConversationRow);
-      setConversations((prev) => [mapped, ...prev]);
-      // Open the Chat tab and pass the conversation as params so the Chat screen can hydrate the thread
-      navigation.navigate('Root', { screen: 'Chat', params: { conversationId: mapped.id, title: mapped.title } });
-    } catch (err: any) {
-      setError(err.message ?? 'Unable to start a new chat right now.');
-    } finally {
-      setCreating(false);
-    }
-  }, [mapConversation, navigation]);
+  const handleNewChat = useCallback(() => {
+    setError('Open a photographer profile and tap Message to start a new conversation.');
+    navigation.navigate('Root', { screen: 'Feed' });
+  }, [navigation]);
 
   const listHeader = useMemo(
     () => (
@@ -224,13 +188,13 @@ const ConversationsListScreen: React.FC = () => {
           <Text style={styles.title}>Conversations</Text>
           <Text style={styles.subtitle}>Keep your conversations in one place.</Text>
         </View>
-        <TouchableOpacity style={styles.primaryButton} onPress={handleNewChat} disabled={creating}>
-          <Text style={styles.primaryButtonText}>{creating ? 'Creating...' : 'New Chat'}</Text>
+        <TouchableOpacity style={styles.primaryButton} onPress={handleNewChat}>
+          <Text style={styles.primaryButtonText}>Find photographer</Text>
         </TouchableOpacity>
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
       </View>
     ),
-    [creating, error, handleNewChat]
+    [error, handleNewChat]
   );
 
   const PLACEHOLDER_AVATAR = 'https://images.unsplash.com/photo-1508214751196-bcfd4ca60f91?auto=format&fit=crop&w=300&q=80';
@@ -265,7 +229,7 @@ const ConversationsListScreen: React.FC = () => {
     return (
       <TouchableOpacity
         style={styles.card}
-        onPress={() => navigation.navigate('Root', { screen: 'Chat', params: { conversationId: item.id, title: displayTitle } })}
+        onPress={() => navigation.navigate('ChatThread', { conversationId: item.id, title: displayTitle })}
       >
         <View style={styles.cardHeader}>
           <View style={styles.avatarRow}>

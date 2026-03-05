@@ -270,7 +270,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
         created_at,
         image_url,
         likes_count,
-        profiles:profiles(id, full_name, city, avatar_url)
+        profiles:profiles!posts_user_id_fkey(id, full_name, city, avatar_url)
       `
       )
       .order('created_at', { ascending: false })
@@ -311,7 +311,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
       const isNetworkError = /failed to fetch/i.test(raw) || lower.includes('network') || lower.includes('typeerror');
       const message = isNetworkError
         ? 'Unable to refresh the feed right now. Check your connection and try again.'
-        : raw;
+        : 'Unable to load the feed right now. Please try again.';
       setError(message);
 
       try {
@@ -381,7 +381,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
           created_at,
           image_url,
           likes_count,
-          profiles:profiles(id, full_name, city, avatar_url)
+          profiles:profiles!posts_user_id_fkey(id, full_name, city, avatar_url)
         `
         )
         .eq('id', postId)
@@ -562,9 +562,10 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
   const handleMessageUser = async (userId: string, name?: string) => {
     try {
       const convo = await startConversationWithUser(userId, name);
-      navigation.navigate('Root', { screen: 'Chat', params: { conversationId: convo.id, title: convo.title } });
-    } catch (e) {
-      // handled by context
+      navigation.navigate('ChatThread', { conversationId: convo.id, title: convo.title });
+    } catch (_e) {
+      setError('Sign in to send messages.');
+      navigation.navigate('Auth');
     }
   };
 

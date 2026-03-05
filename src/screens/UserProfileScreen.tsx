@@ -24,7 +24,7 @@ const UserProfileScreen: React.FC = () => {
     if (!photographer) return;
     try {
       const convo = await startConversationWithUser(photographer.id, photographer.name);
-      navigation.navigate('Root', { screen: 'Chat', params: { conversationId: convo.id, title: convo.title } });
+      navigation.navigate('ChatThread', { conversationId: convo.id, title: convo.title });
     } catch (e) {
       // handled in context
     }

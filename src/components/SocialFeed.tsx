@@ -63,6 +63,33 @@ import { mapPostRow } from '../utils/feedMappings';
 
 const PLACEHOLDER_IMAGE =
   'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=1200&q=80&sat=-20';
+const PAGE_SIZE = 10;
+const PROFILE_PAGE_SIZE = 80;
+const MAX_FEED_ITEMS = 200;
+
+const appendDebugLog = (
+  hypothesisId: string,
+  location: string,
+  message: string,
+  data: Record<string, unknown> = {}
+) => {
+  const payload = { hypothesisId, location, message, data, timestamp: Date.now() };
+  try {
+    const nodeRequire =
+      (globalThis as any).__non_webpack_require__ ?? (typeof require === 'function' ? require : null);
+    if (nodeRequire) {
+      try {
+        nodeRequire('fs').appendFileSync('/opt/cursor/logs/debug.log', JSON.stringify(payload) + '\n');
+        return;
+      } catch {
+        // fallback to console
+      }
+    }
+  } catch {}
+  if (typeof console !== 'undefined') {
+    console.log('[agent-debug]', JSON.stringify(payload));
+  }
+};
 
 export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost, onViewProfile }) => {
   const [profiles, setProfiles] = useState<ProfileSummary[]>([]);
@@ -79,7 +106,29 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
   const { toggleLike } = useAppData();
   const lastTapRef = useRef<number | null>(null);
   const paginationOffsetRef = useRef(0);
-  const PAGE_SIZE = 10;
+  const mountLoggedRef = useRef(false);
+  const hydrationLogCountRef = useRef(0);
+  const loadMoreInFlightRef = useRef(false);
+
+  const normalizeProfiles = useCallback((rows: ProfileSummary[]) => {
+    const unique = new Map<string, ProfileSummary>();
+    rows.forEach((profile) => {
+      if (!profile?.id || unique.has(profile.id)) return;
+      unique.set(profile.id, profile);
+    });
+    return Array.from(unique.values()).slice(0, PROFILE_PAGE_SIZE);
+  }, []);
+
+  const appendUniquePosts = useCallback((prev: FeedPost[], incoming: FeedPost[]) => {
+    const seen = new Set(prev.map((post) => post.id));
+    const merged = [...prev];
+    incoming.forEach((post) => {
+      if (seen.has(post.id)) return;
+      seen.add(post.id);
+      merged.push(post);
+    });
+    return merged.slice(0, MAX_FEED_ITEMS);
+  }, []);
 
   const handleToggleLike = async (postId: string) => {
     try {
@@ -101,9 +150,9 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
   const fetchProfiles = useCallback(async () => {
     // Prefer Hasura if configured
     if (hasHasura) {
-      const q = `query Profiles { profiles(order_by: { full_name: asc }) { id full_name city avatar_url } }`;
-      const data = await hasuraGQL(q);
-      setProfiles(data?.profiles ?? []);
+      const q = `query Profiles($limit:Int!) { profiles(order_by: { full_name: asc }, limit: $limit) { id full_name city avatar_url } }`;
+      const data = await hasuraGQL(q, { limit: PROFILE_PAGE_SIZE });
+      setProfiles(normalizeProfiles(data?.profiles ?? []));
       return;
     }
 
@@ -115,13 +164,14 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
         city: p.location ?? null,
         avatar_url: p.avatar ?? PLACEHOLDER_IMAGE,
       }));
-      setProfiles(mapped);
+      setProfiles(normalizeProfiles(mapped));
       return;
     }
 
     const { data, error: profileError } = await supabase
       .from('profiles')
       .select('id, full_name, city, avatar_url')
+      .limit(PROFILE_PAGE_SIZE)
       .order('full_name', { ascending: true });
 
     if (profileError) {
@@ -131,10 +181,17 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
           : profileError.message;
       throw new Error(message);
     }
-    setProfiles(data ?? []);
-  }, []);
+    setProfiles(normalizeProfiles(data ?? []));
+  }, [normalizeProfiles]);
 
   const fetchPosts = useCallback(async ({ reset = true }: { reset?: boolean } = { reset: true }) => {
+    // #region agent log
+    appendDebugLog('H1', 'SocialFeed.tsx:fetchPosts', 'Fetch posts start', {
+      reset,
+      start: reset ? 0 : paginationOffsetRef.current,
+      pageSize: PAGE_SIZE,
+    });
+    // #endregion
     // Hasura GraphQL fetch
     if (hasHasura) {
       const start = reset ? 0 : paginationOffsetRef.current;
@@ -168,10 +225,11 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
       const mapped = (items ?? []).map(mapRowToFeedPost);
 
       if (reset) {
-        setPosts(mapped);
+        const nextPosts = mapped.slice(0, MAX_FEED_ITEMS);
+        setPosts(nextPosts);
         paginationOffsetRef.current = mapped.length;
       } else {
-        setPosts((prev) => [...prev, ...mapped]);
+        setPosts((prev) => appendUniquePosts(prev, mapped));
         paginationOffsetRef.current += mapped.length;
       }
 
@@ -195,10 +253,11 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
       }));
 
       if (reset) {
-        setPosts(mapped);
+        const nextPosts = mapped.slice(0, MAX_FEED_ITEMS);
+        setPosts(nextPosts);
         paginationOffsetRef.current = mapped.length;
       } else {
-        setPosts((prev) => [...prev, ...mapped]);
+        setPosts((prev) => appendUniquePosts(prev, mapped));
         paginationOffsetRef.current += mapped.length;
       }
       setHasMore(false);
@@ -232,15 +291,24 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
     const mapped = (data ?? []).map(mapRowToFeedPost);
 
     if (reset) {
-      setPosts(mapped);
+      const nextPosts = mapped.slice(0, MAX_FEED_ITEMS);
+      setPosts(nextPosts);
       paginationOffsetRef.current = mapped.length;
     } else {
-      setPosts((prev) => [...prev, ...mapped]);
+      setPosts((prev) => appendUniquePosts(prev, mapped));
       paginationOffsetRef.current += mapped.length;
     }
 
     setHasMore((data ?? []).length === PAGE_SIZE);
-  }, [mapPostRow]);
+    // #region agent log
+    appendDebugLog('H1', 'SocialFeed.tsx:fetchPosts', 'Fetch posts complete (Supabase)', {
+      reset,
+      fetchedCount: mapped.length,
+      nextOffset: paginationOffsetRef.current,
+      hasMore: (data ?? []).length === PAGE_SIZE,
+    });
+    // #endregion
+  }, [appendUniquePosts, mapRowToFeedPost]);
 
   const loadFeed = useCallback(async () => {
     setError(null);
@@ -273,8 +341,9 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
           likes: p.likes ?? 0,
           profile: undefined,
         }));
-        setPosts(mapped);
-        paginationOffsetRef.current = mapped.length;
+        const nextPosts = mapped.slice(0, MAX_FEED_ITEMS);
+        setPosts(nextPosts);
+        paginationOffsetRef.current = nextPosts.length;
         setHasMore(false);
       } catch (fallbackErr) {
         // ignore fallback errors
@@ -295,9 +364,10 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
             likes: p.likes ?? 0,
             profile: undefined,
           }));
-          paginationOffsetRef.current = mapped.length;
+          const nextPosts = mapped.slice(0, MAX_FEED_ITEMS);
+          paginationOffsetRef.current = nextPosts.length;
           setHasMore(false);
-          return mapped;
+          return nextPosts;
         } catch (e) {
           return prev;
         }
@@ -309,8 +379,29 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
   }, [fetchPosts, fetchProfiles]);
 
   useEffect(() => {
+    if (!mountLoggedRef.current) {
+      // #region agent log
+      appendDebugLog('H2', 'SocialFeed.tsx:mount', 'SocialFeed mounted', {
+        hasSupabase,
+        hasHasura,
+      });
+      // #endregion
+      mountLoggedRef.current = true;
+    }
     loadFeed();
   }, [loadFeed]);
+
+  useEffect(() => {
+    if (loading || hydrationLogCountRef.current >= 3) return;
+    // #region agent log
+    appendDebugLog('H3', 'SocialFeed.tsx:hydration', 'Feed state snapshot', {
+      profileCount: profiles.length,
+      postCount: posts.length,
+      selectedProfileId,
+    });
+    // #endregion
+    hydrationLogCountRef.current += 1;
+  }, [loading, posts.length, profiles.length, selectedProfileId]);
 
   const fetchPostById = useCallback(
     async (postId: string) => {
@@ -339,7 +430,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
 
         return data ? mapRowToFeedPost(data as PostRow) : null;
     },
-    [mapPostRow]
+    [mapRowToFeedPost]
   );
 
   useEffect(() => {
@@ -365,9 +456,11 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
           const next = exists
             ? prev.map((post) => (post.id === hydrated.id ? hydrated : post))
             : [hydrated, ...prev];
-          return next.sort(
+          return next
+            .sort(
             (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-          );
+            )
+            .slice(0, MAX_FEED_ITEMS);
         });
       });
 
@@ -391,9 +484,18 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
   const lastLoadAtRef = useRef<number | null>(null);
 
   const loadMore = async () => {
+    // #region agent log
+    appendDebugLog('H1', 'SocialFeed.tsx:loadMore', 'onEndReached invoked', {
+      hasMore,
+      loadingMore,
+      postCount: posts.length,
+      offset: paginationOffsetRef.current,
+    });
+    // #endregion
     // prevent duplicate/fast repeat triggers
-    if (!hasMore || loadingMore) return;
+    if (!hasMore || loadingMore || loadMoreInFlightRef.current) return;
     if (lastLoadAtRef.current && Date.now() - lastLoadAtRef.current < 800) return;
+    loadMoreInFlightRef.current = true;
     setLoadingMore(true);
     lastLoadAtRef.current = Date.now();
     try {
@@ -401,6 +503,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
     } catch (err: any) {
       setError(err.message ?? 'Unable to load more posts.');
     } finally {
+      loadMoreInFlightRef.current = false;
       setLoadingMore(false);
     }
   };

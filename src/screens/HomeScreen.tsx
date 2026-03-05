@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Image,
   Pressable,
@@ -21,30 +21,6 @@ import { AppLogo } from '../components/AppLogo';
 
 type Navigation = BottomTabNavigationProp<TabParamList, 'Home'>;
 const MAX_HOME_CARDS = 120;
-
-const appendDebugLog = (
-  hypothesisId: string,
-  location: string,
-  message: string,
-  data: Record<string, unknown> = {}
-) => {
-  const payload = { hypothesisId, location, message, data, timestamp: Date.now() };
-  try {
-    const nodeRequire =
-      (globalThis as any).__non_webpack_require__ ?? (typeof require === 'function' ? require : null);
-    if (nodeRequire) {
-      try {
-        nodeRequire('fs').appendFileSync('/opt/cursor/logs/debug.log', JSON.stringify(payload) + '\n');
-        return;
-      } catch {
-        // fallback to console
-      }
-    }
-  } catch {}
-  if (typeof console !== 'undefined') {
-    console.log('[agent-debug]', JSON.stringify(payload));
-  }
-};
 
 const HomeScreen: React.FC = () => {
   const { state, loading, error, refresh } = useAppData();
@@ -85,17 +61,6 @@ const HomeScreen: React.FC = () => {
     () => filteredPhotographers.slice(0, MAX_HOME_CARDS),
     [filteredPhotographers]
   );
-
-  useEffect(() => {
-    // #region agent log
-    appendDebugLog('H6', 'HomeScreen.tsx:render', 'Home photographers snapshot', {
-      totalPhotographers: state.photographers.length,
-      filteredPhotographers: filteredPhotographers.length,
-      visiblePhotographers: visiblePhotographers.length,
-      columns,
-    });
-    // #endregion
-  }, [state.photographers.length, filteredPhotographers.length, visiblePhotographers.length, columns]);
 
   const openProfile = (photographer: Photographer) => {
     const parent = navigation.getParent?.();

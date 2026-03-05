@@ -71,30 +71,6 @@ const WEB_PROFILE_PAGE_SIZE = 24;
 const WEB_FEED_PAGE_SIZE = 6;
 const WEB_VISIBLE_FEED_ITEMS = 40;
 
-const appendDebugLog = (
-  hypothesisId: string,
-  location: string,
-  message: string,
-  data: Record<string, unknown> = {}
-) => {
-  const payload = { hypothesisId, location, message, data, timestamp: Date.now() };
-  try {
-    const nodeRequire =
-      (globalThis as any).__non_webpack_require__ ?? (typeof require === 'function' ? require : null);
-    if (nodeRequire) {
-      try {
-        nodeRequire('fs').appendFileSync('/opt/cursor/logs/debug.log', JSON.stringify(payload) + '\n');
-        return;
-      } catch {
-        // fallback to console
-      }
-    }
-  } catch {}
-  if (typeof console !== 'undefined') {
-    console.log('[agent-debug]', JSON.stringify(payload));
-  }
-};
-
 const optimizeImageUriForWeb = (uri: string) => {
   if (!uri || !uri.includes('images.unsplash.com')) return uri;
   const withWidth = uri.includes('w=') ? uri.replace(/w=\d+/i, 'w=900') : `${uri}${uri.includes('?') ? '&' : '?'}w=900`;
@@ -119,8 +95,6 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
   const { toggleLike } = useAppData();
   const lastTapRef = useRef<number | null>(null);
   const paginationOffsetRef = useRef(0);
-  const mountLoggedRef = useRef(false);
-  const hydrationLogCountRef = useRef(0);
   const loadMoreInFlightRef = useRef(false);
 
   const normalizeProfiles = useCallback((rows: ProfileSummary[]) => {
@@ -210,14 +184,6 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
   const fetchPosts = useCallback(async ({ reset = true }: { reset?: boolean } = { reset: true }) => {
     const effectivePageSize = isWeb ? WEB_FEED_PAGE_SIZE : PAGE_SIZE;
     const maxFeedItems = isWeb ? WEB_VISIBLE_FEED_ITEMS : MAX_FEED_ITEMS;
-    // #region agent log
-    appendDebugLog('H1', 'SocialFeed.tsx:fetchPosts', 'Fetch posts start', {
-      reset,
-      start: reset ? 0 : paginationOffsetRef.current,
-      pageSize: effectivePageSize,
-      isWeb,
-    });
-    // #endregion
     // Hasura GraphQL fetch
     if (hasHasura) {
       const start = reset ? 0 : paginationOffsetRef.current;
@@ -326,15 +292,6 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
     }
 
     setHasMore((data ?? []).length === effectivePageSize);
-    // #region agent log
-    appendDebugLog('H1', 'SocialFeed.tsx:fetchPosts', 'Fetch posts complete (Supabase)', {
-      reset,
-      fetchedCount: mapped.length,
-      nextOffset: paginationOffsetRef.current,
-      hasMore: (data ?? []).length === effectivePageSize,
-      isWeb,
-    });
-    // #endregion
   }, [appendUniquePosts, isWeb, mapRowToFeedPost]);
 
   const loadFeed = useCallback(async () => {
@@ -407,15 +364,6 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
   }, [fetchPosts, fetchProfiles, isWeb]);
 
   useEffect(() => {
-    if (!mountLoggedRef.current) {
-      // #region agent log
-      appendDebugLog('H2', 'SocialFeed.tsx:mount', 'SocialFeed mounted', {
-        hasSupabase,
-        hasHasura,
-      });
-      // #endregion
-      mountLoggedRef.current = true;
-    }
     loadFeed();
   }, [loadFeed]);
 
@@ -497,21 +445,6 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
     [filteredPosts, isWeb]
   );
 
-  useEffect(() => {
-    if (loading || hydrationLogCountRef.current >= 3) return;
-    // #region agent log
-    appendDebugLog('H3', 'SocialFeed.tsx:hydration', 'Feed state snapshot', {
-      profileCount: profiles.length,
-      postCount: posts.length,
-      visibleProfiles: visibleProfiles.length,
-      visiblePosts: visiblePosts.length,
-      selectedProfileId,
-      isWeb,
-    });
-    // #endregion
-    hydrationLogCountRef.current += 1;
-  }, [isWeb, loading, posts.length, profiles.length, selectedProfileId, visiblePosts.length, visibleProfiles.length]);
-
   const onRefresh = async () => {
     setRefreshing(true);
     await loadFeed();
@@ -520,15 +453,6 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
   const lastLoadAtRef = useRef<number | null>(null);
 
   const loadMore = async () => {
-    // #region agent log
-    appendDebugLog('H1', 'SocialFeed.tsx:loadMore', 'onEndReached invoked', {
-      hasMore,
-      loadingMore,
-      postCount: posts.length,
-      offset: paginationOffsetRef.current,
-      isWeb,
-    });
-    // #endregion
     // prevent duplicate/fast repeat triggers
     if (isWeb || !hasMore || loadingMore || loadMoreInFlightRef.current) return;
     if (lastLoadAtRef.current && Date.now() - lastLoadAtRef.current < 800) return;

@@ -55,30 +55,6 @@ const AppDataContext = createContext<AppDataContextValue | undefined>(undefined)
 
 type ProfileRow = { role?: AppUser['role']; verified?: boolean } | null;
 
-const appendDebugLog = (
-  hypothesisId: string,
-  location: string,
-  message: string,
-  data: Record<string, unknown> = {}
-) => {
-  const payload = { hypothesisId, location, message, data, timestamp: Date.now() };
-  try {
-    const nodeRequire =
-      (globalThis as any).__non_webpack_require__ ?? (typeof require === 'function' ? require : null);
-    if (nodeRequire) {
-      try {
-        nodeRequire('fs').appendFileSync('/opt/cursor/logs/debug.log', JSON.stringify(payload) + '\n');
-        return;
-      } catch {
-        // fallback to console
-      }
-    }
-  } catch {}
-  if (typeof console !== 'undefined') {
-    console.log('[agent-debug]', JSON.stringify(payload));
-  }
-};
-
 const PHOTOGRAPHER_SELECT = `
   id,
   rating,
@@ -148,20 +124,9 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         .order('rating', { ascending: false });
       if (photographerError) throw photographerError;
       const photographers = (data ?? []).map(mapPhotographerRow).slice(0, MAX_PHOTOGRAPHERS);
-      // #region agent log
-      appendDebugLog('H5', 'AppDataContext.tsx:fetchPhotographers', 'Fetched photographers', {
-        count: photographers.length,
-        cappedAt: MAX_PHOTOGRAPHERS,
-      });
-      // #endregion
       setState({ photographers });
     } catch (err: any) {
       logError('fetch_photographers', err);
-      // #region agent log
-      appendDebugLog('H5', 'AppDataContext.tsx:fetchPhotographers', 'Fetch photographers failed', {
-        error: err?.message ?? String(err),
-      });
-      // #endregion
       setError(formatErrorMessage(err, 'Unable to load photographers right now.'));
     }
   }, []);

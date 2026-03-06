@@ -23,8 +23,8 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.papzi.mobile",
-      "buildNumber": "1",
+      "bundleIdentifier": "com.saicts.papzi",
+      "buildNumber": "1.0.0",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Papzi needs your location to show nearby photographers."
       }

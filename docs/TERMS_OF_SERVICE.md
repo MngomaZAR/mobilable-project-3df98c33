@@ -46,4 +46,4 @@ We may update these Terms. Continued use after updates means you accept the revi
 
 ## 9. Contact
 
-Support: support@papzi.app
+Support: support@papzi.co.za

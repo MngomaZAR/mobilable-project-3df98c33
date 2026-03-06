@@ -8,6 +8,11 @@ import { uid } from '../utils/id';
 import { formatAuthError, formatErrorMessage, logError } from '../utils/errors';
 import { mapPhotographerRow, mapSupabaseUser } from '../utils/mappings';
 import { startConversationViaEdge } from '../services/chatService';
+import {
+  listConversationMessages,
+  sendConversationLockedMediaMessage,
+  sendConversationTextMessage,
+} from '../services/chatMessageService';
 
 type CreateBookingInput = {
   photographerId: string;
@@ -35,8 +40,11 @@ type AppDataContextValue = {
   createBooking: (payload: CreateBookingInput) => Promise<Booking>;
   updateBookingStatus: (bookingId: string) => Promise<Booking | undefined>;
   sendMessage: (chatId: string, text: string, fromUser?: boolean) => Promise<Message>;
+  sendLockedMediaMessage: (chatId: string, payload: { mediaUrl: string; previewUrl?: string; text?: string; unlockBookingId: string }) => Promise<Message>;
   fetchMessages: (chatId: string) => Promise<void>;
   fetchMessagesForChat: (chatId: string) => Promise<void>;
+  updateBookingClientLocation: (bookingId: string, latitude: number, longitude: number) => Promise<void>;
+  updatePhotographerLocation: (latitude: number, longitude: number) => Promise<void>;
   startConversationWithUser: (participantId: string, title?: string) => Promise<{ id: string; title: string }>;
   addPost: (payload: CreatePostInput) => Promise<Post>;
   toggleLike: (postId: string) => Promise<Post | undefined>;
@@ -51,7 +59,7 @@ type AppDataContextValue = {
 
 const STORAGE_KEY = 'movable-app-state-v2';
 const MAX_PHOTOGRAPHERS = 120;
-const BOOKING_SELECT = 'id, photographer_id, booking_date, package_type, notes, status, created_at';
+const BOOKING_SELECT = 'id, photographer_id, booking_date, package_type, notes, status, created_at, user_latitude, user_longitude';
 
 const AppDataContext = createContext<AppDataContextValue | undefined>(undefined);
 
@@ -64,6 +72,8 @@ type BookingRow = {
   notes: string | null;
   status: BookingStatus | null;
   created_at: string | null;
+  user_latitude: number | null;
+  user_longitude: number | null;
 };
 
 const PHOTOGRAPHER_SELECT = `
@@ -87,6 +97,8 @@ const mapBookingRow = (row: BookingRow): Booking => ({
   notes: row.notes ?? '',
   status: (row.status ?? 'pending') as BookingStatus,
   createdAt: row.created_at ?? new Date().toISOString(),
+  userLatitude: row.user_latitude ?? null,
+  userLongitude: row.user_longitude ?? null,
 });
 
 // REDUCER
@@ -307,6 +319,8 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           notes: data?.notes ?? booking.notes,
           status: (data?.status as BookingStatus) ?? booking.status,
           createdAt: data?.created_at ?? booking.createdAt,
+          userLatitude: null,
+          userLongitude: null,
         };
       }
 
@@ -382,94 +396,154 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         throw new Error('Message text is required.');
       }
 
-      const message: Message = {
+      const optimisticMessage: Message = {
         id: uid('msg'),
         chatId,
         fromUser,
         text: trimmed,
         timestamp: new Date().toISOString(),
+        messageType: 'text',
       };
 
-      // Optimistic update
       const previousMessages = stateRef.current.messages;
-      const optimisticMessages = [...previousMessages, message];
-      setState({ messages: optimisticMessages });
+      setState({ messages: [...previousMessages, optimisticMessage] });
 
-      if (hasSupabase) {
-        try {
-            const { data, error: insertError } = await supabase
-            .from('messages')
-            .insert({
-                chat_id: chatId,
-                body: trimmed,
-                sender_id: senderId,
-            })
-            .select('id, chat_id, sender_id, body, created_at')
-            .single();
-
-            if (insertError) {
-                throw insertError;
-            }
-
-            const newMessage = {
-                id: data?.id ?? message.id,
-                chatId: data?.chat_id ?? chatId,
-                fromUser,
-                text: data?.body ?? trimmed,
-                timestamp: data?.created_at ?? new Date().toISOString(),
-            };
-
-            // Replace optimistic message with the real one
-            const latestMessages = stateRef.current.messages;
-            const hasOptimistic = latestMessages.some((m) => m.id === message.id);
-            const nextMessages = hasOptimistic
-              ? latestMessages.map((m) => (m.id === message.id ? newMessage : m))
-              : [...latestMessages, newMessage];
-            setState({ messages: nextMessages });
-            return newMessage;
-
-        } catch (err: any) {
-            // Revert optimistic update
-            setState({ messages: stateRef.current.messages.filter((m) => m.id !== message.id) });
-            logError('send_message', err);
-            const friendly = formatErrorMessage(err, 'Unable to send your message right now.');
-            setError(friendly);
-            throw new Error(friendly);
-        }
+      if (!hasSupabase) {
+        return optimisticMessage;
       }
 
-      return message;
+      try {
+        const sent = await sendConversationTextMessage({ conversationId: chatId, text: trimmed });
+        const confirmed: Message = {
+          id: sent.id,
+          chatId: sent.chatId,
+          fromUser: sent.senderId === senderId,
+          text: sent.text,
+          timestamp: sent.timestamp ?? new Date().toISOString(),
+          messageType: sent.messageType,
+          mediaUrl: sent.mediaUrl ?? null,
+          previewUrl: sent.previewUrl ?? null,
+          locked: sent.locked ?? false,
+          unlocked: sent.unlocked ?? true,
+          unlockBookingId: sent.unlockBookingId ?? null,
+        };
+        const latestMessages = stateRef.current.messages;
+        setState({
+          messages: latestMessages.map((message) =>
+            message.id === optimisticMessage.id ? confirmed : message
+          ),
+        });
+        return confirmed;
+      } catch (err: any) {
+        setState({ messages: stateRef.current.messages.filter((message) => message.id !== optimisticMessage.id) });
+        logError('send_message', err);
+        const friendly = formatErrorMessage(err, 'Unable to send your message right now.');
+        setError(friendly);
+        throw new Error(friendly);
+      }
+    },
+    [state.currentUser?.id]
+  );
+
+  const sendLockedMediaMessage = useCallback(
+    async (
+      chatId: string,
+      payload: { mediaUrl: string; previewUrl?: string; text?: string; unlockBookingId: string }
+    ) => {
+      const senderId = state.currentUser?.id;
+      if (!senderId) {
+        const message = 'You need to be signed in to send media.';
+        setError(message);
+        throw new Error(message);
+      }
+      if (!hasSupabase) {
+        throw new Error('Media messages require a backend connection.');
+      }
+
+      const optimisticMessage: Message = {
+        id: uid('msg'),
+        chatId,
+        fromUser: true,
+        text: payload.text ?? '',
+        timestamp: new Date().toISOString(),
+        messageType: 'media',
+        mediaUrl: null,
+        previewUrl: payload.previewUrl ?? payload.mediaUrl,
+        locked: true,
+        unlocked: false,
+        unlockBookingId: payload.unlockBookingId,
+      };
+
+      const previousMessages = stateRef.current.messages;
+      setState({ messages: [...previousMessages, optimisticMessage] });
+
+      try {
+        const sent = await sendConversationLockedMediaMessage({
+          conversationId: chatId,
+          mediaUrl: payload.mediaUrl,
+          previewUrl: payload.previewUrl,
+          text: payload.text,
+          unlockBookingId: payload.unlockBookingId,
+        });
+        const confirmed: Message = {
+          id: sent.id,
+          chatId: sent.chatId,
+          fromUser: sent.senderId === senderId,
+          text: sent.text,
+          timestamp: sent.timestamp ?? new Date().toISOString(),
+          messageType: 'media',
+          mediaUrl: sent.mediaUrl ?? null,
+          previewUrl: sent.previewUrl ?? payload.previewUrl ?? payload.mediaUrl,
+          locked: sent.locked ?? true,
+          unlocked: sent.unlocked ?? false,
+          unlockBookingId: sent.unlockBookingId ?? payload.unlockBookingId,
+        };
+        const latestMessages = stateRef.current.messages;
+        setState({
+          messages: latestMessages.map((message) =>
+            message.id === optimisticMessage.id ? confirmed : message
+          ),
+        });
+        return confirmed;
+      } catch (err: any) {
+        setState({ messages: stateRef.current.messages.filter((message) => message.id !== optimisticMessage.id) });
+        logError('send_locked_media', err);
+        const friendly = formatErrorMessage(err, 'Unable to send media right now.');
+        setError(friendly);
+        throw new Error(friendly);
+      }
     },
     [state.currentUser?.id]
   );
 
   const fetchMessages = useCallback(async (chatId: string) => {
     if (!hasSupabase) return;
+    const currentUserId = stateRef.current.currentUser?.id;
+    if (!currentUserId) return;
+
     try {
-      const { data, error: fetchError } = await supabase
-        .from('messages')
-        .select('id, chat_id, sender_id, body, created_at')
-        .eq('chat_id', chatId)
-        .order('created_at', { ascending: true });
-
-      if (fetchError) throw fetchError;
-
-      const mapped: Message[] = (data ?? []).map((row: any) => ({
+      const rows = await listConversationMessages(chatId);
+      const mapped: Message[] = rows.map((row) => ({
         id: row.id,
-        chatId: row.chat_id,
-        fromUser: row.sender_id === state.currentUser?.id,
-        text: row.body,
-        timestamp: row.created_at ?? new Date().toISOString(),
+        chatId: row.chatId,
+        fromUser: row.senderId === currentUserId,
+        text: row.text,
+        timestamp: row.timestamp ?? new Date().toISOString(),
+        messageType: row.messageType ?? 'text',
+        mediaUrl: row.mediaUrl ?? null,
+        previewUrl: row.previewUrl ?? null,
+        locked: row.locked ?? false,
+        unlocked: row.unlocked ?? true,
+        unlockBookingId: row.unlockBookingId ?? null,
       }));
 
-      // Replace messages for this chat in local state but keep others
       const latestMessages = stateRef.current.messages;
-      setState({ messages: [...latestMessages.filter((m) => m.chatId !== chatId), ...mapped]});
+      setState({ messages: [...latestMessages.filter((m) => m.chatId !== chatId), ...mapped] });
     } catch (err) {
       logError('fetch_messages', err);
       setError('Unable to load messages for this chat.');
     }
-  }, [state.currentUser?.id]);
+  }, []);
 
   const fetchMessagesForChat = useCallback(async (chatId: string) => {
     // backwards compatible alias
@@ -668,11 +742,18 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return optimistic;
   }, [state.currentUser?.id, state.posts]);
 
-  const addComment = useCallback(async (postId: string, text: string, userId = 'you') => {
+  const addComment = useCallback(async (postId: string, text: string, userId?: string) => {
+    const resolvedUserId = userId ?? state.currentUser?.id;
+    if (!resolvedUserId) {
+      const message = 'You need to be signed in to comment.';
+      setError(message);
+      throw new Error(message);
+    }
+
     const comment: Comment = {
       id: uid('comment'),
       postId,
-      userId,
+      userId: resolvedUserId,
       text,
       createdAt: new Date().toISOString(),
     };
@@ -689,7 +770,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
             const { error } = await supabase.from('post_comments').insert([{
                 id: comment.id,
                 post_id: postId,
-                user_id: userId,
+                user_id: resolvedUserId,
                 body: text,
                 created_at: comment.createdAt
             }]);
@@ -710,7 +791,40 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
 
     return comment;
-  }, [state.comments, state.posts]);
+  }, [state.comments, state.currentUser?.id, state.posts]);
+
+  const updateBookingClientLocation = useCallback(async (bookingId: string, latitude: number, longitude: number) => {
+    if (!hasSupabase) return;
+    const userId = stateRef.current.currentUser?.id;
+    if (!userId) return;
+
+    await supabase
+      .from('bookings')
+      .update({ user_latitude: latitude, user_longitude: longitude, updated_at: new Date().toISOString() })
+      .eq('id', bookingId)
+      .eq('client_id', userId);
+
+    const updated = stateRef.current.bookings.map((booking) =>
+      booking.id === bookingId ? { ...booking, userLatitude: latitude, userLongitude: longitude } : booking
+    );
+    setState({ bookings: updated });
+  }, []);
+
+  const updatePhotographerLocation = useCallback(async (latitude: number, longitude: number) => {
+    if (!hasSupabase) return;
+    const userId = stateRef.current.currentUser?.id;
+    if (!userId) return;
+
+    await supabase
+      .from('photographers')
+      .update({ latitude, longitude })
+      .eq('id', userId);
+
+    const updated = stateRef.current.photographers.map((photographer) =>
+      photographer.id === userId ? { ...photographer, latitude, longitude } : photographer
+    );
+    setState({ photographers: updated });
+  }, []);
 
   const signUp = useCallback(
     async (email: string, password: string, /* role intentionally ignored for security; only server/admin may grant roles */ _role: AppUser['role'] = 'client') => {
@@ -932,8 +1046,11 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       createBooking,
       updateBookingStatus,
       sendMessage,
+      sendLockedMediaMessage,
       fetchMessages,
       fetchMessagesForChat,
+      updateBookingClientLocation,
+      updatePhotographerLocation,
       startConversationWithUser,
       addPost,
       toggleLike,
@@ -947,7 +1064,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       revalidateSession,
       resetState,
     }),
-    [state, createBooking, updateBookingStatus, sendMessage, fetchMessages, fetchMessagesForChat, startConversationWithUser, addPost, toggleLike, addComment, signUp, signIn, signOut, updatePrivacy, requestDataDeletion, refresh, revalidateSession, resetState]
+    [state, createBooking, updateBookingStatus, sendMessage, sendLockedMediaMessage, fetchMessages, fetchMessagesForChat, updateBookingClientLocation, updatePhotographerLocation, startConversationWithUser, addPost, toggleLike, addComment, signUp, signIn, signOut, updatePrivacy, requestDataDeletion, refresh, revalidateSession, resetState]
   );
 
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>;

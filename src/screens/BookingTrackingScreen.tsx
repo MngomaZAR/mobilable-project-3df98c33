@@ -1,11 +1,13 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
+import * as Location from 'expo-location';
 import { MapTracker } from '../components/MapTracker';
 import { RootStackParamList } from '../navigation/types';
 import { useAppData } from '../store/AppDataContext';
 import { DEFAULT_CAPE_TOWN_COORDINATES, ensureSouthAfricanCoordinates } from '../utils/geo';
+import { hasSupabase, supabase } from '../config/supabaseClient';
 
 type Route = RouteProp<RootStackParamList, 'BookingTracking'>;
 type Navigation = StackNavigationProp<RootStackParamList, 'BookingTracking'>;
@@ -13,7 +15,7 @@ type Navigation = StackNavigationProp<RootStackParamList, 'BookingTracking'>;
 const BookingTrackingScreen: React.FC = () => {
   const { params } = useRoute<Route>();
   const navigation = useNavigation<Navigation>();
-  const { state, startConversationWithUser } = useAppData();
+  const { state, startConversationWithUser, updateBookingClientLocation, updatePhotographerLocation } = useAppData();
 
   const booking = useMemo(
     () => state.bookings.find((item) => item.id === params.bookingId),
@@ -24,22 +26,38 @@ const BookingTrackingScreen: React.FC = () => {
     [booking?.photographerId, state.photographers]
   );
 
-  const clientLocation = useMemo(() => {
-    if (photographer) {
-      return ensureSouthAfricanCoordinates({
-        latitude: photographer.latitude + 0.25,
-        longitude: photographer.longitude + 0.12,
-      });
-    }
-    return { ...DEFAULT_CAPE_TOWN_COORDINATES };
-  }, [photographer]);
+  const [liveClientLocation, setLiveClientLocation] = useState(() =>
+    ensureSouthAfricanCoordinates({
+      latitude: booking?.userLatitude ?? photographer?.latitude ?? DEFAULT_CAPE_TOWN_COORDINATES.latitude,
+      longitude: booking?.userLongitude ?? photographer?.longitude ?? DEFAULT_CAPE_TOWN_COORDINATES.longitude,
+    })
+  );
+  const [livePhotographerLocation, setLivePhotographerLocation] = useState(() =>
+    ensureSouthAfricanCoordinates({
+      latitude: photographer?.latitude ?? DEFAULT_CAPE_TOWN_COORDINATES.latitude - 0.1,
+      longitude: photographer?.longitude ?? DEFAULT_CAPE_TOWN_COORDINATES.longitude - 0.1,
+    })
+  );
 
-  const photographerLocation = useMemo(() => {
-    return ensureSouthAfricanCoordinates({
-      latitude: photographer?.latitude ?? clientLocation.latitude - 0.1,
-      longitude: photographer?.longitude ?? clientLocation.longitude - 0.1,
-    });
-  }, [clientLocation.latitude, clientLocation.longitude, photographer?.latitude, photographer?.longitude]);
+  useEffect(() => {
+    if (!booking) return;
+    setLiveClientLocation(
+      ensureSouthAfricanCoordinates({
+        latitude: booking.userLatitude ?? DEFAULT_CAPE_TOWN_COORDINATES.latitude,
+        longitude: booking.userLongitude ?? DEFAULT_CAPE_TOWN_COORDINATES.longitude,
+      })
+    );
+  }, [booking?.id, booking?.userLatitude, booking?.userLongitude]);
+
+  useEffect(() => {
+    if (!photographer) return;
+    setLivePhotographerLocation(
+      ensureSouthAfricanCoordinates({
+        latitude: photographer.latitude,
+        longitude: photographer.longitude,
+      })
+    );
+  }, [photographer?.id, photographer?.latitude, photographer?.longitude]);
 
   if (!booking) {
     return (
@@ -63,12 +81,100 @@ const BookingTrackingScreen: React.FC = () => {
     }
   };
 
+  useEffect(() => {
+    if (!booking || !state.currentUser) return;
+    let mounted = true;
+    let watcher: Location.LocationSubscription | null = null;
+
+    const startLiveTracking = async () => {
+      const permission = await Location.requestForegroundPermissionsAsync();
+      if (permission.status !== 'granted' || !mounted) return;
+
+      watcher = await Location.watchPositionAsync(
+        {
+          accuracy: Location.Accuracy.Balanced,
+          distanceInterval: 20,
+          timeInterval: 7000,
+        },
+        async ({ coords }) => {
+          if (!mounted) return;
+          const next = ensureSouthAfricanCoordinates({
+            latitude: coords.latitude,
+            longitude: coords.longitude,
+          });
+          try {
+            if (state.currentUser?.role === 'client') {
+              setLiveClientLocation(next);
+              await updateBookingClientLocation(booking.id, next.latitude, next.longitude);
+            } else if (state.currentUser?.role === 'photographer') {
+              setLivePhotographerLocation(next);
+              await updatePhotographerLocation(next.latitude, next.longitude);
+            }
+          } catch (_err) {
+            // do not crash on transient location sync failures
+          }
+        }
+      );
+    };
+
+    startLiveTracking();
+
+    return () => {
+      mounted = false;
+      watcher?.remove();
+    };
+  }, [booking, state.currentUser, updateBookingClientLocation, updatePhotographerLocation]);
+
+  useEffect(() => {
+    if (!hasSupabase || !booking) return;
+    const channel = supabase
+      .channel(`booking-tracking-${booking.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'bookings', filter: `id=eq.${booking.id}` },
+        (payload) => {
+          const next = payload.new as any;
+          if (Number.isFinite(next?.user_latitude) && Number.isFinite(next?.user_longitude)) {
+            setLiveClientLocation(
+              ensureSouthAfricanCoordinates({
+                latitude: Number(next.user_latitude),
+                longitude: Number(next.user_longitude),
+              })
+            );
+          }
+        }
+      );
+
+    if (photographer?.id) {
+      channel.on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'photographers', filter: `id=eq.${photographer.id}` },
+        (payload) => {
+          const next = payload.new as any;
+          if (Number.isFinite(next?.latitude) && Number.isFinite(next?.longitude)) {
+            setLivePhotographerLocation(
+              ensureSouthAfricanCoordinates({
+                latitude: Number(next.latitude),
+                longitude: Number(next.longitude),
+              })
+            );
+          }
+        }
+      );
+    }
+
+    channel.subscribe();
+    return () => {
+      channel.unsubscribe();
+    };
+  }, [booking, photographer?.id]);
+
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>Booking tracking</Text>
       <Text style={styles.subtitle}>Follow your photographer on OpenStreetMap tiles.</Text>
 
-      <MapTracker client={clientLocation} photographer={photographerLocation} status={booking.status} />
+      <MapTracker client={liveClientLocation} photographer={livePhotographerLocation} status={booking.status} />
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Status</Text>

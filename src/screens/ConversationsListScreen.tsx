@@ -57,93 +57,100 @@ const ConversationsListScreen: React.FC = () => {
     setError(null);
 
     if (!hasSupabase) {
-      // Use local conversations from AppDataContext when Supabase is not configured
       setError('Chat is temporarily unavailable. Please try again later.');
       setConversations(appState.conversations as any);
       return;
     }
 
-    let data: any[] | null = null;
     try {
-      const res = await supabase
-        .from('conversations')
-        .select('id, title, last_message, last_message_at, created_at')
-        .order('last_message_at', { ascending: false })
-        .order('created_at', { ascending: false });
-
-      data = res.data;
-      const fetchError = res.error;
-
-      // fetch participants for these conversations if the table exists
-      let participantsMap: Record<string, string[]> = {};
-      try {
-        const ids = (data ?? []).map((r: any) => r.id).filter(Boolean);
-        if (ids.length > 0) {
-          const { data: partData } = await supabase
-            .from('conversation_participants')
-            .select('conversation_id, user_id')
-            .in('conversation_id', ids as string[]);
-          (partData ?? []).forEach((p: any) => {
-            const cid = p.conversation_id as string;
-            participantsMap[cid] = participantsMap[cid] ? [...participantsMap[cid], p.user_id] : [p.user_id];
-          });
-        }
-      } catch (e) {
-        // table might not exist yet; ignore
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError || !authData.user?.id) {
+        setConversations([]);
+        return;
       }
+      const currentUserId = authData.user.id;
 
-      if (fetchError) {
-        const raw = (fetchError as any)?.message ?? String(fetchError);
-        const lower = String(raw).toLowerCase();
-        const message =
-          (fetchError as any)?.code === '42P01'
-            ? 'Chat is temporarily unavailable. Please try again shortly.'
-            : /failed to fetch/i.test(raw) || lower.includes('network') || lower.includes('typeerror')
-            ? 'Unable to connect to chat right now. Check your connection and try again.'
-            : raw;
-        setError(message);
+      const { data: myParticipants, error: participantError } = await supabase
+        .from('conversation_participants')
+        .select('conversation_id')
+        .eq('user_id', currentUserId);
+
+      if (participantError) throw participantError;
+
+      const conversationIds = Array.from(
+        new Set((myParticipants ?? []).map((row: any) => row.conversation_id).filter(Boolean))
+      );
+      if (conversationIds.length === 0) {
+        setConversations([]);
         return;
       }
 
-      const mapped = (data ?? []).map(mapConversation).map((c: Conversation) => ({ ...c, participants: participantsMap[c.id] ?? undefined }));
-    // If a conversation has no explicit title and exactly two participants, try to fetch the other participant name for a friendly title
-    try {
-      const convoWithoutTitleOtherIds: Record<string, string> = {};
-      const { data: userData } = await supabase.auth.getUser();
-      const currentUserId = userData?.user?.id ?? null;
+      const { data, error: conversationsError } = await supabase
+        .from('conversations')
+        .select('id, title, last_message, last_message_at, created_at')
+        .in('id', conversationIds)
+        .order('last_message_at', { ascending: false })
+        .order('created_at', { ascending: false });
 
-      (mapped ?? []).forEach((conv: Conversation) => {
-        if ((!conv.title || conv.title === 'Conversation') && conv.participants && conv.participants.length === 2 && currentUserId) {
-          // other participant id
-          const other = conv.participants.find((id) => id !== currentUserId) as any;
-          if (other) convoWithoutTitleOtherIds[conv.id] = other;
+      if (conversationsError) throw conversationsError;
+
+      const { data: allParticipants } = await supabase
+        .from('conversation_participants')
+        .select('conversation_id, user_id')
+        .in('conversation_id', conversationIds);
+
+      const participantsMap: Record<string, string[]> = {};
+      (allParticipants ?? []).forEach((row: any) => {
+        const cid = row.conversation_id as string;
+        participantsMap[cid] = participantsMap[cid] ? [...participantsMap[cid], row.user_id] : [row.user_id];
+      });
+
+      const mapped = (data ?? [])
+        .map(mapConversation)
+        .map((conversation: Conversation) => ({
+          ...conversation,
+          participants: participantsMap[conversation.id] ?? undefined,
+        }));
+
+      // Friendly 1:1 title fallback
+      const convoWithoutTitleOtherIds: Record<string, string> = {};
+      mapped.forEach((conversation) => {
+        if (
+          (!conversation.title || conversation.title === 'Conversation') &&
+          conversation.participants &&
+          conversation.participants.length === 2
+        ) {
+          const other = conversation.participants.find((id) => id !== currentUserId);
+          if (other) convoWithoutTitleOtherIds[conversation.id] = other;
         }
       });
 
       const otherIds = Object.values(convoWithoutTitleOtherIds);
       if (otherIds.length > 0) {
-        const { data: profiles } = await supabase.from('profiles').select('id, full_name').in('id', otherIds);
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, full_name')
+          .in('id', otherIds);
         const nameMap: Record<string, string> = {};
-        (profiles ?? []).forEach((p: any) => {
-          nameMap[p.id] = p.full_name ?? 'Creator';
+        (profiles ?? []).forEach((profile: any) => {
+          nameMap[profile.id] = profile.full_name ?? 'Creator';
         });
-        // apply names
-        mapped.forEach((conv: any) => {
-          const otherId = convoWithoutTitleOtherIds[conv.id];
-          if (otherId && nameMap[otherId]) conv.title = nameMap[otherId];
+        mapped.forEach((conversation) => {
+          const otherId = convoWithoutTitleOtherIds[conversation.id];
+          if (otherId && nameMap[otherId]) {
+            conversation.title = nameMap[otherId];
+          }
         });
       }
-    } catch (e) {
-      // ignore friendly title fallback failures
-    }
 
-    setConversations(mapped);
+      setConversations(mapped);
     } catch (err: any) {
       const raw = String(err?.message ?? err);
       const lower = raw.toLowerCase();
-      const message = /failed to fetch/i.test(raw) || lower.includes('network') || lower.includes('typeerror')
-        ? 'Unable to connect to chat right now. Check your connection and try again.'
-        : raw;
+      const message =
+        /failed to fetch/i.test(raw) || lower.includes('network') || lower.includes('typeerror')
+          ? 'Unable to connect to chat right now. Check your connection and try again.'
+          : raw;
       setError(message);
     }
   }, [appState.conversations, mapConversation]);

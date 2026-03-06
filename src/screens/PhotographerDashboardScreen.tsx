@@ -1,9 +1,10 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
+import * as Location from 'expo-location';
 import { MapTracker } from '../components/MapTracker';
 import { useAppData } from '../store/AppDataContext';
 import { RootStackParamList } from '../navigation/types';
@@ -13,7 +14,7 @@ type Navigation = StackNavigationProp<RootStackParamList, 'Root'>;
 
 const PhotographerDashboardScreen: React.FC = () => {
   const navigation = useNavigation<Navigation>();
-  const { state, startConversationWithUser } = useAppData();
+  const { state, startConversationWithUser, updatePhotographerLocation } = useAppData();
 
   const activeBooking = useMemo(
     () => state.bookings.find((booking) => booking.status === 'pending' || booking.status === 'accepted') ?? state.bookings[0],
@@ -38,6 +39,42 @@ const PhotographerDashboardScreen: React.FC = () => {
       longitude: photographerProfile?.longitude ?? 28.0473,
     });
   }, [photographerProfile?.latitude, photographerProfile?.longitude]);
+
+  useEffect(() => {
+    if (!state.currentUser || state.currentUser.role !== 'photographer' || !activeBooking) return;
+    let mounted = true;
+    let subscription: Location.LocationSubscription | null = null;
+
+    const startTracking = async () => {
+      const permission = await Location.requestForegroundPermissionsAsync();
+      if (permission.status !== 'granted' || !mounted) return;
+
+      subscription = await Location.watchPositionAsync(
+        {
+          accuracy: Location.Accuracy.Balanced,
+          distanceInterval: 20,
+          timeInterval: 8000,
+        },
+        async ({ coords }) => {
+          if (!mounted) return;
+          const { latitude, longitude } = coords;
+          if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
+          try {
+            await updatePhotographerLocation(latitude, longitude);
+          } catch (_err) {
+            // soft-fail: tracking should not crash dashboard
+          }
+        }
+      );
+    };
+
+    startTracking();
+
+    return () => {
+      mounted = false;
+      subscription?.remove();
+    };
+  }, [activeBooking, state.currentUser, updatePhotographerLocation]);
 
   const openChatThread = async () => {
     if (!photographerProfile) {

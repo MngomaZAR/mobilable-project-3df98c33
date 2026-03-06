@@ -1,8 +1,10 @@
-import React, { useMemo, useState } from 'react';
-import { Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { RouteProp, useRoute } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/types';
 import { useAppData } from '../store/AppDataContext';
+import { hasSupabase, supabase } from '../config/supabaseClient';
+import { Post } from '../types';
 
 type Route = RouteProp<RootStackParamList, 'PostDetail'>;
 
@@ -10,12 +12,57 @@ const PostDetailScreen: React.FC = () => {
   const { params } = useRoute<Route>();
   const { state, toggleLike, addComment } = useAppData();
   const [comment, setComment] = useState('');
+  const [hydratedPost, setHydratedPost] = useState<Post | null>(null);
+  const [loadingPost, setLoadingPost] = useState(false);
 
-  const post = useMemo(() => state.posts.find((p) => p.id === params.postId), [params.postId, state.posts]);
+  const postFromState = useMemo(() => state.posts.find((p) => p.id === params.postId), [params.postId, state.posts]);
+  const post = postFromState ?? hydratedPost;
   const comments = useMemo(
     () => state.comments.filter((c) => c.postId === params.postId),
     [params.postId, state.comments]
   );
+
+  useEffect(() => {
+    if (postFromState || !hasSupabase) return;
+    let mounted = true;
+    const loadPost = async () => {
+      setLoadingPost(true);
+      try {
+        const { data } = await supabase
+          .from('posts')
+          .select('id, user_id, caption, image_url, created_at, location, likes_count, comment_count')
+          .eq('id', params.postId)
+          .maybeSingle();
+        if (!mounted || !data) return;
+        setHydratedPost({
+          id: data.id,
+          userId: data.user_id,
+          caption: data.caption ?? '',
+          imageUri: data.image_url ?? '',
+          createdAt: data.created_at ?? new Date().toISOString(),
+          location: data.location ?? undefined,
+          likes: Number(data.likes_count ?? 0),
+          liked: false,
+          commentCount: Number(data.comment_count ?? 0),
+        });
+      } finally {
+        if (mounted) setLoadingPost(false);
+      }
+    };
+    loadPost();
+    return () => {
+      mounted = false;
+    };
+  }, [params.postId, postFromState]);
+
+  if (!post && loadingPost) {
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color="#0f172a" />
+        <Text style={[styles.muted, styles.loadingLabel]}>Loading post details…</Text>
+      </View>
+    );
+  }
 
   if (!post) {
     return (
@@ -85,6 +132,10 @@ const styles = StyleSheet.create({
   },
   muted: {
     color: '#6b7280',
+  },
+  loadingLabel: {
+    marginTop: 10,
+    fontWeight: '600',
   },
   image: {
     width: '100%',

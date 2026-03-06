@@ -767,15 +767,36 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     if (hasSupabase) {
         try {
-            const { error } = await supabase.from('post_comments').insert([{
-                id: comment.id,
-                post_id: postId,
-                user_id: resolvedUserId,
-                body: text,
-                created_at: comment.createdAt
-            }]);
+            const { data, error } = await supabase
+              .from('post_comments')
+              .insert([
+                {
+                  post_id: postId,
+                  user_id: resolvedUserId,
+                  body: text,
+                },
+              ])
+              .select('id, post_id, user_id, body, created_at')
+              .single();
+
             if (error) {
                 throw error;
+            }
+
+            if (data?.id) {
+              const persistedComment: Comment = {
+                id: data.id,
+                postId: data.post_id ?? postId,
+                userId: data.user_id ?? resolvedUserId,
+                text: data.body ?? text,
+                createdAt: data.created_at ?? comment.createdAt,
+              };
+              setState({
+                comments: stateRef.current.comments.map((item) =>
+                  item.id === comment.id ? persistedComment : item
+                ),
+              });
+              return persistedComment;
             }
         } catch (err: any) {
             // Revert optimistic update

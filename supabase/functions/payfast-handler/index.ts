@@ -36,9 +36,11 @@ const textHeaders = {
 const payfastBaseUrlRaw =
   Deno.env.get("PAYFAST_BASE_URL")?.trim() || "https://sandbox.payfast.co.za";
 const payfastBaseUrl = payfastBaseUrlRaw.replace(/\/eng\/process\/?$/i, "");
-const merchantId = Deno.env.get("PAYFAST_MERCHANT_ID")?.trim() || "10046407";
-const merchantKey = Deno.env.get("PAYFAST_MERCHANT_KEY")?.trim() || "zuimv2w7udhu3";
+const merchantId = Deno.env.get("PAYFAST_MERCHANT_ID")?.trim() || "";
+const merchantKey = Deno.env.get("PAYFAST_MERCHANT_KEY")?.trim() || "";
 const passphrase = Deno.env.get("PAYFAST_PASSPHRASE")?.trim() || "";
+const hasSecurePayfastConfig =
+  merchantId.length > 0 && merchantKey.length > 0 && passphrase.length > 0;
 const allowedIps = (Deno.env.get("PAYFAST_ITN_ALLOWED_IPS") || "")
   .split(",")
   .map((value) => value.trim())
@@ -130,6 +132,12 @@ const handleCreateCheckoutLink = async (req: Request) => {
   if (!bookingId) {
     return jsonResponse(400, { error: "booking_id is required" });
   }
+  if (!hasSecurePayfastConfig) {
+    return jsonResponse(500, {
+      error:
+        "PayFast is not securely configured. Set PAYFAST_MERCHANT_ID, PAYFAST_MERCHANT_KEY, and PAYFAST_PASSPHRASE.",
+    });
+  }
 
   const { data: booking, error: bookingError } = await supabase
     .from("bookings")
@@ -179,12 +187,21 @@ const handleItn = async (req: Request) => {
   // PayFast requires a plain 200 response body/header to acknowledge ITN delivery.
   const body = await req.text().catch(() => "");
   const payload = Object.fromEntries(new URLSearchParams(body).entries());
+  if (!hasSecurePayfastConfig) {
+    // Security hard-stop: never accept webhook completions without secret passphrase configuration.
+    console.error("payfast-handler: insecure PayFast config; skipping ITN state update");
+    return textOk("OK");
+  }
 
   const remoteIp = (req.headers.get("x-forwarded-for") || "")
     .split(",")[0]
     ?.trim();
   if (allowedIps.length > 0 && remoteIp && !allowedIps.includes(remoteIp)) {
     console.warn("payfast-handler: rejected ITN by IP allowlist", remoteIp);
+    return textOk("OK");
+  }
+  if (payload.merchant_id && payload.merchant_id !== merchantId) {
+    console.warn("payfast-handler: merchant mismatch");
     return textOk("OK");
   }
 

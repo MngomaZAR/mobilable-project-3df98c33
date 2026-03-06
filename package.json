@@ -19,6 +19,7 @@
     "hasura:logs": "docker-compose -f docker/hasura/docker-compose.yml logs -f",
     "eas:build": "npx eas-cli@latest build --platform all",
     "eas:build:workflow": "npx eas-cli@latest workflow:run .eas/workflows/create-production-builds.yml",
+    "eas:build:ios": "npx eas-cli@latest workflow:run .eas/workflows/build-ios-preview.yml",
     "eas:deploy:web": "npx eas-cli@latest workflow:run .eas/workflows/deploy-web.yml"
   },
   "dependencies": {

@@ -1,0 +1,12 @@
+name: Build iOS (Preview)
+
+# Builds iOS app for internal/TestFlight - NO auto-submit to App Store.
+# Install via build link or submit to TestFlight manually.
+# Use this to get a working .ipa without App Store submission setup.
+
+jobs:
+  build_ios:
+    type: build
+    params:
+      platform: ios
+      profile: preview

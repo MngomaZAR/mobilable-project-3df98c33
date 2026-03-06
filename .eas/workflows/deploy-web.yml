@@ -1,0 +1,17 @@
+name: Deploy Web (Continuous)
+
+# Deploys the web app to EAS Hosting so it runs continuously at a stable URL.
+# Run with: npx eas-cli@latest workflow:run deploy-web.yml
+
+on:
+  push:
+    branches: ['main']
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    type: deploy
+    name: Deploy Web to EAS Hosting
+    environment: production
+    params:
+      prod: true

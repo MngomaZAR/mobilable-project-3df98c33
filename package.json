@@ -16,7 +16,10 @@
     "test:hasura": "EXPO_PUBLIC_HASURA_URL=http://localhost:8080/v1/graphql jest __tests__/hasura.e2e.test.ts --runInBand --detectOpenHandles",
     "hasura:up": "docker-compose -f docker/hasura/docker-compose.yml up -d",
     "hasura:down": "docker-compose -f docker/hasura/docker-compose.yml down",
-    "hasura:logs": "docker-compose -f docker/hasura/docker-compose.yml logs -f"
+    "hasura:logs": "docker-compose -f docker/hasura/docker-compose.yml logs -f",
+    "eas:build": "npx eas-cli@latest build --platform all",
+    "eas:build:workflow": "npx eas-cli@latest workflow:run .eas/workflows/create-production-builds.yml",
+    "eas:deploy:web": "npx eas-cli@latest workflow:run .eas/workflows/deploy-web.yml"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",

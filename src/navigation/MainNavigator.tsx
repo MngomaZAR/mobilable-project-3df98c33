@@ -21,7 +21,10 @@ import AuthScreen from '../screens/AuthScreen';
 import BookingTrackingScreen from '../screens/BookingTrackingScreen';
 import PaymentScreen from '../screens/PaymentScreen';
 import ComplianceScreen from '../screens/ComplianceScreen';
+import PhotographerDashboardScreen from '../screens/PhotographerDashboardScreen';
+import AdminDashboardScreen from '../screens/AdminDashboardScreen';
 import { RootStackParamList, TabParamList } from './types';
+import { useAppData } from '../store/AppDataContext';
 
 const Tab = createBottomTabNavigator<TabParamList>();
 const Stack = createStackNavigator<RootStackParamList>();
@@ -43,23 +46,38 @@ const tabBarIcon = (routeName: keyof TabParamList, focused: boolean, color: stri
   return <Ionicons name={name as any} size={size} color={color} />;
 };
 
-const TabsNavigator = () => (
-  <Tab.Navigator
-    screenOptions={({ route }) => ({
-      tabBarIcon: ({ focused, color, size }) => tabBarIcon(route.name, focused, color, size),
-      tabBarActiveTintColor: '#111827',
-      tabBarInactiveTintColor: '#9ca3af',
-      headerShown: false,
-    })}
-  >
-    <Tab.Screen name="Home" component={HomeScreen} />
-    <Tab.Screen name="Bookings" component={BookingsScreen} />
-    <Tab.Screen name="Feed" component={FeedScreen} />
-    <Tab.Screen name="Chat" component={ConversationsListScreen} />
-    <Tab.Screen name="Map" component={MapScreen} />
-    <Tab.Screen name="Settings" component={SettingsScreen} />
-  </Tab.Navigator>
-);
+const TabsNavigator = () => {
+  const { currentUser } = useAppData();
+  const role = currentUser?.role ?? 'client';
+  const homeComponent =
+    role === 'photographer'
+      ? PhotographerDashboardScreen
+      : role === 'admin'
+        ? AdminDashboardScreen
+        : HomeScreen;
+
+  return (
+    <Tab.Navigator
+      screenOptions={({ route }) => ({
+        tabBarIcon: ({ focused, color, size }) => tabBarIcon(route.name, focused, color, size),
+        tabBarActiveTintColor: '#111827',
+        tabBarInactiveTintColor: '#9ca3af',
+        headerShown: false,
+      })}
+    >
+      <Tab.Screen
+        name="Home"
+        component={homeComponent}
+        options={{ tabBarLabel: role === 'client' ? 'Home' : 'Dashboard' }}
+      />
+      <Tab.Screen name="Bookings" component={BookingsScreen} />
+      <Tab.Screen name="Feed" component={FeedScreen} />
+      <Tab.Screen name="Chat" component={ConversationsListScreen} />
+      <Tab.Screen name="Map" component={MapScreen} />
+      <Tab.Screen name="Settings" component={SettingsScreen} />
+    </Tab.Navigator>
+  );
+};
 
 export const MainNavigator: React.FC<MainNavigatorProps> = ({ logoSource }) => (
   <NavigationContainer

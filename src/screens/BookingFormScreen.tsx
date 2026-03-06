@@ -37,6 +37,11 @@ const BookingFormScreen: React.FC = () => {
     return `${selectedDate.toDateString()} · ${timeSlot}`;
   }, [selectedDate, timeSlot]);
 
+  const estimatedRate = useMemo(() => {
+    const level = (photographer.priceRange.match(/\$/g) || []).length || 2;
+    return `From R${(level * 1200).toLocaleString('en-ZA')}`;
+  }, [photographer.priceRange]);
+
   const handleSubmit = async () => {
     if (!selectedDate) {
       Alert.alert('Date required', 'Please add a shoot date.');
@@ -69,6 +74,12 @@ const BookingFormScreen: React.FC = () => {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
+      <View style={styles.heroCard}>
+        <Text style={styles.heroTitle}>Book {photographer.name}</Text>
+        <Text style={styles.heroMeta}>{photographer.style} · {photographer.location}</Text>
+        <Text style={styles.heroPrice}>{estimatedRate}</Text>
+      </View>
+
       <Text style={styles.label}>Photographer</Text>
       <Text style={styles.value}>{photographer.name}</Text>
 
@@ -78,23 +89,25 @@ const BookingFormScreen: React.FC = () => {
       </View>
       <BookingCalendar value={selectedDate} onChange={setSelectedDate} timeSlot={timeSlot} onTimeChange={setTimeSlot} />
 
-      <Text style={styles.label}>Package</Text>
-      <TextInput
-        placeholder="Half-day coverage"
-        value={packageType}
-        onChangeText={setPackageType}
-        style={styles.input}
-      />
+      <View style={styles.detailsCard}>
+        <Text style={styles.label}>Package</Text>
+        <TextInput
+          placeholder="Half-day coverage"
+          value={packageType}
+          onChangeText={setPackageType}
+          style={styles.input}
+        />
 
-      <Text style={styles.label}>Notes</Text>
-      <TextInput
-        placeholder="Shot list, vibe, must-have moments"
-        value={notes}
-        onChangeText={setNotes}
-        style={[styles.input, styles.multiline]}
-        multiline
-        numberOfLines={4}
-      />
+        <Text style={styles.label}>Notes</Text>
+        <TextInput
+          placeholder="Shot list, vibe, must-have moments"
+          value={notes}
+          onChangeText={setNotes}
+          style={[styles.input, styles.multiline]}
+          multiline
+          numberOfLines={4}
+        />
+      </View>
 
       <TouchableOpacity style={styles.cta} onPress={handleSubmit} disabled={submitting}>
         <Text style={styles.ctaText}>{submitting ? 'Saving...' : 'Send request'}</Text>
@@ -106,7 +119,28 @@ const BookingFormScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     padding: 16,
+    paddingBottom: 120,
     backgroundColor: '#f7f7fb',
+  },
+  heroCard: {
+    backgroundColor: '#0f172a',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 10,
+  },
+  heroTitle: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: '800',
+  },
+  heroMeta: {
+    color: '#cbd5e1',
+    marginTop: 4,
+  },
+  heroPrice: {
+    color: '#fbbf24',
+    fontWeight: '800',
+    marginTop: 8,
   },
   centered: {
     flex: 1,
@@ -138,6 +172,14 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: '#e5e7eb',
     marginBottom: 10,
+  },
+  detailsCard: {
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#e5e7eb',
+    padding: 12,
+    marginTop: 10,
   },
   selectedDateText: {
     color: '#0f172a',

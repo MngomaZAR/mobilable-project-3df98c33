@@ -497,7 +497,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
       <View style={styles.headerInner}>
         <View>
           <Text style={styles.headerTitle}>Social feed</Text>
-          <Text style={styles.headerSubtitle}>Browse recent work from photographers near you.</Text>
+          <Text style={styles.headerSubtitle}>Fresh work from nearby photographers.</Text>
         </View>
         <TouchableOpacity
           style={[styles.primaryButton, styles.headerCTA, !onCreatePost && styles.primaryButtonDisabled]}
@@ -508,7 +508,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
         </TouchableOpacity>
       </View>
 
-      <Text style={styles.helper}>Filter the feed by creator to scan the latest posts.</Text>
+      <Text style={styles.helper}>Use filters to browse faster.</Text>
 
       <ScrollView
         horizontal
@@ -557,15 +557,19 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
   };
 
   const navigation = useNavigation<StackNavigationProp<RootStackParamList, 'Root'>>();
-  const { startConversationWithUser } = useAppData();
+  const { startConversationWithUser, currentUser } = useAppData();
 
   const handleMessageUser = async (userId: string, name?: string) => {
+    if (!currentUser) {
+      setError('Sign in to send messages.');
+      navigation.navigate('Auth');
+      return;
+    }
     try {
       const convo = await startConversationWithUser(userId, name);
       navigation.navigate('ChatThread', { conversationId: convo.id, title: convo.title });
-    } catch (_e) {
-      setError('Sign in to send messages.');
-      navigation.navigate('Auth');
+    } catch (err: any) {
+      setError(err?.message || 'Unable to open chat right now.');
     }
   };
 
@@ -984,7 +988,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   headerContainer: {
-    paddingTop: 12,
+    paddingTop: 8,
     paddingBottom: 12,
     paddingHorizontal: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -999,8 +1003,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 26,
-    fontWeight: '900',
+    fontSize: 24,
+    fontWeight: '800',
     color: '#0f172a',
   },
   headerSubtitle: {

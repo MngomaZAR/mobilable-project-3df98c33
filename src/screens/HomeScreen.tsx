@@ -22,6 +22,13 @@ import { AppLogo } from '../components/AppLogo';
 
 type Navigation = BottomTabNavigationProp<TabParamList, 'Home'>;
 const MAX_HOME_CARDS = 120;
+const randPerTier = 600;
+
+const toHourlyRateRand = (priceRange: string) => {
+  const tiers = (priceRange.match(/\$/g) || []).length || 2;
+  const amount = tiers * randPerTier + 600;
+  return `R${amount.toLocaleString('en-ZA')}/hr`;
+};
 
 const HomeScreen: React.FC = () => {
   const { state, loading, error, refresh } = useAppData();
@@ -106,7 +113,7 @@ const HomeScreen: React.FC = () => {
           ))}
         </View>
         <View style={styles.metaRow}>
-          <Text style={styles.price}>${(item.priceRange.match(/\$/g) || []).length * 50 + 50}/hr</Text>
+          <Text style={styles.price}>{toHourlyRateRand(item.priceRange)}</Text>
           <Text style={styles.dot}>•</Text>
           <Text style={styles.duration}>~1 hour</Text>
         </View>
@@ -239,7 +246,7 @@ const HomeScreen: React.FC = () => {
             onPress={() => setPriceRange(priceRange === 'Any budget' ? '$$' : 'Any budget')}
           >
             <Text style={styles.filterLabel}>Price Range</Text>
-            <Text style={styles.filterValue}>{priceRange === 'Any budget' ? '$50+' : priceRange}</Text>
+            <Text style={styles.filterValue}>{priceRange === 'Any budget' ? 'R1,200+' : 'R1,800+'}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.filterBox} onPress={() => setSort(sort === 'Highest Rated' ? 'Nearest' : 'Highest Rated')}>
             <Text style={styles.filterLabel}>Sort By</Text>

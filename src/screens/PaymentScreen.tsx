@@ -24,7 +24,7 @@ const PaymentScreen: React.FC = () => {
 
   const bookingId = params?.bookingId;
   const checkoutItemName = booking?.package ?? 'Photography booking';
-  const checkoutAmount = '1200';
+  const checkoutAmount = 'R1,200';
 
   const handleSuccess = () => {
     setStatusMessage('Payment completed. Waiting for secure confirmation...');

@@ -41,7 +41,6 @@ const CreatePostScreen: React.FC = () => {
       );
       setImageUri(manipulated.uri);
     } catch (err) {
-      console.warn('Image processing failed', err);
       setImageUri(result.assets[0]?.uri ?? null);
     }
   };
@@ -78,7 +77,7 @@ const CreatePostScreen: React.FC = () => {
       />
 
       <Text style={styles.label}>Location (optional)</Text>
-      <TextInput value={location} onChangeText={setLocation} placeholder="Austin, TX" style={styles.input} />
+      <TextInput value={location} onChangeText={setLocation} placeholder="Cape Town, WC" style={styles.input} />
 
       <TouchableOpacity style={styles.cta} onPress={handleSubmit} disabled={working}>
         <Text style={styles.ctaText}>{working ? 'Saving...' : 'Post'}</Text>

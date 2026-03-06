@@ -1,12 +1,18 @@
 
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useReducer } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { initialState } from '../data/initialData';
 import { supabase, hasSupabase } from '../config/supabaseClient';
-import { AppState, AppUser, Booking, BookingStatus, Comment, Message, Photographer, Post, PrivacySettings } from '../types';
+import { AppState, AppUser, Booking, BookingStatus, Comment, ConversationSummary, Message, Post, PrivacySettings } from '../types';
 import { uid } from '../utils/id';
 import { formatAuthError, formatErrorMessage, logError } from '../utils/errors';
 import { mapPhotographerRow, mapSupabaseUser } from '../utils/mappings';
+import { startConversationViaEdge } from '../services/chatService';
+import {
+  listConversationMessages,
+  sendConversationLockedMediaMessage,
+  sendConversationTextMessage,
+} from '../services/chatMessageService';
 
 type CreateBookingInput = {
   photographerId: string;
@@ -34,8 +40,11 @@ type AppDataContextValue = {
   createBooking: (payload: CreateBookingInput) => Promise<Booking>;
   updateBookingStatus: (bookingId: string) => Promise<Booking | undefined>;
   sendMessage: (chatId: string, text: string, fromUser?: boolean) => Promise<Message>;
+  sendLockedMediaMessage: (chatId: string, payload: { mediaUrl: string; previewUrl?: string; text?: string; unlockBookingId: string }) => Promise<Message>;
   fetchMessages: (chatId: string) => Promise<void>;
   fetchMessagesForChat: (chatId: string) => Promise<void>;
+  updateBookingClientLocation: (bookingId: string, latitude: number, longitude: number) => Promise<void>;
+  updatePhotographerLocation: (latitude: number, longitude: number) => Promise<void>;
   startConversationWithUser: (participantId: string, title?: string) => Promise<{ id: string; title: string }>;
   addPost: (payload: CreatePostInput) => Promise<Post>;
   toggleLike: (postId: string) => Promise<Post | undefined>;
@@ -49,10 +58,23 @@ type AppDataContextValue = {
 };
 
 const STORAGE_KEY = 'movable-app-state-v2';
+const MAX_PHOTOGRAPHERS = 120;
+const BOOKING_SELECT = 'id, photographer_id, booking_date, package_type, notes, status, created_at, user_latitude, user_longitude';
 
 const AppDataContext = createContext<AppDataContextValue | undefined>(undefined);
 
 type ProfileRow = { role?: AppUser['role']; verified?: boolean } | null;
+type BookingRow = {
+  id: string;
+  photographer_id: string;
+  booking_date: string | null;
+  package_type: string | null;
+  notes: string | null;
+  status: BookingStatus | null;
+  created_at: string | null;
+  user_latitude: number | null;
+  user_longitude: number | null;
+};
 
 const PHOTOGRAPHER_SELECT = `
   id,
@@ -66,6 +88,18 @@ const PHOTOGRAPHER_SELECT = `
   tags,
   profiles:profiles(id, full_name, avatar_url, city)
 `;
+
+const mapBookingRow = (row: BookingRow): Booking => ({
+  id: row.id,
+  photographerId: row.photographer_id,
+  date: row.booking_date ?? '',
+  package: row.package_type ?? 'Photography booking',
+  notes: row.notes ?? '',
+  status: (row.status ?? 'pending') as BookingStatus,
+  createdAt: row.created_at ?? new Date().toISOString(),
+  userLatitude: row.user_latitude ?? null,
+  userLongitude: row.user_longitude ?? null,
+});
 
 // REDUCER
 
@@ -95,6 +129,11 @@ const appReducer = (state: AppState, action: Action): AppState => {
 
 export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(appReducer, initialState);
+  const stateRef = useRef(state);
+
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
   const setState = (payload: Partial<AppState>) => dispatch({ type: 'SET_STATE', payload });
   const setLoading = (payload: boolean) => dispatch({ type: 'SET_LOADING', payload });
@@ -119,15 +158,48 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const { data, error: photographerError } = await supabase
         .from('photographers')
         .select(PHOTOGRAPHER_SELECT)
+        .limit(MAX_PHOTOGRAPHERS)
         .order('rating', { ascending: false });
       if (photographerError) throw photographerError;
-      const photographers = (data ?? []).map(mapPhotographerRow);
+      const photographers = (data ?? []).map(mapPhotographerRow).slice(0, MAX_PHOTOGRAPHERS);
       setState({ photographers });
     } catch (err: any) {
-      logError('fetch_photographers', err);
-      setError(formatErrorMessage(err, 'Unable to load photographers right now.'));
+      const message = formatErrorMessage(err, 'Unable to load photographers right now.');
+      // Do not spam device overlays for common connectivity errors in development.
+      if (!/failed to fetch|network/i.test(message)) {
+        logError('fetch_photographers', err);
+      }
+      setError(message);
     }
   }, []);
+
+  const fetchBookings = useCallback(
+    async (userId?: string | null) => {
+      if (!hasSupabase) return;
+      const targetUserId = userId ?? stateRef.current.currentUser?.id;
+      if (!targetUserId) {
+        setState({ bookings: [] });
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from('bookings')
+          .select(BOOKING_SELECT)
+          .or(`client_id.eq.${targetUserId},photographer_id.eq.${targetUserId}`)
+          .order('created_at', { ascending: false })
+          .limit(80);
+
+        if (error) throw error;
+        const bookings = (data ?? []).map((row) => mapBookingRow(row as BookingRow));
+        setState({ bookings });
+      } catch (err) {
+        logError('fetch_bookings', err);
+        setError(formatErrorMessage(err, 'Unable to load bookings right now.'));
+      }
+    },
+    []
+  );
 
   
   useEffect(() => {
@@ -145,6 +217,9 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           if (data.user) {
             const profile = await fetchProfile(data.user.id);
             setState({ currentUser: mapSupabaseUser(data.user, 'client', profile) });
+            await fetchBookings(data.user.id);
+          } else {
+            setState({ bookings: [] });
           }
           await fetchPhotographers();
         }
@@ -157,7 +232,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
 
     load();
-  }, [fetchPhotographers, fetchProfile]);
+  }, [fetchBookings, fetchPhotographers, fetchProfile]);
 
   useEffect(() => {
     if (!hasSupabase) return;
@@ -165,26 +240,32 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (session?.user) {
         const profile = await fetchProfile(session.user.id);
         setState({ currentUser: mapSupabaseUser(session.user, state.currentUser?.role ?? 'client', profile)});
+        await fetchBookings(session.user.id);
       } else {
-        setState({ currentUser: null });
+        setState({ currentUser: null, bookings: [], conversations: [], messages: [] });
       }
     });
 
     return () => {
       data.subscription?.unsubscribe();
     };
-  }, [fetchProfile, state.currentUser?.role]);
+  }, [fetchBookings, fetchProfile, state.currentUser?.role]);
 
   useEffect(() => {
     const persist = async () => {
-      setSaving(true);
       try {
-        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        const persistedState: AppState = {
+          ...state,
+          loading: false,
+          saving: false,
+          authenticating: false,
+          error: null,
+        };
+        const serialized = JSON.stringify(persistedState);
+        await AsyncStorage.setItem(STORAGE_KEY, serialized);
       } catch (err) {
-        console.warn('Failed to persist state', err);
+        logError('persist_state', err);
         setError('Unable to save data locally.');
-      } finally {
-        setSaving(false);
       }
     };
     persist();
@@ -205,33 +286,55 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         createdAt: new Date().toISOString(),
       };
 
-      if(hasSupabase) {
-        const { error } = await supabase.from('bookings').insert([{
-          id: booking.id,
-          photographer_id: booking.photographerId,
-          user_id: state.currentUser.id,
-          date: booking.date,
-          package: booking.package,
-          notes: booking.notes,
-          status: booking.status,
-          created_at: booking.createdAt,
-        }]);
+      let persistedBooking = booking;
+
+      if (hasSupabase) {
+        const bookingDate = payload.date.split('|')[0]?.trim().slice(0, 10);
+        const { data, error } = await supabase
+          .from('bookings')
+          .insert([
+            {
+              client_id: state.currentUser.id,
+              photographer_id: booking.photographerId,
+              booking_date: bookingDate || null,
+              package_type: booking.package,
+              notes: booking.notes,
+              status: booking.status,
+            },
+          ])
+          .select('id, photographer_id, booking_date, package_type, notes, status, created_at')
+          .single();
+
         if (error) {
           logError('createBooking', error);
           setError(formatErrorMessage(error, 'Unable to create booking.'));
           throw error;
         }
+
+        persistedBooking = {
+          id: data?.id ?? booking.id,
+          photographerId: data?.photographer_id ?? booking.photographerId,
+          date: data?.booking_date ? new Date(data.booking_date).toISOString() : booking.date,
+          package: data?.package_type ?? booking.package,
+          notes: data?.notes ?? booking.notes,
+          status: (data?.status as BookingStatus) ?? booking.status,
+          createdAt: data?.created_at ?? booking.createdAt,
+          userLatitude: null,
+          userLongitude: null,
+        };
       }
-      setState({ bookings: [booking, ...state.bookings] });
-      return booking;
+
+      setState({ bookings: [persistedBooking, ...state.bookings] });
+      return persistedBooking;
     },
     [state.currentUser, state.bookings]
   );
 
     const updateBookingStatus = useCallback(async (bookingId: string) => {
     const nextStatus = (current: BookingStatus): BookingStatus => {
-      const order: BookingStatus[] = ['pending', 'accepted', 'completed', 'reviewed'];
+      const order: BookingStatus[] = ['pending', 'accepted', 'completed'];
       const index = order.indexOf(current);
+      if (index < 0) return current;
       return order[Math.min(index + 1, order.length - 1)];
     };
 
@@ -293,86 +396,154 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         throw new Error('Message text is required.');
       }
 
-      const message: Message = {
+      const optimisticMessage: Message = {
         id: uid('msg'),
         chatId,
         fromUser,
         text: trimmed,
         timestamp: new Date().toISOString(),
+        messageType: 'text',
       };
 
-      // Optimistic update
-      setState({ messages: [...state.messages, message] });
+      const previousMessages = stateRef.current.messages;
+      setState({ messages: [...previousMessages, optimisticMessage] });
 
-      if (hasSupabase) {
-        try {
-            const { data, error: insertError } = await supabase
-            .from('messages')
-            .insert({
-                chat_id: chatId,
-                body: trimmed,
-                sender_id: senderId,
-            })
-            .select('id, chat_id, sender_id, body, created_at')
-            .single();
-
-            if (insertError) {
-                throw insertError;
-            }
-
-            const newMessage = {
-                id: data?.id ?? message.id,
-                chatId: data?.chat_id ?? chatId,
-                fromUser,
-                text: data?.body ?? trimmed,
-                timestamp: data?.created_at ?? new Date().toISOString(),
-            };
-
-            // Replace optimistic message with the real one
-            setState({ messages: state.messages.map(m => m.id === message.id ? newMessage : m) });
-            return newMessage;
-
-        } catch (err: any) {
-            // Revert optimistic update
-            setState({ messages: state.messages.filter(m => m.id !== message.id) });
-            logError('send_message', err);
-            const friendly = formatErrorMessage(err, 'Unable to send your message right now.');
-            setError(friendly);
-            throw new Error(friendly);
-        }
+      if (!hasSupabase) {
+        return optimisticMessage;
       }
 
-      return message;
+      try {
+        const sent = await sendConversationTextMessage({ conversationId: chatId, text: trimmed });
+        const confirmed: Message = {
+          id: sent.id,
+          chatId: sent.chatId,
+          fromUser: sent.senderId === senderId,
+          text: sent.text,
+          timestamp: sent.timestamp ?? new Date().toISOString(),
+          messageType: sent.messageType,
+          mediaUrl: sent.mediaUrl ?? null,
+          previewUrl: sent.previewUrl ?? null,
+          locked: sent.locked ?? false,
+          unlocked: sent.unlocked ?? true,
+          unlockBookingId: sent.unlockBookingId ?? null,
+        };
+        const latestMessages = stateRef.current.messages;
+        setState({
+          messages: latestMessages.map((message) =>
+            message.id === optimisticMessage.id ? confirmed : message
+          ),
+        });
+        return confirmed;
+      } catch (err: any) {
+        setState({ messages: stateRef.current.messages.filter((message) => message.id !== optimisticMessage.id) });
+        logError('send_message', err);
+        const friendly = formatErrorMessage(err, 'Unable to send your message right now.');
+        setError(friendly);
+        throw new Error(friendly);
+      }
     },
-    [state.currentUser?.id, state.messages]
+    [state.currentUser?.id]
+  );
+
+  const sendLockedMediaMessage = useCallback(
+    async (
+      chatId: string,
+      payload: { mediaUrl: string; previewUrl?: string; text?: string; unlockBookingId: string }
+    ) => {
+      const senderId = state.currentUser?.id;
+      if (!senderId) {
+        const message = 'You need to be signed in to send media.';
+        setError(message);
+        throw new Error(message);
+      }
+      if (!hasSupabase) {
+        throw new Error('Media messages require a backend connection.');
+      }
+
+      const optimisticMessage: Message = {
+        id: uid('msg'),
+        chatId,
+        fromUser: true,
+        text: payload.text ?? '',
+        timestamp: new Date().toISOString(),
+        messageType: 'media',
+        mediaUrl: null,
+        previewUrl: payload.previewUrl ?? payload.mediaUrl,
+        locked: true,
+        unlocked: false,
+        unlockBookingId: payload.unlockBookingId,
+      };
+
+      const previousMessages = stateRef.current.messages;
+      setState({ messages: [...previousMessages, optimisticMessage] });
+
+      try {
+        const sent = await sendConversationLockedMediaMessage({
+          conversationId: chatId,
+          mediaUrl: payload.mediaUrl,
+          previewUrl: payload.previewUrl,
+          text: payload.text,
+          unlockBookingId: payload.unlockBookingId,
+        });
+        const confirmed: Message = {
+          id: sent.id,
+          chatId: sent.chatId,
+          fromUser: sent.senderId === senderId,
+          text: sent.text,
+          timestamp: sent.timestamp ?? new Date().toISOString(),
+          messageType: 'media',
+          mediaUrl: sent.mediaUrl ?? null,
+          previewUrl: sent.previewUrl ?? payload.previewUrl ?? payload.mediaUrl,
+          locked: sent.locked ?? true,
+          unlocked: sent.unlocked ?? false,
+          unlockBookingId: sent.unlockBookingId ?? payload.unlockBookingId,
+        };
+        const latestMessages = stateRef.current.messages;
+        setState({
+          messages: latestMessages.map((message) =>
+            message.id === optimisticMessage.id ? confirmed : message
+          ),
+        });
+        return confirmed;
+      } catch (err: any) {
+        setState({ messages: stateRef.current.messages.filter((message) => message.id !== optimisticMessage.id) });
+        logError('send_locked_media', err);
+        const friendly = formatErrorMessage(err, 'Unable to send media right now.');
+        setError(friendly);
+        throw new Error(friendly);
+      }
+    },
+    [state.currentUser?.id]
   );
 
   const fetchMessages = useCallback(async (chatId: string) => {
     if (!hasSupabase) return;
+    const currentUserId = stateRef.current.currentUser?.id;
+    if (!currentUserId) return;
+
     try {
-      const { data, error: fetchError } = await supabase
-        .from('messages')
-        .select('id, chat_id, sender_id, body, created_at')
-        .eq('chat_id', chatId)
-        .order('created_at', { ascending: true });
-
-      if (fetchError) throw fetchError;
-
-      const mapped: Message[] = (data ?? []).map((row: any) => ({
+      const rows = await listConversationMessages(chatId);
+      const mapped: Message[] = rows.map((row) => ({
         id: row.id,
-        chatId: row.chat_id,
-        fromUser: row.sender_id === state.currentUser?.id,
-        text: row.body,
-        timestamp: row.created_at ?? new Date().toISOString(),
+        chatId: row.chatId,
+        fromUser: row.senderId === currentUserId,
+        text: row.text,
+        timestamp: row.timestamp ?? new Date().toISOString(),
+        messageType: row.messageType ?? 'text',
+        mediaUrl: row.mediaUrl ?? null,
+        previewUrl: row.previewUrl ?? null,
+        locked: row.locked ?? false,
+        unlocked: row.unlocked ?? true,
+        unlockBookingId: row.unlockBookingId ?? null,
       }));
 
-      // Replace messages for this chat in local state but keep others
-      setState({ messages: [...state.messages.filter((m) => m.chatId !== chatId), ...mapped]});
+      const latestMessages = stateRef.current.messages;
+      setState({ messages: [...latestMessages.filter((m) => m.chatId !== chatId), ...mapped] });
     } catch (err) {
       logError('fetch_messages', err);
       setError('Unable to load messages for this chat.');
     }
-  }, [state.currentUser?.id, state.messages]);
+  }, []);
 
   const fetchMessagesForChat = useCallback(async (chatId: string) => {
     // backwards compatible alias
@@ -386,64 +557,54 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setError(msg);
       throw new Error(msg);
     }
+    if (participantId === currentUserId) {
+      const msg = 'You cannot start a chat with yourself.';
+      setError(msg);
+      throw new Error(msg);
+    }
 
     // Check if a conversation with this user already exists
-    const existingConversation = state.conversations.find(c => c.participants.includes(participantId));
+    const existingConversation = state.conversations.find((c) => c.participants?.includes(participantId));
     if (existingConversation) {
-        return existingConversation;
+        return { id: existingConversation.id, title: existingConversation.title };
     }
 
     const convoTitle = title ?? `Chat with ${participantId}`;
 
-    const convo = {
+    const convo: ConversationSummary = {
         id: uid('conv'),
         title: convoTitle,
         participants: [currentUserId, participantId],
-        last_message: 'Say hello 👋',
-        last_message_at: new Date().toISOString(),
+        lastMessage: 'Say hello 👋',
+        lastMessageAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
     };
 
     // Optimistic update
-    setState({ conversations: [convo as any, ...state.conversations] });
+    setState({ conversations: [convo, ...state.conversations] });
 
 
     if (hasSupabase) {
-        try {
-            const { data, error: insertError } = await supabase
-            .from('conversations')
-            .insert({ title: convoTitle, created_by: currentUserId, last_message: 'Say hello 👋', last_message_at: new Date().toISOString() })
-            .select('id, title, created_at')
-            .single();
-
-            if (insertError) throw insertError;
-
-            const newConvo = { ...convo, id: data?.id ?? convo.id };
-
-            // insert participants into conversation_participants table
-            try {
-                await supabase.from('conversation_participants').insert([
-                { conversation_id: newConvo.id, user_id: currentUserId },
-                { conversation_id: newConvo.id, user_id: participantId },
-                ]);
-            } catch (e) {
-                // ignore participant insert failures for now
-            }
-            
-            // Replace optimistic conversation with the real one
-            setState({ conversations: state.conversations.map(c => c.id === convo.id ? newConvo : c) } as any);
-            return newConvo;
-
-        } catch(err: any) {
-            // Revert optimistic update
-            setState({ conversations: state.conversations.filter(c => c.id !== convo.id) });
-            logError('start_conversation', err);
-            const friendly = formatErrorMessage(err, 'Unable to start a chat right now.');
-            setError(friendly);
-            throw new Error(friendly);
-        }
+      try {
+        const data = await startConversationViaEdge({ participantId, title: convoTitle });
+        const newConvo: ConversationSummary = {
+          ...convo,
+          id: data.id,
+          title: data.title,
+        };
+        setState({ conversations: [newConvo, ...state.conversations.filter((c) => c.id !== convo.id)] });
+        return { id: newConvo.id, title: newConvo.title };
+      } catch (err: any) {
+        // Revert optimistic update
+        setState({ conversations: state.conversations.filter((c) => c.id !== convo.id) });
+        logError('start_conversation', err);
+        const friendly = formatErrorMessage(err, 'Unable to start a chat right now.');
+        setError(friendly);
+        throw new Error(friendly);
+      }
     }
 
-    return convo;
+    return { id: convo.id, title: convo.title };
   }, [state.currentUser?.id, state.conversations]);
 
   const addPost = useCallback(
@@ -536,7 +697,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         try {
             // Check if like exists
             const { data: existingLike, error: selErr } = await supabase
-                .from('likes')
+                .from('post_likes')
                 .select('id')
                 .eq('post_id', postId)
                 .eq('user_id', userId)
@@ -545,15 +706,15 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
             if (selErr) throw selErr;
 
             if (existingLike && existingLike.id) {
-                const { error: delErr } = await supabase.from('likes').delete().eq('id', existingLike.id);
+                const { error: delErr } = await supabase.from('post_likes').delete().eq('id', existingLike.id);
                 if (delErr) throw delErr;
             } else {
-                const { error: insertErr } = await supabase.from('likes').insert({ post_id: postId, user_id: userId });
+                const { error: insertErr } = await supabase.from('post_likes').insert({ post_id: postId, user_id: userId });
                 if (insertErr) throw insertErr;
             }
 
             // Recount likes and persist to posts table to keep feed subscribers in sync
-            const { data: likesRows, error: likesErr } = await supabase.from('likes').select('id').eq('post_id', postId);
+            const { data: likesRows, error: likesErr } = await supabase.from('post_likes').select('id').eq('post_id', postId);
             if (likesErr) throw likesErr;
             const likesCount = (likesRows ?? []).length;
 
@@ -581,11 +742,18 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return optimistic;
   }, [state.currentUser?.id, state.posts]);
 
-  const addComment = useCallback(async (postId: string, text: string, userId = 'you') => {
+  const addComment = useCallback(async (postId: string, text: string, userId?: string) => {
+    const resolvedUserId = userId ?? state.currentUser?.id;
+    if (!resolvedUserId) {
+      const message = 'You need to be signed in to comment.';
+      setError(message);
+      throw new Error(message);
+    }
+
     const comment: Comment = {
       id: uid('comment'),
       postId,
-      userId,
+      userId: resolvedUserId,
       text,
       createdAt: new Date().toISOString(),
     };
@@ -599,15 +767,36 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     if (hasSupabase) {
         try {
-            const { error } = await supabase.from('comments').insert([{
-                id: comment.id,
-                post_id: postId,
-                user_id: userId,
-                body: text,
-                created_at: comment.createdAt
-            }]);
+            const { data, error } = await supabase
+              .from('post_comments')
+              .insert([
+                {
+                  post_id: postId,
+                  user_id: resolvedUserId,
+                  body: text,
+                },
+              ])
+              .select('id, post_id, user_id, body, created_at')
+              .single();
+
             if (error) {
                 throw error;
+            }
+
+            if (data?.id) {
+              const persistedComment: Comment = {
+                id: data.id,
+                postId: data.post_id ?? postId,
+                userId: data.user_id ?? resolvedUserId,
+                text: data.body ?? text,
+                createdAt: data.created_at ?? comment.createdAt,
+              };
+              setState({
+                comments: stateRef.current.comments.map((item) =>
+                  item.id === comment.id ? persistedComment : item
+                ),
+              });
+              return persistedComment;
             }
         } catch (err: any) {
             // Revert optimistic update
@@ -623,7 +812,40 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
 
     return comment;
-  }, [state.comments, state.posts]);
+  }, [state.comments, state.currentUser?.id, state.posts]);
+
+  const updateBookingClientLocation = useCallback(async (bookingId: string, latitude: number, longitude: number) => {
+    if (!hasSupabase) return;
+    const userId = stateRef.current.currentUser?.id;
+    if (!userId) return;
+
+    await supabase
+      .from('bookings')
+      .update({ user_latitude: latitude, user_longitude: longitude, updated_at: new Date().toISOString() })
+      .eq('id', bookingId)
+      .eq('client_id', userId);
+
+    const updated = stateRef.current.bookings.map((booking) =>
+      booking.id === bookingId ? { ...booking, userLatitude: latitude, userLongitude: longitude } : booking
+    );
+    setState({ bookings: updated });
+  }, []);
+
+  const updatePhotographerLocation = useCallback(async (latitude: number, longitude: number) => {
+    if (!hasSupabase) return;
+    const userId = stateRef.current.currentUser?.id;
+    if (!userId) return;
+
+    await supabase
+      .from('photographers')
+      .update({ latitude, longitude })
+      .eq('id', userId);
+
+    const updated = stateRef.current.photographers.map((photographer) =>
+      photographer.id === userId ? { ...photographer, latitude, longitude } : photographer
+    );
+    setState({ photographers: updated });
+  }, []);
 
   const signUp = useCallback(
     async (email: string, password: string, /* role intentionally ignored for security; only server/admin may grant roles */ _role: AppUser['role'] = 'client') => {
@@ -688,7 +910,9 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setAuthenticating(true);
     setError(null);
     try {
-      await supabase.auth.signOut();
+      if (hasSupabase) {
+        await supabase.auth.signOut();
+      }
       setState({ currentUser: null });
     } catch (err: any) {
       setError(err.message ?? 'Unable to sign out.');
@@ -696,6 +920,57 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setAuthenticating(false);
     }
   }, []);
+
+  const revalidateSession = useCallback(async (): Promise<AppUser | null> => {
+    if (!hasSupabase) {
+      return state.currentUser;
+    }
+
+    try {
+      const { data, error: userError } = await supabase.auth.getUser();
+      if (userError) throw userError;
+
+      if (!data.user) {
+        setState({ currentUser: null });
+        return null;
+      }
+
+      const profile = await fetchProfile(data.user.id);
+      const user = mapSupabaseUser(data.user, state.currentUser?.role ?? 'client', profile);
+      setState({ currentUser: user });
+      return user;
+    } catch (err) {
+      logError('revalidate_session', err);
+      setError(formatErrorMessage(err, 'Unable to validate your current session.'));
+      return null;
+    }
+  }, [fetchProfile, state.currentUser]);
+
+  const refresh = useCallback(async () => {
+    setError(null);
+    setLoading(true);
+    try {
+      const currentUser = await revalidateSession();
+      await Promise.all([fetchPhotographers(), fetchBookings(currentUser?.id ?? null)]);
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchBookings, fetchPhotographers, revalidateSession]);
+
+  const resetState = useCallback(async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      const currentUser = state.currentUser;
+      await AsyncStorage.removeItem(STORAGE_KEY);
+      setState({ ...initialState, currentUser });
+    } catch (err) {
+      logError('reset_state', err);
+      setError('Unable to reset local data.');
+    } finally {
+      setSaving(false);
+    }
+  }, [state.currentUser]);
 
   const updatePrivacy = useCallback(async (changes: Partial<PrivacySettings>) => {
     const userId = state.currentUser?.id;
@@ -711,8 +986,39 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     if (hasSupabase) {
         try {
-            const { error } = await supabase.from('privacy').update(changes).eq('user_id', userId);
-            if (error) throw error;
+            const consentTypeBySetting: Record<'marketingOptIn' | 'personalizedAds' | 'locationEnabled', string> = {
+              marketingOptIn: 'marketing',
+              personalizedAds: 'personalized_ads',
+              locationEnabled: 'location_tracking',
+            };
+
+            const consentEntries = (Object.entries(changes) as Array<[keyof PrivacySettings, unknown]>)
+              .filter(([key, value]) =>
+                (key === 'marketingOptIn' || key === 'personalizedAds' || key === 'locationEnabled') &&
+                typeof value === 'boolean'
+              ) as Array<['marketingOptIn' | 'personalizedAds' | 'locationEnabled', boolean]>;
+
+            for (const [setting, enabled] of consentEntries) {
+              const consentType = consentTypeBySetting[setting];
+              if (enabled) {
+                const { error } = await supabase.from('user_consents').upsert(
+                  {
+                    user_id: userId,
+                    consent_type: consentType,
+                    accepted_at: new Date().toISOString(),
+                  },
+                  { onConflict: 'user_id,consent_type' }
+                );
+                if (error) throw error;
+              } else {
+                const { error } = await supabase
+                  .from('user_consents')
+                  .delete()
+                  .eq('user_id', userId)
+                  .eq('consent_type', consentType);
+                if (error) throw error;
+              }
+            }
         } catch(err: any) {
             // Revert
             setState({ privacy: state.privacy });
@@ -731,18 +1037,25 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       throw new Error(msg);
     }
 
+    const previousPrivacy = state.privacy;
+    const requestedAt = new Date().toISOString();
+    setState({ privacy: { ...previousPrivacy, dataDeletionRequestedAt: requestedAt } });
+
     if (hasSupabase) {
         try {
-            // This is a placeholder; in a real app, this should trigger a server-side process
-            const { error } = await supabase.from('profiles').update({ data_deletion_requested_at: new Date().toISOString() }).eq('id', userId);
+            const { error } = await supabase.from('account_deletion_requests').insert({
+              created_by: userId,
+              reason: 'Requested from mobile app settings',
+            });
             if (error) throw error;
         } catch(err: any) {
+            setState({ privacy: previousPrivacy });
             const msg = formatErrorMessage(err, 'Unable to request data deletion.');
             setError(msg);
             throw new Error(msg);
         }
     }
-  }, [state.currentUser?.id]);
+  }, [state.currentUser?.id, state.privacy]);
 
   const value = useMemo<AppDataContextValue>(() => ({
       state,
@@ -754,8 +1067,11 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       createBooking,
       updateBookingStatus,
       sendMessage,
+      sendLockedMediaMessage,
       fetchMessages,
       fetchMessagesForChat,
+      updateBookingClientLocation,
+      updatePhotographerLocation,
       startConversationWithUser,
       addPost,
       toggleLike,
@@ -765,11 +1081,11 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       signOut,
       updatePrivacy,
       requestDataDeletion,
-      // refresh,
-      // revalidateSession,
-      // resetState,
-    } as any),
-    [state, createBooking, updateBookingStatus, sendMessage, fetchMessages, fetchMessagesForChat, startConversationWithUser, addPost, toggleLike, addComment, signUp, signIn, signOut, updatePrivacy, requestDataDeletion]
+      refresh,
+      revalidateSession,
+      resetState,
+    }),
+    [state, createBooking, updateBookingStatus, sendMessage, sendLockedMediaMessage, fetchMessages, fetchMessagesForChat, updateBookingClientLocation, updatePhotographerLocation, startConversationWithUser, addPost, toggleLike, addComment, signUp, signIn, signOut, updatePrivacy, requestDataDeletion, refresh, revalidateSession, resetState]
   );
 
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>;

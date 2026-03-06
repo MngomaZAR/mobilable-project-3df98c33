@@ -36,15 +36,23 @@ const SettingsScreen: React.FC = () => {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Terms of Service</Text>
         <Text style={styles.paragraph}>
-          Placeholder terms: booking requests remain local on your device. Add your own terms when you connect your
-          backend and legal copy.
+          By using Papzi, you agree to provide accurate account details, follow platform policies, and complete
+          bookings in good faith. Commercial use requires accepting the full terms published by Papzi Legal.
         </Text>
+        <Text style={styles.meta}>https://papzi.co.za/terms</Text>
       </View>
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Privacy Policy</Text>
         <Text style={styles.paragraph}>
-          Placeholder privacy policy: this demo stores data in AsyncStorage on your device only. No external services
-          are contacted.
+          Papzi processes account, booking, messaging, and location data to provide core features. For full data rights
+          and retention details, review the published privacy policy and contact support for deletion requests.
+        </Text>
+        <Text style={styles.meta}>https://papzi.co.za/privacy</Text>
+      </View>
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Payments</Text>
+        <Text style={styles.paragraph}>
+          Papzi uses PayFast for secure checkout. Payment status is verified on the server before booking status updates.
         </Text>
       </View>
       <TouchableOpacity style={styles.linkCard} onPress={() => navigation.navigate('Auth')}>

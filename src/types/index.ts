@@ -38,6 +38,8 @@ export interface Booking {
   notes?: string;
   status: BookingStatus;
   createdAt: string;
+  userLatitude?: number | null;
+  userLongitude?: number | null;
 }
 
 export interface Message {
@@ -46,6 +48,12 @@ export interface Message {
   fromUser: boolean;
   text: string;
   timestamp: string;
+  messageType?: 'text' | 'media';
+  mediaUrl?: string | null;
+  previewUrl?: string | null;
+  locked?: boolean;
+  unlocked?: boolean;
+  unlockBookingId?: string | null;
 }
 
 export interface Post {
@@ -71,7 +79,9 @@ export interface Comment {
 export interface ConversationSummary {
   id: string;
   title: string;
+  lastMessage?: string | null;
   lastMessageAt: string | null;
+  createdAt?: string | null;
   participants?: string[]; // list of user IDs
 }
 
@@ -84,4 +94,8 @@ export interface AppState {
   comments: Comment[];
   currentUser: AppUser | null;
   privacy: PrivacySettings;
+  loading: boolean;
+  saving: boolean;
+  authenticating: boolean;
+  error: string | null;
 }

@@ -3,20 +3,21 @@ import MapView, { Marker, Region, UrlTile } from 'react-native-maps';
 import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { MapMarker, MapPreviewProps } from './mapTypes';
-import { DEFAULT_CAPE_TOWN_COORDINATES, validateSouthAfricanLocation } from '../utils/geo';
+import { DEFAULT_CAPE_TOWN_COORDINATES, ensureSouthAfricanCoordinates } from '../utils/geo';
 
 export const MapPreview: React.FC<MapPreviewProps> = ({ markers, onMapError }) => {
   const mapRef = useRef<any | null>(null);
   const { width } = useWindowDimensions();
 
   const region: Region = useMemo(() => {
-    const baseLatitude = markers[0]?.latitude ?? DEFAULT_CAPE_TOWN_COORDINATES.latitude;
-    const baseLongitude = markers[0]?.longitude ?? DEFAULT_CAPE_TOWN_COORDINATES.longitude;
-    validateSouthAfricanLocation(baseLatitude, baseLongitude);
+    const base = ensureSouthAfricanCoordinates({
+      latitude: markers[0]?.latitude ?? DEFAULT_CAPE_TOWN_COORDINATES.latitude,
+      longitude: markers[0]?.longitude ?? DEFAULT_CAPE_TOWN_COORDINATES.longitude,
+    });
 
     return {
-      latitude: baseLatitude,
-      longitude: baseLongitude,
+      latitude: base.latitude,
+      longitude: base.longitude,
       latitudeDelta: markers.length > 1 ? 6 : 4,
       longitudeDelta: markers.length > 1 ? 6 : 4,
     };
@@ -24,6 +25,14 @@ export const MapPreview: React.FC<MapPreviewProps> = ({ markers, onMapError }) =
 
   useEffect(() => {
     if (!mapRef.current || markers.length === 0) return;
+    const invalidMarker = markers.find(
+      (marker) => !Number.isFinite(marker.latitude) || !Number.isFinite(marker.longitude)
+    );
+    if (invalidMarker) {
+      onMapError?.('Unable to render one or more map pins.');
+      return;
+    }
+
     const coords = markers.map((marker: MapMarker) => ({
       latitude: marker.latitude,
       longitude: marker.longitude,
@@ -34,10 +43,10 @@ export const MapPreview: React.FC<MapPreviewProps> = ({ markers, onMapError }) =
         edgePadding: { top: 60, bottom: 60, left: 40, right: 40 },
         animated: true,
       });
-    } catch (e) {
-      // ignore if the underlying native ref doesn't support this
+    } catch (_e) {
+      onMapError?.('Unable to center the map preview.');
     }
-  }, [markers]);
+  }, [markers, onMapError]);
 
   const pinStyles = (marker: MapMarker) => ({
     ...styles.pin,

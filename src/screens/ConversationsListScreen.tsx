@@ -13,7 +13,6 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useAppData } from '../store/AppDataContext';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { supabase, hasSupabase } from '../config/supabaseClient';
-import { uid } from '../utils/id';
 import { RootStackParamList } from '../navigation/types';
 
 type Navigation = StackNavigationProp<RootStackParamList, 'Root'>;
@@ -41,7 +40,6 @@ const ConversationsListScreen: React.FC = () => {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const mapConversation = useCallback((row: ConversationRow): Conversation => {
@@ -59,96 +57,103 @@ const ConversationsListScreen: React.FC = () => {
     setError(null);
 
     if (!hasSupabase) {
-      // Use local conversations from AppDataContext when Supabase is not configured
-      setError('Supabase is not configured — messages are local only. Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY to your .env to enable sync.');
+      setError('Chat is temporarily unavailable. Please try again later.');
       setConversations(appState.conversations as any);
       return;
     }
 
-    let data: any[] | null = null;
     try {
-      const res = await supabase
-        .from('conversations')
-        .select('id, title, last_message, last_message_at, created_at')
-        .order('last_message_at', { ascending: false })
-        .order('created_at', { ascending: false });
-
-      data = res.data;
-      const fetchError = res.error;
-
-      // fetch participants for these conversations if the table exists
-      let participantsMap: Record<string, string[]> = {};
-      try {
-        const ids = (data ?? []).map((r: any) => r.id).filter(Boolean);
-        if (ids.length > 0) {
-          const { data: partData } = await supabase
-            .from('conversation_participants')
-            .select('conversation_id, user_id')
-            .in('conversation_id', ids as string[]);
-          (partData ?? []).forEach((p: any) => {
-            const cid = p.conversation_id as string;
-            participantsMap[cid] = participantsMap[cid] ? [...participantsMap[cid], p.user_id] : [p.user_id];
-          });
-        }
-      } catch (e) {
-        // table might not exist yet; ignore
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError || !authData.user?.id) {
+        setConversations([]);
+        return;
       }
+      const currentUserId = authData.user.id;
 
-      if (fetchError) {
-        const raw = (fetchError as any)?.message ?? String(fetchError);
-        const lower = String(raw).toLowerCase();
-        const message =
-          (fetchError as any)?.code === '42P01'
-            ? 'Conversations table missing. Apply the latest Supabase migration.'
-            : /failed to fetch/i.test(raw) || lower.includes('network') || lower.includes('typeerror')
-            ? 'Network error contacting Supabase. Check your EXPO_PUBLIC_SUPABASE_URL and network connectivity.'
-            : raw;
-        setError(message);
+      const { data: myParticipants, error: participantError } = await supabase
+        .from('conversation_participants')
+        .select('conversation_id')
+        .eq('user_id', currentUserId);
+
+      if (participantError) throw participantError;
+
+      const conversationIds = Array.from(
+        new Set((myParticipants ?? []).map((row: any) => row.conversation_id).filter(Boolean))
+      );
+      if (conversationIds.length === 0) {
+        setConversations([]);
         return;
       }
 
-      const mapped = (data ?? []).map(mapConversation).map((c: Conversation) => ({ ...c, participants: participantsMap[c.id] ?? undefined }));
-    // If a conversation has no explicit title and exactly two participants, try to fetch the other participant name for a friendly title
-    try {
-      const convoWithoutTitleOtherIds: Record<string, string> = {};
-      const { data: userData } = await supabase.auth.getUser();
-      const currentUserId = userData?.user?.id ?? null;
+      const { data, error: conversationsError } = await supabase
+        .from('conversations')
+        .select('id, title, last_message, last_message_at, created_at')
+        .in('id', conversationIds)
+        .order('last_message_at', { ascending: false })
+        .order('created_at', { ascending: false });
 
-      (mapped ?? []).forEach((conv: Conversation) => {
-        if ((!conv.title || conv.title === 'Conversation') && conv.participants && conv.participants.length === 2 && currentUserId) {
-          // other participant id
-          const other = conv.participants.find((id) => id !== currentUserId) as any;
-          if (other) convoWithoutTitleOtherIds[conv.id] = other;
+      if (conversationsError) throw conversationsError;
+
+      const { data: allParticipants } = await supabase
+        .from('conversation_participants')
+        .select('conversation_id, user_id')
+        .in('conversation_id', conversationIds);
+
+      const participantsMap: Record<string, string[]> = {};
+      (allParticipants ?? []).forEach((row: any) => {
+        const cid = row.conversation_id as string;
+        participantsMap[cid] = participantsMap[cid] ? [...participantsMap[cid], row.user_id] : [row.user_id];
+      });
+
+      const mapped = (data ?? [])
+        .map(mapConversation)
+        .map((conversation: Conversation) => ({
+          ...conversation,
+          participants: participantsMap[conversation.id] ?? undefined,
+        }));
+
+      // Friendly 1:1 title fallback
+      const convoWithoutTitleOtherIds: Record<string, string> = {};
+      mapped.forEach((conversation) => {
+        if (
+          (!conversation.title || conversation.title === 'Conversation') &&
+          conversation.participants &&
+          conversation.participants.length === 2
+        ) {
+          const other = conversation.participants.find((id) => id !== currentUserId);
+          if (other) convoWithoutTitleOtherIds[conversation.id] = other;
         }
       });
 
       const otherIds = Object.values(convoWithoutTitleOtherIds);
       if (otherIds.length > 0) {
-        const { data: profiles } = await supabase.from('profiles').select('id, full_name').in('id', otherIds);
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, full_name')
+          .in('id', otherIds);
         const nameMap: Record<string, string> = {};
-        (profiles ?? []).forEach((p: any) => {
-          nameMap[p.id] = p.full_name ?? 'Creator';
+        (profiles ?? []).forEach((profile: any) => {
+          nameMap[profile.id] = profile.full_name ?? 'Creator';
         });
-        // apply names
-        mapped.forEach((conv: any) => {
-          const otherId = convoWithoutTitleOtherIds[conv.id];
-          if (otherId && nameMap[otherId]) conv.title = nameMap[otherId];
+        mapped.forEach((conversation) => {
+          const otherId = convoWithoutTitleOtherIds[conversation.id];
+          if (otherId && nameMap[otherId]) {
+            conversation.title = nameMap[otherId];
+          }
         });
       }
-    } catch (e) {
-      // ignore friendly title fallback failures
-    }
 
-    setConversations(mapped);
+      setConversations(mapped);
     } catch (err: any) {
       const raw = String(err?.message ?? err);
       const lower = raw.toLowerCase();
-      const message = /failed to fetch/i.test(raw) || lower.includes('network') || lower.includes('typeerror')
-        ? 'Network error contacting Supabase. Check your EXPO_PUBLIC_SUPABASE_URL and network connectivity.'
-        : raw;
+      const message =
+        /failed to fetch/i.test(raw) || lower.includes('network') || lower.includes('typeerror')
+          ? 'Unable to connect to chat right now. Check your connection and try again.'
+          : raw;
       setError(message);
     }
-  }, [mapConversation]);
+  }, [appState.conversations, mapConversation]);
 
   useFocusEffect(
     useCallback(() => {
@@ -178,59 +183,25 @@ const ConversationsListScreen: React.FC = () => {
     setRefreshing(false);
   }, [fetchConversations]);
 
-  const handleNewChat = useCallback(async () => {
-    setCreating(true);
-    setError(null);
-    try {
-      const title = `New chat · ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-
-      if (!hasSupabase) {
-        // local-only fallback
-        const newConv = { id: uid('conv'), title, lastMessage: 'Say hello 👋', lastMessageAt: new Date().toISOString(), createdAt: new Date().toISOString() };
-        setConversations((prev) => [newConv as Conversation, ...prev]);
-        navigation.navigate('Root', { screen: 'Chat', params: { conversationId: newConv.id, title: newConv.title } });
-        return;
-      }
-
-      const { data: userData } = await supabase.auth.getUser();
-      const { data, error: insertError } = await supabase
-        .from('conversations')
-        .insert({
-          title,
-          created_by: userData?.user?.id ?? null,
-          last_message: 'Say hello 👋',
-          last_message_at: new Date().toISOString(),
-        })
-        .select('id, title, last_message, last_message_at, created_at')
-        .single();
-
-      if (insertError) throw insertError;
-
-      const mapped = mapConversation(data as ConversationRow);
-      setConversations((prev) => [mapped, ...prev]);
-      // Open the Chat tab and pass the conversation as params so the Chat screen can hydrate the thread
-      navigation.navigate('Root', { screen: 'Chat', params: { conversationId: mapped.id, title: mapped.title } });
-    } catch (err: any) {
-      setError(err.message ?? 'Unable to start a new chat right now.');
-    } finally {
-      setCreating(false);
-    }
-  }, [mapConversation, navigation]);
+  const handleNewChat = useCallback(() => {
+    setError('Open a photographer profile and tap Message to start a new conversation.');
+    navigation.navigate('Root', { screen: 'Feed' });
+  }, [navigation]);
 
   const listHeader = useMemo(
     () => (
       <View style={styles.header}>
         <View>
           <Text style={styles.title}>Conversations</Text>
-          <Text style={styles.subtitle}>Synced from Supabase so you can keep the chat flowing.</Text>
+          <Text style={styles.subtitle}>Keep your conversations in one place.</Text>
         </View>
-        <TouchableOpacity style={styles.primaryButton} onPress={handleNewChat} disabled={creating}>
-          <Text style={styles.primaryButtonText}>{creating ? 'Creating...' : 'New Chat'}</Text>
+        <TouchableOpacity style={styles.primaryButton} onPress={handleNewChat}>
+          <Text style={styles.primaryButtonText}>Find photographer</Text>
         </TouchableOpacity>
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
       </View>
     ),
-    [creating, error, handleNewChat]
+    [error, handleNewChat]
   );
 
   const PLACEHOLDER_AVATAR = 'https://images.unsplash.com/photo-1508214751196-bcfd4ca60f91?auto=format&fit=crop&w=300&q=80';
@@ -265,7 +236,7 @@ const ConversationsListScreen: React.FC = () => {
     return (
       <TouchableOpacity
         style={styles.card}
-        onPress={() => navigation.navigate('Root', { screen: 'Chat', params: { conversationId: item.id, title: displayTitle } })}
+        onPress={() => navigation.navigate('ChatThread', { conversationId: item.id, title: displayTitle })}
       >
         <View style={styles.cardHeader}>
           <View style={styles.avatarRow}>

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { AppLogo } from '../components/AppLogo';
 import { useAppData } from '../store/AppDataContext';
-import { AppUser } from '../types';
+import { supabase, hasSupabase } from '../config/supabaseClient';
 
 type Mode = 'signin' | 'signup';
 
@@ -11,7 +11,6 @@ const AuthScreen: React.FC = () => {
   const [mode, setMode] = useState<Mode>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState<AppUser['role']>('client');
 
   const submit = async () => {
     if (!email || !password) {
@@ -22,7 +21,7 @@ const AuthScreen: React.FC = () => {
       const user = await signIn(email, password);
       if (user) Alert.alert('Signed in', `Welcome back, ${user.email}.`);
     } else {
-      const user = await signUp(email, password, role);
+      const user = await signUp(email, password);
       if (user) Alert.alert('Account created', 'We emailed a confirmation link to verify your address.');
     }
   };
@@ -30,6 +29,29 @@ const AuthScreen: React.FC = () => {
   const handleSignOut = async () => {
     await signOut();
     Alert.alert('Signed out', 'You have been signed out securely.');
+  };
+
+  const handleOAuth = async (provider: 'google' | 'apple') => {
+    if (!hasSupabase) {
+      Alert.alert('Unavailable', 'Single sign-on needs backend configuration.');
+      return;
+    }
+    try {
+      const redirectTo =
+        Platform.OS === 'web' && typeof window !== 'undefined' ? window.location.origin : undefined;
+      const { error: oauthError } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo,
+        },
+      });
+      if (oauthError) throw oauthError;
+    } catch (err: any) {
+      Alert.alert(
+        'Single sign-on unavailable',
+        err?.message || `Unable to continue with ${provider}. Configure the provider in Supabase Auth.`
+      );
+    }
   };
 
   return (
@@ -41,7 +63,7 @@ const AuthScreen: React.FC = () => {
       <View style={styles.header}>
         <AppLogo size={88} />
         <Text style={styles.title}>Papzi</Text>
-        <Text style={styles.subtitle}>Email & password auth powered by Supabase.</Text>
+        <Text style={styles.subtitle}>Find and book talented photographers across South Africa.</Text>
       </View>
 
       <View style={styles.switcher}>
@@ -84,6 +106,14 @@ const AuthScreen: React.FC = () => {
         <TouchableOpacity style={styles.submit} onPress={submit} disabled={authenticating}>
           <Text style={styles.submitText}>{authenticating ? 'Submitting...' : mode === 'signin' ? 'Sign in' : 'Sign up'}</Text>
         </TouchableOpacity>
+        <View style={styles.oauthRow}>
+          <TouchableOpacity style={styles.oauthButton} onPress={() => handleOAuth('google')} disabled={authenticating}>
+            <Text style={styles.oauthText}>Continue with Google</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.oauthButton} onPress={() => handleOAuth('apple')} disabled={authenticating}>
+            <Text style={styles.oauthText}>Continue with Apple</Text>
+          </TouchableOpacity>
+        </View>
         {currentUser ? (
           <TouchableOpacity style={styles.secondary} onPress={handleSignOut} disabled={authenticating}>
             <Text style={styles.secondaryText}>Sign out ({currentUser.email})</Text>
@@ -207,6 +237,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   secondaryText: {
+    color: '#0f172a',
+    fontWeight: '700',
+  },
+  oauthRow: {
+    marginTop: 10,
+    gap: 8,
+  },
+  oauthButton: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#cbd5e1',
+    borderRadius: 12,
+    paddingVertical: 10,
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+  },
+  oauthText: {
     color: '#0f172a',
     fontWeight: '700',
   },

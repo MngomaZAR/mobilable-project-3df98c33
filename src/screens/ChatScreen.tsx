@@ -1,31 +1,36 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { FlatList, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View, Image } from 'react-native';
+import { Alert, FlatList, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View, Image } from 'react-native';
 import { AnimatedBubble } from '../components/AnimatedBubble';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
 import { useAppData } from '../store/AppDataContext';
 import { ChatSkeleton } from '../components/Skeleton';
-import { hasSupabase } from '../config/supabaseClient';
-import { RootStackParamList, TabParamList } from '../navigation/types';
+import { RootStackParamList } from '../navigation/types';
 
-type Route = RouteProp<TabParamList, 'Chat'> | RouteProp<RootStackParamList, 'ChatThread'>;
+type Route = RouteProp<RootStackParamList, 'ChatThread'>;
+type Navigation = StackNavigationProp<RootStackParamList, 'ChatThread'>;
 
 
 const ChatScreen: React.FC = () => {
   const route = useRoute<Route>();
-  const navigation = useNavigation();
-  const { state, sendMessage, fetchMessages, fetchMessagesForChat } = useAppData();
+  const navigation = useNavigation<Navigation>();
+  const { state, sendMessage, sendLockedMediaMessage, fetchMessages } = useAppData();
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [messagesLoading, setMessagesLoading] = useState(false);
 
   const listRef = useRef<FlatList<any> | null>(null);
 
-  const conversationId = route.params?.conversationId ?? state.conversations?.[0]?.id ?? 'demo-conversation';
-  const chatId = route.params?.conversationId ?? state.messages[0]?.chatId ?? conversationId;
+  const chatId = route.params.conversationId;
   const messages = useMemo(() => state.messages.filter((m) => m.chatId === chatId), [chatId, state.messages]);
+  const latestUnlockBooking = useMemo(() => state.bookings[0] ?? null, [state.bookings]);
 
   const PLACEHOLDER_IMAGE = 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=300&q=80';
+  const LOCKED_MEDIA_FULL =
+    'https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?auto=format&fit=crop&w=1200&q=80';
+  const LOCKED_MEDIA_PREVIEW =
+    'https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?auto=format&fit=crop&w=500&q=20';
 
   useEffect(() => {
     if (!chatId) return;
@@ -74,6 +79,26 @@ const ChatScreen: React.FC = () => {
     }
   };
 
+  const handleSendLockedMedia = async () => {
+    if (!latestUnlockBooking) {
+      Alert.alert('Booking needed', 'Create a booking first so media can unlock after payment.');
+      return;
+    }
+    setSending(true);
+    try {
+      await sendLockedMediaMessage(chatId, {
+        mediaUrl: LOCKED_MEDIA_FULL,
+        previewUrl: LOCKED_MEDIA_PREVIEW,
+        text: 'Photo delivered (payment-gated)',
+        unlockBookingId: latestUnlockBooking.id,
+      });
+    } catch (err: any) {
+      Alert.alert('Unable to send', err?.message ?? 'Could not send locked media.');
+    } finally {
+      setSending(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView
@@ -91,12 +116,8 @@ const ChatScreen: React.FC = () => {
           contentContainerStyle={styles.listContent}
           ListHeaderComponent={
             <View style={styles.banner}>
-              <Text style={styles.bannerTitle}>Realtime chat</Text>
-              <Text style={styles.bannerText}>
-                {hasSupabase
-                  ? 'Connect this screen to Supabase Realtime with a booking_id channel to sync messages across devices.'
-                  : 'Supabase is not configured — messages are local only. Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY to your .env to enable realtime sync.'}
-              </Text>
+              <Text style={styles.bannerTitle}>Conversations</Text>
+              <Text style={styles.bannerText}>Messages stay synced to your account and booking activity.</Text>
             </View>
           }
           renderItem={({ item, index }) => {
@@ -109,7 +130,30 @@ const ChatScreen: React.FC = () => {
                     sameSenderAsPrev ? <View style={{ width: 34 }} /> : <Image source={{ uri: PLACEHOLDER_IMAGE }} style={styles.msgAvatar} />
                   ) : null}
                   <View style={[styles.bubble, item.fromUser ? styles.bubbleUser : styles.bubblePhotographer, { maxWidth: '78%' }]}>
-                    <Text style={[styles.bubbleText, item.fromUser && styles.bubbleTextLight]}>{item.text}</Text>
+                    {item.messageType === 'media' ? (
+                      <View>
+                        <Image
+                          source={{ uri: item.unlocked ? item.mediaUrl ?? item.previewUrl ?? PLACEHOLDER_IMAGE : item.previewUrl ?? PLACEHOLDER_IMAGE }}
+                          style={styles.mediaImage}
+                        />
+                        {item.locked && !item.unlocked ? (
+                          <View style={styles.lockOverlay}>
+                            <Text style={styles.lockText}>Locked until payment clears</Text>
+                          </View>
+                        ) : null}
+                        {item.text ? <Text style={[styles.bubbleText, item.fromUser && styles.bubbleTextLight, styles.mediaCaption]}>{item.text}</Text> : null}
+                        {item.locked && !item.unlocked && item.unlockBookingId ? (
+                          <TouchableOpacity
+                            style={styles.unlockButton}
+                            onPress={() => navigation.navigate('Payment', { bookingId: item.unlockBookingId as string })}
+                          >
+                            <Text style={styles.unlockButtonText}>Pay to unlock</Text>
+                          </TouchableOpacity>
+                        ) : null}
+                      </View>
+                    ) : (
+                      <Text style={[styles.bubbleText, item.fromUser && styles.bubbleTextLight]}>{item.text}</Text>
+                    )}
                     <Text style={[styles.bubbleMeta, item.fromUser && styles.bubbleMetaLight]}>
                       {new Date(item.timestamp).toLocaleTimeString()}
                     </Text>
@@ -124,6 +168,13 @@ const ChatScreen: React.FC = () => {
         />
       )}
       <View style={styles.composer}>
+        <TouchableOpacity
+          style={[styles.mediaButton, sending && styles.mediaButtonDisabled]}
+          onPress={handleSendLockedMedia}
+          disabled={sending}
+        >
+          <Text style={styles.mediaButtonText}>Locked photo</Text>
+        </TouchableOpacity>
         <TextInput
           placeholder="Send a message"
           value={text}
@@ -202,6 +253,42 @@ const styles = StyleSheet.create({
   bubbleMetaLight: {
     color: '#e5e7eb',
   },
+  mediaImage: {
+    width: 210,
+    height: 150,
+    borderRadius: 10,
+    backgroundColor: '#0f172a',
+  },
+  mediaCaption: {
+    marginTop: 6,
+  },
+  lockOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(15, 23, 42, 0.55)',
+    borderRadius: 10,
+  },
+  lockText: {
+    color: '#fff',
+    fontWeight: '800',
+    fontSize: 12,
+  },
+  unlockButton: {
+    marginTop: 8,
+    borderRadius: 10,
+    backgroundColor: '#22c55e',
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+  unlockButtonText: {
+    color: '#06280f',
+    fontWeight: '800',
+  },
   composer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -209,6 +296,21 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: '#e5e7eb',
     backgroundColor: '#fff',
+  },
+  mediaButton: {
+    backgroundColor: '#e2e8f0',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    marginRight: 8,
+  },
+  mediaButtonDisabled: {
+    opacity: 0.6,
+  },
+  mediaButtonText: {
+    color: '#0f172a',
+    fontWeight: '700',
+    fontSize: 12,
   },
   input: {
     flex: 1,

@@ -35,8 +35,7 @@ type UserCoordinates = {
 const formatTimestamp = (timestamp: number) => {
   try {
     return new Date(timestamp).toLocaleTimeString();
-  } catch (err) {
-    console.warn('Failed to format timestamp', err);
+  } catch (_err) {
     return 'recently';
   }
 };
@@ -50,6 +49,8 @@ const MapScreen: React.FC = () => {
   const [mapError, setMapError] = useState<string | null>(null);
   const [requesting, setRequesting] = useState(false);
   const [usingManual, setUsingManual] = useState(false);
+  const [showManualEntry, setShowManualEntry] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const [manualLocation, setManualLocation] = useState({ label: '', latitude: '', longitude: '' });
   const [gpsEnabled, setGpsEnabled] = useState<boolean | null>(null);
   const lastRequestRef = useRef<number>(0);
@@ -67,9 +68,22 @@ const MapScreen: React.FC = () => {
     [state.photographers]
   );
 
+  const filteredBaseMarkers: MapMarker[] = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return baseMarkers;
+    return baseMarkers.filter((marker) => {
+      const title = marker.title ?? '';
+      const description = marker.description ?? '';
+      return (
+        title.toLowerCase().includes(q) ||
+        description.toLowerCase().includes(q)
+      );
+    });
+  }, [baseMarkers, searchQuery]);
+
   const markers: MapMarker[] = useMemo(
-    () => (userMarker ? [userMarker, ...baseMarkers] : baseMarkers),
-    [baseMarkers, userMarker]
+    () => (userMarker ? [userMarker, ...filteredBaseMarkers] : filteredBaseMarkers),
+    [filteredBaseMarkers, userMarker]
   );
 
   const handleLocationFailure = useCallback((message: string) => {
@@ -87,6 +101,7 @@ const MapScreen: React.FC = () => {
     setLocationError(null);
     setLocationWarning(null);
     setUsingManual(false);
+    setShowManualEntry(false);
 
     try {
       const servicesEnabled = await Location.hasServicesEnabledAsync();
@@ -129,8 +144,7 @@ const MapScreen: React.FC = () => {
         type: 'user',
       });
       setUserCoordinates({ lat: latitude, lng: longitude, timestamp: position.timestamp });
-    } catch (err) {
-      console.warn('Location request failed', err);
+    } catch (_err) {
       handleLocationFailure('Unable to fetch GPS. Check connectivity or enter your location manually.');
     } finally {
       setRequesting(false);
@@ -186,7 +200,7 @@ const MapScreen: React.FC = () => {
           <View>
             <Text style={styles.title}>Photographers nearby</Text>
             <Text style={styles.subtitle}>
-              Native apps render OpenStreetMap tiles with live markers. Web shows a preview list.
+              Search photographers by city or name, then tap markers to explore nearby talent.
             </Text>
             <Text style={styles.status}>{statusLabel}</Text>
             <Text style={styles.coordsLabel}>
@@ -212,59 +226,70 @@ const MapScreen: React.FC = () => {
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.secondaryButton, usingManual && styles.secondaryButtonActive]}
-            onPress={() => setUsingManual(true)}
+            onPress={() => setShowManualEntry((current) => !current)}
           >
             <Text style={[styles.secondaryButtonText, usingManual && styles.secondaryButtonTextActive]}>
-              Manual location
+              {showManualEntry ? 'Hide manual pin' : 'Manual pin'}
             </Text>
           </TouchableOpacity>
+        </View>
+
+        <View style={styles.searchRow}>
+          <TextInput
+            placeholder="Search photographers or city"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            style={styles.searchInput}
+          />
+          <Text style={styles.searchMeta}>{filteredBaseMarkers.length} shown</Text>
         </View>
 
         <View style={styles.mapWrapper}>
           <MapPreview markers={markers} onMapError={(message) => setMapError(message)} />
         </View>
 
-        <View style={styles.manualCard}>
-          <Text style={styles.manualTitle}>Manual fallback</Text>
-          <Text style={styles.manualSubtitle}>
-            If GPS or map tiles fail, enter a South Africa coordinate. We only accept lat -35 to -22 and lng 16
-            to 33.
-          </Text>
-          <View style={styles.inputRow}>
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Label</Text>
-              <TextInput
-                placeholder="Cape Town CBD"
-                value={manualLocation.label}
-                onChangeText={(text) => setManualLocation((prev) => ({ ...prev, label: text }))}
-                style={styles.input}
-              />
+        {showManualEntry ? (
+          <View style={styles.manualCard}>
+            <Text style={styles.manualTitle}>Manual fallback</Text>
+            <Text style={styles.manualSubtitle}>
+              Use only if GPS fails. South Africa bounds: lat -35 to -22, lng 16 to 33.
+            </Text>
+            <View style={styles.inputRow}>
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Label</Text>
+                <TextInput
+                  placeholder="Cape Town CBD"
+                  value={manualLocation.label}
+                  onChangeText={(text) => setManualLocation((prev) => ({ ...prev, label: text }))}
+                  style={styles.input}
+                />
+              </View>
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Latitude</Text>
+                <TextInput
+                  placeholder="-33.92"
+                  value={manualLocation.latitude}
+                  onChangeText={(text) => setManualLocation((prev) => ({ ...prev, latitude: text }))}
+                  style={styles.input}
+                  keyboardType="numeric"
+                />
+              </View>
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Longitude</Text>
+                <TextInput
+                  placeholder="18.42"
+                  value={manualLocation.longitude}
+                  onChangeText={(text) => setManualLocation((prev) => ({ ...prev, longitude: text }))}
+                  style={styles.input}
+                  keyboardType="numeric"
+                />
+              </View>
             </View>
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Latitude</Text>
-              <TextInput
-                placeholder="-33.92"
-                value={manualLocation.latitude}
-                onChangeText={(text) => setManualLocation((prev) => ({ ...prev, latitude: text }))}
-                style={styles.input}
-                keyboardType="numeric"
-              />
-            </View>
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Longitude</Text>
-              <TextInput
-                placeholder="18.42"
-                value={manualLocation.longitude}
-                onChangeText={(text) => setManualLocation((prev) => ({ ...prev, longitude: text }))}
-                style={styles.input}
-                keyboardType="numeric"
-              />
-            </View>
+            <TouchableOpacity style={styles.applyButton} onPress={applyManualLocation}>
+              <Text style={styles.applyButtonText}>Pin manual location</Text>
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity style={styles.applyButton} onPress={applyManualLocation}>
-            <Text style={styles.applyButtonText}>Pin manual location</Text>
-          </TouchableOpacity>
-        </View>
+        ) : null}
       </View>
     </SafeAreaView>
   );
@@ -370,6 +395,25 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
     height: '100%',
+  },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+    gap: 10,
+  },
+  searchInput: {
+    flex: 1,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#cbd5e1',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: '#fff',
+  },
+  searchMeta: {
+    color: '#475569',
+    fontWeight: '700',
   },
   manualCard: {
     marginTop: 12,

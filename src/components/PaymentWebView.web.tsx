@@ -3,11 +3,13 @@ import { Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 
 type Props = {
   paymentUrl: string;
-  onSuccess: () => void;
+  onSuccess?: () => void;
   onError: (message: string) => void;
+  successUrlPrefix?: string;
+  cancelUrlPrefix?: string;
 };
 
-export const PaymentWebView: React.FC<Props> = ({ paymentUrl, onSuccess, onError }) => {
+export const PaymentWebView: React.FC<Props> = ({ paymentUrl, onSuccess: _onSuccess, onError }) => {
   const openLink = async () => {
     try {
       await Linking.openURL(paymentUrl);
@@ -19,12 +21,9 @@ export const PaymentWebView: React.FC<Props> = ({ paymentUrl, onSuccess, onError
   return (
     <View style={styles.container}>
       <Text style={styles.title}>PayFast is opened in a new tab on web.</Text>
-      <Text style={styles.subtitle}>Complete the payment then mark it as paid to continue.</Text>
+      <Text style={styles.subtitle}>Complete payment in the PayFast tab. Booking status updates after secure confirmation.</Text>
       <TouchableOpacity style={styles.button} onPress={openLink}>
         <Text style={styles.buttonText}>Open PayFast checkout</Text>
-      </TouchableOpacity>
-      <TouchableOpacity style={styles.secondary} onPress={onSuccess}>
-        <Text style={styles.secondaryText}>Simulate success</Text>
       </TouchableOpacity>
     </View>
   );
@@ -56,17 +55,6 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: '#fff',
-    fontWeight: '700',
-  },
-  secondary: {
-    marginTop: 10,
-    padding: 12,
-    borderRadius: 12,
-    backgroundColor: '#e2e8f0',
-    alignItems: 'center',
-  },
-  secondaryText: {
-    color: '#0f172a',
     fontWeight: '700',
   },
 });

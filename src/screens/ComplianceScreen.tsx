@@ -50,7 +50,7 @@ const ComplianceScreen: React.FC = () => {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Data deletion</Text>
         <Text style={styles.meta}>
-          Request deletion of your data. We log the request locally and send it to backend when connected.
+          Request deletion of your data. We submit your request securely and track it for support follow-up.
         </Text>
         <TextInput
           placeholder="Add optional details for your deletion request"

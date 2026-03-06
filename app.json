@@ -26,7 +26,8 @@
       "bundleIdentifier": "com.saicts.papzi",
       "buildNumber": "1.0.0",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Papzi needs your location to show nearby photographers."
+        "NSLocationWhenInUseUsageDescription": "Papzi needs your location to show nearby photographers.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {

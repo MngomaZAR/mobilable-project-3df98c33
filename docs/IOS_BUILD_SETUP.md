@@ -1,19 +1,27 @@
 # iOS Build Setup
 
-## One-time: Set up credentials (required)
+## One-time: Set up credentials (REQUIRED)
 
-EAS needs Apple credentials stored before non-interactive (workflow) builds can run. **Run this once from your terminal** (any OS):
+EAS needs Apple credentials stored before workflow/dashboard builds can run. **You must run this once from your terminal** (not from EAS dashboard):
 
+### Option A: Credentials only (faster, ~2 min)
 ```bash
 cd /workspace   # or your project root
+npx eas-cli login
+npx eas-cli credentials --platform ios
+```
+Then select: **Build credentials** → **Set up all the required credentials**
+
+### Option B: Full build (credentials + build, ~15 min)
+```bash
+cd /workspace
 npx eas-cli login
 npx eas-cli build --platform ios --profile preview
 ```
 
 When prompted:
 - Choose **Let EAS manage your credentials**
-- Sign in with your Apple ID (smngoma22@gmail.com) when asked
-- Complete the credential setup
+- Sign in with your Apple ID when asked
 
 After this completes once, workflow builds will use the stored credentials.
 

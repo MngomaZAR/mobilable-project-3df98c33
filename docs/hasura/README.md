@@ -17,7 +17,7 @@ Start Hasura + Postgres
 
 Environment / Client config
 
-- For a quick demo, set the following environment variables for Expo (or in `app.json` / shell):
+- For a quick demo, set the following environment variables for Expo (or in `app.config.js` / shell):
 
   ```bash
   EXPO_PUBLIC_HASURA_URL=http://localhost:8080/v1/graphql

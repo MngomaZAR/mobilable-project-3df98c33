@@ -221,7 +221,9 @@ const ConversationsListScreen: React.FC = () => {
     if ((!displayTitle || displayTitle === 'Conversation') && item.participants && item.participants.length === 2 && currentUserId) {
       const otherId = item.participants.find((id) => id !== currentUserId);
       if (otherId) {
-        const found = appState.photographers.find((p) => p.id === otherId);
+        const foundPh = appState.photographers.find((p) => p.id === otherId);
+        const foundMo = !foundPh ? appState.models.find((m) => m.id === otherId) : null;
+        const found = foundPh || foundMo;
         if (found) {
           displayTitle = found.name;
           avatarUrl = found.avatar;

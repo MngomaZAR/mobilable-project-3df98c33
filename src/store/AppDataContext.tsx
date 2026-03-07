@@ -266,7 +266,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
             const { data } = await supabase.auth.getUser();
             if (data.user) {
               const profile = await fetchProfile(data.user.id);
-              setState({ currentUser: mapSupabaseUser(data.user, 'client', profile) });
+              setState({ currentUser: mapSupabaseUser(data.user, profile?.role || 'client', profile) });
               await fetchBookings(data.user.id);
             } else {
               setState({ bookings: [] });

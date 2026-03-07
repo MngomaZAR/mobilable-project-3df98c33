@@ -18,9 +18,14 @@ const statusColors: Record<Booking['status'], string> = {
 const BookingsScreen: React.FC = () => {
   const { state } = useAppData();
   const navigation = useNavigation<Navigation>();
-  const photographerById = useMemo(
-    () => new Map(state.photographers.map((photographer) => [photographer.id, photographer])),
-    [state.photographers]
+  const providerById = useMemo(
+    () => {
+      const map = new Map<string, any>();
+      state.photographers.forEach(p => map.set(p.id, { ...p, role: 'photographer' }));
+      state.models.forEach(m => map.set(m.id, { ...m, role: 'model' }));
+      return map;
+    },
+    [state.photographers, state.models]
   );
 
   const formatDateTime = (value: string) => {
@@ -29,7 +34,7 @@ const BookingsScreen: React.FC = () => {
   };
 
   const renderItem = ({ item }: { item: Booking }) => {
-    const photographer = photographerById.get(item.photographerId);
+    const provider = providerById.get(item.photographerId);
     return (
       <TouchableOpacity
         style={styles.card}
@@ -42,7 +47,11 @@ const BookingsScreen: React.FC = () => {
           </View>
         </View>
         <Text style={styles.meta}>{formatDateTime(item.date)}</Text>
-        {photographer ? <Text style={styles.meta}>Photographer: {photographer.name}</Text> : null}
+        {provider ? (
+          <Text style={styles.meta}>
+            {provider.role === 'model' ? 'Model' : 'Photographer'}: {provider.name}
+          </Text>
+        ) : null}
         <Text style={styles.meta}>Created {new Date(item.createdAt).toLocaleDateString()}</Text>
       </TouchableOpacity>
     );

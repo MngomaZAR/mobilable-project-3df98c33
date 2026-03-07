@@ -39,13 +39,13 @@ const SettingsScreen: React.FC = () => {
   const handleSignOut = async () => {
     if (Platform.OS === 'web') {
       if (window.confirm('Are you sure you want to sign out?')) {
-        signOut();
+        await signOut();
       }
       return;
     }
     Alert.alert('Sign out', 'Are you sure you want to sign out?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Sign Out', style: 'destructive', onPress: signOut },
+      { text: 'Sign Out', style: 'destructive', onPress: async () => await signOut() },
     ]);
   };
 

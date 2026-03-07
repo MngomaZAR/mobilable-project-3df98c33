@@ -17,7 +17,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppData } from '../store/AppDataContext';
 import { RootStackParamList, TabParamList } from '../navigation/types';
-import { Photographer } from '../types';
+import { Photographer, Model } from '../types';
 import { AppLogo } from '../components/AppLogo';
 
 type Navigation = BottomTabNavigationProp<TabParamList, 'Home'>;
@@ -71,6 +71,13 @@ const HomeScreen: React.FC = () => {
     [filteredPhotographers]
   );
   const featuredPhotographer = visiblePhotographers[0] ?? state.photographers[0] ?? null;
+  const models = state.models ?? [];
+
+  const startModelBooking = (model: Model) => {
+    // Placeholder navigation — routes to BookingForm with photographer field re-used
+    // until a dedicated model booking screen is built
+    parentNavigation?.navigate('BookingForm', { photographerId: model.id });
+  };
 
   const openProfile = (photographer: Photographer) => {
     parentNavigation?.navigate('Profile', { photographerId: photographer.id });
@@ -258,9 +265,45 @@ const HomeScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
 
-      <View style={styles.grid}> 
-        {visiblePhotographers.map(renderCard)}
-      </View>
+      {/* Models Section */}
+      {models.length > 0 && (
+        <View style={styles.modelsSection}>
+          <View style={styles.sectionHeader}>
+            <View>
+              <Text style={styles.sectionTitle}>Featured Models</Text>
+              <Text style={styles.sectionSubtitle}>{models.length} models available to book</Text>
+            </View>
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.modelsScroll}>
+            {models.map((model) => (
+              <View key={model.id} style={styles.modelCard}>
+                <Image source={{ uri: model.avatar }} style={styles.modelAvatar} />
+                <View style={styles.modelBadge}>
+                  <Ionicons name="body" size={10} color="#fff" />
+                  <Text style={styles.modelBadgeTxt}>Model</Text>
+                </View>
+                <View style={styles.modelRating}>
+                  <Ionicons name="star" size={11} color="#fbbf24" />
+                  <Text style={styles.modelRatingTxt}>{model.rating.toFixed(1)}</Text>
+                </View>
+                <Text style={styles.modelName}>{model.name}</Text>
+                <Text style={styles.modelStyle}>{model.style}</Text>
+                <Text style={styles.modelLocation}>{model.location}</Text>
+                <View style={styles.modelTags}>
+                  {model.tags.slice(0, 2).map((t) => (
+                    <View key={t} style={styles.modelTag}><Text style={styles.modelTagTxt}>{t}</Text></View>
+                  ))}
+                </View>
+                <TouchableOpacity style={styles.modelBookBtn} onPress={() => startModelBooking(model)}>
+                  <Text style={styles.modelBookTxt}>Book Model</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+          </ScrollView>
+        </View>
+      )}
+
+      <View style={styles.grid}>{visiblePhotographers.map(renderCard)}</View>
       {!visiblePhotographers.length ? (
         <Text style={styles.empty}>{error ? error : 'No photographers match your filters yet.'}</Text>
       ) : null}
@@ -778,6 +821,42 @@ const styles = StyleSheet.create({
     marginTop: 16,
     color: '#475569',
   },
+  // Models section
+  modelsSection: { marginBottom: 24 },
+  modelsScroll: { paddingVertical: 8, paddingRight: 16 },
+  modelCard: {
+    width: 180,
+    backgroundColor: '#fff',
+    borderRadius: 18,
+    padding: 14,
+    marginRight: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#e5e7eb',
+    shadowColor: '#ec4899',
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    position: 'relative',
+  },
+  modelAvatar: { width: '100%', height: 120, borderRadius: 12, marginBottom: 10 },
+  modelBadge: {
+    position: 'absolute', top: 22, left: 22, flexDirection: 'row', alignItems: 'center', gap: 3,
+    backgroundColor: '#ec4899', borderRadius: 8, paddingHorizontal: 7, paddingVertical: 3,
+  },
+  modelBadgeTxt: { color: '#fff', fontWeight: '800', fontSize: 10 },
+  modelRating: {
+    position: 'absolute', top: 22, right: 22, flexDirection: 'row', alignItems: 'center', gap: 3,
+    backgroundColor: 'rgba(0,0,0,0.65)', borderRadius: 8, paddingHorizontal: 7, paddingVertical: 3,
+  },
+  modelRatingTxt: { color: '#fff', fontWeight: '700', fontSize: 11 },
+  modelName: { fontSize: 14, fontWeight: '800', color: '#0f172a', marginBottom: 2 },
+  modelStyle: { fontSize: 12, color: '#8b5cf6', fontWeight: '600', marginBottom: 2 },
+  modelLocation: { fontSize: 11, color: '#64748b', marginBottom: 8 },
+  modelTags: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginBottom: 10 },
+  modelTag: { backgroundColor: '#fce7f3', borderRadius: 10, paddingHorizontal: 7, paddingVertical: 2 },
+  modelTagTxt: { color: '#9d174d', fontWeight: '600', fontSize: 10 },
+  modelBookBtn: { backgroundColor: '#0f172a', borderRadius: 10, paddingVertical: 8, alignItems: 'center' },
+  modelBookTxt: { color: '#fff', fontWeight: '800', fontSize: 12 },
 });
 
 export default HomeScreen;

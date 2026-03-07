@@ -24,6 +24,7 @@ import PaymentScreen from '../screens/PaymentScreen';
 import ComplianceScreen from '../screens/ComplianceScreen';
 import PhotographerDashboardScreen from '../screens/PhotographerDashboardScreen';
 import AdminDashboardScreen from '../screens/AdminDashboardScreen';
+import ModelDashboardScreen from '../screens/ModelDashboardScreen';
 import { RootStackParamList, TabParamList } from './types';
 import { useAppData } from '../store/AppDataContext';
 
@@ -53,9 +54,11 @@ const TabsNavigator = () => {
   const homeComponent =
     role === 'photographer'
       ? PhotographerDashboardScreen
-      : role === 'admin'
-        ? AdminDashboardScreen
-        : HomeScreen;
+      : role === 'model'
+        ? ModelDashboardScreen
+        : role === 'admin'
+          ? AdminDashboardScreen
+          : HomeScreen;
 
   return (
     <Tab.Navigator

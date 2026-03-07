@@ -1,6 +1,6 @@
 export type BookingStatus = 'pending' | 'accepted' | 'completed' | 'reviewed';
 
-export type UserRole = 'client' | 'photographer' | 'admin';
+export type UserRole = 'client' | 'photographer' | 'model' | 'admin';
 
 export interface AppUser {
   id: string;
@@ -30,9 +30,26 @@ export interface Photographer {
   tags: string[];
 }
 
+export interface Model {
+  id: string;
+  name: string;
+  style: string;       // e.g. "Editorial", "Commercial", "Fitness"
+  location: string;
+  latitude: number;
+  longitude: number;
+  avatar: string;
+  bio: string;
+  rating: number;
+  priceRange: string;  // e.g. "$$", "$$$"
+  tags: string[];
+  portfolioUrls: string[];
+}
+
 export interface Booking {
   id: string;
   photographerId: string;
+  modelId?: string | null;
+  serviceType?: 'photography' | 'modeling' | 'combined';
   date: string;
   package: string;
   notes?: string;
@@ -82,11 +99,12 @@ export interface ConversationSummary {
   lastMessage?: string | null;
   lastMessageAt: string | null;
   createdAt?: string | null;
-  participants?: string[]; // list of user IDs
+  participants?: string[];
 }
 
 export interface AppState {
   photographers: Photographer[];
+  models: Model[];
   bookings: Booking[];
   conversations: ConversationSummary[];
   messages: Message[];

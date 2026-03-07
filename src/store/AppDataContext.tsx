@@ -3,7 +3,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { initialState } from '../data/initialData';
 import { supabase, hasSupabase } from '../config/supabaseClient';
-import { AppState, AppUser, Booking, BookingStatus, Comment, ConversationSummary, Message, Post, PrivacySettings } from '../types';
+import { AppState, AppUser, Booking, BookingStatus, Comment, ConversationSummary, Message, Model, Post, PrivacySettings, UserRole } from '../types';
 import { uid } from '../utils/id';
 import { formatAuthError, formatErrorMessage, logError } from '../utils/errors';
 import { mapPhotographerRow, mapSupabaseUser } from '../utils/mappings';
@@ -169,9 +169,51 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         logError('fetch_photographers', err);
         setError(message);
       } else {
-        // Silently fail if we have cache or it's just an offline network timeout
         console.warn('Network offline, using cached photographers.');
       }
+    }
+  }, []);
+
+  const fetchModels = useCallback(async () => {
+    if (!hasSupabase) return;
+    try {
+      const { data, error: modelError } = await supabase
+        .from('models')
+        .select(`
+          id,
+          rating,
+          location,
+          latitude,
+          longitude,
+          price_range,
+          style,
+          bio,
+          tags,
+          portfolio_urls,
+          profiles:profiles(id, full_name, avatar_url, city)
+        `)
+        .limit(MAX_PHOTOGRAPHERS)
+        .order('rating', { ascending: false });
+      if (modelError) throw modelError;
+      
+      const mapped = (data ?? []).map((row: any) => ({
+        id: row.id,
+        name: row.profiles?.full_name ?? 'Model',
+        style: row.style ?? 'Generic',
+        location: row.location ?? row.profiles?.city ?? 'Unknown',
+        latitude: row.latitude ?? 0,
+        longitude: row.longitude ?? 0,
+        avatar: row.profiles?.avatar_url ?? '',
+        bio: row.bio ?? '',
+        rating: row.rating ?? 5.0,
+        priceRange: row.price_range ?? '$$',
+        tags: row.tags ?? [],
+        portfolioUrls: row.portfolio_urls ?? [],
+      }));
+
+      setState({ models: mapped });
+    } catch (err: any) {
+      console.warn('Network offline, using cached models.');
     }
   }, []);
 
@@ -232,7 +274,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           } catch (authErr) {
             console.warn('Network offline or auth failed, skipping live session check and using cache.');
           }
-          await fetchPhotographers();
+          await Promise.all([fetchPhotographers(), fetchModels()]);
         }
       } catch (err) {
         logError('load_state', err);
@@ -860,7 +902,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, []);
 
   const signUp = useCallback(
-    async (email: string, password: string, /* role intentionally ignored for security; only server/admin may grant roles */ _role: AppUser['role'] = 'client') => {
+    async (email: string, password: string, role: UserRole = 'client') => {
       setAuthenticating(true);
       setError(null);
       try {
@@ -880,10 +922,11 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           // Upsert profile without allowing client to decide role. Default DB role is 'client'.
           await supabase.from('profiles').upsert({
             id: data.user.id,
+            role,
             verified: false,
           });
         }
-        const user: AppUser | null = data.user ? mapSupabaseUser(data.user, 'client', { role: 'client', verified: false }) : null;
+        const user: AppUser | null = data.user ? mapSupabaseUser(data.user, role, { role, verified: false }) : null;
         setState({ currentUser: user });
         return user;
       } catch (err: any) {
@@ -963,7 +1006,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setLoading(true);
     try {
       const currentUser = await revalidateSession();
-      await Promise.all([fetchPhotographers(), fetchBookings(currentUser?.id ?? null)]);
+      await Promise.all([fetchPhotographers(), fetchModels(), fetchBookings(currentUser?.id ?? null)]);
     } finally {
       setLoading(false);
     }

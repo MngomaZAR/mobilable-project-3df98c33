@@ -22,7 +22,7 @@ export type RootStackParamList = {
   UserProfile: { userId: string; photographer?: Photographer };
   Auth: undefined;
   Compliance: undefined;
-  ChatThread: { conversationId: string; title?: string };
+  ChatThread: { conversationId: string; title?: string; avatarUrl?: string };
 };
 
 declare global {

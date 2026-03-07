@@ -165,11 +165,13 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setState({ photographers });
     } catch (err: any) {
       const message = formatErrorMessage(err, 'Unable to load photographers right now.');
-      // Do not spam device overlays for common connectivity errors in development.
-      if (!/failed to fetch|network/i.test(message)) {
+      if (!/failed to fetch|network/i.test(message) && stateRef.current.photographers.length === 0) {
         logError('fetch_photographers', err);
+        setError(message);
+      } else {
+        // Silently fail if we have cache or it's just an offline network timeout
+        console.warn('Network offline, using cached photographers.');
       }
-      setError(message);
     }
   }, []);
 
@@ -193,9 +195,14 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (error) throw error;
         const bookings = (data ?? []).map((row) => mapBookingRow(row as BookingRow));
         setState({ bookings });
-      } catch (err) {
-        logError('fetch_bookings', err);
-        setError(formatErrorMessage(err, 'Unable to load bookings right now.'));
+      } catch (err: any) {
+        const message = formatErrorMessage(err, 'Unable to load bookings right now.');
+        if (!/failed to fetch|network/i.test(message) && stateRef.current.bookings.length === 0) {
+          logError('fetch_bookings', err);
+          setError(message);
+        } else {
+          console.warn('Network offline, using cached bookings.');
+        }
       }
     },
     []
@@ -213,19 +220,24 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
 
         if (hasSupabase) {
-          const { data } = await supabase.auth.getUser();
-          if (data.user) {
-            const profile = await fetchProfile(data.user.id);
-            setState({ currentUser: mapSupabaseUser(data.user, 'client', profile) });
-            await fetchBookings(data.user.id);
-          } else {
-            setState({ bookings: [] });
+          try {
+            const { data } = await supabase.auth.getUser();
+            if (data.user) {
+              const profile = await fetchProfile(data.user.id);
+              setState({ currentUser: mapSupabaseUser(data.user, 'client', profile) });
+              await fetchBookings(data.user.id);
+            } else {
+              setState({ bookings: [] });
+            }
+          } catch (authErr) {
+            console.warn('Network offline or auth failed, skipping live session check and using cache.');
           }
           await fetchPhotographers();
         }
       } catch (err) {
         logError('load_state', err);
-        setError('Unable to load saved data.');
+        // Do not ruin the user experience by throwing a hard UI error overlay for local cache misses
+        console.warn('Unable to load saved data, initializing fresh.');
       } finally {
         setLoading(false);
       }

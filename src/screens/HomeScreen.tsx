@@ -140,17 +140,6 @@ const HomeScreen: React.FC = () => {
           <AppLogo size={48} />
           <Text style={styles.brandName}>Papzi</Text>
         </View>
-        <View style={styles.navActions}>
-          <TouchableOpacity style={styles.linkPill} onPress={() => parentNavigation?.navigate('Auth')}>
-            <Text style={styles.linkText}>Sign In</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.linkPill, styles.linkFilled, styles.navActionSpacer]}
-            onPress={() => parentNavigation?.navigate('Auth')}
-          >
-            <Text style={[styles.linkText, styles.linkFilledText]}>Sign Up</Text>
-          </TouchableOpacity>
-        </View>
       </View>
 
       <View style={[styles.hero, !isWideHero && styles.heroStacked]}>

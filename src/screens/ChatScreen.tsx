@@ -7,6 +7,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { useAppData } from '../store/AppDataContext';
 import { ChatSkeleton } from '../components/Skeleton';
 import { RootStackParamList } from '../navigation/types';
+import { Ionicons } from '@expo/vector-icons';
 
 type Route = RouteProp<RootStackParamList, 'ChatThread'>;
 type Navigation = StackNavigationProp<RootStackParamList, 'ChatThread'>;
@@ -27,6 +28,8 @@ const ChatScreen: React.FC = () => {
   const latestUnlockBooking = useMemo(() => state.bookings[0] ?? null, [state.bookings]);
 
   const PLACEHOLDER_IMAGE = 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=300&q=80';
+  const otherAvatar = route.params?.avatarUrl ?? PLACEHOLDER_IMAGE;
+
   const LOCKED_MEDIA_FULL =
     'https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?auto=format&fit=crop&w=1200&q=80';
   const LOCKED_MEDIA_PREVIEW =
@@ -127,7 +130,7 @@ const ChatScreen: React.FC = () => {
               <AnimatedBubble style={{ marginBottom: sameSenderAsPrev ? 4 : 12 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'flex-end' }}>
                   {!item.fromUser ? (
-                    sameSenderAsPrev ? <View style={{ width: 34 }} /> : <Image source={{ uri: PLACEHOLDER_IMAGE }} style={styles.msgAvatar} />
+                    sameSenderAsPrev ? <View style={{ width: 34 }} /> : <Image source={{ uri: otherAvatar }} style={styles.msgAvatar} />
                   ) : null}
                   <View style={[styles.bubble, item.fromUser ? styles.bubbleUser : styles.bubblePhotographer, { maxWidth: '78%' }]}>
                     {item.messageType === 'media' ? (
@@ -137,17 +140,23 @@ const ChatScreen: React.FC = () => {
                           style={styles.mediaImage}
                         />
                         {item.locked && !item.unlocked ? (
-                          <View style={styles.lockOverlay}>
-                            <Text style={styles.lockText}>Locked until payment clears</Text>
+                          <View style={styles.premiumLockOverlay}>
+                            <View style={styles.premiumWatermarkBadge}>
+                              <Ionicons name="water-outline" size={14} color="#fff" style={{ marginRight: 4 }} />
+                              <Text style={styles.premiumWatermarkText}>WATERMARKED PROOF</Text>
+                            </View>
+                            <Ionicons name="lock-closed" size={32} color="#fff" style={{ marginBottom: 8 }} />
                           </View>
                         ) : null}
                         {item.text ? <Text style={[styles.bubbleText, item.fromUser && styles.bubbleTextLight, styles.mediaCaption]}>{item.text}</Text> : null}
                         {item.locked && !item.unlocked && item.unlockBookingId ? (
                           <TouchableOpacity
-                            style={styles.unlockButton}
+                            style={styles.premiumUnlockButton}
                             onPress={() => navigation.navigate('Payment', { bookingId: item.unlockBookingId as string })}
+                            activeOpacity={0.8}
                           >
-                            <Text style={styles.unlockButtonText}>Pay to unlock</Text>
+                            <Ionicons name="key" size={16} color="#000" style={{ marginRight: 6 }} />
+                            <Text style={styles.premiumUnlockButtonText}>Unlock High-Res</Text>
                           </TouchableOpacity>
                         ) : null}
                       </View>
@@ -262,7 +271,7 @@ const styles = StyleSheet.create({
   mediaCaption: {
     marginTop: 6,
   },
-  lockOverlay: {
+  premiumLockOverlay: {
     position: 'absolute',
     left: 0,
     right: 0,
@@ -270,24 +279,45 @@ const styles = StyleSheet.create({
     bottom: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(15, 23, 42, 0.55)',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)', // sleek dark overlay
     borderRadius: 10,
   },
-  lockText: {
-    color: '#fff',
-    fontWeight: '800',
-    fontSize: 12,
-  },
-  unlockButton: {
-    marginTop: 8,
-    borderRadius: 10,
-    backgroundColor: '#22c55e',
-    paddingVertical: 8,
+  premiumWatermarkBadge: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
   },
-  unlockButtonText: {
-    color: '#06280f',
+  premiumWatermarkText: {
+    color: '#fff',
+    fontSize: 10,
     fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  premiumUnlockButton: {
+    marginTop: 10,
+    borderRadius: 20, // pill shape
+    backgroundColor: '#fbbf24', // premium gold/amber
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#fbbf24',
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+  },
+  premiumUnlockButtonText: {
+    color: '#000',
+    fontWeight: '800',
+    fontSize: 14,
   },
   composer: {
     flexDirection: 'row',

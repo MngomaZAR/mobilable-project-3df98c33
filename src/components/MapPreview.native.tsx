@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { MapMarker, MapPreviewProps } from './mapTypes';
 import { DEFAULT_CAPE_TOWN_COORDINATES, ensureSouthAfricanCoordinates } from '../utils/geo';
 
-export const MapPreview: React.FC<MapPreviewProps> = ({ markers, onMapError }) => {
+export const MapPreview: React.FC<MapPreviewProps> = ({ markers, onMapError, onMarkerPress }) => {
   const mapRef = useRef<any | null>(null);
   const { width } = useWindowDimensions();
 
@@ -50,7 +50,10 @@ export const MapPreview: React.FC<MapPreviewProps> = ({ markers, onMapError }) =
 
   const pinStyles = (marker: MapMarker) => ({
     ...styles.pin,
-    backgroundColor: marker.type === 'user' ? '#2563eb' : '#0f172a',
+    backgroundColor: marker.type === 'user' ? '#3b82f6' : '#000', // vibrant blue for user, sleek black for photographer
+    borderColor: marker.type === 'user' ? '#eff6ff' : '#27272a',
+    borderWidth: 2,
+    padding: marker.type === 'user' ? 6 : 8,
   });
 
   const photographerCount = markers.filter((marker: MapMarker) => marker.type !== 'user').length;
@@ -70,12 +73,11 @@ export const MapPreview: React.FC<MapPreviewProps> = ({ markers, onMapError }) =
           <Marker
             key={marker.id}
             coordinate={{ latitude: marker.latitude, longitude: marker.longitude }}
-            title={marker.title}
-            description={marker.description}
             tracksViewChanges={false}
+            onPress={() => onMarkerPress?.(marker)}
           >
             <View style={pinStyles(marker)}>
-              <Ionicons name={marker.type === 'user' ? 'person' : 'camera'} size={18} color="#fff" />
+              <Ionicons name={marker.type === 'user' ? 'navigate' : 'camera'} size={marker.type === 'user' ? 14 : 18} color="#fff" style={marker.type === 'user' ? { transform: [{ rotate: '45deg' }] } : undefined} />
             </View>
           </Marker>
         ))}
@@ -127,15 +129,13 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   pin: {
-    backgroundColor: '#0f172a',
-    padding: 8,
-    borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#e2e8f0',
-    shadowColor: '#0f172a',
-    shadowOpacity: 0.25,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 4,
-    elevation: 4,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 6,
+    elevation: 6,
   },
 });

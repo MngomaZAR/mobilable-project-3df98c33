@@ -32,6 +32,7 @@ type Conversation = {
   lastMessageAt: string | null;
   createdAt: string;
   participants?: string[];
+  avatarUrl?: string;
 };
 
 const ConversationsListScreen: React.FC = () => {
@@ -129,16 +130,22 @@ const ConversationsListScreen: React.FC = () => {
       if (otherIds.length > 0) {
         const { data: profiles } = await supabase
           .from('profiles')
-          .select('id, full_name')
+          .select('id, full_name, avatar_url')
           .in('id', otherIds);
-        const nameMap: Record<string, string> = {};
+
+        const profileMap: Record<string, { name: string; avatar: string | null }> = {};
         (profiles ?? []).forEach((profile: any) => {
-          nameMap[profile.id] = profile.full_name ?? 'Creator';
+          profileMap[profile.id] = {
+            name: profile.full_name ?? 'Creator',
+            avatar: profile.avatar_url,
+          };
         });
+
         mapped.forEach((conversation) => {
           const otherId = convoWithoutTitleOtherIds[conversation.id];
-          if (otherId && nameMap[otherId]) {
-            conversation.title = nameMap[otherId];
+          if (otherId && profileMap[otherId]) {
+            conversation.title = profileMap[otherId].name;
+            conversation.avatarUrl = profileMap[otherId].avatar ?? undefined;
           }
         });
       }
@@ -231,12 +238,13 @@ const ConversationsListScreen: React.FC = () => {
     const timestamp = item.lastMessageAt ?? item.createdAt;
     const formatted = timestamp ? new Date(timestamp).toLocaleString() : '';
 
-    const { displayTitle, avatarUrl } = require('../utils/conversations').getConversationDisplayInfo(item, appState as any);
+    const displayTitle = item.title !== 'Conversation' ? item.title : 'Chat';
+    const avatarUrl = item.avatarUrl ?? PLACEHOLDER_AVATAR;
 
     return (
       <TouchableOpacity
         style={styles.card}
-        onPress={() => navigation.navigate('ChatThread', { conversationId: item.id, title: displayTitle })}
+        onPress={() => navigation.navigate('ChatThread', { conversationId: item.id, title: displayTitle, avatarUrl })}
       >
         <View style={styles.cardHeader}>
           <View style={styles.avatarRow}>

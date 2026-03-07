@@ -1,8 +1,14 @@
 import React, { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { AppLogo } from '../components/AppLogo';
 import { useAppData } from '../store/AppDataContext';
 import { supabase, hasSupabase } from '../config/supabaseClient';
+import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
+import { makeRedirectUri } from 'expo-auth-session';
+import { Ionicons } from '@expo/vector-icons';
+
+WebBrowser.maybeCompleteAuthSession();
 
 type Mode = 'signin' | 'signup';
 
@@ -11,250 +17,310 @@ const AuthScreen: React.FC = () => {
   const [mode, setMode] = useState<Mode>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [localMessage, setLocalMessage] = useState<string | null>(null);
 
   const submit = async () => {
+    setLocalMessage(null);
     if (!email || !password) {
-      Alert.alert('Missing fields', 'Enter both email and password to continue.');
+      setLocalMessage('Enter both email and password to continue.');
       return;
     }
     if (mode === 'signin') {
       const user = await signIn(email, password);
-      if (user) Alert.alert('Signed in', `Welcome back, ${user.email}.`);
     } else {
       const user = await signUp(email, password);
-      if (user) Alert.alert('Account created', 'We emailed a confirmation link to verify your address.');
+      if (user) setLocalMessage('Account created! We emailed a confirmation link to verify your address.');
     }
   };
 
   const handleSignOut = async () => {
     await signOut();
-    Alert.alert('Signed out', 'You have been signed out securely.');
   };
 
   const handleOAuth = async (provider: 'google' | 'apple') => {
+    setLocalMessage(null);
     if (!hasSupabase) {
-      Alert.alert('Unavailable', 'Single sign-on needs backend configuration.');
+      setLocalMessage('Single sign-on needs backend configuration.');
       return;
     }
     try {
-      const redirectTo =
-        Platform.OS === 'web' && typeof window !== 'undefined' ? window.location.origin : undefined;
-      const { error: oauthError } = await supabase.auth.signInWithOAuth({
+      const redirectTo = makeRedirectUri({
+        preferLocalhost: true
+      });
+
+      const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
           redirectTo,
+          skipBrowserRedirect: Platform.OS !== 'web',
         },
       });
+
       if (oauthError) throw oauthError;
+
+      if (Platform.OS !== 'web' && data?.url) {
+        const res = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+        if (res.type === 'success' && res.url) {
+          const params = Linking.parse(res.url);
+          if (params.queryParams?.error_description) {
+            throw new Error(params.queryParams.error_description as string);
+          }
+        }
+      }
     } catch (err: any) {
-      Alert.alert(
-        'Single sign-on unavailable',
-        err?.message || `Unable to continue with ${provider}. Configure the provider in Supabase Auth.`
-      );
+      setLocalMessage(err?.message || `Unable to continue with ${provider}. Verify configuration.`);
     }
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={80}
-    >
-      <View style={styles.header}>
-        <AppLogo size={88} />
-        <Text style={styles.title}>Papzi</Text>
-        <Text style={styles.subtitle}>Find and book talented photographers across South Africa.</Text>
-      </View>
+    <View style={styles.container}>
+      <KeyboardAvoidingView
+        style={styles.keyboardView}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <View style={styles.content}>
+          <View style={styles.header}>
+            <AppLogo size={64} />
+            <Text style={styles.title}>Welcome to Papzi</Text>
+            <Text style={styles.subtitle}>Log in or sign up to book top photographers and manage your gallery.</Text>
+          </View>
 
-      <View style={styles.switcher}>
-        <TouchableOpacity
-          style={[styles.switchButton, mode === 'signin' && styles.switchButtonActive]}
-          onPress={() => setMode('signin')}
-        >
-          <Text style={[styles.switchText, mode === 'signin' && styles.switchTextActive]}>Sign in</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.switchButton, mode === 'signup' && styles.switchButtonActive]}
-          onPress={() => setMode('signup')}
-        >
-          <Text style={[styles.switchText, mode === 'signup' && styles.switchTextActive]}>Create account</Text>
-        </TouchableOpacity>
-      </View>
+          <View style={styles.switcher}>
+            <TouchableOpacity style={[styles.switchButton, mode === 'signin' && styles.switchButtonActive]} onPress={() => setMode('signin')}>
+              <Text style={[styles.switchText, mode === 'signin' && styles.switchTextActive]}>Sign in</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.switchButton, mode === 'signup' && styles.switchButtonActive]} onPress={() => setMode('signup')}>
+              <Text style={[styles.switchText, mode === 'signup' && styles.switchTextActive]}>Sign up</Text>
+            </TouchableOpacity>
+          </View>
 
-      {/* For security, role selection is hidden from signup. Photographer/admin roles must be granted by an admin. */}
+          <View style={styles.form}>
+            <View style={styles.inputWrapper}>
+              <View style={styles.inputIcon}>
+                <Ionicons name="mail-outline" size={20} color="#64748b" />
+              </View>
+              <TextInput
+                value={email}
+                onChangeText={setEmail}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                placeholder="Email address"
+                placeholderTextColor="#94a3b8"
+                style={styles.input}
+              />
+            </View>
 
-      <View style={styles.form}>
-        <Text style={styles.label}>Email</Text>
-        <TextInput
-          value={email}
-          onChangeText={setEmail}
-          autoCapitalize="none"
-          keyboardType="email-address"
-          placeholder="you@example.com"
-          style={styles.input}
-        />
-        <Text style={[styles.label, styles.labelSpacing]}>Password</Text>
-        <TextInput
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-          placeholder="••••••••"
-          style={styles.input}
-        />
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+            <View style={[styles.inputWrapper, { marginTop: 14 }]}>
+              <View style={styles.inputIcon}>
+                <Ionicons name="lock-closed-outline" size={20} color="#64748b" />
+              </View>
+              <TextInput
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry
+                placeholder="Password"
+                placeholderTextColor="#94a3b8"
+                style={styles.input}
+              />
+            </View>
 
-        <TouchableOpacity style={styles.submit} onPress={submit} disabled={authenticating}>
-          <Text style={styles.submitText}>{authenticating ? 'Submitting...' : mode === 'signin' ? 'Sign in' : 'Sign up'}</Text>
-        </TouchableOpacity>
-        <View style={styles.oauthRow}>
-          <TouchableOpacity style={styles.oauthButton} onPress={() => handleOAuth('google')} disabled={authenticating}>
-            <Text style={styles.oauthText}>Continue with Google</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.oauthButton} onPress={() => handleOAuth('apple')} disabled={authenticating}>
-            <Text style={styles.oauthText}>Continue with Apple</Text>
-          </TouchableOpacity>
+            {(error || localMessage) && (
+              <View style={styles.errorBox}>
+                <Ionicons name="alert-circle" size={16} color="#dc2626" style={{ marginRight: 6 }} />
+                <Text style={styles.errorText}>{error || localMessage}</Text>
+              </View>
+            )}
+
+            <TouchableOpacity
+              style={[styles.submit, authenticating && styles.submitDisabled]}
+              onPress={submit}
+              disabled={authenticating}
+            >
+              <Text style={styles.submitText}>{authenticating ? 'Processing...' : mode === 'signin' ? 'Sign in' : 'Create account'}</Text>
+            </TouchableOpacity>
+
+            <View style={styles.divider}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>or</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            <View style={styles.oauthRow}>
+              <TouchableOpacity style={styles.oauthButton} onPress={() => handleOAuth('google')} disabled={authenticating}>
+                <Ionicons name="logo-google" size={18} color="#0f172a" style={{ marginRight: 8 }} />
+                <Text style={styles.oauthText}>Google</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.oauthButton} onPress={() => handleOAuth('apple')} disabled={authenticating}>
+                <Ionicons name="logo-apple" size={18} color="#0f172a" style={{ marginRight: 8 }} />
+                <Text style={styles.oauthText}>Apple</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
-        {currentUser ? (
-          <TouchableOpacity style={styles.secondary} onPress={handleSignOut} disabled={authenticating}>
-            <Text style={styles.secondaryText}>Sign out ({currentUser.email})</Text>
-          </TouchableOpacity>
-        ) : null}
-      </View>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f7f7fb',
-    padding: 16,
+    backgroundColor: '#f8fafc',
+  },
+  keyboardView: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  content: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: '#fff',
+    borderRadius: 24,
+    padding: 32,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 10 },
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#e2e8f0',
   },
   header: {
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 32,
   },
   title: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: '800',
     color: '#0f172a',
-    marginTop: 10,
+    marginTop: 16,
   },
   subtitle: {
-    color: '#475569',
+    color: '#64748b',
     textAlign: 'center',
-    marginTop: 4,
+    marginTop: 8,
+    fontSize: 15,
+    lineHeight: 22,
   },
   switcher: {
     flexDirection: 'row',
-    marginBottom: 12,
+    backgroundColor: '#f1f5f9',
+    borderRadius: 12,
+    padding: 4,
+    marginBottom: 24,
   },
   switchButton: {
     flex: 1,
-    padding: 12,
-    borderRadius: 12,
-    backgroundColor: '#e5e7eb',
+    paddingVertical: 12,
+    borderRadius: 10,
     alignItems: 'center',
   },
   switchButtonActive: {
-    backgroundColor: '#0f172a',
-  },
-  switchText: {
-    color: '#0f172a',
-    fontWeight: '700',
-  },
-  switchTextActive: {
-    color: '#fff',
-  },
-  roleRow: {
-    flexDirection: 'row',
-    marginBottom: 12,
-  },
-  roleChip: {
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    backgroundColor: '#e2e8f0',
-    borderRadius: 12,
-    marginRight: 8,
-  },
-  roleChipActive: {
-    backgroundColor: '#0f172a',
-  },
-  roleText: {
-    color: '#0f172a',
-    fontWeight: '700',
-    textTransform: 'capitalize',
-  },
-  roleTextActive: {
-    color: '#fff',
-  },
-  form: {
     backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#e5e7eb',
     shadowColor: '#000',
     shadowOpacity: 0.05,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
   },
-  label: {
-    fontWeight: '700',
+  switchText: {
+    color: '#64748b',
+    fontWeight: '600',
+    fontSize: 15,
+  },
+  switchTextActive: {
     color: '#0f172a',
+    fontWeight: '700',
   },
-  labelSpacing: {
-    marginTop: 10,
+  form: {
+    width: '100%',
+  },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    height: 56,
+  },
+  inputIcon: {
+    marginRight: 12,
   },
   input: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#e5e7eb',
-    borderRadius: 12,
-    padding: 12,
-    marginTop: 6,
-    backgroundColor: '#f8fafc',
+    flex: 1,
+    fontSize: 16,
+    color: '#0f172a',
+    height: '100%',
   },
-  error: {
+  errorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fef2f2',
+    padding: 12,
+    borderRadius: 10,
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+  },
+  errorText: {
     color: '#dc2626',
-    marginTop: 8,
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '500',
+    lineHeight: 20,
   },
   submit: {
-    marginTop: 14,
+    marginTop: 24,
     backgroundColor: '#0f172a',
-    padding: 14,
+    height: 56,
     borderRadius: 14,
+    justifyContent: 'center',
     alignItems: 'center',
+  },
+  submitDisabled: {
+    opacity: 0.7,
   },
   submitText: {
     color: '#fff',
     fontWeight: '700',
+    fontSize: 16,
   },
-  secondary: {
-    marginTop: 10,
-    padding: 12,
-    borderRadius: 12,
-    backgroundColor: '#e2e8f0',
+  divider: {
+    flexDirection: 'row',
     alignItems: 'center',
+    marginVertical: 24,
   },
-  secondaryText: {
-    color: '#0f172a',
-    fontWeight: '700',
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#e2e8f0',
+  },
+  dividerText: {
+    marginHorizontal: 16,
+    color: '#94a3b8',
+    fontWeight: '500',
   },
   oauthRow: {
-    marginTop: 10,
-    gap: 8,
+    flexDirection: 'row',
+    gap: 16,
   },
   oauthButton: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#cbd5e1',
-    borderRadius: 12,
-    paddingVertical: 10,
+    flex: 1,
+    flexDirection: 'row',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 14,
+    height: 52,
+    justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#fff',
   },
   oauthText: {
     color: '#0f172a',
     fontWeight: '700',
+    fontSize: 15,
   },
 });
 

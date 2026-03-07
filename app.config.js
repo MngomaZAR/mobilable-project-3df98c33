@@ -8,7 +8,7 @@ module.exports = {
     version: "1.0.0",
     orientation: "portrait",
     icon: "./assets/icon.png",
-    userInterfaceStyle: "light",
+    userInterfaceStyle: "automatic",
     newArchEnabled: true,
     plugins: [
       "expo-notifications",
@@ -16,7 +16,7 @@ module.exports = {
         "expo-location",
         {
           locationWhenInUsePermission:
-            "Allow Papzi to use your location to find nearby photographers.",
+            "Allow Papzi to use your location to show available photographers nearby on the interactive map.",
         },
       ],
     ],
@@ -31,7 +31,11 @@ module.exports = {
       buildNumber: "1.0.0",
       infoPlist: {
         NSLocationWhenInUseUsageDescription:
-          "Papzi needs your location to show nearby photographers.",
+          "Papzi uses your location to show available photographers nearby on the interactive map so you can find and book the right photographer for your moment.",
+        NSCameraUsageDescription:
+          "Papzi needs camera access so you can take and upload photos for posts and your profile.",
+        NSPhotoLibraryUsageDescription:
+          "Papzi needs photo library access to let you select photos for posts and your profile.",
         ITSAppUsesNonExemptEncryption: false,
       },
     },

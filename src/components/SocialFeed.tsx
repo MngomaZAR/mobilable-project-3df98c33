@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Image,
   Platform,
@@ -11,6 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { AnimatedHeart } from './AnimatedHeart';
 import { useAppData } from '../store/AppDataContext';
 import { supabase, hasSupabase } from '../config/supabaseClient';
@@ -21,6 +23,7 @@ import { RootStackParamList } from '../navigation/types';
 import { initialState } from '../data/initialData';
 import { FeedSkeleton } from '../components/Skeleton';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 
 export type ProfileSummary = {
   id: string;
@@ -96,6 +99,8 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
   const lastTapRef = useRef<number | null>(null);
   const paginationOffsetRef = useRef(0);
   const loadMoreInFlightRef = useRef(false);
+  const [blockedUserIds, setBlockedUserIds] = useState<Set<string>>(new Set());
+  const [reportedPostIds, setReportedPostIds] = useState<Set<string>>(new Set());
 
   const normalizeProfiles = useCallback((rows: ProfileSummary[]) => {
     const maxProfiles = isWeb ? WEB_PROFILE_PAGE_SIZE : PROFILE_PAGE_SIZE;
@@ -128,6 +133,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
     try {
       // show a quick heart animation on double-tap
       if (!isWeb) {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
         setLikedAnimPostId(postId);
         setTimeout(() => setLikedAnimPostId(null), 700);
       }
@@ -435,9 +441,14 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
   }, [fetchPostById, isWeb]);
 
   const filteredPosts = useMemo(() => {
-    if (!selectedProfileId) return posts;
-    return posts.filter((post) => post.userId === selectedProfileId);
-  }, [posts, selectedProfileId]);
+    let filtered = posts.filter(
+      (post) => !blockedUserIds.has(post.userId) && !reportedPostIds.has(post.id)
+    );
+    if (selectedProfileId) {
+      filtered = filtered.filter((post) => post.userId === selectedProfileId);
+    }
+    return filtered;
+  }, [posts, selectedProfileId, blockedUserIds, reportedPostIds]);
 
   const visiblePosts = useMemo(
     () => (isWeb ? filteredPosts.slice(0, WEB_VISIBLE_FEED_ITEMS) : filteredPosts),
@@ -495,52 +506,41 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
       ) : null}
 
       <View style={styles.headerInner}>
-        <View>
-          <Text style={styles.headerTitle}>Social feed</Text>
-          <Text style={styles.headerSubtitle}>Fresh work from nearby photographers.</Text>
-        </View>
+        <Text style={styles.headerTitle}>Feed</Text>
         <TouchableOpacity
-          style={[styles.primaryButton, styles.headerCTA, !onCreatePost && styles.primaryButtonDisabled]}
+          style={[styles.primaryIconButton, !onCreatePost && styles.primaryIconButtonDisabled]}
           onPress={onCreatePost}
           disabled={!onCreatePost}
         >
-          <Text style={styles.primaryButtonText}>New Post</Text>
+          <Ionicons name="add" size={24} color="#0f172a" />
         </TouchableOpacity>
       </View>
-
-      <Text style={styles.helper}>Use filters to browse faster.</Text>
 
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.profileRail}
-        style={styles.profileRailWrapper}
+        contentContainerStyle={styles.textRail}
+        style={styles.textRailWrapper}
       >
         <TouchableOpacity
-          style={[styles.profileChip, !selectedProfileId && styles.profileChipActive]}
+          style={[styles.textChip, !selectedProfileId && styles.textChipActive]}
           onPress={() => setSelectedProfileId(null)}
         >
-          <Image source={{ uri: PLACEHOLDER_IMAGE }} style={styles.profileAvatar} />
-          <View style={styles.profileText}>
-            <Text style={[styles.profileName, styles.allProfilesName]}>All profiles</Text>
-            <Text style={styles.profileMeta}>{posts.length} posts</Text>
-          </View>
+          <Text style={[styles.textChipLabel, !selectedProfileId && styles.textChipLabelActive]}>All Photographers</Text>
         </TouchableOpacity>
         {visibleProfiles.map((profile, index) => (
           <TouchableOpacity
             key={profile.id}
             style={[
-              styles.profileChip,
-              selectedProfileId === profile.id && styles.profileChipActive,
-              index === visibleProfiles.length - 1 ? null : styles.profileChipSpacer,
+              styles.textChip,
+              selectedProfileId === profile.id && styles.textChipActive,
+              index === visibleProfiles.length - 1 ? null : styles.textChipSpacer,
             ]}
             onPress={() => setSelectedProfileId(profile.id)}
           >
-            <Image source={{ uri: profile.avatar_url ?? PLACEHOLDER_IMAGE }} style={styles.profileAvatar} />
-            <View style={styles.profileText}>
-              <Text style={styles.profileName}>{profile.full_name ?? 'Demo profile'}</Text>
-              <Text style={styles.profileMeta}>{profile.city ?? 'South Africa'}</Text>
-            </View>
+            <Text style={[styles.textChipLabel, selectedProfileId === profile.id && styles.textChipLabelActive]}>
+              {profile.full_name ?? 'Demo profile'}
+            </Text>
           </TouchableOpacity>
         ))}
       </ScrollView>
@@ -550,16 +550,40 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
     return isWeb ? (
       <View style={[styles.headerContainer, styles.headerContainerWeb]}>{headerContent}</View>
     ) : (
-      <LinearGradient colors={["#f8fafc", "#eef2ff"]} style={styles.headerContainer}>
+      <View style={styles.headerContainer}>
         {headerContent}
-      </LinearGradient>
+      </View>
     );
   };
 
   const navigation = useNavigation<StackNavigationProp<RootStackParamList, 'Root'>>();
   const { startConversationWithUser, currentUser } = useAppData();
 
-  const handleMessageUser = async (userId: string, name?: string) => {
+  const handlePostOptions = (post: FeedPost) => {
+    const doReport = () => {
+      setReportedPostIds((prev) => new Set([...prev, post.id]));
+    };
+    const doBlock = () => {
+      setBlockedUserIds((prev) => new Set([...prev, post.userId]));
+    };
+    if (Platform.OS === 'web') {
+      if (window.confirm(`Report or block this content?\n\n[OK] = Report Post  |  [Cancel] = Cancel`)) {
+        doReport();
+      }
+      return;
+    }
+    Alert.alert(
+      'Content Options',
+      `What would you like to do with this post by ${post.profile?.full_name ?? 'this user'}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: '🚩 Report Post', style: 'destructive', onPress: doReport },
+        { text: '🚫 Block User', style: 'destructive', onPress: doBlock },
+      ]
+    );
+  };
+
+  const handleMessageUser = async (userId: string, name?: string, avatarUrl?: string) => {
     if (!currentUser) {
       setError('Sign in to send messages.');
       navigation.navigate('Auth');
@@ -567,7 +591,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
     }
     try {
       const convo = await startConversationWithUser(userId, name);
-      navigation.navigate('ChatThread', { conversationId: convo.id, title: convo.title });
+      navigation.navigate('ChatThread', { conversationId: convo.id, title: convo.title, avatarUrl });
     } catch (err: any) {
       setError(err?.message || 'Unable to open chat right now.');
     }
@@ -590,10 +614,13 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
           </View>
         </TouchableOpacity>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <TouchableOpacity onPress={() => handleMessageUser(item.userId, item.profile?.full_name ?? undefined)} style={{ marginRight: 10 }}>
-            <Text style={{ color: '#0f172a', fontWeight: '700' }}>Message</Text>
+          <TouchableOpacity onPress={() => handleMessageUser(item.userId, item.profile?.full_name ?? undefined, item.profile?.avatar_url ?? undefined)} style={{ marginRight: 12 }}>
+            <Ionicons name="chatbubble-outline" size={20} color="#0f172a" />
           </TouchableOpacity>
           <Text style={styles.timestamp}>{new Date(item.createdAt).toLocaleDateString()}</Text>
+          <TouchableOpacity onPress={() => handlePostOptions(item)} style={{ marginLeft: 12, padding: 4 }}>
+            <Ionicons name="ellipsis-vertical" size={18} color="#94a3b8" />
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -698,71 +725,57 @@ const styles = StyleSheet.create({
   listHeader: {
     marginBottom: 10,
   },
-  headerRow: {
+  headerInner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 4,
   },
-  title: {
-    fontSize: 22,
+  headerTitle: {
+    fontSize: 28,
     fontWeight: '800',
     color: '#0f172a',
   },
-  subtitle: {
-    color: '#475569',
-    marginTop: 4,
-    maxWidth: 280,
+  primaryIconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#f1f5f9',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  helper: {
-    color: '#6b7280',
-  },
-  primaryButton: {
-    backgroundColor: '#0f172a',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  primaryButtonDisabled: {
+  primaryIconButtonDisabled: {
     opacity: 0.5,
   },
-  primaryButtonText: {
+  textRailWrapper: {
+    paddingLeft: 16,
+    paddingBottom: 10,
+    paddingTop: 8,
+  },
+  textRail: {
+    paddingRight: 32,
+  },
+  textChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: '#f1f5f9',
+    marginRight: 8,
+  },
+  textChipActive: {
+    backgroundColor: '#0f172a',
+  },
+  textChipSpacer: {
+    marginRight: 8,
+  },
+  textChipLabel: {
+    fontWeight: '600',
+    color: '#475569',
+  },
+  textChipLabelActive: {
     color: '#fff',
-    fontWeight: '700',
-  },
-  profileRail: {
-    paddingVertical: 4,
-  },
-  profileChipSpacer: {
-    marginRight: 12,
-  },
-  profileChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    padding: 10,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#e5e7eb',
-  },
-  profileText: {
-    marginLeft: 10,
-  },
-  profileChipActive: {
-    borderColor: '#0f172a',
-    backgroundColor: '#0f172a08',
-  },
-  profileAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: '#e5e7eb',
-  },
-  profileName: {
-    fontWeight: '700',
-    color: '#0f172a',
-  },
-  profileMeta: {
-    color: '#6b7280',
   },
   card: {
     backgroundColor: '#fff',
@@ -996,31 +1009,6 @@ const styles = StyleSheet.create({
   },
   headerContainerWeb: {
     backgroundColor: '#f8fafc',
-  },
-  headerInner: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#0f172a',
-  },
-  headerSubtitle: {
-    color: '#475569',
-    marginTop: 4,
-  },
-  headerCTA: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 12,
-  },
-  profileRailWrapper: {
-    marginTop: 12,
-  },
-  allProfilesName: {
-    fontWeight: '800',
   },
 });
 

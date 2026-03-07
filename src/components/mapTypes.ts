@@ -10,4 +10,5 @@ export type MapMarker = {
 export type MapPreviewProps = {
   markers: MapMarker[];
   onMapError?: (message: string) => void;
+  onMarkerPress?: (marker: MapMarker) => void;
 };

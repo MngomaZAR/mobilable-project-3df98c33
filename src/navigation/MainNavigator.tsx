@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { NavigationContainer, DefaultTheme, useNavigation } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import * as Linking from 'expo-linking';
 import { Image, ImageSourcePropType } from 'react-native';
 import HomeScreen from '../screens/HomeScreen';
 import ProfileScreen from '../screens/ProfileScreen';
@@ -25,59 +26,12 @@ import PhotographerDashboardScreen from '../screens/PhotographerDashboardScreen'
 import AdminDashboardScreen from '../screens/AdminDashboardScreen';
 import { RootStackParamList, TabParamList } from './types';
 import { useAppData } from '../store/AppDataContext';
-import AccessDeniedScreen from '../screens/AccessDeniedScreen';
-import { UserRole } from '../types';
 
 const Tab = createBottomTabNavigator<TabParamList>();
 const Stack = createStackNavigator<RootStackParamList>();
 
 type MainNavigatorProps = {
   logoSource?: ImageSourcePropType;
-};
-
-type GuardedRouteProps = {
-  component: React.ComponentType<any>;
-  routeProps: any;
-  requireAuth?: boolean;
-  allowedRoles?: UserRole[];
-  authMessage?: string;
-  roleMessage?: string;
-};
-
-const GuardedRoute: React.FC<GuardedRouteProps> = ({
-  component: Component,
-  routeProps,
-  requireAuth = false,
-  allowedRoles,
-  authMessage = 'Sign in to continue.',
-  roleMessage = 'Your current account role cannot access this screen.',
-}) => {
-  const { currentUser } = useAppData();
-  const navigation = useNavigation<any>();
-
-  if (requireAuth && !currentUser) {
-    return (
-      <AccessDeniedScreen
-        title="Sign in required"
-        message={authMessage}
-        actionLabel="Go to sign in"
-        onAction={() => navigation.navigate('Auth')}
-      />
-    );
-  }
-
-  if (allowedRoles && (!currentUser || !allowedRoles.includes(currentUser.role))) {
-    return (
-      <AccessDeniedScreen
-        title="Access restricted"
-        message={roleMessage}
-        actionLabel="Back to dashboard"
-        onAction={() => navigation.navigate('Root', { screen: 'Home' })}
-      />
-    );
-  }
-
-  return <Component {...routeProps} />;
 };
 
 const tabBarIcon = (routeName: keyof TabParamList, focused: boolean, color: string, size: number) => {
@@ -114,116 +68,91 @@ const TabsNavigator = () => {
     >
       <Tab.Screen
         name="Home"
-        children={(props) => (
-          <GuardedRoute
-            component={homeComponent}
-            routeProps={props}
-          />
-        )}
+        component={homeComponent}
         options={{ tabBarLabel: role === 'client' ? 'Home' : 'Dashboard' }}
       />
-      <Tab.Screen
-        name="Bookings"
-        children={(props) => (
-          <GuardedRoute
-            component={BookingsScreen}
-            routeProps={props}
-            requireAuth
-            authMessage="Sign in to view your bookings and payment status."
-          />
-        )}
-      />
-      <Tab.Screen name="Feed" children={(props) => <GuardedRoute component={FeedScreen} routeProps={props} />} />
-      <Tab.Screen
-        name="Chat"
-        children={(props) => (
-          <GuardedRoute
-            component={ConversationsListScreen}
-            routeProps={props}
-            requireAuth
-            authMessage="Sign in to access conversations."
-          />
-        )}
-      />
-      <Tab.Screen name="Map" children={(props) => <GuardedRoute component={MapScreen} routeProps={props} />} />
-      <Tab.Screen name="Settings" children={(props) => <GuardedRoute component={SettingsScreen} routeProps={props} />} />
+      <Tab.Screen name="Bookings" component={BookingsScreen} />
+      <Tab.Screen name="Feed" component={FeedScreen} />
+      <Tab.Screen name="Chat" component={ConversationsListScreen} />
+      <Tab.Screen name="Map" component={MapScreen} />
+      <Tab.Screen name="Settings" component={SettingsScreen} />
     </Tab.Navigator>
   );
 };
 
-export const MainNavigator: React.FC<MainNavigatorProps> = ({ logoSource }) => (
-  <NavigationContainer
-    theme={{
-      ...DefaultTheme,
-      colors: { ...DefaultTheme.colors, background: '#f7f7fb' },
-    }}
-  >
-    <Stack.Navigator
-      screenOptions={{
-        headerTitle: () =>
-          logoSource ? (
-            <Image source={logoSource} style={{ width: 120, height: 40, resizeMode: 'contain' }} />
-          ) : undefined,
+export const MainNavigator: React.FC<MainNavigatorProps> = ({ logoSource }) => {
+  const { currentUser, loading } = useAppData();
+
+  if (loading) {
+    return null; // or a splash screen
+  }
+
+  const linking = {
+    prefixes: [Linking.createURL('/')],
+    config: {
+      screens: {
+        Root: {
+          path: 'Root',
+          screens: {
+            Home: 'Home',
+            Bookings: 'Bookings',
+            Feed: 'Feed',
+            Chat: 'Chat',
+            Map: 'Map',
+            Settings: 'Settings',
+          },
+        },
+        Auth: 'Auth',
+        Profile: 'Profile',
+        BookingForm: 'BookingForm',
+        BookingDetail: 'BookingDetail',
+        BookingTracking: 'BookingTracking',
+        Payment: 'Payment',
+        PostDetail: 'PostDetail',
+        CreatePost: 'CreatePost',
+        UserProfile: 'UserProfile',
+        Compliance: 'Compliance',
+        ChatThread: 'ChatThread',
+      },
+    },
+  };
+
+  return (
+    <NavigationContainer
+      linking={linking}
+      theme={{
+        ...DefaultTheme,
+        colors: { ...DefaultTheme.colors, background: '#f7f7fb' },
       }}
     >
-      <Stack.Screen name="Root" component={TabsNavigator} options={{ headerShown: false }} />
-      <Stack.Screen name="Profile" children={(props) => <GuardedRoute component={ProfileScreen} routeProps={props} />} options={{ title: 'Photographer' }} />
-      <Stack.Screen
-        name="BookingForm"
-        children={(props) => (
-          <GuardedRoute
-            component={BookingFormScreen}
-            routeProps={props}
-            requireAuth
-            allowedRoles={['client', 'admin']}
-            authMessage="Sign in to request a booking."
-            roleMessage="Only clients and admins can create bookings."
-          />
+      <Stack.Navigator
+        screenOptions={{
+          headerTitle: () =>
+            logoSource ? (
+              <Image source={logoSource} style={{ width: 120, height: 40, resizeMode: 'contain' }} />
+            ) : undefined,
+        }}
+      >
+        {!currentUser ? (
+          // Unauthenticated Stack
+          <Stack.Screen name="Auth" component={AuthScreen} options={{ headerShown: false }} />
+        ) : (
+          // Authenticated Stack
+          <>
+            <Stack.Screen name="Root" component={TabsNavigator} options={{ headerShown: false }} />
+            <Stack.Screen name="Profile" component={ProfileScreen} options={{ title: 'Photographer' }} />
+            <Stack.Screen name="BookingForm" component={BookingFormScreen} options={{ title: 'Booking Request' }} />
+            <Stack.Screen name="BookingDetail" component={BookingDetailScreen} options={{ title: 'Booking Detail' }} />
+            <Stack.Screen name="BookingTracking" component={BookingTrackingScreen} options={{ title: 'Track Booking' }} />
+            <Stack.Screen name="Payment" component={PaymentScreen} options={{ title: 'Payments' }} />
+            <Stack.Screen name="PostDetail" component={PostDetailScreen} options={{ title: 'Post' }} />
+            <Stack.Screen name="CreatePost" component={CreatePostScreen} options={{ title: 'New Post' }} />
+            <Stack.Screen name="UserProfile" component={UserProfileScreen} options={{ title: 'Photographer Profile' }} />
+            <Stack.Screen name="Compliance" component={ComplianceScreen} options={{ title: 'Privacy & Permissions' }} />
+            <Stack.Screen name="ChatThread" component={ChatScreen} options={{ title: 'Chat' }} />
+          </>
         )}
-        options={{ title: 'Booking Request' }}
-      />
-      <Stack.Screen
-        name="BookingDetail"
-        children={(props) => <GuardedRoute component={BookingDetailScreen} routeProps={props} requireAuth authMessage="Sign in to view booking details." />}
-        options={{ title: 'Booking Detail' }}
-      />
-      <Stack.Screen
-        name="BookingTracking"
-        children={(props) => <GuardedRoute component={BookingTrackingScreen} routeProps={props} requireAuth authMessage="Sign in to track this booking." />}
-        options={{ title: 'Track Booking' }}
-      />
-      <Stack.Screen
-        name="Payment"
-        children={(props) => (
-          <GuardedRoute
-            component={PaymentScreen}
-            routeProps={props}
-            requireAuth
-            allowedRoles={['client', 'admin']}
-            authMessage="Sign in to continue with payment."
-            roleMessage="Only clients and admins can open the checkout screen."
-          />
-        )}
-        options={{ title: 'Payments' }}
-      />
-      <Stack.Screen name="PostDetail" children={(props) => <GuardedRoute component={PostDetailScreen} routeProps={props} />} options={{ title: 'Post' }} />
-      <Stack.Screen
-        name="CreatePost"
-        children={(props) => <GuardedRoute component={CreatePostScreen} routeProps={props} requireAuth authMessage="Sign in to create a post." />}
-        options={{ title: 'New Post' }}
-      />
-      <Stack.Screen name="UserProfile" children={(props) => <GuardedRoute component={UserProfileScreen} routeProps={props} />} options={{ title: 'Photographer Profile' }} />
-      <Stack.Screen name="Auth" component={AuthScreen} options={{ title: 'Sign in' }} />
-      <Stack.Screen
-        name="Compliance"
-        children={(props) => <GuardedRoute component={ComplianceScreen} routeProps={props} requireAuth authMessage="Sign in to manage privacy and permissions." />}
-        options={{ title: 'Privacy & Permissions' }}
-      />
-      <Stack.Screen
-        name="ChatThread"
-        children={(props) => <GuardedRoute component={ChatScreen} routeProps={props} requireAuth authMessage="Sign in to open this conversation." />}
-        options={{ title: 'Chat' }}
-      />
-    </Stack.Navigator>
-  </NavigationContainer>
-);
+      </Stack.Navigator>
+    </NavigationContainer>
+  );
+};

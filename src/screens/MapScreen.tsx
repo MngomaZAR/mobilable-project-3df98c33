@@ -5,6 +5,10 @@ import * as Location from 'expo-location';
 import { MapPreview } from '../components/MapPreview';
 import { MapMarker } from '../components/mapTypes';
 import { useAppData } from '../store/AppDataContext';
+import { StackNavigationProp } from '@react-navigation/stack';
+import { useNavigation } from '@react-navigation/native';
+import { RootStackParamList } from '../navigation/types';
+import { Ionicons } from '@expo/vector-icons';
 
 const SA_BOUNDS = {
   minLat: -35,
@@ -53,7 +57,9 @@ const MapScreen: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [manualLocation, setManualLocation] = useState({ label: '', latitude: '', longitude: '' });
   const [gpsEnabled, setGpsEnabled] = useState<boolean | null>(null);
+  const [selectedMarker, setSelectedMarker] = useState<MapMarker | null>(null);
   const lastRequestRef = useRef<number>(0);
+  const navigation = useNavigation<StackNavigationProp<RootStackParamList, 'Root'>>();
 
   const baseMarkers: MapMarker[] = useMemo(
     () =>
@@ -245,7 +251,46 @@ const MapScreen: React.FC = () => {
         </View>
 
         <View style={styles.mapWrapper}>
-          <MapPreview markers={markers} onMapError={(message) => setMapError(message)} />
+          <MapPreview
+            markers={markers}
+            onMapError={(message) => setMapError(message)}
+            onMarkerPress={(m) => {
+              if (m.type === 'photographer') {
+                setSelectedMarker(m);
+              }
+            }}
+          />
+          
+          {selectedMarker && (
+            <View style={styles.bottomSheet}>
+              <TouchableOpacity style={styles.closeSheet} onPress={() => setSelectedMarker(null)}>
+                <Ionicons name="close" size={24} color="#64748b" />
+              </TouchableOpacity>
+              <View style={styles.sheetHeader}>
+                <View style={styles.sheetPhotoPlaceholder}>
+                  <Ionicons name="camera" size={24} color="#94a3b8" />
+                </View>
+                <View style={styles.sheetInfo}>
+                  <Text style={styles.sheetTitle}>{selectedMarker.title}</Text>
+                  <Text style={styles.sheetSubtitle}>{selectedMarker.description}</Text>
+                  <View style={styles.ratingRow}>
+                    <Ionicons name="star" size={14} color="#fbbf24" />
+                    <Text style={styles.ratingText}>4.9 (120+ trips)</Text>
+                  </View>
+                </View>
+              </View>
+              <TouchableOpacity
+                style={styles.bookButton}
+                onPress={() => {
+                  if (selectedMarker.id) {
+                    navigation.navigate('Profile', { photographerId: selectedMarker.id });
+                  }
+                }}
+              >
+                <Text style={styles.bookButtonText}>View Profile & Book</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
 
         {showManualEntry ? (
@@ -463,6 +508,77 @@ const styles = StyleSheet.create({
   applyButtonText: {
     color: '#fff',
     fontWeight: '800',
+  },
+  bottomSheet: {
+    position: 'absolute',
+    bottom: 16,
+    left: 16,
+    right: 16,
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 10,
+    zIndex: 10,
+  },
+  closeSheet: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    zIndex: 11,
+    padding: 4,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  sheetPhotoPlaceholder: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  sheetInfo: {
+    flex: 1,
+  },
+  sheetTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  sheetSubtitle: {
+    fontSize: 14,
+    color: '#64748b',
+    marginTop: 2,
+  },
+  ratingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  ratingText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#0f172a',
+    marginLeft: 4,
+  },
+  bookButton: {
+    backgroundColor: '#0f172a',
+    borderRadius: 14,
+    alignItems: 'center',
+    paddingVertical: 14,
+  },
+  bookButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
   },
 });
 

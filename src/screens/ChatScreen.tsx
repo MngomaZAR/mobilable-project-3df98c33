@@ -1,10 +1,17 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import * as ImagePicker from 'expo-image-picker';
+import * as Haptics from 'expo-haptics';
 import { Alert, FlatList, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View, Image } from 'react-native';
 import { AnimatedBubble } from '../components/AnimatedBubble';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { useAppData } from '../store/AppDataContext';
+import { useAuth } from '../store/AuthContext';
+import { useMessaging } from '../store/MessagingContext';
+import { useBooking } from '../store/BookingContext';
+import { useTheme } from '../store/ThemeContext';
 import { ChatSkeleton } from '../components/Skeleton';
 import { RootStackParamList } from '../navigation/types';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,16 +23,23 @@ type Navigation = StackNavigationProp<RootStackParamList, 'ChatThread'>;
 const ChatScreen: React.FC = () => {
   const route = useRoute<Route>();
   const navigation = useNavigation<Navigation>();
-  const { state, sendMessage, sendLockedMediaMessage, fetchMessages } = useAppData();
+  const { currentUser } = useAuth();
+  const { messages: allMessages, sendMessage, sendLockedMediaMessage, fetchMessages } = useMessaging();
+  const { bookings } = useBooking();
+  const { colors, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [messagesLoading, setMessagesLoading] = useState(false);
+  const [lightboxUri, setLightboxUri] = useState<string | null>(null);
+  const [pendingMedia, setPendingMedia] = useState<{ uri: string; preview: string } | null>(null);
+  const [isLockedPending, setIsLockedPending] = useState(true);
 
-  const listRef = useRef<FlatList<any> | null>(null);
+  const listRef = useRef<FlatList>(null);
 
   const chatId = route.params.conversationId;
-  const messages = useMemo(() => state.messages.filter((m) => m.chatId === chatId), [chatId, state.messages]);
-  const latestUnlockBooking = useMemo(() => state.bookings[0] ?? null, [state.bookings]);
+  const messages = useMemo(() => allMessages[chatId] ?? [], [chatId, allMessages]);
+  const latestUnlockBooking = useMemo(() => bookings[0] ?? null, [bookings]);
 
   const PLACEHOLDER_IMAGE = 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=300&q=80';
   const otherAvatar = route.params?.avatarUrl ?? PLACEHOLDER_IMAGE;
@@ -75,6 +89,7 @@ const ChatScreen: React.FC = () => {
     if (!text.trim()) return;
     setSending(true);
     try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       await sendMessage(chatId, text);
       setText('');
     } finally {
@@ -82,282 +97,480 @@ const ChatScreen: React.FC = () => {
     }
   };
 
-  const handleSendLockedMedia = async () => {
-    if (!latestUnlockBooking) {
-      Alert.alert('Booking needed', 'Create a booking first so media can unlock after payment.');
+  const handlePickMedia = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'Please allow access to your photos.');
       return;
     }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      quality: 0.6,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      const asset = result.assets[0];
+      setPendingMedia({
+        uri: asset.uri,
+        preview: asset.uri, // In a real app, generate a low-res blurred preview here
+      });
+      setIsLockedPending(true);
+    }
+  };
+
+  const confirmSendMedia = async () => {
+    if (!pendingMedia) return;
+    if (isLockedPending && !latestUnlockBooking) {
+      Alert.alert('Booking needed', 'To send a locked photo, you must have an active booking.');
+      return;
+    }
+
     setSending(true);
     try {
       await sendLockedMediaMessage(chatId, {
-        mediaUrl: LOCKED_MEDIA_FULL,
-        previewUrl: LOCKED_MEDIA_PREVIEW,
-        text: 'Photo delivered (payment-gated)',
-        unlockBookingId: latestUnlockBooking.id,
+        mediaUrl: pendingMedia.uri,
+        previewUrl: pendingMedia.preview,
+        text: text.trim() || (isLockedPending ? 'Locked Photo' : 'Shared Photo'),
+        unlockBookingId: isLockedPending ? (latestUnlockBooking?.id as any) : undefined,
       });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setPendingMedia(null);
+      setText('');
     } catch (err: any) {
-      Alert.alert('Unable to send', err?.message ?? 'Could not send locked media.');
+      Alert.alert('Upload failed', err.message || 'Could not upload image.');
     } finally {
       setSending(false);
     }
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <View style={[styles.container, { backgroundColor: colors.bg, paddingTop: insets.top }]}>
       <KeyboardAvoidingView
-        style={styles.container}
+        style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={80}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
       {messagesLoading && messages.length === 0 ? (
         <ChatSkeleton />
+      ) : !messagesLoading && messages.length === 0 ? (
+        <View style={styles.errorContainer}>
+          <Ionicons name="cloud-offline" size={48} color={colors.textSecondary} />
+          <Text style={[styles.errorTitle, { color: colors.text }]}>Connection Problem</Text>
+          <Text style={[styles.errorText, { color: colors.textSecondary }]}>We couldn't load your messages. This might be due to a temporary service interruption.</Text>
+          <TouchableOpacity 
+            style={[styles.retryButton, { backgroundColor: colors.accent }]} 
+            onPress={() => fetchMessages(chatId)}
+          >
+            <Text style={[styles.retryButtonText, { color: isDark ? colors.bg : '#fff' }]}>Retry</Text>
+          </TouchableOpacity>
+        </View>
       ) : (
         <FlatList
           ref={listRef}
           data={messages}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
+          onRefresh={() => fetchMessages(chatId)}
+          refreshing={messagesLoading}
+          contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 20 }]}
           ListHeaderComponent={
-            <View style={styles.banner}>
-              <Text style={styles.bannerTitle}>Conversations</Text>
-              <Text style={styles.bannerText}>Messages stay synced to your account and booking activity.</Text>
+            <View style={[styles.banner, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Text style={[styles.bannerTitle, { color: colors.text }]}>Conversations</Text>
+              <Text style={[styles.bannerText, { color: colors.textSecondary }]}>Messages stay synced to your account and booking activity.</Text>
             </View>
           }
-          renderItem={({ item, index }) => {
-            const prev = messages[index - 1];
-            const sameSenderAsPrev = prev ? prev.fromUser === item.fromUser : false;
-            return (
-              <AnimatedBubble style={{ marginBottom: sameSenderAsPrev ? 4 : 12 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'flex-end' }}>
-                  {!item.fromUser ? (
-                    sameSenderAsPrev ? <View style={{ width: 34 }} /> : <Image source={{ uri: otherAvatar }} style={styles.msgAvatar} />
-                  ) : null}
-                  <View style={[styles.bubble, item.fromUser ? styles.bubbleUser : styles.bubblePhotographer, { maxWidth: '78%' }]}>
-                    {item.messageType === 'media' ? (
-                      <View>
-                        <Image
-                          source={{ uri: item.unlocked ? item.mediaUrl ?? item.previewUrl ?? PLACEHOLDER_IMAGE : item.previewUrl ?? PLACEHOLDER_IMAGE }}
-                          style={styles.mediaImage}
-                        />
-                        {item.locked && !item.unlocked ? (
-                          <View style={styles.premiumLockOverlay}>
-                            <View style={styles.premiumWatermarkBadge}>
-                              <Ionicons name="water-outline" size={14} color="#fff" style={{ marginRight: 4 }} />
-                              <Text style={styles.premiumWatermarkText}>WATERMARKED PROOF</Text>
-                            </View>
-                            <Ionicons name="lock-closed" size={32} color="#fff" style={{ marginBottom: 8 }} />
-                          </View>
-                        ) : null}
-                        {item.text ? <Text style={[styles.bubbleText, item.fromUser && styles.bubbleTextLight, styles.mediaCaption]}>{item.text}</Text> : null}
-                        {item.locked && !item.unlocked && item.unlockBookingId ? (
-                          <TouchableOpacity
-                            style={styles.premiumUnlockButton}
-                            onPress={() => navigation.navigate('Payment', { bookingId: item.unlockBookingId as string })}
-                            activeOpacity={0.8}
-                          >
-                            <Ionicons name="key" size={16} color="#000" style={{ marginRight: 6 }} />
-                            <Text style={styles.premiumUnlockButtonText}>Unlock High-Res</Text>
-                          </TouchableOpacity>
-                        ) : null}
+          renderItem={({ item }) => {
+            const isMe = item.from_user;
+            
+            if (item.message_type === 'media') {
+              return (
+                <View style={[styles.messageRow, isMe ? styles.meRow : styles.otherRow]}>
+                  <TouchableOpacity
+                    style={styles.mediaBubble}
+                    disabled={!item.unlocked}
+                    onPress={() => item.unlocked && setLightboxUri(item.media_url || null)}
+                  >
+                    <Image
+                      source={{ uri: item.unlocked ? item.media_url ?? item.preview_url ?? PLACEHOLDER_IMAGE : item.preview_url ?? PLACEHOLDER_IMAGE }}
+                      style={styles.mediaImage}
+                    />
+                    {item.locked && !item.unlocked && (
+                      <View style={styles.lockedOverlay}>
+                        <Ionicons name="lock-closed" size={32} color="#fff" />
+                        <Text style={styles.unlockPrice}>LOCKED</Text>
+                        <Text style={styles.unlockHint}>Unlock after payment</Text>
                       </View>
-                    ) : (
-                      <Text style={[styles.bubbleText, item.fromUser && styles.bubbleTextLight]}>{item.text}</Text>
                     )}
-                    <Text style={[styles.bubbleMeta, item.fromUser && styles.bubbleMetaLight]}>
-                      {new Date(item.timestamp).toLocaleTimeString()}
-                    </Text>
-                  </View>
-                  {item.fromUser ? (
-                    sameSenderAsPrev ? <View style={{ width: 34 }} /> : <Image source={{ uri: PLACEHOLDER_IMAGE }} style={styles.msgAvatar} />
-                  ) : null}
+                    {item.text ? <Text style={[styles.messageText, isMe ? styles.meText : styles.otherText, styles.mediaCaption]}>{item.text}</Text> : null}
+                  </TouchableOpacity>
                 </View>
-              </AnimatedBubble>
+              );
+            }
+
+            return (
+              <View style={[styles.messageRow, isMe ? styles.meRow : styles.otherRow]}>
+                <AnimatedBubble
+                  style={[
+                    styles.messageBubble,
+                    isMe ? styles.meBubble : styles.otherBubble,
+                    isMe ? { backgroundColor: colors.accent } : { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }
+                  ]}
+                >
+                  {isMe && !isDark && <LinearGradient colors={['#3b82f6', '#2563eb', '#1d4ed8']} style={StyleSheet.absoluteFillObject} />}
+                  <Text style={[styles.messageText, isMe ? [styles.meText, { color: isDark ? colors.bg : '#fff' }] : [styles.otherText, { color: colors.text }]]}>
+                    {item.text}
+                  </Text>
+                  <Text style={[styles.timestamp, isMe ? [styles.meTimestamp, { color: 'rgba(255,255,255,0.7)' }] : [styles.otherTimestamp, { color: colors.textMuted }]]}>
+                    {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </Text>
+                </AnimatedBubble>
+              </View>
             );
           }}
         />
       )}
-      <View style={styles.composer}>
-        <TouchableOpacity
-          style={[styles.mediaButton, sending && styles.mediaButtonDisabled]}
-          onPress={handleSendLockedMedia}
-          disabled={sending}
-        >
-          <Text style={styles.mediaButtonText}>Locked photo</Text>
+
+      {lightboxUri && (
+        <TouchableOpacity style={styles.lightboxOverlay} activeOpacity={1} onPress={() => setLightboxUri(null)}>
+          <Image source={{ uri: lightboxUri }} style={styles.lightboxImage} />
+          <TouchableOpacity style={styles.lightboxClose} onPress={() => setLightboxUri(null)}>
+            <Ionicons name="close" size={32} color="#fff" />
+          </TouchableOpacity>
         </TouchableOpacity>
-        <TextInput
-          placeholder="Send a message"
-          value={text}
-          onChangeText={setText}
-          style={styles.input}
-        />
-        <TouchableOpacity style={styles.sendButton} onPress={handleSend} disabled={sending}>
-          <Text style={styles.sendText}>{sending ? '...' : 'Send'}</Text>
-        </TouchableOpacity>
+      )}
+
+      {pendingMedia && (
+        <View style={[styles.previewOverlay, { backgroundColor: 'rgba(0,0,0,0.85)' }]}>
+          <View style={[styles.previewCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.previewTitle, { color: colors.text }]}>Review Attachment</Text>
+            <Image source={{ uri: pendingMedia.uri }} style={styles.previewImage} />
+            <View style={styles.previewOptions}>
+              <TouchableOpacity 
+                style={[styles.lockToggle, { backgroundColor: colors.bg }, isLockedPending && [styles.lockToggleActive, { backgroundColor: colors.accent }]]}
+                onPress={() => setIsLockedPending(!isLockedPending)}
+              >
+                <Ionicons name={isLockedPending ? "lock-closed" : "lock-open"} size={20} color={isLockedPending ? "#fff" : colors.text} />
+                <Text style={[styles.lockToggleText, { color: colors.text }, isLockedPending && [styles.lockToggleTextActive, { color: "#fff" }]]}>
+                  {isLockedPending ? "Locked (Pay to see)" : "Standard Send"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.previewActions}>
+              <TouchableOpacity style={[styles.cancelBtn, { backgroundColor: colors.bg }]} onPress={() => setPendingMedia(null)}>
+                <Text style={[styles.cancelBtnText, { color: colors.textSecondary }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.confirmBtn, { backgroundColor: colors.accent }]} onPress={confirmSendMedia} disabled={sending}>
+                <Text style={[styles.confirmBtnText, { color: isDark ? colors.bg : '#fff' }]}>{sending ? "Sending..." : "Send Now"}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
+
+      <View style={[styles.inputWrapper, { backgroundColor: colors.card, borderTopColor: colors.border, paddingBottom: Math.max(insets.bottom, 12) }]}>
+        <View style={[styles.inputContainer, { backgroundColor: colors.bg, borderColor: colors.border }]}>
+          <TouchableOpacity 
+            style={styles.attachButton} 
+            onPress={handlePickMedia}
+            disabled={sending}
+          >
+            <Ionicons name="camera" size={28} color={colors.accent} />
+          </TouchableOpacity>
+          <TextInput
+            style={[styles.input, { color: colors.text }]}
+            value={text}
+            onChangeText={setText}
+            placeholder="Type a message..."
+            placeholderTextColor={colors.textMuted}
+            multiline
+          />
+          <TouchableOpacity
+            onPress={handleSend}
+            disabled={sending || !text.trim()}
+            style={[styles.sendButton, { backgroundColor: text.trim() ? colors.accent : colors.border }, (!text.trim() || sending) && styles.sendButtonDisabled]}
+          >
+            <Ionicons name="arrow-up" size={20} color="#fff" />
+          </TouchableOpacity>
+        </View>
       </View>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#f7f7fb',
   },
   container: {
     flex: 1,
-    backgroundColor: '#f7f7fb',
   },
   listContent: {
-    padding: 16,
-    paddingBottom: 90,
+    paddingHorizontal: 16,
+    paddingTop: 20,
+    paddingBottom: 20,
   },
   banner: {
-    backgroundColor: '#e0f2fe',
-    padding: 12,
-    borderRadius: 12,
-    marginBottom: 12,
+    padding: 16,
+    borderRadius: 16,
+    marginBottom: 20,
+    borderWidth: 1,
   },
   bannerTitle: {
     fontWeight: '800',
-    color: '#0f172a',
+    fontSize: 16,
     marginBottom: 4,
   },
   bannerText: {
-    color: '#0f172a',
+    fontSize: 13,
+    lineHeight: 18,
   },
-  bubble: {
+  messageRow: {
+    flexDirection: 'row',
+    marginBottom: 4,
     maxWidth: '85%',
-    padding: 12,
-    borderRadius: 14,
-    marginBottom: 10,
   },
-  msgAvatar: {
-    width: 34,
-    height: 34,
-    borderRadius: 8,
-    marginRight: 8,
-    marginLeft: 8,
-    backgroundColor: '#e5e7eb',
-  },
-  bubbleUser: {
+  meRow: {
     alignSelf: 'flex-end',
-    backgroundColor: '#0f172a',
+    justifyContent: 'flex-end',
   },
-  bubblePhotographer: {
+  otherRow: {
     alignSelf: 'flex-start',
-    backgroundColor: '#e5e7eb',
+    justifyContent: 'flex-start',
   },
-  bubbleText: {
-    color: '#0f172a',
-  },
-  bubbleTextLight: {
-    color: '#fff',
-  },
-  bubbleMeta: {
-    color: '#6b7280',
-    fontSize: 11,
-    marginTop: 4,
-  },
-  bubbleMetaLight: {
-    color: '#e5e7eb',
-  },
-  mediaImage: {
-    width: 210,
-    height: 150,
-    borderRadius: 10,
-    backgroundColor: '#0f172a',
-  },
-  mediaCaption: {
-    marginTop: 6,
-  },
-  premiumLockOverlay: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.4)', // sleek dark overlay
-    borderRadius: 10,
-  },
-  premiumWatermarkBadge: {
-    position: 'absolute',
-    top: 10,
-    left: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  premiumWatermarkText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  premiumUnlockButton: {
-    marginTop: 10,
-    borderRadius: 20, // pill shape
-    backgroundColor: '#fbbf24', // premium gold/amber
-    paddingVertical: 10,
+  messageBubble: {
     paddingHorizontal: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#fbbf24',
-    shadowOpacity: 0.4,
+    paddingVertical: 10,
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  meBubble: {
+    borderBottomRightRadius: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
+    elevation: 3,
   },
-  premiumUnlockButtonText: {
-    color: '#000',
+  otherBubble: {
+    borderBottomLeftRadius: 4,
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
+  },
+  messageText: {
+    fontSize: 16,
+    lineHeight: 20,
+  },
+  meText: {
+  },
+  otherText: {
+  },
+  timestamp: {
+    fontSize: 10,
+    marginTop: 4,
+    alignSelf: 'flex-end',
+  },
+  meTimestamp: {
+  },
+  otherTimestamp: {
+  },
+  mediaBubble: {
+    padding: 4,
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  mediaImage: {
+    width: 240,
+    height: 180,
+    borderRadius: 16,
+  },
+  mediaCaption: {
+    marginTop: 8,
+    paddingHorizontal: 10,
+    paddingBottom: 6,
+  },
+  lockedOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 16,
+  },
+  unlockPrice: {
+    color: '#fff',
     fontWeight: '800',
-    fontSize: 14,
+    fontSize: 18,
+    marginTop: 10,
+    letterSpacing: 2,
   },
-  composer: {
+  unlockHint: {
+    color: 'rgba(255,255,255,0.9)',
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  inputWrapper: {
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#e5e7eb',
-    backgroundColor: '#fff',
-  },
-  mediaButton: {
-    backgroundColor: '#e2e8f0',
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-    marginRight: 8,
-  },
-  mediaButtonDisabled: {
-    opacity: 0.6,
-  },
-  mediaButtonText: {
-    color: '#0f172a',
-    fontWeight: '700',
-    fontSize: 12,
+    borderRadius: 24,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderWidth: 1,
   },
   input: {
     flex: 1,
-    backgroundColor: '#f1f5f9',
-    borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    marginRight: 10,
+    fontSize: 16,
+    maxHeight: 120,
+  },
+  attachButton: {
+    padding: 4,
   },
   sendButton: {
-    backgroundColor: '#0f172a',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  sendText: {
-    color: '#fff',
+  sendButtonDisabled: {
+    opacity: 0.5,
+  },
+  msgAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    marginRight: 8,
+  },
+  lightboxOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.95)',
+    zIndex: 1000,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  lightboxImage: {
+    width: '100%',
+    height: '80%',
+    resizeMode: 'contain',
+  },
+  lightboxClose: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    padding: 10,
+  },
+  errorContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 40,
+  },
+  errorTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  errorText: {
+    fontSize: 15,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  retryButton: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  retryButtonText: {
+    fontWeight: '700',
+    fontSize: 16,
+  },
+  previewOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 2000,
+    padding: 20,
+  },
+  previewCard: {
+    borderRadius: 24,
+    width: '100%',
+    maxWidth: 400,
+    padding: 20,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 10,
+    borderWidth: 1,
+  },
+  previewTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    marginBottom: 16,
+  },
+  previewImage: {
+    width: '100%',
+    height: 300,
+    borderRadius: 16,
+    marginBottom: 16,
+  },
+  previewOptions: {
+    width: '100%',
+    marginBottom: 20,
+  },
+  lockToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    borderRadius: 12,
+    gap: 8,
+  },
+  lockToggleActive: {
+  },
+  lockToggleText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  lockToggleTextActive: {
+  },
+  previewActions: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  cancelBtn: {
+    flex: 1,
+    padding: 14,
+    borderRadius: 14,
+    alignItems: 'center',
+  },
+  cancelBtnText: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  confirmBtn: {
+    flex: 2,
+    padding: 14,
+    borderRadius: 14,
+    alignItems: 'center',
+  },
+  confirmBtnText: {
+    fontSize: 16,
     fontWeight: '700',
   },
 });

@@ -6,68 +6,74 @@ import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppData } from '../store/AppDataContext';
+import { useTheme } from '../store/ThemeContext';
 
-type Navigation = StackNavigationProp<RootStackParamList, 'Root'>;
+type Navigation = StackNavigationProp<RootStackParamList>;
 
 const AdminDashboardScreen: React.FC = () => {
   const navigation = useNavigation<Navigation>();
   const { state } = useAppData();
+  const { colors, isDark } = useTheme();
 
   const pendingBookings = useMemo(
     () => state.bookings.filter((booking) => booking.status === 'pending').length,
     [state.bookings]
   );
-  const completedBookings = useMemo(
-    () => state.bookings.filter((booking) => booking.status === 'completed').length,
+  const activeJobs = useMemo(
+    () => state.bookings.filter((booking) => booking.status === 'accepted').length,
     [state.bookings]
   );
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.bg }]}>
       <ScrollView contentContainerStyle={styles.container}>
         <View style={styles.hero}>
-          <Text style={styles.eyebrow}>Admin operations</Text>
-          <Text style={styles.title}>Papzi control center</Text>
-          <Text style={styles.subtitle}>Review marketplace health, orders, and user activity.</Text>
+          <Text style={[styles.eyebrow, { color: colors.accent }]}>Control Center</Text>
+          <Text style={[styles.title, { color: colors.text }]}>Admin Overview</Text>
+          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Platform health and operations dashboard.</Text>
         </View>
 
         <View style={styles.statsRow}>
-          <View style={styles.statCard}>
-            <Text style={styles.statLabel}>Pending bookings</Text>
-            <Text style={styles.statValue}>{pendingBookings}</Text>
-            <Text style={styles.statMeta}>Needs ops follow-up</Text>
+          <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.statLabel, { color: colors.textMuted }]}>Pending</Text>
+            <Text style={[styles.statValue, { color: colors.text }]}>{pendingBookings}</Text>
+            <Text style={[styles.statMeta, { color: colors.destructive }]}>Attention</Text>
           </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statLabel}>Completed jobs</Text>
-            <Text style={styles.statValue}>{completedBookings}</Text>
-            <Text style={styles.statMeta}>Settled and delivered</Text>
+          <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.statLabel, { color: colors.textMuted }]}>Active Jobs</Text>
+            <Text style={[styles.statValue, { color: colors.text }]}>{activeJobs}</Text>
+            <Text style={[styles.statMeta, { color: colors.accent }]}>Live now</Text>
+          </View>
+          <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border, marginRight: 0 }]}>
+            <Text style={[styles.statLabel, { color: colors.textMuted }]}>Revenue</Text>
+            <Text style={[styles.statValue, { color: colors.text }]}>R12k</Text>
+            <Text style={[styles.statMeta, { color: '#10b981' }]}>+12.5%</Text>
           </View>
         </View>
 
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Moderation queue</Text>
-          <Text style={styles.cardBody}>
-            Use feed and chat tools to review content reports and resolve disputes quickly.
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[styles.cardTitle, { color: colors.text }]}>Trust & Safety</Text>
+          <Text style={[styles.cardBody, { color: colors.textSecondary }]}>
+            Review reported content, user disputes, and community standards.
           </Text>
-          <TouchableOpacity style={styles.action} onPress={() => navigation.navigate('Root', { screen: 'Feed' })}>
-            <Ionicons name="images-outline" size={18} color="#0f172a" />
-            <Text style={styles.actionText}>Review feed activity</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.action} onPress={() => navigation.navigate('Root', { screen: 'Chat' })}>
-            <Ionicons name="chatbubble-ellipses-outline" size={18} color="#0f172a" />
-            <Text style={styles.actionText}>Review active chats</Text>
+          <TouchableOpacity style={[styles.action, { backgroundColor: colors.bg, borderColor: colors.border }]} onPress={() => navigation.navigate('AdminModeration')}>
+            <Ionicons name="shield-half-outline" size={18} color={colors.destructive} />
+            <Text style={[styles.actionText, { color: colors.text }]}>Moderation queue</Text>
+            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} style={{ marginLeft: 'auto' }} />
           </TouchableOpacity>
         </View>
 
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Payments and compliance</Text>
-          <TouchableOpacity style={styles.action} onPress={() => navigation.navigate('Root', { screen: 'Bookings' })}>
-            <Ionicons name="card-outline" size={18} color="#0f172a" />
-            <Text style={styles.actionText}>Inspect booking and payment states</Text>
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[styles.cardTitle, { color: colors.text }]}>Operations</Text>
+          <TouchableOpacity style={[styles.action, { backgroundColor: colors.bg, borderColor: colors.border }]} onPress={() => navigation.navigate('Root', { screen: 'Bookings' })}>
+            <Ionicons name="calendar-outline" size={18} color={colors.accent} />
+            <Text style={[styles.actionText, { color: colors.text }]}>Browse all bookings</Text>
+            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} style={{ marginLeft: 'auto' }} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.action} onPress={() => navigation.navigate('Compliance')}>
-            <Ionicons name="shield-checkmark-outline" size={18} color="#0f172a" />
-            <Text style={styles.actionText}>Open compliance settings</Text>
+          <TouchableOpacity style={[styles.action, { backgroundColor: colors.bg, borderColor: colors.border }]} onPress={() => navigation.navigate('Compliance')}>
+            <Ionicons name="file-tray-full-outline" size={18} color={colors.text} />
+            <Text style={[styles.actionText, { color: colors.text }]}>Compliance & Logs</Text>
+            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} style={{ marginLeft: 'auto' }} />
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -76,49 +82,46 @@ const AdminDashboardScreen: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#f7f7fb' },
-  container: { padding: 16, paddingBottom: 120 },
-  hero: { marginBottom: 14 },
-  eyebrow: { color: '#2563eb', fontWeight: '800', marginBottom: 4 },
-  title: { fontSize: 24, fontWeight: '800', color: '#0f172a' },
-  subtitle: { color: '#475569', marginTop: 4 },
-  statsRow: { flexDirection: 'row', marginBottom: 14 },
+  safeArea: { flex: 1 },
+  container: { padding: 20, paddingBottom: 120 },
+  hero: { marginBottom: 24 },
+  eyebrow: { fontWeight: '900', marginBottom: 4, letterSpacing: 1, fontSize: 12, textTransform: 'uppercase' },
+  title: { fontSize: 32, fontWeight: '900', letterSpacing: -1 },
+  subtitle: { fontSize: 16, marginTop: 4 },
+  statsRow: { flexDirection: 'row', marginBottom: 20, gap: 10 },
   statCard: {
     flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 14,
+    borderRadius: 18,
     padding: 14,
-    marginRight: 10,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#e5e7eb',
+    borderWidth: 1,
   },
-  statLabel: { color: '#475569', fontWeight: '700' },
-  statValue: { fontSize: 24, fontWeight: '800', color: '#0f172a' },
-  statMeta: { color: '#64748b', marginTop: 4 },
+  statLabel: { fontWeight: '700', fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.5 },
+  statValue: { fontSize: 22, fontWeight: '900', marginTop: 4 },
+  statMeta: { fontWeight: '700', fontSize: 11, marginTop: 4 },
   card: {
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#e5e7eb',
-    marginBottom: 12,
+    borderRadius: 20,
+    padding: 20,
+    borderWidth: 1,
+    marginBottom: 16,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
   },
-  cardTitle: { fontSize: 18, fontWeight: '800', color: '#0f172a', marginBottom: 8 },
-  cardBody: { color: '#475569', marginBottom: 10 },
+  cardTitle: { fontSize: 20, fontWeight: '800', marginBottom: 8 },
+  cardBody: { fontSize: 14, lineHeight: 20, marginBottom: 16 },
   action: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#dbe3f2',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    gap: 12,
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     marginTop: 8,
-    backgroundColor: '#f8fafc',
   },
-  actionText: { color: '#0f172a', fontWeight: '700' },
+  actionText: { fontWeight: '700', fontSize: 15 },
 });
 
 export default AdminDashboardScreen;
-

@@ -10,48 +10,80 @@ import {
   TouchableOpacity,
   View,
   useWindowDimensions,
+  Modal,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '../store/ThemeContext';
 import { useAppData } from '../store/AppDataContext';
 import { RootStackParamList, TabParamList } from '../navigation/types';
 import { Photographer, Model } from '../types';
 import { AppLogo } from '../components/AppLogo';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
+import { fetchRecommendedMatches } from '../services/matchService';
 
 type Navigation = BottomTabNavigationProp<TabParamList, 'Home'>;
 const MAX_HOME_CARDS = 120;
 const randPerTier = 600;
 
-const toHourlyRateRand = (priceRange: string) => {
-  const tiers = (priceRange.match(/\$/g) || []).length || 2;
+const toHourlyRateRand = (price_range: string) => {
+  const tiers = ((price_range || '').match(/\$/g) || []).length || 2;
   const amount = tiers * randPerTier + 600;
   return `R${amount.toLocaleString('en-ZA')}/hr`;
 };
 
 const HomeScreen: React.FC = () => {
   const { state, loading, error, refresh } = useAppData();
+  const { colors, isDark } = useTheme();
   const navigation = useNavigation<Navigation>();
   const parentNavigation = navigation.getParent<StackNavigationProp<RootStackParamList>>();
   const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const [category, setCategory] = useState('All Categories');
   const [priceRange, setPriceRange] = useState('Any budget');
   const [sort, setSort] = useState('Highest Rated');
   const [location, setLocation] = useState('');
+  const [discoveryMode, setDiscoveryMode] = useState<'photographers' | 'models'>('photographers');
+  const [filterModalVisible, setFilterModalVisible] = useState(false);
+  
+  const [recommended, setRecommended] = useState<Photographer[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+
+  React.useEffect(() => {
+     // Initial generic recommendations
+     fetchRecommendedMatches('Cape Town', '', 0).then(setRecommended);
+  }, []);
+
+  const handleSmartSearch = async () => {
+      setIsSearching(true);
+      try {
+          // In a real app we'd parse budget from string, but here we just pass simple params
+          const budget = priceRange.includes('$$') ? 1000 : 2000;
+          const matches = await fetchRecommendedMatches(location, category === 'All Categories' ? '' : category, budget);
+          setRecommended(matches);
+      } catch (e) {
+          console.warn(e);
+      } finally {
+          setIsSearching(false);
+      }
+  };
 
   const columns = width > 900 ? 3 : width > 700 ? 2 : 1;
   const isWideHero = width > 820;
 
-  const filteredPhotographers = useMemo(() => {
-    let list = [...state.photographers];
+  const filteredTalent = useMemo(() => {
+    let list = discoveryMode === 'photographers' ? [...state.photographers] : [...state.models];
 
     if (category !== 'All Categories') {
       list = list.filter((item) => item.tags.some((tag) => category.toLowerCase().includes(tag.toLowerCase())));
     }
 
     if (priceRange !== 'Any budget') {
-      list = list.filter((item) => item.priceRange.includes(priceRange.replace(/[^$]/g, '')));
+      list = list.filter((item) => item.price_range.includes(priceRange.replace(/[^$]/g, '')));
     }
 
     if (location.trim().length > 0) {
@@ -64,13 +96,10 @@ const HomeScreen: React.FC = () => {
     }
 
     return list;
-  }, [state.photographers, category, priceRange, sort, location]);
+  }, [state.photographers, state.models, category, priceRange, sort, location, discoveryMode]);
 
-  const visiblePhotographers = useMemo(
-    () => filteredPhotographers.slice(0, MAX_HOME_CARDS),
-    [filteredPhotographers]
-  );
-  const featuredPhotographer = visiblePhotographers[0] ?? state.photographers[0] ?? null;
+  const visibleTalent = useMemo(() => filteredTalent.slice(0, MAX_HOME_CARDS), [filteredTalent]);
+  const featuredPhotographer = discoveryMode === 'photographers' ? visibleTalent[0] ?? state.photographers[0] ?? null : null;
   const models = state.models ?? [];
 
   const startModelBooking = (model: Model) => {
@@ -80,14 +109,14 @@ const HomeScreen: React.FC = () => {
   };
 
   const openProfile = (photographer: Photographer) => {
-    parentNavigation?.navigate('Profile', { photographerId: photographer.id });
+    parentNavigation?.navigate('Profile', { userId: photographer.id });
   };
 
   const startBooking = (photographer: Photographer) => {
     parentNavigation?.navigate('BookingForm', { photographerId: photographer.id });
   };
 
-  const renderCard = (item: Photographer) => (
+  const renderCard = (item: any) => (
     <View
       key={item.id}
       style={[
@@ -96,40 +125,48 @@ const HomeScreen: React.FC = () => {
           width: columns === 1 ? '100%' : `${100 / columns - 3}%`,
           marginRight: columns === 1 ? 0 : 12,
           marginBottom: 14,
+          backgroundColor: colors.card,
+          borderColor: colors.border
         },
       ]}
     >
       <View style={styles.imageWrap}>
-        <Image source={{ uri: item.avatar }} style={styles.avatar} />
-        <View style={styles.ratingBadge}>
+        <Image source={{ uri: item.avatar_url }} style={styles.avatar} />
+        <View style={[styles.ratingBadge, { backgroundColor: isDark ? 'rgba(0,0,0,0.6)' : '#111827cc' }]}>
           <Ionicons name="star" size={14} color="#fbbf24" />
           <Text style={styles.ratingText}>{item.rating.toFixed(1)}</Text>
         </View>
         <View style={styles.availabilityBadge}>
-          <Text style={styles.availabilityText}>Available Today</Text>
+          <Text style={styles.availabilityText}>{discoveryMode === 'models' ? 'Ready to Shoot' : 'Available Today'}</Text>
         </View>
       </View>
       <View style={styles.cardContent}>
-        <Text style={styles.name}>{item.name}</Text>
-        <Text style={styles.meta}>{item.location}</Text>
+        <Text style={[styles.name, { color: colors.text }]}>{discoveryMode === 'models' ? item.name : item.name}</Text>
+        <Text style={[styles.meta, { color: colors.textMuted }]}>{item.location}</Text>
         <View style={styles.tagRowCompact}>
-          {item.tags.slice(0, 3).map((tag) => (
-            <View style={styles.tag} key={tag}>
-              <Text style={styles.tagText}>{tag}</Text>
+          {item.tags.slice(0, 3).map((tag: string) => (
+            <View style={[styles.tag, { backgroundColor: colors.bg }]} key={tag}>
+              <Text style={[styles.tagText, { color: colors.text }]}>{tag}</Text>
             </View>
           ))}
         </View>
         <View style={styles.metaRow}>
-          <Text style={styles.price}>{toHourlyRateRand(item.priceRange)}</Text>
-          <Text style={styles.dot}>•</Text>
-          <Text style={styles.duration}>~1 hour</Text>
+          <Text style={[styles.price, { color: colors.text }]}>{toHourlyRateRand(item.price_range)}</Text>
+          <Text style={[styles.dot, { color: colors.textMuted }]}>•</Text>
+          <Text style={[styles.duration, { color: colors.textMuted }]}>{discoveryMode === 'models' ? 'Min 2 hours' : '~1 hour'}</Text>
         </View>
         <View style={styles.actions}>
-          <TouchableOpacity style={styles.buttonGhost} onPress={() => openProfile(item)}>
-            <Text style={styles.buttonGhostText}>View Profile</Text>
+          <TouchableOpacity 
+            style={[styles.buttonGhost, { borderColor: colors.border }, discoveryMode === 'models' && styles.buttonVideo]} 
+            onPress={() => (discoveryMode === 'models' ? (navigation as any).navigate('PaidVideoCall') : openProfile(item))}
+          >
+            {discoveryMode === 'models' && <Ionicons name="videocam" size={16} color="#fff" style={{ marginRight: 6 }} />}
+            <Text style={[styles.buttonGhostText, { color: colors.text }, discoveryMode === 'models' && styles.buttonVideoText]}>
+              {discoveryMode === 'models' ? 'Video Call' : 'View Profile'}
+            </Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.buttonPrimary} onPress={() => startBooking(item)}>
-            <Text style={styles.buttonPrimaryText}>Book Now</Text>
+          <TouchableOpacity style={[styles.buttonPrimary, { backgroundColor: colors.accent }]} onPress={() => (discoveryMode === 'models' ? startModelBooking(item) : startBooking(item))}>
+            <Text style={[styles.buttonPrimaryText, { color: colors.card }]}>Book Now</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -138,76 +175,103 @@ const HomeScreen: React.FC = () => {
 
   return (
     <ScrollView
-      style={styles.container}
-      refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} />}
+      style={[styles.container, { backgroundColor: colors.bg }]}
+      refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} tintColor={colors.accent} />}
       contentContainerStyle={styles.scrollContent}
     >
-      <View style={styles.topBar}>
+      <View style={[styles.topBar, { paddingTop: Math.max(insets.top, 24) }]}>
         <View style={styles.brandRow}>
           <AppLogo size={48} />
-          <Text style={styles.brandName}>Papzi</Text>
+          <Text style={[styles.brandName, { color: colors.text }]}>Papzi</Text>
+        </View>
+        <View style={styles.navActions}>
+          <View style={[styles.modeToggle, { backgroundColor: colors.bg }]}>
+            <TouchableOpacity 
+              style={[styles.modeBtn, discoveryMode === 'photographers' && [styles.modeBtnActive, { backgroundColor: colors.card }]]} 
+              onPress={() => setDiscoveryMode('photographers')}
+            >
+              <Text style={[styles.modeBtnText, { color: colors.textMuted }, discoveryMode === 'photographers' && [styles.modeBtnTextActive, { color: colors.text }]]}>Photographers</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.modeBtn, discoveryMode === 'models' && [styles.modeBtnActive, { backgroundColor: colors.card }]]} 
+              onPress={() => setDiscoveryMode('models')}
+            >
+              <Text style={[styles.modeBtnText, { color: colors.textMuted }, discoveryMode === 'models' && [styles.modeBtnTextActive, { color: colors.text }]]}>Models</Text>
+            </TouchableOpacity>
+          </View>
+          <TouchableOpacity 
+            style={[styles.linkPill, styles.navActionSpacer, { backgroundColor: colors.card }]}
+            onPress={() => parentNavigation?.navigate('Notifications')}
+          >
+            <Ionicons name="notifications-outline" size={20} color={colors.text} />
+          </TouchableOpacity>
         </View>
       </View>
 
-      <View style={[styles.hero, !isWideHero && styles.heroStacked]}>
+      <LinearGradient colors={isDark ? ['#1e293b', '#0f172a', '#020617'] : ['#e8edff', '#e0e7ff', '#cfd9f9']} style={[styles.hero, !isWideHero && styles.heroStacked, { borderColor: colors.border }]}>
         <View style={[styles.heroText, !isWideHero && styles.heroTextCentered]}>
-          <Text style={[styles.title, !isWideHero && styles.titleCentered]}>Find the Perfect Photographer for Your Moments</Text>
-          <Text style={[styles.subtitle, !isWideHero && styles.subtitleCentered]}>
+          <Text style={[styles.title, !isWideHero && styles.titleCentered, { color: colors.text }]}>Find the Perfect Photographer for Your Moments</Text>
+          <Text style={[styles.subtitle, !isWideHero && styles.subtitleCentered, { color: colors.textSecondary }]}>
             Connect with professional photographers in your area. Browse, compare, and book in minutes.
           </Text>
-          <View style={[styles.searchCard, !isWideHero && styles.searchCardFull]}>
+          <BlurView intensity={70} tint={isDark ? 'dark' : 'light'} style={[styles.searchCard, !isWideHero && styles.searchCardFull, { backgroundColor: isDark ? 'rgba(30,41,59,0.5)' : 'rgba(255, 255, 255, 0.45)', borderColor: colors.border }]}>
             <View style={[styles.searchRow, !isWideHero && styles.searchRowStacked]}>
-              <View style={[styles.inputGroup, styles.inputSpacer, !isWideHero && styles.inputGroupBlock]}>
-                <Ionicons name="location-outline" size={18} color="#0f172a" />
+              <View style={[styles.inputGroup, styles.inputSpacer, !isWideHero && styles.inputGroupBlock, { backgroundColor: colors.bg, borderColor: colors.border }]}>
+                <Ionicons name="location-outline" size={18} color={colors.text} />
                 <View style={styles.inputContent}>
-                  <Text style={styles.inputLabel}>Location</Text>
+                  <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Location</Text>
                   <TextInput
                     placeholder="Enter your location"
                     value={location}
                     onChangeText={setLocation}
-                    style={styles.input}
-                    placeholderTextColor="#94a3b8"
+                    style={[styles.input, { color: colors.text }]}
+                    placeholderTextColor={colors.textMuted}
                   />
                 </View>
               </View>
-              <View style={[styles.inputGroup, styles.dropdown, !isWideHero && styles.inputGroupBlock]}>
-                <Ionicons name="camera-outline" size={18} color="#0f172a" />
+              <View style={[styles.inputGroup, styles.dropdown, !isWideHero && styles.inputGroupBlock, { backgroundColor: colors.bg, borderColor: colors.border }]}>
+                <Ionicons name="camera-outline" size={18} color={colors.text} />
                 <View style={styles.inputContent}>
-                  <Text style={styles.inputLabel}>Category</Text>
+                  <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Category</Text>
                   <View style={styles.dropdownRow}>
-                    <Text style={styles.dropdownValue}>{category}</Text>
-                    <Ionicons name="chevron-down" size={16} color="#475569" />
+                    <Text style={[styles.dropdownValue, { color: colors.text }]}>{category}</Text>
+                    <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
                   </View>
                 </View>
               </View>
             </View>
-            <Pressable style={({ pressed }) => [styles.ctaButton, pressed && styles.ctaButtonPressed]}>
-              <Ionicons name="search" size={18} color="#fff" />
-              <Text style={styles.ctaText}>Find Photographers</Text>
+            <Pressable 
+              style={({ pressed }) => [styles.ctaButton, { backgroundColor: colors.accent }, pressed && styles.ctaButtonPressed]}
+              onPress={handleSmartSearch}
+            >
+              <Ionicons name="search" size={18} color={isDark ? colors.bg : colors.card} />
+              <Text style={[styles.ctaText, { color: isDark ? colors.bg : colors.card }]}>
+                {isSearching ? 'Matching...' : 'Find Photographers'}
+              </Text>
             </Pressable>
-          </View>
+          </BlurView>
           <View style={[styles.metricsRow, !isWideHero && styles.metricsRowStacked]}>
-            <View style={[styles.metric, styles.metricPrimary]}>
-              <Text style={styles.metricValue}>500+</Text>
-              <Text style={styles.metricLabel}>Photographers</Text>
+            <View style={[styles.metric, styles.metricPrimary, { backgroundColor: isDark ? '#1e293b' : '#eef2ff', borderColor: isDark ? '#334155' : '#c7d2fe' }]}>
+              <Text style={[styles.metricValue, { color: colors.text }]}>500+</Text>
+              <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>Photographers</Text>
             </View>
-            <View style={[styles.metric, styles.metricSecondary]}>
-              <Text style={styles.metricValue}>10k+</Text>
-              <Text style={styles.metricLabel}>Happy Customers</Text>
+            <View style={[styles.metric, styles.metricSecondary, { backgroundColor: isDark ? '#0f172a' : '#e0f2fe', borderColor: isDark ? '#1e293b' : '#bae6fd' }]}>
+              <Text style={[styles.metricValue, { color: colors.text }]}>10k+</Text>
+              <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>Happy Customers</Text>
             </View>
-            <View style={[styles.metric, styles.metricTertiary]}>
-              <Text style={styles.metricValue}>4.9</Text>
-              <Text style={styles.metricLabel}>Average Rating</Text>
+            <View style={[styles.metric, styles.metricTertiary, { backgroundColor: isDark ? '#064e3b' : '#ecfccb', borderColor: isDark ? '#065f46' : '#bef264' }]}>
+              <Text style={[styles.metricValue, { color: colors.text }]}>4.9</Text>
+              <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>Average Rating</Text>
             </View>
           </View>
         </View>
-        <View style={[styles.heroCard, !isWideHero && styles.heroCardWide]}>
+        <View style={[styles.heroCard, !isWideHero && styles.heroCardWide, { backgroundColor: colors.card, borderColor: colors.border }]}>
           {featuredPhotographer ? (
             <>
-              <Image source={{ uri: featuredPhotographer.avatar }} style={styles.heroCardImage} />
-              <View style={styles.heroCardOverlay}>
+              <Image source={{ uri: featuredPhotographer.avatar_url }} style={styles.heroCardImage} />
+              <View style={[styles.heroCardOverlay, { backgroundColor: isDark ? 'rgba(0,0,0,0.8)' : 'rgba(15, 23, 42, 0.72)' }]}>
                 <Text style={styles.heroCardName}>{featuredPhotographer.name}</Text>
-                <Text style={styles.heroCardMeta}>{featuredPhotographer.location}</Text>
+                <Text style={[styles.heroCardMeta, { color: isDark ? '#94a3b8' : '#cbd5e1' }]}>{featuredPhotographer.location}</Text>
                 <View style={styles.heroCardRatingRow}>
                   <Ionicons name="star" size={14} color="#fbbf24" />
                   <Text style={styles.heroCardRatingText}>{featuredPhotographer.rating.toFixed(1)} rating</Text>
@@ -216,97 +280,148 @@ const HomeScreen: React.FC = () => {
             </>
           ) : (
             <>
-              <Ionicons name="camera-outline" size={44} color="#0f172a" />
-              <Text style={styles.heroCardTitle}>Top photographers updated daily</Text>
+              <Ionicons name="camera-outline" size={44} color={colors.text} />
+              <Text style={[styles.heroCardTitle, { color: colors.text }]}>Top photographers updated daily</Text>
             </>
           )}
         </View>
-      </View>
+      </LinearGradient>
 
-      <View style={styles.filtersCard}>
-        <Text style={styles.sectionTitle}>Filters</Text>
+      <View style={[styles.filtersCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: colors.text, fontSize: 18 }]}>Quick Filters</Text>
+            <TouchableOpacity onPress={() => setFilterModalVisible(true)}>
+                <Text style={{ color: colors.accent, fontWeight: '600' }}>Advanced</Text>
+            </TouchableOpacity>
+        </View>
         <View style={styles.filtersRow}>
           {['All Categories', 'Wedding', 'Portrait', 'Event', 'Family'].map((item) => (
             <TouchableOpacity
               key={item}
-              style={[styles.filterPill, category === item && styles.filterPillActive]}
+              style={[styles.filterPill, { backgroundColor: colors.bg }, category === item && [styles.filterPillActive, { backgroundColor: colors.accent }]]}
               onPress={() => setCategory(item)}
             >
-              <Text style={[styles.filterText, category === item && styles.filterTextActive]}>{item}</Text>
+              <Text style={[styles.filterText, { color: colors.text }, category === item && [styles.filterTextActive, { color: colors.card }]]}>{item}</Text>
             </TouchableOpacity>
           ))}
         </View>
         <View style={styles.filtersGrid}>
           <TouchableOpacity
-            style={[styles.filterBox, styles.filterBoxSpacer]}
+            style={[styles.filterBox, styles.filterBoxSpacer, { backgroundColor: colors.bg, borderColor: colors.border }]}
             onPress={() => setPriceRange(priceRange === 'Any budget' ? '$$' : 'Any budget')}
           >
-            <Text style={styles.filterLabel}>Price Range</Text>
-            <Text style={styles.filterValue}>{priceRange === 'Any budget' ? 'R1,200+' : 'R1,800+'}</Text>
+            <Text style={[styles.filterLabel, { color: colors.textMuted }]}>Price Range</Text>
+            <Text style={[styles.filterValue, { color: colors.text }]}>{priceRange === 'Any budget' ? 'R1,200+' : 'R1,800+'}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.filterBox} onPress={() => setSort(sort === 'Highest Rated' ? 'Nearest' : 'Highest Rated')}>
-            <Text style={styles.filterLabel}>Sort By</Text>
-            <Text style={styles.filterValue}>{sort}</Text>
+          <TouchableOpacity style={[styles.filterBox, { backgroundColor: colors.bg, borderColor: colors.border }]} onPress={() => setSort(sort === 'Highest Rated' ? 'Nearest' : 'Highest Rated')}>
+            <Text style={[styles.filterLabel, { color: colors.textMuted }]}>Sort By</Text>
+            <Text style={[styles.filterValue, { color: colors.text }]}>{sort}</Text>
           </TouchableOpacity>
         </View>
       </View>
 
       <View style={styles.sectionHeader}>
         <View>
-          <Text style={styles.sectionTitle}>Available Photographers</Text>
-          <Text style={styles.sectionSubtitle}>
-            {filteredPhotographers.length} options in your area
-            {filteredPhotographers.length > MAX_HOME_CARDS ? ` (showing top ${MAX_HOME_CARDS})` : ''}
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            {discoveryMode === 'photographers' ? 'Available Photographers' : 'Featured Models'}
+          </Text>
+          <Text style={[styles.sectionSubtitle, { color: colors.textMuted }]}>
+            {filteredTalent.length} options in your area
+            {filteredTalent.length > MAX_HOME_CARDS ? ` (showing top ${MAX_HOME_CARDS})` : ''}
           </Text>
         </View>
-        <TouchableOpacity style={styles.lightButton} onPress={() => navigation.navigate('Bookings')}>
-          <Ionicons name="calendar-outline" size={16} color="#0f172a" />
-          <Text style={styles.lightButtonText}>View Dashboard</Text>
+        <TouchableOpacity style={[styles.lightButton, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={() => navigation.navigate('Settings')}>
+          <Ionicons name="person-outline" size={16} color={colors.text} />
+          <Text style={[styles.lightButtonText, { color: colors.text }]}>Account</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Models Section */}
-      {models.length > 0 && (
-        <View style={styles.modelsSection}>
-          <View style={styles.sectionHeader}>
-            <View>
-              <Text style={styles.sectionTitle}>Featured Models</Text>
-              <Text style={styles.sectionSubtitle}>{models.length} models available to book</Text>
+      {recommended.length > 0 && discoveryMode === 'photographers' && (
+         <View style={styles.recommendedSection}>
+            <View style={styles.recommendedHeader}>
+                <Ionicons name="sparkles" size={20} color={colors.accent} />
+                <Text style={[styles.recommendedTitle, { color: colors.text }]}>Recommended for you</Text>
             </View>
-          </View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.modelsScroll}>
-            {models.map((model) => (
-              <View key={model.id} style={styles.modelCard}>
-                <Image source={{ uri: model.avatar }} style={styles.modelAvatar} />
-                <View style={styles.modelBadge}>
-                  <Ionicons name="body" size={10} color="#fff" />
-                  <Text style={styles.modelBadgeTxt}>Model</Text>
-                </View>
-                <View style={styles.modelRating}>
-                  <Ionicons name="star" size={11} color="#fbbf24" />
-                  <Text style={styles.modelRatingTxt}>{model.rating.toFixed(1)}</Text>
-                </View>
-                <Text style={styles.modelName}>{model.name}</Text>
-                <Text style={styles.modelStyle}>{model.style}</Text>
-                <Text style={styles.modelLocation}>{model.location}</Text>
-                <View style={styles.modelTags}>
-                  {model.tags.slice(0, 2).map((t) => (
-                    <View key={t} style={styles.modelTag}><Text style={styles.modelTagTxt}>{t}</Text></View>
-                  ))}
-                </View>
-                <TouchableOpacity style={styles.modelBookBtn} onPress={() => startModelBooking(model)}>
-                  <Text style={styles.modelBookTxt}>Book Model</Text>
-                </TouchableOpacity>
-              </View>
-            ))}
-          </ScrollView>
-        </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recommendedScroll}>
+                {recommended.map(item => (
+                    <View key={`rec-${item.id}`} style={{ width: width * 0.7, maxWidth: 320 }}>
+                        {renderCard(item)}
+                    </View>
+                ))}
+            </ScrollView>
+         </View>
       )}
 
-      <View style={styles.grid}>{visiblePhotographers.map(renderCard)}</View>
-      {!visiblePhotographers.length ? (
-        <Text style={styles.empty}>{error ? error : 'No photographers match your filters yet.'}</Text>
-      ) : null}
+      <View style={styles.grid}>
+        {visibleTalent.map((item) => renderCard(item))}
+      </View>
+
+      {visibleTalent.length === 0 && (
+        <Text style={styles.empty}>No {discoveryMode} found in this area.</Text>
+      )}
+
+      {/* Advanced Filters Modal */}
+      <Modal visible={filterModalVisible} transparent animationType="slide" onRequestClose={() => setFilterModalVisible(false)}>
+        <View style={styles.modalBg}>
+          <View style={[styles.modalContent, { backgroundColor: colors.bg }]}>
+             <View style={styles.modalHeader}>
+                 <Text style={[styles.modalTitle, { color: colors.text }]}>Advanced Search</Text>
+                 <TouchableOpacity onPress={() => setFilterModalVisible(false)} style={styles.iconBtn}>
+                     <Ionicons name="close" size={24} color={colors.text} />
+                 </TouchableOpacity>
+             </View>
+
+             <ScrollView style={styles.modalScroll}>
+                <Text style={[styles.filterLabel, { color: colors.text }]}>Budget (ZAR)</Text>
+                <View style={styles.filtersGrid}>
+                    {['Any budget', '$$', '$$$'].map(item => (
+                        <TouchableOpacity
+                            key={`modal-price-${item}`}
+                            style={[styles.filterBox, { backgroundColor: priceRange === item ? colors.accent : colors.card, borderColor: colors.border }]}
+                            onPress={() => setPriceRange(item)}
+                        >
+                            <Text style={[{ color: priceRange === item ? '#fff' : colors.text, textAlign: 'center', fontWeight: '600' }]}>{item}</Text>
+                        </TouchableOpacity>
+                    ))}
+                </View>
+
+                <Text style={[styles.filterLabel, { color: colors.text, marginTop: 24 }]}>Location / City</Text>
+                <TextInput
+                    style={[styles.modalInput, { backgroundColor: colors.card, color: colors.text, borderColor: colors.border }]}
+                    placeholder="e.g. Cape Town"
+                    placeholderTextColor={colors.textMuted}
+                    value={location}
+                    onChangeText={setLocation}
+                />
+
+                <Text style={[styles.filterLabel, { color: colors.text, marginTop: 24 }]}>Category Specialty</Text>
+                <View style={styles.filtersRow}>
+                    {['All Categories', 'Wedding', 'Portrait', 'Fashion', 'Product', 'Real Estate'].map(item => (
+                        <TouchableOpacity
+                            key={`modal-cat-${item}`}
+                            style={[
+                                styles.filterPill, 
+                                { backgroundColor: category === item ? colors.accent : colors.card, borderWidth: 1, borderColor: colors.border }
+                            ]}
+                            onPress={() => setCategory(item)}
+                        >
+                            <Text style={[{ color: category === item ? '#fff' : colors.text, fontWeight: '600' }]}>{item}</Text>
+                        </TouchableOpacity>
+                    ))}
+                </View>
+             </ScrollView>
+
+             <View style={[styles.modalFooter, { borderTopColor: colors.border }]}>
+                 <TouchableOpacity 
+                    style={[styles.buttonPrimary, { backgroundColor: colors.accent, width: '100%' }]} 
+                    onPress={() => { setFilterModalVisible(false); handleSmartSearch(); }}
+                 >
+                     <Text style={[styles.buttonPrimaryText, { color: colors.card, textAlign: 'center' }]}>Apply Filters</Text>
+                 </TouchableOpacity>
+             </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 };
@@ -336,6 +451,32 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#0f172a',
   },
+  modeToggle: {
+    flexDirection: 'row',
+    backgroundColor: '#f1f5f9',
+    padding: 4,
+    borderRadius: 14,
+  },
+  modeBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 12,
+  },
+  modeBtnActive: {
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  modeBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  modeBtnTextActive: {
+    color: '#0f172a',
+  },
   navActions: {
     flexDirection: 'row',
     marginLeft: 10,
@@ -360,15 +501,19 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   hero: {
-    backgroundColor: '#e8edff',
     borderRadius: 20,
     padding: 20,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#cbd5e1',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.6)',
+    shadowColor: '#a5b4fc',
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 5,
   },
   heroStacked: {
     flexDirection: 'column',
@@ -402,17 +547,18 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   searchCard: {
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(255, 255, 255, 0.45)',
     borderRadius: 16,
     padding: 14,
     shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 3,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#e2e8f0',
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.6)',
     marginTop: 14,
+    overflow: 'hidden',
   },
   searchCardFull: {
     width: '100%',
@@ -708,6 +854,75 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: '#e5e7eb',
   },
+  recommendedSection: {
+    marginBottom: 20,
+    backgroundColor: 'rgba(99, 102, 241, 0.05)',
+    paddingVertical: 16,
+    borderRadius: 16,
+  },
+  recommendedHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    marginBottom: 12,
+    gap: 8,
+  },
+  recommendedTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  recommendedScroll: {
+    paddingHorizontal: 16,
+    gap: 12,
+  },
+  modalBg: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    height: '75%',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingTop: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: -10 },
+    elevation: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+  },
+  iconBtn: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+  },
+  modalScroll: {
+    paddingHorizontal: 20,
+  },
+  modalInput: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 16,
+    marginTop: 8,
+  },
+  modalFooter: {
+    padding: 20,
+    paddingBottom: 40,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
   imageWrap: {
     position: 'relative',
   },
@@ -815,6 +1030,14 @@ const styles = StyleSheet.create({
   buttonGhostText: {
     color: '#0f172a',
     fontWeight: '800',
+  },
+  buttonVideo: {
+    backgroundColor: '#8b5cf6',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  buttonVideoText: {
+    color: '#fff',
   },
   empty: {
     textAlign: 'center',

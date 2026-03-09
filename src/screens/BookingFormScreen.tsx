@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
@@ -19,15 +20,16 @@ const BookingFormScreen: React.FC = () => {
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  const photographer = useMemo(
-    () => state.photographers.find((item) => item.id === params.photographerId),
-    [params.photographerId, state.photographers]
+  const talent = useMemo(
+    () => state.photographers.find((item) => item.id === params.photographerId) || 
+          state.models.find((item) => item.id === params.photographerId),
+    [params.photographerId, state.photographers, state.models]
   );
 
-  if (!photographer) {
+  if (!talent) {
     return (
       <View style={styles.centered}>
-        <Text style={styles.muted}>This photographer is no longer available.</Text>
+        <Text style={styles.muted}>This talent is no longer available.</Text>
       </View>
     );
   }
@@ -38,9 +40,9 @@ const BookingFormScreen: React.FC = () => {
   }, [selectedDate, timeSlot]);
 
   const estimatedRate = useMemo(() => {
-    const level = (photographer.priceRange.match(/\$/g) || []).length || 2;
+    const level = ((talent?.price_range || '').match(/\$/g) || []).length || 2;
     return `From R${(level * 1200).toLocaleString('en-ZA')}`;
-  }, [photographer.priceRange]);
+  }, [talent.price_range]);
 
   const handleSubmit = async () => {
     if (!selectedDate) {
@@ -54,9 +56,9 @@ const BookingFormScreen: React.FC = () => {
       normalizedDate.setUTCHours(12, 0, 0, 0);
       const bookingDate = `${normalizedDate.toISOString()} | ${timeSlot}`;
       const booking = await createBooking({
-        photographerId: photographer.id,
-        date: bookingDate,
-        package: packageType,
+        talent_id: talent.id,
+        booking_date: bookingDate,
+        package_type: packageType,
         notes,
       });
       Alert.alert('Request sent', 'Your booking request was submitted and is ready to review.', [
@@ -75,13 +77,13 @@ const BookingFormScreen: React.FC = () => {
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <View style={styles.heroCard}>
-        <Text style={styles.heroTitle}>Book {photographer.name}</Text>
-        <Text style={styles.heroMeta}>{photographer.style} · {photographer.location}</Text>
+        <Text style={styles.heroTitle}>Book {talent.name}</Text>
+        <Text style={styles.heroMeta}>{talent.style} · {talent.location}</Text>
         <Text style={styles.heroPrice}>{estimatedRate}</Text>
       </View>
 
-      <Text style={styles.label}>Photographer</Text>
-      <Text style={styles.value}>{photographer.name}</Text>
+      <Text style={styles.label}>Talent</Text>
+      <Text style={styles.value}>{talent.name}</Text>
 
       <Text style={styles.label}>Preferred date</Text>
       <View style={styles.selectedDate}>

@@ -11,8 +11,9 @@ import {
 } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useAppData } from '../store/AppDataContext';
+import { useTheme } from '../store/ThemeContext';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { supabase, hasSupabase } from '../config/supabaseClient';
+import { hasSupabase } from '../config/supabaseClient';
 import { RootStackParamList } from '../navigation/types';
 
 type Navigation = StackNavigationProp<RootStackParamList, 'Root'>;
@@ -28,139 +29,42 @@ type ConversationRow = {
 type Conversation = {
   id: string;
   title: string;
-  lastMessage: string | null;
-  lastMessageAt: string | null;
-  createdAt: string;
-  participants?: string[];
-  avatarUrl?: string;
+  last_message?: string | null;
+  last_message_at?: string | null;
+  created_at?: string | null;
+  avatar_url?: string;
 };
 
 const ConversationsListScreen: React.FC = () => {
   const navigation = useNavigation<Navigation>();
   const { state: appState } = useAppData();
+  const { colors, isDark } = useTheme();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const mapConversation = useCallback((row: ConversationRow): Conversation => {
-    const createdAt = row.created_at ?? new Date().toISOString();
-    return {
-      id: row.id,
-      title: row.title ?? 'Conversation',
-      lastMessage: row.last_message,
-      lastMessageAt: row.last_message_at ?? row.created_at,
-      createdAt,
-    };
-  }, []);
-
   const fetchConversations = useCallback(async () => {
     setError(null);
-
     if (!hasSupabase) {
-      setError('Chat is temporarily unavailable. Please try again later.');
-      setConversations(appState.conversations as any);
+      setConversations(appState.conversations);
       return;
     }
 
     try {
-      const { data: authData, error: authError } = await supabase.auth.getUser();
-      if (authError || !authData.user?.id) {
-        setConversations([]);
-        return;
-      }
-      const currentUserId = authData.user.id;
-
-      const { data: myParticipants, error: participantError } = await supabase
-        .from('conversation_participants')
-        .select('conversation_id')
-        .eq('user_id', currentUserId);
-
-      if (participantError) throw participantError;
-
-      const conversationIds = Array.from(
-        new Set((myParticipants ?? []).map((row: any) => row.conversation_id).filter(Boolean))
-      );
-      if (conversationIds.length === 0) {
-        setConversations([]);
-        return;
-      }
-
-      const { data, error: conversationsError } = await supabase
-        .from('conversations')
-        .select('id, title, last_message, last_message_at, created_at')
-        .in('id', conversationIds)
-        .order('last_message_at', { ascending: false })
-        .order('created_at', { ascending: false });
-
-      if (conversationsError) throw conversationsError;
-
-      const { data: allParticipants } = await supabase
-        .from('conversation_participants')
-        .select('conversation_id, user_id')
-        .in('conversation_id', conversationIds);
-
-      const participantsMap: Record<string, string[]> = {};
-      (allParticipants ?? []).forEach((row: any) => {
-        const cid = row.conversation_id as string;
-        participantsMap[cid] = participantsMap[cid] ? [...participantsMap[cid], row.user_id] : [row.user_id];
-      });
-
-      const mapped = (data ?? [])
-        .map(mapConversation)
-        .map((conversation: Conversation) => ({
-          ...conversation,
-          participants: participantsMap[conversation.id] ?? undefined,
-        }));
-
-      // Friendly 1:1 title fallback
-      const convoWithoutTitleOtherIds: Record<string, string> = {};
-      mapped.forEach((conversation) => {
-        if (
-          (!conversation.title || conversation.title === 'Conversation') &&
-          conversation.participants &&
-          conversation.participants.length === 2
-        ) {
-          const other = conversation.participants.find((id) => id !== currentUserId);
-          if (other) convoWithoutTitleOtherIds[conversation.id] = other;
-        }
-      });
-
-      const otherIds = Object.values(convoWithoutTitleOtherIds);
-      if (otherIds.length > 0) {
-        const { data: profiles } = await supabase
-          .from('profiles')
-          .select('id, full_name, avatar_url')
-          .in('id', otherIds);
-
-        const profileMap: Record<string, { name: string; avatar: string | null }> = {};
-        (profiles ?? []).forEach((profile: any) => {
-          profileMap[profile.id] = {
-            name: profile.full_name ?? 'Creator',
-            avatar: profile.avatar_url,
-          };
-        });
-
-        mapped.forEach((conversation) => {
-          const otherId = convoWithoutTitleOtherIds[conversation.id];
-          if (otherId && profileMap[otherId]) {
-            conversation.title = profileMap[otherId].name;
-            conversation.avatarUrl = profileMap[otherId].avatar ?? undefined;
-          }
-        });
-      }
-
+      const mapped = appState.conversations.map((convo) => ({
+        id: convo.id,
+        title: convo.title,
+        last_message: convo.last_message,
+        last_message_at: convo.last_message_at,
+        created_at: convo.created_at,
+        avatar_url: convo.participant?.avatar_url ?? undefined,
+      }));
       setConversations(mapped);
     } catch (err: any) {
-      const raw = String(err?.message ?? err);
-      const lower = raw.toLowerCase();
-      const message =
-        /failed to fetch/i.test(raw) || lower.includes('network') || lower.includes('typeerror')
-          ? 'Unable to connect to chat right now. Check your connection and try again.'
-          : raw;
-      setError(message);
+      setError('Unable to load conversations.');
     }
-  }, [appState.conversations, mapConversation]);
+  }, [appState.conversations]);
 
   useFocusEffect(
     useCallback(() => {
@@ -179,9 +83,8 @@ const ConversationsListScreen: React.FC = () => {
     }, [fetchConversations])
   );
 
-  // Keep local list in sync with context when Supabase is not configured
   useEffect(() => {
-    if (!hasSupabase) setConversations(appState.conversations as any);
+    if (!hasSupabase) setConversations(appState.conversations);
   }, [appState.conversations]);
 
   const handleRefresh = useCallback(async () => {
@@ -199,64 +102,41 @@ const ConversationsListScreen: React.FC = () => {
     () => (
       <View style={styles.header}>
         <View>
-          <Text style={styles.title}>Conversations</Text>
-          <Text style={styles.subtitle}>Keep your conversations in one place.</Text>
+          <Text style={[styles.title, { color: colors.text }]}>Conversations</Text>
+          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Keep your conversations in one place.</Text>
         </View>
-        <TouchableOpacity style={styles.primaryButton} onPress={handleNewChat}>
-          <Text style={styles.primaryButtonText}>Find photographer</Text>
+        <TouchableOpacity style={[styles.primaryButton, { backgroundColor: colors.accent }]} onPress={handleNewChat}>
+          <Text style={[styles.primaryButtonText, { color: isDark ? colors.bg : '#fff' }]}>Find photographer</Text>
         </TouchableOpacity>
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
       </View>
     ),
-    [error, handleNewChat]
+    [error, handleNewChat, colors, isDark]
   );
 
   const PLACEHOLDER_AVATAR = 'https://images.unsplash.com/photo-1508214751196-bcfd4ca60f91?auto=format&fit=crop&w=300&q=80';
 
-  const getConversationDisplayInfo = (item: Conversation) => {
-    const currentUserId = appState.currentUser?.id;
-    let displayTitle = item.title;
-    let avatarUrl = PLACEHOLDER_AVATAR;
-
-    if ((!displayTitle || displayTitle === 'Conversation') && item.participants && item.participants.length === 2 && currentUserId) {
-      const otherId = item.participants.find((id) => id !== currentUserId);
-      if (otherId) {
-        const foundPh = appState.photographers.find((p) => p.id === otherId);
-        const foundMo = !foundPh ? appState.models.find((m) => m.id === otherId) : null;
-        const found = foundPh || foundMo;
-        if (found) {
-          displayTitle = found.name;
-          avatarUrl = found.avatar;
-        }
-      }
-    }
-
-    return { displayTitle, avatarUrl };
-  };
-
-
-
   const renderItem = ({ item }: { item: Conversation }) => {
-    const timestamp = item.lastMessageAt ?? item.createdAt;
+    const timestamp = item.last_message_at ?? item.created_at;
     const formatted = timestamp ? new Date(timestamp).toLocaleString() : '';
 
-    const displayTitle = item.title !== 'Conversation' ? item.title : 'Chat';
-    const avatarUrl = item.avatarUrl ?? PLACEHOLDER_AVATAR;
+      const displayTitle = item.title !== 'Conversation' ? item.title : 'Chat';
+      const avatarUrl = item.avatar_url ?? PLACEHOLDER_AVATAR;
 
-    return (
-      <TouchableOpacity
-        style={styles.card}
-        onPress={() => navigation.navigate('ChatThread', { conversationId: item.id, title: displayTitle, avatarUrl })}
-      >
+      return (
+        <TouchableOpacity
+          style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
+          onPress={() => navigation.navigate('ChatThread', { conversationId: item.id, title: displayTitle, avatarUrl })}
+        >
         <View style={styles.cardHeader}>
           <View style={styles.avatarRow}>
-            <Image source={{ uri: avatarUrl }} style={styles.convAvatar} />
-            <Text style={styles.cardTitle}>{displayTitle}</Text>
+            <Image source={{ uri: avatarUrl }} style={[styles.convAvatar, { backgroundColor: colors.bg }]} />
+            <Text style={[styles.cardTitle, { color: colors.text }]}>{displayTitle}</Text>
           </View>
-          <Text style={styles.cardTime}>{formatted}</Text>
+          <Text style={[styles.cardTime, { color: colors.textMuted }]}>{formatted}</Text>
         </View>
-        <Text style={styles.cardMessage} numberOfLines={2}>
-          {item.lastMessage ?? 'Start the conversation'}
+        <Text style={[styles.cardMessage, { color: colors.textSecondary }]} numberOfLines={2}>
+          {item.last_message ?? 'Start the conversation'}
         </Text>
       </TouchableOpacity>
     );
@@ -264,24 +144,26 @@ const ConversationsListScreen: React.FC = () => {
 
   if (loading && !refreshing) {
     return (
-      <View style={styles.loading}>
-        <ActivityIndicator size="large" color="#0f172a" />
-        <Text style={styles.loadingText}>Fetching your conversations...</Text>
+      <View style={[styles.loading, { backgroundColor: colors.bg }]}>
+        <ActivityIndicator size="large" color={colors.accent} />
+        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Fetching your conversations...</Text>
       </View>
     );
   }
 
   return (
-    <FlatList
-      data={conversations}
-      keyExtractor={(item) => item.id}
-      renderItem={renderItem}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
-      contentContainerStyle={styles.listContent}
-      ListHeaderComponent={listHeader}
-      ListEmptyComponent={<Text style={styles.empty}>Start a chat to see conversations here.</Text>}
-      ItemSeparatorComponent={() => <View style={styles.separator} />}
-    />
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      <FlatList
+        data={conversations}
+        keyExtractor={(item) => item.id}
+        renderItem={renderItem}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.accent} />}
+        contentContainerStyle={[styles.listContent, { backgroundColor: colors.bg }]}
+        ListHeaderComponent={listHeader}
+        ListEmptyComponent={<Text style={[styles.empty, { color: colors.textMuted }]}>Start a chat to see conversations here.</Text>}
+        ItemSeparatorComponent={() => <View style={styles.separator} />}
+      />
+    </View>
   );
 };
 
@@ -289,7 +171,6 @@ const styles = StyleSheet.create({
   listContent: {
     padding: 16,
     paddingBottom: 80,
-    backgroundColor: '#f7f7fb',
   },
   header: {
     marginBottom: 12,
@@ -298,7 +179,6 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 22,
     fontWeight: '800',
-    color: '#0f172a',
   },
   avatarRow: {
     flexDirection: 'row',
@@ -309,21 +189,17 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 10,
-    backgroundColor: '#e5e7eb',
   },
   subtitle: {
-    color: '#475569',
   },
   primaryButton: {
     alignSelf: 'flex-start',
-    backgroundColor: '#0f172a',
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
     marginTop: 6,
   },
   primaryButtonText: {
-    color: '#fff',
     fontWeight: '700',
   },
   errorText: {
@@ -331,11 +207,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   card: {
-    backgroundColor: '#fff',
     borderRadius: 14,
     padding: 14,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#e5e7eb',
   },
   cardHeader: {
     flexDirection: 'row',
@@ -346,26 +220,21 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 16,
     fontWeight: '800',
-    color: '#0f172a',
     flex: 1,
   },
   cardTime: {
-    color: '#6b7280',
     marginLeft: 8,
     fontSize: 12,
   },
   cardMessage: {
-    color: '#111827',
   },
   loading: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#f7f7fb',
   },
   loadingText: {
     marginTop: 10,
-    color: '#475569',
     fontWeight: '600',
   },
   separator: {
@@ -373,7 +242,6 @@ const styles = StyleSheet.create({
   },
   empty: {
     textAlign: 'center',
-    color: '#475569',
     marginTop: 40,
     fontWeight: '600',
   },

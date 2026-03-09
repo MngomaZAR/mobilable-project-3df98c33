@@ -12,7 +12,7 @@ export type TabParamList = {
 
 export type RootStackParamList = {
   Root: NavigatorScreenParams<TabParamList>;
-  Profile: { photographerId: string };
+  Profile: { userId: string; photographer?: Photographer };
   BookingForm: { photographerId: string };
   BookingDetail: { bookingId: string };
   BookingTracking: { bookingId: string };
@@ -23,6 +23,19 @@ export type RootStackParamList = {
   Auth: undefined;
   Compliance: undefined;
   ChatThread: { conversationId: string; title?: string; avatarUrl?: string };
+  AccountConfig: undefined;
+  ModelPremiumDashboard: undefined;
+  PaidVideoCall: undefined;
+  Notifications: undefined;
+  PaymentHistory: undefined;
+  Support: undefined;
+  EarningsDashboard: undefined;
+  CreatorSubscriptions: { creatorId: string };
+  Reviews: { photographerId: string };
+  MediaLibrary: { creatorId: string; title?: string };
+  AdminModeration: undefined;
+  Availability: undefined;
+  ModelRelease: { bookingId: string };
 };
 
 declare global {

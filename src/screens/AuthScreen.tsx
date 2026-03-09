@@ -11,12 +11,14 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppLogo } from '../components/AppLogo';
 import { useAppData } from '../store/AppDataContext';
 import { supabase, hasSupabase } from '../config/supabaseClient';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import { makeRedirectUri } from 'expo-auth-session';
+import Constants, { AppOwnership } from 'expo-constants';
 import { Ionicons } from '@expo/vector-icons';
 import { UserRole } from '../types';
 
@@ -71,11 +73,30 @@ const ROLE_OPTIONS: RoleOption[] = [
 ];
 
 const AuthScreen: React.FC = () => {
-  const { signIn, signUp, authenticating, error } = useAppData();
+  const { signIn, signUp, resetState, authenticating, error } = useAppData();
   const [mode, setMode] = useState<Mode>('signin');
+
+  const handleClearCache = async () => {
+    Alert.alert(
+      'Reset App State',
+      'This will clear all local data and log you out. Continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Reset', 
+          style: 'destructive', 
+          onPress: async () => {
+            await resetState();
+            setLocalSuccess('App state reset. Please try signing in again.');
+          }
+        }
+      ]
+    );
+  };
   const [selectedRole, setSelectedRole] = useState<UserRole>('client');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [fullName, setFullName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [localMessage, setLocalMessage] = useState<string | null>(null);
   const [localSuccess, setLocalSuccess] = useState<string | null>(null);
@@ -97,11 +118,16 @@ const AuthScreen: React.FC = () => {
     if (mode === 'signin') {
       await signIn(email.trim(), password);
     } else {
-      const user = await signUp(email.trim(), password, selectedRole);
+      if (!fullName.trim()) {
+        setLocalMessage('Please enter your full name.');
+        return;
+      }
+      const user = await signUp(email.trim(), password, selectedRole, fullName.trim());
       if (user) {
         setLocalSuccess('🎉 Account created! Check your email to verify, then sign in.');
         setEmail('');
         setPassword('');
+        setFullName('');
         setMode('signin');
       }
     }
@@ -109,38 +135,43 @@ const AuthScreen: React.FC = () => {
 
   const handleOAuth = async (provider: 'google' | 'apple') => {
     setLocalMessage(null);
-    setLocalSuccess(null);
     if (!hasSupabase) {
-      setLocalMessage('Single sign-on requires backend configuration.');
+      setLocalMessage('Supabase not configured.');
       return;
     }
     try {
-      const redirectTo = Platform.OS === 'web'
-        ? window.location.origin
-        : makeRedirectUri({ preferLocalhost: false });
-
-      const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
+      const redirectTo = Linking.createURL('auth');
+      console.log('Using Dynamic Redirect URI:', redirectTo);
+      
+      const { data, error: oauthErr } = await supabase.auth.signInWithOAuth({
         provider,
-        options: {
-          redirectTo: SUPABASE_CALLBACK,
-          skipBrowserRedirect: Platform.OS !== 'web',
+        options: { 
+          redirectTo, 
+          skipBrowserRedirect: true,
           queryParams: provider === 'apple' ? { response_type: 'code' } : undefined,
         },
       });
+      if (oauthErr) throw oauthErr;
 
-      if (oauthError) throw oauthError;
-
-      if (Platform.OS !== 'web' && data?.url) {
+      if (data?.url) {
+        console.log('Opening Auth Session with URL:', data.url);
         const res = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
-        if (res.type === 'success' && res.url) {
-          const params = Linking.parse(res.url);
-          if (params.queryParams?.error_description) {
-            throw new Error(params.queryParams.error_description as string);
-          }
+        console.log('Auth Session Result:', res.type);
+        
+        if (res.type === 'success' && 'url' in res) {
+          const { url } = res;
+          console.log('Auth Success URL:', url);
+          const params = new URLSearchParams(url.split('#')[1] || url.split('?')[1]);
+          const { error: sessionError } = await supabase.auth.setSession({
+            access_token: params.get('access_token') || '',
+            refresh_token: params.get('refresh_token') || '',
+          });
+          if (sessionError) throw sessionError;
         }
       }
     } catch (err: any) {
-      setLocalMessage(friendlyAuthError(err?.message ?? `Unable to continue with ${provider}.`));
+      console.error('OAuth Error:', err);
+      setLocalMessage(err.message || 'Authentication failed');
     }
   };
 
@@ -149,10 +180,11 @@ const AuthScreen: React.FC = () => {
       contentContainerStyle={styles.scroll}
       keyboardShouldPersistTaps="handled"
     >
-      <KeyboardAvoidingView
-        style={styles.kav}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+      <SafeAreaView style={{ flex: 1 }}>
+        <KeyboardAvoidingView
+          style={styles.kav}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
         <View style={styles.card}>
           {/* Header */}
           <View style={styles.header}>
@@ -169,13 +201,13 @@ const AuthScreen: React.FC = () => {
           <View style={styles.switcher}>
             <TouchableOpacity
               style={[styles.switchBtn, mode === 'signin' && styles.switchBtnActive]}
-              onPress={() => { setMode('signin'); setLocalMessage(null); setLocalSuccess(null); }}
+              onPress={() => { setMode('signin'); setLocalMessage(null); setLocalSuccess(null); setFullName(''); }}
             >
               <Text style={[styles.switchTxt, mode === 'signin' && styles.switchTxtActive]}>Sign In</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.switchBtn, mode === 'signup' && styles.switchBtnActive]}
-              onPress={() => { setMode('signup'); setLocalMessage(null); setLocalSuccess(null); }}
+              onPress={() => { setMode('signup'); setLocalMessage(null); setLocalSuccess(null); setFullName(''); }}
             >
               <Text style={[styles.switchTxt, mode === 'signup' && styles.switchTxtActive]}>Create Account</Text>
             </TouchableOpacity>
@@ -213,7 +245,22 @@ const AuthScreen: React.FC = () => {
 
           {/* Form */}
           <View style={styles.form}>
-            <View style={styles.inputRow}>
+            {/* Full Name — only on signup */}
+            {mode === 'signup' && (
+              <View style={styles.inputRow}>
+                <Ionicons name="person-outline" size={20} color="#64748b" style={styles.inputIcon} />
+                <TextInput
+                  value={fullName}
+                  onChangeText={setFullName}
+                  placeholder="Full name"
+                  placeholderTextColor="#94a3b8"
+                  style={styles.input}
+                  autoComplete="name"
+                />
+              </View>
+            )}
+
+            <View style={[styles.inputRow, mode === 'signup' ? { marginTop: 14 } : undefined]}>
               <Ionicons name="mail-outline" size={20} color="#64748b" style={styles.inputIcon} />
               <TextInput
                 value={email}
@@ -259,7 +306,6 @@ const AuthScreen: React.FC = () => {
             <TouchableOpacity
               style={[styles.submitBtn, authenticating && styles.submitBtnDisabled]}
               onPress={submit}
-              disabled={authenticating}
             >
               <Text style={styles.submitTxt}>
                 {authenticating ? 'Please wait...' : mode === 'signin' ? 'Sign In' : `Create ${selectedRole.charAt(0).toUpperCase() + selectedRole.slice(1)} Account`}
@@ -288,9 +334,20 @@ const AuthScreen: React.FC = () => {
             <Text style={styles.legalTxt}>
               By continuing, you agree to our Terms of Service and Privacy Policy.
             </Text>
+
+            <TouchableOpacity 
+              style={{ marginTop: 24, padding: 8 }} 
+              onPress={handleClearCache}
+              disabled={authenticating}
+            >
+              <Text style={{ color: '#6366f1', textAlign: 'center', fontSize: 13, textDecorationLine: 'underline' }}>
+                Trouble signing in? Reset app state
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
-      </KeyboardAvoidingView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
     </ScrollView>
   );
 };

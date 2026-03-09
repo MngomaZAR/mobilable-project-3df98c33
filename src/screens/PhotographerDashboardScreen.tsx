@@ -6,6 +6,9 @@ import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import * as Location from 'expo-location';
 import { MapTracker } from '../components/MapTracker';
+import { useAuth } from '../store/AuthContext';
+import { useBooking } from '../store/BookingContext';
+import { useMessaging } from '../store/MessagingContext';
 import { useAppData } from '../store/AppDataContext';
 import { RootStackParamList } from '../navigation/types';
 import { DEFAULT_CAPE_TOWN_COORDINATES, ensureSouthAfricanCoordinates } from '../utils/geo';
@@ -14,19 +17,33 @@ type Navigation = StackNavigationProp<RootStackParamList, 'Root'>;
 
 const PhotographerDashboardScreen: React.FC = () => {
   const navigation = useNavigation<Navigation>();
-  const { state, startConversationWithUser, updatePhotographerLocation } = useAppData();
+  const { currentUser } = useAuth();
+  const { bookings } = useBooking();
+  const { startConversationWithUser } = useMessaging();
+  const { updatePhotographerLocation } = useAppData();
 
   const activeBooking = useMemo(
-    () => state.bookings.find((booking) => booking.status === 'pending' || booking.status === 'accepted') ?? state.bookings[0],
-    [state.bookings]
+    () => bookings.find((booking) => booking.status === 'pending' || booking.status === 'accepted') ?? bookings[0],
+    [bookings]
   );
   const pendingBookings = useMemo(
-    () => state.bookings.filter((booking) => booking.status === 'pending'),
-    [state.bookings]
+    () => bookings.filter((booking) => booking.status === 'pending'),
+    [bookings]
   );
+  
+  const earnings = useMemo(() => {
+    const completed = bookings.filter(b => b.status === 'completed' || b.status === 'accepted');
+    const total = completed.reduce((sum, b) => sum + (b.total_amount || 0), 0);
+    const net = completed.reduce((sum, b) => sum + (b.payout_amount || 0), 0);
+    const commission = completed.reduce((sum, b) => sum + (b.commission_amount || 0), 0);
+    return { total, net, commission };
+  }, [bookings]);
+
+  const { state } = useAppData(); // Still needed for state.photographers for now
+
   const photographerProfile = useMemo(
-    () => state.photographers.find((p) => p.id === activeBooking?.photographerId) ?? state.photographers[0],
-    [activeBooking?.photographerId, state.photographers]
+    () => state.photographers.find((p) => p.id === activeBooking?.photographer_id) ?? state.photographers[0],
+    [activeBooking?.photographer_id, state.photographers]
   );
 
   const clientLocation = useMemo(() => {
@@ -41,7 +58,7 @@ const PhotographerDashboardScreen: React.FC = () => {
   }, [photographerProfile?.latitude, photographerProfile?.longitude]);
 
   useEffect(() => {
-    if (!state.currentUser || state.currentUser.role !== 'photographer' || !activeBooking) return;
+    if (!currentUser || currentUser.role !== 'photographer' || !activeBooking) return;
     let mounted = true;
     let subscription: Location.LocationSubscription | null = null;
 
@@ -74,7 +91,7 @@ const PhotographerDashboardScreen: React.FC = () => {
       mounted = false;
       subscription?.remove();
     };
-  }, [activeBooking, state.currentUser, updatePhotographerLocation]);
+  }, [activeBooking, currentUser, updatePhotographerLocation]);
 
   const openChatThread = async () => {
     if (!photographerProfile) {
@@ -111,10 +128,26 @@ const PhotographerDashboardScreen: React.FC = () => {
             <Text style={styles.statValue}>{pendingBookings.length || 1}</Text>
             <Text style={styles.statMeta}>Accept and route to client</Text>
           </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statLabel}>Inbox</Text>
-            <Text style={styles.statValue}>{state.messages.length}</Text>
-            <Text style={styles.statMeta}>Unread messages</Text>
+          <View style={[styles.statCard, { marginRight: 0 }]}>
+            <Text style={styles.statLabel}>Earnings</Text>
+            <Text style={styles.statValue}>R{earnings.net.toLocaleString()}</Text>
+            <Text style={styles.statMeta}>Net from {bookings.length} shoots</Text>
+          </View>
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Financial summary</Text>
+          <View style={styles.financeRow}>
+            <Text style={styles.financeLabel}>Total revenue</Text>
+            <Text style={styles.financeValue}>R{earnings.total.toLocaleString()}</Text>
+          </View>
+          <View style={styles.financeRow}>
+            <Text style={styles.financeLabel}>Platform fees (30%)</Text>
+            <Text style={styles.financeValue}>-R{earnings.commission.toLocaleString()}</Text>
+          </View>
+          <View style={[styles.financeRow, styles.financeRowTotal]}>
+            <Text style={styles.financeTotalLabel}>Net payout</Text>
+            <Text style={styles.financeTotalValue}>R{earnings.net.toLocaleString()}</Text>
           </View>
         </View>
 
@@ -146,8 +179,8 @@ const PhotographerDashboardScreen: React.FC = () => {
                 onPress={() => navigation.navigate('BookingDetail', { bookingId: booking.id })}
               >
                 <View>
-                  <Text style={styles.queueTitle}>{booking.package}</Text>
-                  <Text style={styles.queueMeta}>{new Date(booking.date).toLocaleString()}</Text>
+                  <Text style={styles.queueTitle}>{booking.package_type}</Text>
+                  <Text style={styles.queueMeta}>{new Date(booking.booking_date).toLocaleString()}</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={18} color="#0f172a" />
               </TouchableOpacity>
@@ -169,6 +202,10 @@ const PhotographerDashboardScreen: React.FC = () => {
             <Ionicons name="navigate-outline" size={16} color="#0f172a" />
             <Text style={styles.secondaryText}>Map to client</Text>
           </TouchableOpacity>
+          <TouchableOpacity style={[styles.secondaryButton, { backgroundColor: '#eff6ff' }]} onPress={() => navigation.navigate('Availability')}>
+            <Ionicons name="time-outline" size={16} color="#2563eb" />
+            <Text style={[styles.secondaryText, { color: '#2563eb' }]}>Set working hours</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -178,40 +215,47 @@ const PhotographerDashboardScreen: React.FC = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#f7f7fb',
+    backgroundColor: '#0f172a',
   },
   container: {
     padding: 16,
     paddingBottom: 120,
-    backgroundColor: '#f7f7fb',
+    backgroundColor: '#0f172a',
   },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 24,
   },
   eyebrow: {
-    color: '#2563eb',
+    color: '#8b5cf6',
     fontWeight: '800',
     marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    fontSize: 12,
   },
   title: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#0f172a',
+    fontSize: 26,
+    fontWeight: '900',
+    color: '#fff',
+    letterSpacing: -0.5,
   },
   subtitle: {
-    color: '#475569',
-    marginTop: 4,
+    color: '#94a3b8',
+    marginTop: 6,
+    lineHeight: 20,
   },
   actionPill: {
-    backgroundColor: '#0f172a',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 12,
+    backgroundColor: '#1e293b',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 14,
     flexDirection: 'row',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#334155',
   },
   actionPillText: {
     color: '#fff',
@@ -220,118 +264,166 @@ const styles = StyleSheet.create({
   },
   statsRow: {
     flexDirection: 'row',
-    marginBottom: 14,
+    marginBottom: 16,
   },
   statCard: {
     flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    padding: 14,
-    marginRight: 10,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#e5e7eb',
+    backgroundColor: '#1e293b',
+    borderRadius: 18,
+    padding: 18,
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: '#334155',
     shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
   },
   statLabel: {
-    color: '#475569',
+    color: '#64748b',
     fontWeight: '700',
+    fontSize: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   statValue: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#0f172a',
-  },
-  statMeta: {
-    color: '#475569',
+    fontSize: 28,
+    fontWeight: '900',
+    color: '#fff',
     marginTop: 4,
   },
+  statMeta: {
+    color: '#94a3b8',
+    marginTop: 6,
+    fontSize: 13,
+  },
   mapCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#e5e7eb',
-    marginBottom: 14,
+    backgroundColor: '#1e293b',
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#334155',
+    marginBottom: 16,
   },
   card: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#e5e7eb',
-    marginBottom: 14,
+    backgroundColor: '#1e293b',
+    borderRadius: 20,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: '#334155',
+    marginBottom: 16,
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 14,
   },
   cardTitle: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '800',
-    color: '#0f172a',
+    color: '#fff',
   },
   cardMeta: {
-    color: '#475569',
+    color: '#8b5cf6',
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    fontSize: 11,
   },
   infoCallout: {
-    marginTop: 12,
-    borderRadius: 12,
-    backgroundColor: '#eff6ff',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#dbeafe',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
+    marginTop: 14,
+    borderRadius: 14,
+    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.2)',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
   },
   infoCalloutText: {
-    color: '#1e40af',
+    color: '#8b5cf6',
     fontWeight: '600',
+    fontSize: 14,
   },
   smallLink: {
     padding: 6,
+    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+    borderRadius: 8,
   },
   smallLinkText: {
-    color: '#2563eb',
+    color: '#8b5cf6',
     fontWeight: '700',
   },
   empty: {
-    color: '#475569',
-    marginTop: 4,
+    color: '#64748b',
+    marginTop: 8,
+    textAlign: 'center',
   },
   queueRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#e5e7eb',
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#262626',
   },
   queueTitle: {
     fontWeight: '700',
-    color: '#0f172a',
+    color: '#fff',
+    fontSize: 16,
   },
   queueMeta: {
-    color: '#475569',
+    color: '#64748b',
+    marginTop: 2,
   },
   secondaryButton: {
-    marginTop: 10,
-    backgroundColor: '#f1f5f9',
-    padding: 12,
-    borderRadius: 12,
+    marginTop: 12,
+    backgroundColor: '#0f172a',
+    padding: 14,
+    borderRadius: 14,
     flexDirection: 'row',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#334155',
   },
   secondaryButtonDisabled: {
-    opacity: 0.5,
+    opacity: 0.4,
   },
   secondaryText: {
-    color: '#0f172a',
+    color: '#fff',
     fontWeight: '700',
-    marginLeft: 8,
+    marginLeft: 10,
+  },
+  financeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#262626',
+  },
+  financeRowTotal: {
+    borderBottomWidth: 0,
+    marginTop: 10,
+    paddingTop: 14,
+    borderTopWidth: 2,
+    borderTopColor: '#262626',
+  },
+  financeLabel: {
+    color: '#94a3b8',
+    fontSize: 14,
+  },
+  financeValue: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+  financeTotalLabel: {
+    color: '#fff',
+    fontWeight: '900',
+    fontSize: 18,
+  },
+  financeTotalValue: {
+    color: '#10b981',
+    fontWeight: '900',
+    fontSize: 22,
   },
 });
 

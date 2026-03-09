@@ -1,72 +1,66 @@
-const googleMapsApiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY?.trim() || "";
-
-/** @type {import('expo/config').ExpoConfig} */
-module.exports = {
+export default {
   expo: {
     name: "Papzi",
-    slug: "my-simple-expo",
+    slug: "papzi",
+    scheme: "papzi",
     version: "1.0.0",
     orientation: "portrait",
     icon: "./assets/icon.png",
-    userInterfaceStyle: "automatic",
-    newArchEnabled: true,
-    plugins: [
-      "expo-notifications",
-      [
-        "expo-location",
-        {
-          locationWhenInUsePermission:
-            "Allow Papzi to use your location to show available photographers nearby on the interactive map.",
-        },
-      ],
-    ],
+    userInterfaceStyle: "light",
     splash: {
       image: "./assets/splash-icon.png",
       resizeMode: "contain",
-      backgroundColor: "#ffffff",
+      backgroundColor: "#ffffff"
     },
+    assetBundlePatterns: ["**/*"],
     ios: {
       supportsTablet: true,
-      bundleIdentifier: "com.saicts.papzi",
-      buildNumber: "1.0.0",
+      bundleIdentifier: "com.papzi.app",
       infoPlist: {
-        NSLocationWhenInUseUsageDescription:
-          "Papzi uses your location to show available photographers nearby on the interactive map so you can find and book the right photographer for your moment.",
-        NSCameraUsageDescription:
-          "Papzi needs camera access so you can take and upload photos for posts and your profile.",
-        NSPhotoLibraryUsageDescription:
-          "Papzi needs photo library access to let you select photos for posts and your profile.",
-        ITSAppUsesNonExemptEncryption: false,
-      },
+        NSCameraUsageDescription: "Papzi needs access to your camera to let you take and share photos directly in chat.",
+        NSPhotoLibraryUsageDescription: "Papzi needs access to your photos to let you upload your portfolio and share media in chat.",
+        NSLocationWhenInUseUsageDescription: "Papzi uses your location to show available talent near you and track bookings.",
+        NSLocationAlwaysAndWhenInUseUsageDescription: "Papzi needs your location to track you during a live booking session."
+      }
     },
     android: {
-      package: "com.papzi.mobile",
-      versionCode: 1,
       adaptiveIcon: {
         foregroundImage: "./assets/adaptive-icon.png",
-        backgroundColor: "#ffffff",
+        backgroundColor: "#ffffff"
       },
-      edgeToEdgeEnabled: true,
-      permissions: [
-        "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION",
-      ],
-      ...(googleMapsApiKey && {
-        config: {
-          googleMaps: { apiKey: googleMapsApiKey },
-        },
-      }),
+      package: "com.papzi.app"
     },
     web: {
-      favicon: "./assets/favicon.png",
+      favicon: "./assets/favicon.png"
     },
+    plugins: [
+      [
+        "expo-notifications",
+        {
+          icon: "./assets/icon.png",
+          color: "#ffffff"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "The app accesses your photos to let you share them with others."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow Papzi to use your location."
+        }
+      ]
+    ],
     extra: {
       eas: {
-        projectId: "2d37d693-bc7a-48c7-9729-3fd3a260245e",
+        projectId: "2d37d693-bc7a-48c7-9729-3fd3a260245e"
       },
-      EXPO_PUBLIC_SUPABASE_URL: process.env.EXPO_PUBLIC_SUPABASE_URL,
-      EXPO_PUBLIC_SUPABASE_ANON_KEY:
-        process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? process.env.EXPO_PUBLIC_SUPABASE_KEY,
-    },
-  },
+      EXPO_PUBLIC_SUPABASE_URL: "https://mizdvqhvspkjayffaqqd.supabase.co",
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1pemR2cWh2c3BramF5ZmZhcXFkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjczNjg0NzksImV4cCI6MjA4Mjk0NDQ3OX0.WBEcxhd0WFpay_J9l2_A1wpfkbpcIUiAQnp1VeMvNjY"
+    }
+  }
 };
+

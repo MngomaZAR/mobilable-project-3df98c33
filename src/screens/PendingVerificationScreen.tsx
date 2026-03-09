@@ -1,13 +1,36 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View, Animated, Easing } from 'react-native';
 import { AppLogo } from '../components/AppLogo';
 import { useAppData } from '../store/AppDataContext';
+import { useTheme } from '../store/ThemeContext';
 
 const PendingVerificationScreen: React.FC = () => {
   const { currentUser, revalidateSession, signOut } = useAppData();
+  const { colors, isDark } = useTheme();
   const [checking, setChecking] = useState(false);
+  
+  const pulseAnim = React.useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.2,
+          duration: 1500,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1500,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  }, [pulseAnim]);
 
   const refreshStatus = async () => {
     setChecking(true);
@@ -19,48 +42,72 @@ const PendingVerificationScreen: React.FC = () => {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.bg }]}>
       <View style={styles.container}>
         <View style={styles.header}>
-          <AppLogo size={82} />
-          <Text style={styles.title}>Verification pending</Text>
-          <Text style={styles.subtitle}>
-            We&apos;re reviewing your photographer profile. This can take a few minutes while we double-check
-            your details.
+          <AppLogo size={90} />
+          <View style={styles.pulseContainer}>
+             <Animated.View style={[styles.pulseCircle, { 
+               backgroundColor: colors.accent + '20',
+               transform: [{ scale: pulseAnim }] 
+             }]} />
+             <View style={[styles.innerCircle, { backgroundColor: colors.accent }]}>
+                <Ionicons name="time" size={32} color={isDark ? colors.bg : '#fff'} />
+             </View>
+          </View>
+          <Text style={[styles.title, { color: colors.text }]}>Profile Under Review</Text>
+          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+            Thanks for joining Papzi. Our team is currently reviewing your photographer details to ensure marketplace quality.
           </Text>
         </View>
 
-        <View style={styles.card}>
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <View style={styles.row}>
-            <Ionicons name="person-circle" size={28} color="#0f172a" />
+            <View style={[styles.statusIcon, { backgroundColor: colors.bg }]}>
+              <Ionicons name="person" size={20} color={colors.text} />
+            </View>
             <View style={styles.rowText}>
-              <Text style={styles.label}>Signed in as</Text>
-              <Text style={styles.value}>{currentUser?.email ?? 'Unknown user'}</Text>
+              <Text style={[styles.label, { color: colors.textMuted }]}>CREATOR EMAIL</Text>
+              <Text style={[styles.value, { color: colors.text }]}>{currentUser?.email ?? 'Unknown user'}</Text>
             </View>
           </View>
-          <View style={styles.row}>
-            <Ionicons name="shield-checkmark" size={28} color="#0f172a" />
+          
+          <View style={[styles.row, { borderBottomWidth: 0 }]}>
+            <View style={[styles.statusIcon, { backgroundColor: colors.bg }]}>
+              <Ionicons name="shield-checkmark" size={20} color={colors.accent} />
+            </View>
             <View style={styles.rowText}>
-              <Text style={styles.label}>Status</Text>
-              <Text style={styles.value}>Awaiting manual review</Text>
-              <Text style={styles.meta}>Keep this screen open or refresh below to check again.</Text>
+              <Text style={[styles.label, { color: colors.textMuted }]}>CURRENT STATUS</Text>
+              <Text style={[styles.value, { color: colors.accent, fontWeight: '800' }]}>AWAITING MANUAL REVIEW</Text>
+              <Text style={[styles.meta, { color: colors.textSecondary }]}>
+                We usually approve accounts within 12-24 hours.
+              </Text>
             </View>
           </View>
         </View>
 
         <View style={styles.actions}>
-          <TouchableOpacity style={styles.primary} onPress={refreshStatus} disabled={checking}>
-            <Text style={styles.primaryText}>{checking ? 'Checking status...' : 'Refresh status'}</Text>
+          <TouchableOpacity 
+            style={[styles.primary, { backgroundColor: colors.text }]} 
+            onPress={refreshStatus} 
+            disabled={checking}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.primaryText, { color: colors.bg }]}>
+              {checking ? 'Synchronizing...' : 'Refresh Status'}
+            </Text>
+            {!checking && <Ionicons name="refresh" size={18} color={colors.bg} style={{ marginLeft: 8 }} />}
           </TouchableOpacity>
+          
           <TouchableOpacity style={styles.secondary} onPress={signOut}>
-            <Text style={styles.secondaryText}>Sign out</Text>
+            <Text style={[styles.secondaryText, { color: colors.textSecondary }]}>Sign Out</Text>
           </TouchableOpacity>
         </View>
 
-        <View style={styles.helper}>
-          <Ionicons name="information-circle" size={22} color="#475569" />
-          <Text style={styles.helperText}>
-            We&apos;ll email you once you&apos;re approved. You can keep exploring the app while you wait.
+        <View style={[styles.notificationBox, { backgroundColor: colors.accent + '10' }]}>
+          <Ionicons name="notifications-outline" size={20} color={colors.accent} />
+          <Text style={[styles.notificationText, { color: colors.accent }]}>
+            We'll send you a push notification and an email as soon as your account is active.
           </Text>
         </View>
       </View>
@@ -71,100 +118,142 @@ const PendingVerificationScreen: React.FC = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#f7f7fb',
   },
   container: {
     flex: 1,
-    padding: 16,
-    backgroundColor: '#f7f7fb',
+    padding: 24,
+    justifyContent: 'center',
   },
   header: {
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 32,
+  },
+  pulseContainer: {
+    width: 120,
+    height: 120,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 20,
+    marginBottom: 20,
+  },
+  pulseCircle: {
+    position: 'absolute',
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+  },
+  innerCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
   },
   title: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#0f172a',
-    marginTop: 8,
+    fontSize: 28,
+    fontWeight: '900',
+    textAlign: 'center',
+    marginTop: 10,
+    letterSpacing: -0.5,
   },
   subtitle: {
     textAlign: 'center',
-    color: '#475569',
-    marginTop: 6,
+    marginTop: 12,
+    lineHeight: 22,
+    fontSize: 15,
+    paddingHorizontal: 10,
   },
   card: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#e5e7eb',
+    borderRadius: 24,
+    padding: 20,
+    borderWidth: 1,
+    marginBottom: 24,
+    elevation: 4,
     shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.05,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    marginBottom: 14,
+    shadowRadius: 15,
   },
   row: {
     flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
+    alignItems: 'flex-start',
+    paddingVertical: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: '#e5e7eb',
+    borderColor: 'rgba(0,0,0,0.05)',
+  },
+  statusIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
   },
   rowText: {
     flex: 1,
-    marginLeft: 12,
   },
   label: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0f172a',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1,
   },
   value: {
-    color: '#0f172a',
+    fontSize: 16,
     marginTop: 2,
+    fontWeight: '600',
   },
   meta: {
-    color: '#475569',
-    fontSize: 12,
-    marginTop: 2,
+    fontSize: 13,
+    marginTop: 6,
+    lineHeight: 18,
   },
   actions: {
-    marginTop: 4,
+    marginTop: 8,
   },
   primary: {
-    backgroundColor: '#0f172a',
-    padding: 14,
-    borderRadius: 14,
+    height: 58,
+    borderRadius: 18,
     alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 4,
   },
   primaryText: {
-    color: '#fff',
-    fontWeight: '700',
+    fontSize: 16,
+    fontWeight: '800',
   },
   secondary: {
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#cbd5e1',
+    height: 50,
     alignItems: 'center',
-    backgroundColor: '#e2e8f0',
-    marginTop: 10,
-  },
-  secondaryText: {
-    color: '#0f172a',
-    fontWeight: '700',
-  },
-  helper: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    justifyContent: 'center',
     marginTop: 12,
   },
-  helperText: {
+  secondaryText: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  notificationBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 32,
+    padding: 16,
+    borderRadius: 16,
+    gap: 12,
+  },
+  notificationText: {
     flex: 1,
-    color: '#475569',
-    marginLeft: 8,
+    fontSize: 13,
+    fontWeight: '600',
+    lineHeight: 20,
   },
 });
 

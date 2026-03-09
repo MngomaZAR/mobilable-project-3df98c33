@@ -55,11 +55,28 @@ const toPayfastValue = (value: string) =>
   encodeURIComponent(value).replace(/%20/g, "+");
 
 const createSignature = (params: Record<string, string>, providedPassphrase?: string) => {
-  const payload = Object.entries(params)
-    .filter(([key, value]) => key !== "signature" && value !== undefined && value !== null && `${value}`.length > 0)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([key, value]) => `${key}=${toPayfastValue(`${value}`)}`)
-    .join("&");
+  // PAYFAST IMPORTANT: Variable order must match attribute description order in documentation.
+  // DO NOT use alphabetical sorting for Custom Integration signatures.
+  const orderedKeys = [
+    "merchant_id", "merchant_key", "return_url", "cancel_url", "notify_url", 
+    "fica_idnumber", "name_first", "name_last", "email_address", "cell_number",
+    "m_payment_id", "amount", "item_name", "item_description",
+    "custom_int1", "custom_int2", "custom_int3", "custom_int4", "custom_int5",
+    "custom_str1", "custom_str2", "custom_str3", "custom_str4", "custom_str5",
+    "email_confirmation", "confirmation_address", "payment_method",
+    "subscription_type", "billing_date", "recurring_amount", "frequency", "cycles"
+  ];
+
+  const payloadSegments: string[] = [];
+
+  for (const key of orderedKeys) {
+    const value = params[key];
+    if (value !== undefined && value !== null && `${value}`.trim().length > 0) {
+      payloadSegments.push(`${key}=${toPayfastValue(`${value}`.trim())}`);
+    }
+  }
+
+  const payload = payloadSegments.join("&");
 
   const fullPayload =
     providedPassphrase && providedPassphrase.length > 0
@@ -169,7 +186,23 @@ const handleCreateCheckoutLink = async (req: Request) => {
   };
 
   const signature = createSignature(params, passphrase);
-  const urlParams = new URLSearchParams({ ...params, signature });
+  
+  // Split Payment Setup (30% Platform Fee)
+  // Note: 'setup' is NOT included in the signature as per documentation.
+  const splitSetup = {
+    split_payment: {
+      merchant_id: parseInt(merchantId), // In a real production split this would be the Platform's separate merchant ID
+      percentage: 30, // 30% Platform Fee
+      min: 100,
+      max: 1000000
+    }
+  };
+
+  const urlParams = new URLSearchParams({ 
+    ...params, 
+    signature,
+    setup: JSON.stringify(splitSetup)
+  });
   const paymentUrl = `${payfastBaseUrl}/eng/process?${urlParams.toString()}`;
 
   return jsonResponse(200, { paymentUrl, paymentId: payment.id, bookingId });

@@ -6,7 +6,6 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import * as Linking from 'expo-linking';
 import { Image, ImageSourcePropType } from 'react-native';
 import HomeScreen from '../screens/HomeScreen';
-import ProfileScreen from '../screens/ProfileScreen';
 import BookingFormScreen from '../screens/BookingFormScreen';
 import BookingDetailScreen from '../screens/BookingDetailScreen';
 import BookingsScreen from '../screens/BookingsScreen';
@@ -24,7 +23,19 @@ import PaymentScreen from '../screens/PaymentScreen';
 import ComplianceScreen from '../screens/ComplianceScreen';
 import PhotographerDashboardScreen from '../screens/PhotographerDashboardScreen';
 import AdminDashboardScreen from '../screens/AdminDashboardScreen';
-import ModelDashboardScreen from '../screens/ModelDashboardScreen';
+import ModelPremiumDashboard from '../screens/ModelPremiumDashboard';
+import PaidVideoCallScreen from '../screens/PaidVideoCallScreen';
+import AccountConfigScreen from '../screens/AccountConfigScreen';
+import NotificationsScreen from '../screens/NotificationsScreen';
+import PaymentHistoryScreen from '../screens/PaymentHistoryScreen';
+import SupportScreen from '../screens/SupportScreen';
+import EarningsDashboardScreen from '../screens/EarningsDashboardScreen';
+import CreatorSubscriptionsScreen from '../screens/CreatorSubscriptionsScreen';
+import ReviewsScreen from '../screens/ReviewsScreen';
+import MediaLibraryScreen from '../screens/MediaLibraryScreen';
+import AdminModerationScreen from '../screens/AdminModerationScreen';
+import AvailabilityScreen from '../screens/AvailabilityScreen';
+import ModelReleaseScreen from '../screens/ModelReleaseScreen';
 import { RootStackParamList, TabParamList } from './types';
 import { useAppData } from '../store/AppDataContext';
 
@@ -55,7 +66,7 @@ const TabsNavigator = () => {
     role === 'photographer'
       ? PhotographerDashboardScreen
       : role === 'model'
-        ? ModelDashboardScreen
+        ? ModelPremiumDashboard
         : role === 'admin'
           ? AdminDashboardScreen
           : HomeScreen;
@@ -91,7 +102,7 @@ export const MainNavigator: React.FC<MainNavigatorProps> = ({ logoSource }) => {
   }
 
   const linking = {
-    prefixes: [Linking.createURL('/')],
+    prefixes: [Linking.createURL('/'), 'papzi://'],
     config: {
       screens: {
         Root: {
@@ -105,17 +116,28 @@ export const MainNavigator: React.FC<MainNavigatorProps> = ({ logoSource }) => {
             Settings: 'Settings',
           },
         },
-        Auth: 'Auth',
-        Profile: 'Profile',
-        BookingForm: 'BookingForm',
-        BookingDetail: 'BookingDetail',
-        BookingTracking: 'BookingTracking',
-        Payment: 'Payment',
-        PostDetail: 'PostDetail',
-        CreatePost: 'CreatePost',
-        UserProfile: 'UserProfile',
-        Compliance: 'Compliance',
-        ChatThread: 'ChatThread',
+        Auth: 'auth',
+        Profile: 'profile/:userId',
+        BookingForm: 'booking/new/:photographerId',
+        BookingDetail: 'booking/:bookingId',
+        BookingTracking: 'booking/:bookingId/track',
+        Payment: 'payment/:bookingId',
+        PostDetail: 'post/:postId',
+        CreatePost: 'post/new',
+        UserProfile: 'user/:userId',
+        Compliance: 'compliance',
+        ChatThread: 'chat/:conversationId',
+        AccountConfig: 'account/config',
+        Notifications: 'notifications',
+        PaymentHistory: 'payments/history',
+        Support: 'support',
+        EarningsDashboard: 'earnings',
+        CreatorSubscriptions: 'subscriptions',
+        Reviews: 'reviews/:userId',
+        MediaLibrary: 'media',
+        AdminModeration: 'admin/moderation',
+        Availability: 'availability',
+        ModelRelease: 'legal/release',
       },
     },
   };
@@ -143,7 +165,7 @@ export const MainNavigator: React.FC<MainNavigatorProps> = ({ logoSource }) => {
           // Authenticated Stack
           <>
             <Stack.Screen name="Root" component={TabsNavigator} options={{ headerShown: false }} />
-            <Stack.Screen name="Profile" component={ProfileScreen} options={{ title: 'Photographer' }} />
+            <Stack.Screen name="Profile" component={UserProfileScreen} options={{ title: 'Photographer Profile' }} />
             <Stack.Screen name="BookingForm" component={BookingFormScreen} options={{ title: 'Booking Request' }} />
             <Stack.Screen name="BookingDetail" component={BookingDetailScreen} options={{ title: 'Booking Detail' }} />
             <Stack.Screen name="BookingTracking" component={BookingTrackingScreen} options={{ title: 'Track Booking' }} />
@@ -153,6 +175,18 @@ export const MainNavigator: React.FC<MainNavigatorProps> = ({ logoSource }) => {
             <Stack.Screen name="UserProfile" component={UserProfileScreen} options={{ title: 'Photographer Profile' }} />
             <Stack.Screen name="Compliance" component={ComplianceScreen} options={{ title: 'Privacy & Permissions' }} />
             <Stack.Screen name="ChatThread" component={ChatScreen} options={{ title: 'Chat' }} />
+            <Stack.Screen name="PaidVideoCall" component={PaidVideoCallScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="PaymentHistory" component={PaymentHistoryScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="Support" component={SupportScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="EarningsDashboard" component={EarningsDashboardScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="CreatorSubscriptions" component={CreatorSubscriptionsScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="Reviews" component={ReviewsScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="MediaLibrary" component={MediaLibraryScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="AdminModeration" component={AdminModerationScreen} options={{ title: 'Moderation Queue' }} />
+            <Stack.Screen name="Availability" component={AvailabilityScreen} options={{ title: 'Manage Availability' }} />
+            <Stack.Screen name="AccountConfig" component={AccountConfigScreen} options={{ title: 'Account Settings' }} />
+            <Stack.Screen name="ModelRelease" component={ModelReleaseScreen} options={{ title: 'Legal Documents' }} />
           </>
         )}
       </Stack.Navigator>

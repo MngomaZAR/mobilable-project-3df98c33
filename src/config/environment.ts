@@ -11,4 +11,12 @@ export const environment = {
   EXPO_PUBLIC_SUPABASE_ANON_KEY: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
 };
 
+/** Centralised Supabase Storage bucket names — change here and it propagates everywhere */
+export const BUCKETS = {
+  posts: 'post-images',
+  avatars: 'avatars',
+  previews: 'previews',
+  media: 'media-assets',
+} as const;
+
 export default environment;

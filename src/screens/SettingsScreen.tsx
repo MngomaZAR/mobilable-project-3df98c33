@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import * as ImagePicker from 'expo-image-picker';
 import {
   Alert,
   ScrollView,
@@ -17,6 +18,7 @@ import { useAppData } from '../store/AppDataContext';
 import { useTheme, ThemeMode } from '../store/ThemeContext';
 import { environment } from '../config/environment';
 import { RootStackParamList } from '../navigation/types';
+import { ActionModal } from '../components/ActionModal';
 
 type Navigation = StackNavigationProp<RootStackParamList, 'Root'>;
 const PLACEHOLDER_AVATAR =
@@ -29,57 +31,115 @@ const THEME_OPTIONS: { label: string; value: ThemeMode; icon: string }[] = [
 ];
 
 const SettingsScreen: React.FC = () => {
-  const { resetState, saving, currentUser, signOut } = useAppData();
+  const { resetState, saving, currentUser, signOut, updateProfilePicture } = useAppData();
   const { colors, isDark, themeMode, setThemeMode } = useTheme();
   const navigation = useNavigation<Navigation>();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [modalState, setModalState] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    isDestructive?: boolean;
+    onCancel?: () => void;
+  }>({
+    visible: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
+  const [legalModal, setLegalModal] = useState<{ visible: boolean; title: string; content: string }>({
+    visible: false,
+    title: '',
+    content: ''
+  });
 
   const s = makeStyles(colors, isDark);
 
-  const handleSignOut = async () => {
-    if (Platform.OS === 'web') {
-      if (window.confirm('Are you sure you want to sign out?')) {
+  const handleSignOut = () => {
+    setModalState({
+      visible: true,
+      title: 'Sign Out',
+      message: 'Are you sure you want to sign out of your account?',
+      isDestructive: true,
+      onConfirm: async () => {
+        setModalState(p => ({ ...p, visible: false }));
         await signOut();
-      }
-      return;
-    }
-    Alert.alert('Sign out', 'Are you sure you want to sign out?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Sign Out', style: 'destructive', onPress: async () => await signOut() },
-    ]);
+      },
+      onCancel: () => setModalState(p => ({ ...p, visible: false }))
+    });
   };
 
   const handleReset = () => {
-    if (Platform.OS === 'web') {
-      if (window.confirm('This will clear your local cache. Continue?')) {
-        resetState();
-      }
+    setModalState({
+      visible: true,
+      title: 'Reset Local Data',
+      message: 'This will clear your local cache and preferences. Your account data remains safe on the server. Continue?',
+      isDestructive: true,
+      onConfirm: async () => {
+        setModalState(p => ({ ...p, visible: false }));
+        await resetState();
+      },
+      onCancel: () => setModalState(p => ({ ...p, visible: false }))
+    });
+  };
+
+  const handleUpdateAvatar = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'Please allow access to your photos to update your avatar.');
       return;
     }
-    Alert.alert('Reset Data', 'This will clear your local cache. Continue?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Reset', style: 'destructive', onPress: resetState },
-    ]);
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    });
+
+    if (!result.canceled && result.assets[0]?.uri) {
+      try {
+        setIsUploadingAvatar(true);
+        await updateProfilePicture(result.assets[0].uri);
+        Alert.alert('Success', 'Profile picture updated successfully!');
+      } catch (err) {
+        // error handled in context
+      } finally {
+        setIsUploadingAvatar(false);
+      }
+    }
   };
 
   return (
     <ScrollView contentContainerStyle={s.container}>
       {/* Profile Card */}
       <View style={s.profileSection}>
-        <Image
-          source={{ uri: (currentUser as any)?.user_metadata?.avatar_url || PLACEHOLDER_AVATAR }}
-          style={s.profileAvatar}
-        />
+        <TouchableOpacity style={s.avatarContainer} onPress={handleUpdateAvatar} disabled={isUploadingAvatar}>
+          <Image
+            source={{ uri: currentUser?.avatar_url || (currentUser as any)?.user_metadata?.avatar_url || PLACEHOLDER_AVATAR }}
+            style={[s.profileAvatar, isUploadingAvatar && s.avatarUploading]}
+          />
+          <View style={s.cameraBadge}>
+            <Ionicons name="camera" size={14} color="#fff" />
+          </View>
+        </TouchableOpacity>
         <View style={s.profileInfo}>
           <Text style={s.profileName}>
-            {(currentUser as any)?.user_metadata?.full_name ||
+            {currentUser?.full_name ||
+              (currentUser as any)?.user_metadata?.full_name ||
               currentUser?.email?.split('@')[0] ||
               'Guest User'}
           </Text>
-          <Text style={s.profileEmail}>
-            {currentUser?.email || 'Sign in to access your account'}
-          </Text>
         </View>
+        <TouchableOpacity 
+          style={s.editProfileButton} 
+          onPress={() => navigation.navigate('AccountConfig')}
+        >
+          <Ionicons name="create-outline" size={20} color={colors.accent} />
+          <Text style={s.editProfileText}>Edit</Text>
+        </TouchableOpacity>
       </View>
 
       {/* APPEARANCE */}
@@ -152,7 +212,32 @@ const SettingsScreen: React.FC = () => {
       <View style={s.section}>
         <Text style={s.sectionHeader}>SUPPORT & ABOUT</Text>
         <View style={s.group}>
-          <TouchableOpacity style={[s.groupItem, s.groupItemBorder]}>
+          <TouchableOpacity style={[s.groupItem, s.groupItemBorder]} onPress={() => navigation.navigate('PaymentHistory')}>
+            <View style={s.itemLeft}>
+              <View style={[s.iconContainer, { backgroundColor: '#10b981' }]}>
+                <Ionicons name="card" size={16} color="#fff" />
+              </View>
+              <Text style={s.itemText}>Payment History</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          </TouchableOpacity>
+          <TouchableOpacity style={[s.groupItem, s.groupItemBorder]} onPress={() => navigation.navigate('Support')}>
+            <View style={s.itemLeft}>
+              <View style={[s.iconContainer, { backgroundColor: '#f43f5e' }]}>
+                <Ionicons name="help-buoy" size={16} color="#fff" />
+              </View>
+              <Text style={s.itemText}>Contact Support</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[s.groupItem, s.groupItemBorder]} 
+            onPress={() => setLegalModal({ 
+              visible: true, 
+              title: 'Terms of Service', 
+              content: 'Welcome to Papzi. By using our platform, you agree to our terms regarding booking, payments, and content sharing. We facilitate connections between creators and clients. All transactions are subject to platform fees as described in our fee schedule. Please respect local laws and the privacy of others.' 
+            })}
+          >
             <View style={s.itemLeft}>
               <View style={[s.iconContainer, { backgroundColor: '#f59e0b' }]}>
                 <Ionicons name="document-text" size={16} color="#fff" />
@@ -161,7 +246,14 @@ const SettingsScreen: React.FC = () => {
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </TouchableOpacity>
-          <TouchableOpacity style={[s.groupItem, s.groupItemBorder]}>
+          <TouchableOpacity 
+            style={[s.groupItem, s.groupItemBorder]}
+            onPress={() => setLegalModal({ 
+              visible: true, 
+              title: 'Privacy Policy', 
+              content: 'Your privacy is important to us. We collect data necessary for providing our services, including location data for matching you with nearby talent. We do not sell your personal data to third parties. For more information on how we handle your data, please contact our support team.' 
+            })}
+          >
             <View style={s.itemLeft}>
               <View style={[s.iconContainer, { backgroundColor: '#10b981' }]}>
                 <Ionicons name="shield-checkmark" size={16} color="#fff" />
@@ -202,6 +294,25 @@ const SettingsScreen: React.FC = () => {
       </View>
 
       <Text style={s.footerText}>Papzi Marketplace</Text>
+      
+      <ActionModal
+        visible={modalState.visible}
+        title={modalState.title}
+        message={modalState.message}
+        onConfirm={modalState.onConfirm || (() => {})}
+        onCancel={modalState.onCancel || (() => {})}
+        isDestructive={modalState.isDestructive}
+        confirmLabel={modalState.isDestructive ? 'Confirm' : 'OK'}
+      />
+
+      <ActionModal
+        visible={legalModal.visible}
+        title={legalModal.title}
+        message={legalModal.content}
+        onConfirm={() => setLegalModal(p => ({ ...p, visible: false }))}
+        onCancel={() => setLegalModal(p => ({ ...p, visible: false }))}
+        confirmLabel="Close"
+      />
     </ScrollView>
   );
 };
@@ -223,15 +334,50 @@ const makeStyles = (colors: Colors, isDark: boolean) =>
       marginBottom: 32,
       marginTop: 10,
     },
+    avatarContainer: {
+      position: 'relative',
+    },
     profileAvatar: {
       width: 64,
       height: 64,
       borderRadius: 32,
       backgroundColor: colors.border,
     },
+    avatarUploading: {
+      opacity: 0.5,
+    },
+    cameraBadge: {
+      position: 'absolute',
+      bottom: 0,
+      right: -4,
+      backgroundColor: '#007AFF',
+      width: 24,
+      height: 24,
+      borderRadius: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 2,
+      borderColor: colors.bg,
+    },
     profileInfo: { marginLeft: 16, flex: 1 },
     profileName: { fontSize: 22, fontWeight: '700', color: colors.text },
-    profileEmail: { fontSize: 15, color: colors.textMuted, marginTop: 4 },
+    profileStatus: { fontSize: 14, color: colors.textMuted, marginTop: 2 },
+    editProfileButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
+      paddingVertical: 6,
+      paddingHorizontal: 10,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    editProfileText: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: colors.accent,
+      marginLeft: 4,
+    },
     section: { marginBottom: 24 },
     sectionHeader: {
       fontSize: 13,

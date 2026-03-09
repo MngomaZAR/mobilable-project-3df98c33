@@ -1,16 +1,19 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { RouteProp, useRoute } from '@react-navigation/native';
+import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/types';
+import { StackNavigationProp } from '@react-navigation/stack';
 import { useAppData } from '../store/AppDataContext';
 import { hasSupabase, supabase } from '../config/supabaseClient';
 import { Post } from '../types';
+import { HashtagText } from '../components/HashtagText';
 
 type Route = RouteProp<RootStackParamList, 'PostDetail'>;
 
 const PostDetailScreen: React.FC = () => {
   const { params } = useRoute<Route>();
-  const { state, toggleLike, addComment } = useAppData();
+  const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
+  const { state, toggleLike, addComment, fetchComments } = useAppData();
   const [comment, setComment] = useState('');
   const [hydratedPost, setHydratedPost] = useState<Post | null>(null);
   const [loadingPost, setLoadingPost] = useState(false);
@@ -18,9 +21,14 @@ const PostDetailScreen: React.FC = () => {
   const postFromState = useMemo(() => state.posts.find((p) => p.id === params.postId), [params.postId, state.posts]);
   const post = postFromState ?? hydratedPost;
   const comments = useMemo(
-    () => state.comments.filter((c) => c.postId === params.postId),
+    () => state.comments[params.postId] ?? [],
     [params.postId, state.comments]
   );
+
+  // Load comments when screen mounts
+  useEffect(() => {
+    fetchComments(params.postId);
+  }, [params.postId, fetchComments]);
 
   useEffect(() => {
     if (postFromState || !hasSupabase) return;
@@ -34,16 +42,29 @@ const PostDetailScreen: React.FC = () => {
           .eq('id', params.postId)
           .maybeSingle();
         if (!mounted || !data) return;
+
+        const currentUserId = state.currentUser?.id;
+        let liked = false;
+        if (currentUserId) {
+          const { data: likeData } = await supabase
+            .from('post_likes')
+            .select('post_id')
+            .eq('user_id', currentUserId)
+            .eq('post_id', data.id)
+            .maybeSingle();
+          liked = !!likeData;
+        }
+
         setHydratedPost({
           id: data.id,
-          userId: data.user_id,
+          user_id: data.user_id,
           caption: data.caption ?? '',
-          imageUri: data.image_url ?? '',
-          createdAt: data.created_at ?? new Date().toISOString(),
+          image_url: data.image_url ?? '',
+          created_at: data.created_at ?? new Date().toISOString(),
           location: data.location ?? undefined,
-          likes: Number(data.likes_count ?? 0),
-          liked: false,
-          commentCount: Number(data.comment_count ?? 0),
+          likes_count: Number(data.likes_count ?? 0),
+          liked,
+          comment_count: Number(data.comment_count ?? 0),
         });
       } finally {
         if (mounted) setLoadingPost(false);
@@ -80,16 +101,25 @@ const PostDetailScreen: React.FC = () => {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <Image source={{ uri: post.imageUri }} style={styles.image} />
+      <Image source={{ uri: post.image_url }} style={styles.image} />
       <View style={styles.content}>
         <View style={styles.row}>
-          <Text style={styles.title}>{post.caption}</Text>
+          <HashtagText 
+            text={post.caption} 
+            style={styles.title} 
+            hashtagStyle={{ color: '#6366f1' }}
+            onHashtagPress={(tag) => {
+               // Placeholder for TagSearch
+               alert(`Searching for ${tag}`);
+               // navigation.navigate('Search', { query: tag });
+            }}
+          />
           <TouchableOpacity onPress={() => toggleLike(post.id)}>
-            <Text style={styles.like}>{post.liked ? '♥️' : '♡'} {post.likes}</Text>
+            <Text style={styles.like}>{post.liked ? '♥️' : '♡'} {post.likes_count}</Text>
           </TouchableOpacity>
         </View>
         {post.location ? <Text style={styles.meta}>{post.location}</Text> : null}
-        <Text style={styles.meta}>{new Date(post.createdAt).toLocaleString()}</Text>
+        <Text style={styles.meta}>{new Date(post.created_at).toLocaleString()}</Text>
 
         <Text style={styles.sectionTitle}>Comments</Text>
         {comments.length === 0 ? (
@@ -97,7 +127,7 @@ const PostDetailScreen: React.FC = () => {
         ) : (
           comments.map((item) => (
             <View key={item.id} style={styles.comment}>
-              <Text style={styles.commentAuthor}>{item.userId}</Text>
+              <Text style={styles.commentAuthor}>{item.user_id}</Text>
               <Text style={styles.commentText}>{item.text}</Text>
             </View>
           ))

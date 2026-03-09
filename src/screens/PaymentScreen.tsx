@@ -23,8 +23,8 @@ const PaymentScreen: React.FC = () => {
   const [loadingLink, setLoadingLink] = useState(false);
 
   const bookingId = params?.bookingId;
-  const checkoutItemName = booking?.package ?? 'Photography booking';
-  const checkoutAmount = 'R1,200';
+  const checkoutItemName = booking?.package_type ?? 'Photography booking';
+  const checkoutAmount = booking?.total_amount ? `R${booking.total_amount.toLocaleString()}` : 'R1,200';
 
   const handleSuccess = () => {
     setStatusMessage('Payment completed. Waiting for secure confirmation...');
@@ -41,8 +41,8 @@ const PaymentScreen: React.FC = () => {
   const notifyUrl = supabaseBaseUrl ? `${supabaseBaseUrl}/functions/v1/payfast-handler/notify` : null;
 
   useEffect(() => {
-    if (booking?.date) {
-      setStatusMessage(`Payment requested for ${booking.date}`);
+    if (booking?.booking_date) {
+      setStatusMessage(`Payment requested for ${booking.booking_date}`);
     }
   }, [booking]);
 

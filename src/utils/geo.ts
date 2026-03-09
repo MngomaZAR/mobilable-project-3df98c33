@@ -9,6 +9,16 @@ export function validateSouthAfricanLocation(lat: number, lng: number): boolean 
   return lat >= -35 && lat <= -22 && lng >= 16 && lng <= 33;
 }
 
+/**
+ * Assertion for safety-critical location boundaries.
+ * Throws an explicit error if the project's operational domain (South Africa) is breached.
+ */
+export function assertSouthAfricanLocation(lat: number, lng: number): void {
+  if (!validateSouthAfricanLocation(lat, lng)) {
+    throw new Error(`Location Out of Bounds: (${lat}, ${lng}) is outside the South African operational zone.`);
+  }
+}
+
 const toRadians = (degrees: number) => (degrees * Math.PI) / 180;
 
 export const haversineDistanceKm = (from: Coordinates, to: Coordinates) => {

@@ -5,6 +5,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import * as Location from 'expo-location';
 import { MapTracker } from '../components/MapTracker';
 import { RootStackParamList } from '../navigation/types';
+import { Booking, Photographer } from '../types';
 import { useAppData } from '../store/AppDataContext';
 import { DEFAULT_CAPE_TOWN_COORDINATES, ensureSouthAfricanCoordinates } from '../utils/geo';
 import { hasSupabase, supabase } from '../config/supabaseClient';
@@ -22,14 +23,14 @@ const BookingTrackingScreen: React.FC = () => {
     [params.bookingId, state.bookings]
   );
   const photographer = useMemo(
-    () => state.photographers.find((p) => p.id === booking?.photographerId),
-    [booking?.photographerId, state.photographers]
+    () => state.photographers.find((p) => p.id === booking?.photographer_id),
+    [booking?.photographer_id, state.photographers]
   );
 
   const [liveClientLocation, setLiveClientLocation] = useState(() =>
     ensureSouthAfricanCoordinates({
-      latitude: booking?.userLatitude ?? photographer?.latitude ?? DEFAULT_CAPE_TOWN_COORDINATES.latitude,
-      longitude: booking?.userLongitude ?? photographer?.longitude ?? DEFAULT_CAPE_TOWN_COORDINATES.longitude,
+      latitude: booking?.user_latitude ?? photographer?.latitude ?? DEFAULT_CAPE_TOWN_COORDINATES.latitude,
+      longitude: booking?.user_longitude ?? photographer?.longitude ?? DEFAULT_CAPE_TOWN_COORDINATES.longitude,
     })
   );
   const [livePhotographerLocation, setLivePhotographerLocation] = useState(() =>
@@ -43,11 +44,11 @@ const BookingTrackingScreen: React.FC = () => {
     if (!booking) return;
     setLiveClientLocation(
       ensureSouthAfricanCoordinates({
-        latitude: booking.userLatitude ?? DEFAULT_CAPE_TOWN_COORDINATES.latitude,
-        longitude: booking.userLongitude ?? DEFAULT_CAPE_TOWN_COORDINATES.longitude,
+        latitude: booking.user_latitude ?? DEFAULT_CAPE_TOWN_COORDINATES.latitude,
+        longitude: booking.user_longitude ?? DEFAULT_CAPE_TOWN_COORDINATES.longitude,
       })
     );
-  }, [booking?.id, booking?.userLatitude, booking?.userLongitude]);
+  }, [booking?.id, booking?.user_latitude, booking?.user_longitude]);
 
   useEffect(() => {
     if (!photographer) return;
@@ -133,8 +134,8 @@ const BookingTrackingScreen: React.FC = () => {
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'bookings', filter: `id=eq.${booking.id}` },
         (payload) => {
-          const next = payload.new as any;
-          if (Number.isFinite(next?.user_latitude) && Number.isFinite(next?.user_longitude)) {
+          const next = payload.new as Partial<Booking>;
+          if (next?.user_latitude !== undefined && next?.user_longitude !== undefined) {
             setLiveClientLocation(
               ensureSouthAfricanCoordinates({
                 latitude: Number(next.user_latitude),
@@ -150,8 +151,8 @@ const BookingTrackingScreen: React.FC = () => {
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'photographers', filter: `id=eq.${photographer.id}` },
         (payload) => {
-          const next = payload.new as any;
-          if (Number.isFinite(next?.latitude) && Number.isFinite(next?.longitude)) {
+          const next = payload.new as Partial<Photographer>;
+          if (next?.latitude !== undefined && next?.longitude !== undefined) {
             setLivePhotographerLocation(
               ensureSouthAfricanCoordinates({
                 latitude: Number(next.latitude),

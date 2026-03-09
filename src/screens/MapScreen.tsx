@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Alert, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import * as Location from 'expo-location';
 import { MapPreview } from '../components/MapPreview';
 import { MapMarker } from '../components/mapTypes';
 import { useAppData } from '../store/AppDataContext';
+import { useTheme } from '../store/ThemeContext';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useNavigation } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/types';
@@ -46,6 +47,8 @@ const formatTimestamp = (timestamp: number) => {
 
 const MapScreen: React.FC = () => {
   const { state } = useAppData();
+  const { colors, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
   const [userMarker, setUserMarker] = useState<MapMarker | null>(null);
   const [userCoordinates, setUserCoordinates] = useState<UserCoordinates | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
@@ -200,150 +203,155 @@ const MapScreen: React.FC = () => {
   }, [gpsEnabled, locationError, mapError, userMarker, usingManual]);
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
-        <View style={styles.headerRow}>
-          <View>
-            <Text style={styles.title}>Photographers nearby</Text>
-            <Text style={styles.subtitle}>
-              Search photographers by city or name, then tap markers to explore nearby talent.
-            </Text>
-            <Text style={styles.status}>{statusLabel}</Text>
-            <Text style={styles.coordsLabel}>
-              {userCoordinates
-                ? `Lat ${userCoordinates.lat.toFixed(5)}, Lng ${userCoordinates.lng.toFixed(5)} · Updated ${formatTimestamp(
-                    userCoordinates.timestamp
-                  )}`
-                : 'Awaiting live GPS coordinates'}
-            </Text>
-            {locationWarning ? <Text style={styles.warning}>{locationWarning}</Text> : null}
-            {locationError ? <Text style={styles.errorText}>{locationError}</Text> : null}
-            {mapError ? <Text style={styles.errorText}>{mapError}</Text> : null}
-          </View>
-          <View style={styles.countPill}>
-            <Text style={styles.countText}>{baseMarkers.length}</Text>
-            <Text style={styles.countLabel}>active</Text>
-          </View>
-        </View>
-
-        <View style={styles.actionRow}>
-          <TouchableOpacity style={styles.primaryButton} onPress={requestLocation} disabled={requesting}>
-            <Text style={styles.primaryButtonText}>{requesting ? 'Requesting...' : 'Retry GPS'}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.secondaryButton, usingManual && styles.secondaryButtonActive]}
-            onPress={() => setShowManualEntry((current) => !current)}
-          >
-            <Text style={[styles.secondaryButtonText, usingManual && styles.secondaryButtonTextActive]}>
-              {showManualEntry ? 'Hide manual pin' : 'Manual pin'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.searchRow}>
-          <TextInput
-            placeholder="Search photographers or city"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            style={styles.searchInput}
-          />
-          <Text style={styles.searchMeta}>{filteredBaseMarkers.length} shown</Text>
-        </View>
-
-        <View style={styles.mapWrapper}>
-          <MapPreview
-            markers={markers}
-            onMapError={(message) => setMapError(message)}
-            onMarkerPress={(m) => {
-              if (m.type === 'photographer') {
-                setSelectedMarker(m);
-              }
-            }}
-          />
-          
-          {selectedMarker && (
-            <View style={styles.bottomSheet}>
-              <TouchableOpacity style={styles.closeSheet} onPress={() => setSelectedMarker(null)}>
-                <Ionicons name="close" size={24} color="#64748b" />
-              </TouchableOpacity>
-              <View style={styles.sheetHeader}>
-                <View style={styles.sheetPhotoPlaceholder}>
-                  <Ionicons name="camera" size={24} color="#94a3b8" />
-                </View>
-                <View style={styles.sheetInfo}>
-                  <Text style={styles.sheetTitle}>{selectedMarker.title}</Text>
-                  <Text style={styles.sheetSubtitle}>{selectedMarker.description}</Text>
-                  <View style={styles.ratingRow}>
-                    <Ionicons name="star" size={14} color="#fbbf24" />
-                    <Text style={styles.ratingText}>4.9 (120+ trips)</Text>
-                  </View>
-                </View>
-              </View>
-              <TouchableOpacity
-                style={styles.bookButton}
-                onPress={() => {
-                  if (selectedMarker.id) {
-                    navigation.navigate('Profile', { photographerId: selectedMarker.id });
-                  }
-                }}
-              >
-                <Text style={styles.bookButtonText}>View Profile & Book</Text>
-              </TouchableOpacity>
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.bg }]}>
+        <View style={styles.container}>
+          <View style={styles.headerRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.title, { color: colors.text }]}>Photographers nearby</Text>
+              <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+                Search photographers by city or name, then tap markers to explore nearby talent.
+              </Text>
+              <Text style={[styles.status, { color: colors.text }]}>{statusLabel}</Text>
+              <Text style={[styles.coordsLabel, { color: colors.textMuted }]}>
+                {userCoordinates
+                  ? `Lat ${userCoordinates.lat.toFixed(5)}, Lng ${userCoordinates.lng.toFixed(5)} · Updated ${formatTimestamp(
+                      userCoordinates.timestamp
+                    )}`
+                  : 'Awaiting live GPS coordinates'}
+              </Text>
+              {locationWarning ? <Text style={styles.warning}>{locationWarning}</Text> : null}
+              {locationError ? <Text style={styles.errorText}>{locationError}</Text> : null}
+              {mapError ? <Text style={styles.errorText}>{mapError}</Text> : null}
             </View>
-          )}
-        </View>
-
-        {showManualEntry ? (
-          <View style={styles.manualCard}>
-            <Text style={styles.manualTitle}>Manual fallback</Text>
-            <Text style={styles.manualSubtitle}>
-              Use only if GPS fails. South Africa bounds: lat -35 to -22, lng 16 to 33.
-            </Text>
-            <View style={styles.inputRow}>
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Label</Text>
-                <TextInput
-                  placeholder="Cape Town CBD"
-                  value={manualLocation.label}
-                  onChangeText={(text) => setManualLocation((prev) => ({ ...prev, label: text }))}
-                  style={styles.input}
-                />
-              </View>
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Latitude</Text>
-                <TextInput
-                  placeholder="-33.92"
-                  value={manualLocation.latitude}
-                  onChangeText={(text) => setManualLocation((prev) => ({ ...prev, latitude: text }))}
-                  style={styles.input}
-                  keyboardType="numeric"
-                />
-              </View>
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Longitude</Text>
-                <TextInput
-                  placeholder="18.42"
-                  value={manualLocation.longitude}
-                  onChangeText={(text) => setManualLocation((prev) => ({ ...prev, longitude: text }))}
-                  style={styles.input}
-                  keyboardType="numeric"
-                />
-              </View>
+            <View style={[styles.countPill, { backgroundColor: colors.accent }]}>
+              <Text style={[styles.countText, { color: isDark ? colors.bg : '#fff' }]}>{baseMarkers.length}</Text>
+              <Text style={[styles.countLabel, { color: isDark ? colors.bg + '80' : 'rgba(255,255,255,0.7)' }]}>active</Text>
             </View>
-            <TouchableOpacity style={styles.applyButton} onPress={applyManualLocation}>
-              <Text style={styles.applyButtonText}>Pin manual location</Text>
+          </View>
+
+          <View style={styles.actionRow}>
+            <TouchableOpacity style={[styles.primaryButton, { backgroundColor: colors.accent }]} onPress={requestLocation} disabled={requesting}>
+              <Text style={[styles.primaryButtonText, { color: isDark ? colors.bg : '#fff' }]}>{requesting ? 'Requesting...' : 'Retry GPS'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.secondaryButton, { backgroundColor: colors.card, borderColor: colors.border }, usingManual && [styles.secondaryButtonActive, { borderColor: colors.accent, backgroundColor: colors.accent + '10' }]]}
+              onPress={() => setShowManualEntry((current) => !current)}
+            >
+              <Text style={[styles.secondaryButtonText, { color: colors.textSecondary }, usingManual && [styles.secondaryButtonTextActive, { color: colors.accent }]]}>
+                {showManualEntry ? 'Hide manual pin' : 'Manual pin'}
+              </Text>
             </TouchableOpacity>
           </View>
-        ) : null}
-      </View>
-    </SafeAreaView>
+
+          <View style={styles.searchRow}>
+            <TextInput
+              placeholder="Search photographers or city"
+              placeholderTextColor={colors.textMuted}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              style={[styles.searchInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
+            />
+            <Text style={[styles.searchMeta, { color: colors.textSecondary }]}>{filteredBaseMarkers.length} shown</Text>
+          </View>
+
+          <View style={styles.mapWrapper}>
+            <MapPreview
+              markers={markers}
+              onMapError={(message) => setMapError(message)}
+              onMarkerPress={(m) => {
+                if (m.type === 'photographer') {
+                  setSelectedMarker(m);
+                }
+              }}
+            />
+            
+            {selectedMarker && (
+              <View style={[styles.bottomSheet, { backgroundColor: colors.card }]}>
+                <TouchableOpacity style={styles.closeSheet} onPress={() => setSelectedMarker(null)}>
+                  <Ionicons name="close" size={24} color={colors.textSecondary} />
+                </TouchableOpacity>
+                <View style={styles.sheetHeader}>
+                  <View style={[styles.sheetPhotoPlaceholder, { backgroundColor: colors.bg }]}>
+                    <Ionicons name="camera" size={24} color={colors.textMuted} />
+                  </View>
+                  <View style={styles.sheetInfo}>
+                    <Text style={[styles.sheetTitle, { color: colors.text }]}>{selectedMarker.title}</Text>
+                    <Text style={[styles.sheetSubtitle, { color: colors.textSecondary }]}>{selectedMarker.description}</Text>
+                    <View style={styles.ratingRow}>
+                      <Ionicons name="star" size={14} color="#fbbf24" />
+                      <Text style={[styles.ratingText, { color: colors.text }]}>4.9 (120+ trips)</Text>
+                    </View>
+                  </View>
+                </View>
+                <TouchableOpacity
+                  style={[styles.bookButton, { backgroundColor: colors.accent }]}
+                  onPress={() => {
+                    if (selectedMarker.id) {
+                      navigation.navigate('Profile', { userId: selectedMarker.id });
+                    }
+                  }}
+                >
+                  <Text style={[styles.bookButtonText, { color: isDark ? colors.bg : '#fff' }]}>View Profile & Book</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+
+          {showManualEntry ? (
+            <View style={[styles.manualCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Text style={[styles.manualTitle, { color: colors.text }]}>Manual fallback</Text>
+              <Text style={[styles.manualSubtitle, { color: colors.textSecondary }]}>
+                Use only if GPS fails. South Africa bounds: lat -35 to -22, lng 16 to 33.
+              </Text>
+              <View style={styles.inputRow}>
+                <View style={styles.inputGroup}>
+                  <Text style={[styles.label, { color: colors.text }]}>Label</Text>
+                  <TextInput
+                    placeholder="Cape Town CBD"
+                    placeholderTextColor={colors.textMuted}
+                    value={manualLocation.label}
+                    onChangeText={(text) => setManualLocation((prev) => ({ ...prev, label: text }))}
+                    style={[styles.input, { backgroundColor: colors.bg, borderColor: colors.border, color: colors.text }]}
+                  />
+                </View>
+                <View style={styles.inputGroup}>
+                  <Text style={[styles.label, { color: colors.text }]}>Latitude</Text>
+                  <TextInput
+                    placeholder="-33.92"
+                    placeholderTextColor={colors.textMuted}
+                    value={manualLocation.latitude}
+                    onChangeText={(text) => setManualLocation((prev) => ({ ...prev, latitude: text }))}
+                    style={[styles.input, { backgroundColor: colors.bg, borderColor: colors.border, color: colors.text }]}
+                    keyboardType="numeric"
+                  />
+                </View>
+                <View style={styles.inputGroup}>
+                  <Text style={[styles.label, { color: colors.text }]}>Longitude</Text>
+                  <TextInput
+                    placeholder="18.42"
+                    placeholderTextColor={colors.textMuted}
+                    value={manualLocation.longitude}
+                    onChangeText={(text) => setManualLocation((prev) => ({ ...prev, longitude: text }))}
+                    style={[styles.input, { backgroundColor: colors.bg, borderColor: colors.border, color: colors.text }]}
+                    keyboardType="numeric"
+                  />
+                </View>
+              </View>
+              <TouchableOpacity style={[styles.applyButton, { backgroundColor: colors.accent }]} onPress={applyManualLocation}>
+                <Text style={[styles.applyButtonText, { color: isDark ? colors.bg : '#fff' }]}>Pin manual location</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+        </View>
+      </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#f7f7fb',
   },
   container: {
     flex: 1,
@@ -352,21 +360,18 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 22,
     fontWeight: '800',
-    color: '#0f172a',
   },
   subtitle: {
     marginTop: 4,
     marginBottom: 12,
-    color: '#475569',
   },
   status: {
-    color: '#0f172a',
     fontWeight: '700',
   },
   coordsLabel: {
     marginTop: 4,
-    color: '#334155',
-    fontFamily: 'monospace',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    fontSize: 12,
   },
   warning: {
     color: '#b45309',
@@ -386,19 +391,16 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   countPill: {
-    backgroundColor: '#0f172a',
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 8,
     alignItems: 'center',
   },
   countText: {
-    color: '#fff',
     fontWeight: '800',
     fontSize: 16,
   },
   countLabel: {
-    color: '#e2e8f0',
     fontSize: 12,
     fontWeight: '700',
   },
@@ -408,13 +410,11 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   primaryButton: {
-    backgroundColor: '#0f172a',
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
   primaryButtonText: {
-    color: '#fff',
     fontWeight: '700',
   },
   secondaryButton: {
@@ -422,24 +422,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#cbd5e1',
-    backgroundColor: '#fff',
   },
   secondaryButtonActive: {
-    borderColor: '#0ea5e9',
-    backgroundColor: '#ecfeff',
   },
   secondaryButtonText: {
-    color: '#0f172a',
     fontWeight: '700',
   },
   secondaryButtonTextActive: {
-    color: '#0ea5e9',
   },
   mapWrapper: {
     flex: 1,
     width: '100%',
     height: '100%',
+    borderRadius: 16,
+    overflow: 'hidden',
   },
   searchRow: {
     flexDirection: 'row',
@@ -450,30 +446,23 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#cbd5e1',
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    backgroundColor: '#fff',
   },
   searchMeta: {
-    color: '#475569',
     fontWeight: '700',
   },
   manualCard: {
     marginTop: 12,
-    backgroundColor: '#fff',
     borderRadius: 14,
     padding: 12,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#e5e7eb',
   },
   manualTitle: {
     fontWeight: '800',
-    color: '#0f172a',
   },
   manualSubtitle: {
-    color: '#475569',
     marginTop: 4,
     marginBottom: 10,
   },
@@ -488,25 +477,20 @@ const styles = StyleSheet.create({
   },
   label: {
     fontWeight: '700',
-    color: '#0f172a',
     marginBottom: 4,
   },
   input: {
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#e2e8f0',
     borderRadius: 10,
     padding: 10,
-    backgroundColor: '#f8fafc',
   },
   applyButton: {
     marginTop: 10,
-    backgroundColor: '#0ea5e9',
     paddingVertical: 12,
     borderRadius: 12,
     alignItems: 'center',
   },
   applyButtonText: {
-    color: '#fff',
     fontWeight: '800',
   },
   bottomSheet: {
@@ -514,7 +498,6 @@ const styles = StyleSheet.create({
     bottom: 16,
     left: 16,
     right: 16,
-    backgroundColor: '#fff',
     borderRadius: 20,
     padding: 20,
     shadowColor: '#000',
@@ -540,7 +523,6 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: '#f1f5f9',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 16,
@@ -551,11 +533,9 @@ const styles = StyleSheet.create({
   sheetTitle: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#0f172a',
   },
   sheetSubtitle: {
     fontSize: 14,
-    color: '#64748b',
     marginTop: 2,
   },
   ratingRow: {
@@ -566,17 +546,14 @@ const styles = StyleSheet.create({
   ratingText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#0f172a',
     marginLeft: 4,
   },
   bookButton: {
-    backgroundColor: '#0f172a',
     borderRadius: 14,
     alignItems: 'center',
     paddingVertical: 14,
   },
   bookButtonText: {
-    color: '#fff',
     fontSize: 16,
     fontWeight: '700',
   },

@@ -97,7 +97,19 @@ serve(async (req) => {
     if (action === 'list') {
       const { data: rows, error } = await supabaseAdmin
         .from('messages')
-        .select('id, chat_id, sender_id, body, created_at')
+        .select(`
+          id, 
+          chat_id, 
+          sender_id, 
+          body, 
+          message_type, 
+          media_url, 
+          preview_url, 
+          locked, 
+          unlock_booking_id, 
+          unlocked, 
+          created_at
+        `)
         .eq('chat_id', conversationId)
         .order('created_at', { ascending: true });
 
@@ -105,46 +117,19 @@ serve(async (req) => {
         return jsonResponse(500, { error: error.message });
       }
 
-      const unlockBookingIds = Array.from(
-        new Set(
-          (rows ?? [])
-            .map((row: any) => parseBody(row.body))
-            .filter((parsed: any) => parsed?.type === 'media' && parsed?.locked && parsed?.unlockBookingId)
-            .map((parsed: any) => parsed.unlockBookingId)
-        )
-      );
-
-      let bookingStatusMap = new Map<string, string>();
-      if (unlockBookingIds.length > 0) {
-        const { data: bookings } = await supabaseAdmin
-          .from('bookings')
-          .select('id, status')
-          .in('id', unlockBookingIds);
-        (bookings ?? []).forEach((booking: any) => {
-          bookingStatusMap.set(booking.id, booking.status ?? 'pending');
-        });
-      }
-
-      const messages = (rows ?? []).map((row: any) => {
-        const parsed = parseBody(row.body);
-        const messageType = parsed?.type === 'media' ? 'media' : 'text';
-        const unlockBookingId = parsed?.unlockBookingId ?? null;
-        const bookingStatus = unlockBookingId ? bookingStatusMap.get(unlockBookingId) : null;
-        const unlocked = !parsed?.locked || bookingStatus === 'accepted' || bookingStatus === 'completed';
-        return {
-          id: row.id,
-          chatId: row.chat_id,
-          senderId: row.sender_id,
-          text: parsed?.text ?? '',
-          timestamp: row.created_at,
-          messageType,
-          mediaUrl: messageType === 'media' ? (unlocked ? parsed?.mediaUrl ?? null : null) : null,
-          previewUrl: messageType === 'media' ? parsed?.previewUrl ?? parsed?.mediaUrl ?? null : null,
-          locked: messageType === 'media' ? Boolean(parsed?.locked) : false,
-          unlocked: messageType === 'media' ? unlocked : true,
-          unlockBookingId,
-        };
-      });
+      const messages = (rows ?? []).map((row: any) => ({
+        id: row.id,
+        chatId: row.chat_id,
+        senderId: row.sender_id,
+        text: row.body,
+        timestamp: row.created_at,
+        messageType: row.message_type,
+        mediaUrl: row.unlocked ? row.media_url : null,
+        previewUrl: row.preview_url,
+        locked: row.locked,
+        unlocked: row.unlocked,
+        unlockBookingId: row.unlock_booking_id,
+      }));
 
       return jsonResponse(200, { messages });
     }
@@ -152,7 +137,7 @@ serve(async (req) => {
     if (action === 'send') {
       const messageType = payload?.message_type === 'media' ? 'media' : 'text';
       const text = typeof payload?.text === 'string' ? payload.text.trim() : '';
-      const mediaUrl = typeof payload?.media_url === 'string' ? payload.media_url.trim() : '';
+      const mediaUrl = typeof payload?.media_url === 'string' ? payload.media_url.trim() : null;
       const previewUrl =
         typeof payload?.preview_url === 'string' && payload.preview_url.trim().length > 0
           ? payload.preview_url.trim()
@@ -170,43 +155,32 @@ serve(async (req) => {
         return jsonResponse(400, { error: 'media_url is required for media messages.' });
       }
 
-      if (locked && unlockBookingId) {
-        const { data: booking } = await supabaseAdmin
-          .from('bookings')
-          .select('id, client_id, photographer_id')
-          .eq('id', unlockBookingId)
-          .maybeSingle();
-        if (!booking) {
-          return jsonResponse(400, { error: 'unlock_booking_id was not found.' });
-        }
-        if (booking.client_id !== user.id && booking.photographer_id !== user.id) {
-          return jsonResponse(403, { error: 'You do not have access to this booking unlock target.' });
-        }
-      }
-
-      const bodyPayload =
-        messageType === 'media'
-          ? {
-              type: 'media',
-              text,
-              mediaUrl,
-              previewUrl,
-              locked,
-              unlockBookingId,
-            }
-          : {
-              type: 'text',
-              text,
-            };
-
       const { data: inserted, error: insertError } = await supabaseAdmin
         .from('messages')
         .insert({
           chat_id: conversationId,
           sender_id: user.id,
-          body: JSON.stringify(bodyPayload),
+          body: text,
+          message_type: messageType,
+          media_url: mediaUrl,
+          preview_url: previewUrl,
+          locked: locked,
+          unlock_booking_id: unlockBookingId,
+          unlocked: !locked
         })
-        .select('id, chat_id, sender_id, body, created_at')
+        .select(`
+          id, 
+          chat_id, 
+          sender_id, 
+          body, 
+          message_type, 
+          media_url, 
+          preview_url, 
+          locked, 
+          unlock_booking_id, 
+          unlocked, 
+          created_at
+        `)
         .single();
 
       if (insertError || !inserted) {
@@ -227,14 +201,14 @@ serve(async (req) => {
           id: inserted.id,
           chatId: inserted.chat_id,
           senderId: inserted.sender_id,
-          text: bodyPayload.text ?? '',
+          text: inserted.body || '',
           timestamp: inserted.created_at,
-          messageType,
-          mediaUrl: messageType === 'media' ? mediaUrl : null,
-          previewUrl: messageType === 'media' ? previewUrl : null,
-          locked: messageType === 'media' ? locked : false,
-          unlocked: messageType === 'media' ? !locked : true,
-          unlockBookingId,
+          messageType: inserted.message_type,
+          mediaUrl: inserted.unlocked ? inserted.media_url : null,
+          previewUrl: inserted.preview_url,
+          locked: inserted.locked,
+          unlocked: inserted.unlocked,
+          unlockBookingId: inserted.unlock_booking_id,
         },
       });
     }

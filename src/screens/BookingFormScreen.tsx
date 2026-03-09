@@ -5,7 +5,9 @@ import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppData } from '../store/AppDataContext';
+import { useMessaging } from '../store/MessagingContext';
 import { BookingCalendar } from '../components/BookingCalendar';
+import { Ionicons } from '@expo/vector-icons';
 
 type Route = RouteProp<RootStackParamList, 'BookingForm'>;
 type Navigation = StackNavigationProp<RootStackParamList, 'BookingForm'>;
@@ -14,6 +16,7 @@ const BookingFormScreen: React.FC = () => {
   const { params } = useRoute<Route>();
   const navigation = useNavigation<Navigation>();
   const { state, createBooking } = useAppData();
+  const { startConversationWithUser } = useMessaging();
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [timeSlot, setTimeSlot] = useState('Golden hour (4-7)');
   const [packageType, setPackageType] = useState('Half-day coverage');
@@ -74,12 +77,27 @@ const BookingFormScreen: React.FC = () => {
     }
   };
 
+  const handleMessage = async () => {
+    try {
+      const convo = await startConversationWithUser(talent.id, talent.name);
+      navigation.navigate('ChatThread', { conversationId: convo.id, title: convo.title });
+    } catch (e) {
+      Alert.alert('Error', 'Unable to start chat.');
+    }
+  };
+
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <View style={styles.heroCard}>
         <Text style={styles.heroTitle}>Book {talent.name}</Text>
         <Text style={styles.heroMeta}>{talent.style} · {talent.location}</Text>
-        <Text style={styles.heroPrice}>{estimatedRate}</Text>
+        <View style={styles.heroFooter}>
+          <Text style={styles.heroPrice}>{estimatedRate}</Text>
+          <TouchableOpacity style={styles.msgBadge} onPress={handleMessage}>
+            <Ionicons name="chatbubble-outline" size={16} color="#fbbf24" />
+            <Text style={styles.msgBadgeText}>Message</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <Text style={styles.label}>Talent</Text>
@@ -142,7 +160,26 @@ const styles = StyleSheet.create({
   heroPrice: {
     color: '#fbbf24',
     fontWeight: '800',
+  },
+  heroFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginTop: 8,
+  },
+  msgBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(251, 191, 36, 0.15)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    gap: 6,
+  },
+  msgBadgeText: {
+    color: '#fbbf24',
+    fontWeight: '700',
+    fontSize: 12,
   },
   centered: {
     flex: 1,

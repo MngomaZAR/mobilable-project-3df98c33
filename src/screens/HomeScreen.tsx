@@ -19,6 +19,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../store/ThemeContext';
 import { useAppData } from '../store/AppDataContext';
+import { useMessaging } from '../store/MessagingContext';
 import { RootStackParamList, TabParamList } from '../navigation/types';
 import { Photographer, Model } from '../types';
 import { AppLogo } from '../components/AppLogo';
@@ -38,6 +39,7 @@ const toHourlyRateRand = (price_range: string) => {
 
 const HomeScreen: React.FC = () => {
   const { state, loading, error, refresh } = useAppData();
+  const { startConversationWithUser } = useMessaging();
   const { colors, isDark } = useTheme();
   const navigation = useNavigation<Navigation>();
   const parentNavigation = navigation.getParent<StackNavigationProp<RootStackParamList>>();
@@ -116,6 +118,15 @@ const HomeScreen: React.FC = () => {
     parentNavigation?.navigate('BookingForm', { photographerId: photographer.id });
   };
 
+  const handleMessage = async (item: any) => {
+    try {
+      const convo = await startConversationWithUser(item.id, item.name);
+      parentNavigation?.navigate('ChatThread', { conversationId: convo.id, title: convo.title });
+    } catch (e) {
+      console.warn('Failed to start chat:', e);
+    }
+  };
+
   const renderCard = (item: any) => (
     <View
       key={item.id}
@@ -157,16 +168,22 @@ const HomeScreen: React.FC = () => {
         </View>
         <View style={styles.actions}>
           <TouchableOpacity 
+            style={[styles.buttonSmall, { borderColor: colors.border, backgroundColor: colors.card }]} 
+            onPress={() => handleMessage(item)}
+          >
+            <Ionicons name="chatbubble-outline" size={18} color={colors.accent} />
+          </TouchableOpacity>
+          <TouchableOpacity 
             style={[styles.buttonGhost, { borderColor: colors.border }, discoveryMode === 'models' && styles.buttonVideo]} 
             onPress={() => (discoveryMode === 'models' ? (navigation as any).navigate('PaidVideoCall') : openProfile(item))}
           >
             {discoveryMode === 'models' && <Ionicons name="videocam" size={16} color="#fff" style={{ marginRight: 6 }} />}
             <Text style={[styles.buttonGhostText, { color: colors.text }, discoveryMode === 'models' && styles.buttonVideoText]}>
-              {discoveryMode === 'models' ? 'Video Call' : 'View Profile'}
+              {discoveryMode === 'models' ? 'Video' : 'Profile'}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.buttonPrimary, { backgroundColor: colors.accent }]} onPress={() => (discoveryMode === 'models' ? startModelBooking(item) : startBooking(item))}>
-            <Text style={[styles.buttonPrimaryText, { color: colors.card }]}>Book Now</Text>
+            <Text style={[styles.buttonPrimaryText, { color: colors.card }]}>Book</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -1030,6 +1047,15 @@ const styles = StyleSheet.create({
   buttonGhostText: {
     color: '#0f172a',
     fontWeight: '800',
+    fontSize: 13,
+  },
+  buttonSmall: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   buttonVideo: {
     backgroundColor: '#8b5cf6',

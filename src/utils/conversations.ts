@@ -7,8 +7,7 @@
 
 import { AppState } from '../types';
 
-export const PLACEHOLDER_AVATAR =
-  'https://images.unsplash.com/photo-1508214751196-bcfd4ca60f91?auto=format&fit=crop&w=300&q=80';
+import { PLACEHOLDER_AVATAR } from './constants';
 
 export function getConversationDisplayInfo(
   item: { participants?: string[]; title?: string; participant?: { id: string; name: string; avatar_url: string } },

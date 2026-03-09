@@ -1,4 +1,6 @@
 import { AppUser, Photographer, Post, ProfileSummary } from '../types';
+import { supabase } from '../config/supabaseClient';
+import { PLACEHOLDER_IMAGE } from './constants';
 
 type ProfileRow = { 
   role?: AppUser['role']; 
@@ -35,7 +37,7 @@ type PhotographerRow = {
 
 type PostRow = {
   id: string;
-  user_id: string;
+  author_id: string;
   caption: string | null;
   location: string | null;
   comment_count: number | null;
@@ -46,7 +48,7 @@ type PostRow = {
 };
 
 const FALLBACK_AVATAR = 'https://images.unsplash.com/photo-1508214751196-bcfd4ca60f91?auto=format&fit=crop&w=300&q=80';
-const PLACEHOLDER_IMAGE = 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=1200&q=80&sat=-20';
+
 
 export const mapSupabaseUser = (user: any, fallbackRole: AppUser['role'] = 'client', profile: ProfileRow = null): AppUser => ({
   id: user.id,
@@ -85,7 +87,7 @@ export const mapPostRow = (row: PostRow): Post => {
   const profile = Array.isArray(row.profiles) && row.profiles.length > 0 ? row.profiles[0] : (row.profiles as any);
   return {
     id: row.id,
-    user_id: row.user_id,
+    author_id: row.author_id,
     caption: row.caption ?? 'Untitled post',
     location: row.location ?? profile?.city ?? undefined,
     created_at: row.created_at,

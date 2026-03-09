@@ -18,8 +18,9 @@ import * as ImagePicker from 'expo-image-picker';
 import { useAppData } from '../store/AppDataContext';
 import { useTheme } from '../store/ThemeContext';
 import { AppUser } from '../types';
+import { PLACEHOLDER_AVATAR } from '../utils/constants';
 
-const PLACEHOLDER_AVATAR = 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=300&q=80';
+
 
 const AccountConfigScreen: React.FC = () => {
   const { currentUser, updateProfile, updateProfilePicture, saving } = useAppData();

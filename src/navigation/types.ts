@@ -36,6 +36,7 @@ export type RootStackParamList = {
   AdminModeration: undefined;
   Availability: undefined;
   ModelRelease: { bookingId: string };
+  Legal: { title: string; content: string };
 };
 
 declare global {

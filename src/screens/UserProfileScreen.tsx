@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import { FlatList, Image, StyleSheet, Text, View, TouchableOpacity, Platform, Alert } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { FlatList, Image, StyleSheet, Text, View, TouchableOpacity, Platform, Alert, Modal, TextInput } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -12,6 +12,7 @@ import { reportContent } from '../services/reportService';
 import { sendTip } from '../services/monetisationService';
 import { toggleFollow } from '../services/followService';
 import { trackEvent } from '../services/analyticsService';
+import { PLACEHOLDER_IMAGE } from '../utils/constants';
 
 type Route = RouteProp<RootStackParamList, 'UserProfile'>;
 type Navigation = StackNavigationProp<RootStackParamList, 'UserProfile'>;
@@ -22,6 +23,9 @@ const UserProfileScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
   const { state, startConversationWithUser, setState } = useAppData();
+  const [tipModalVisible, setTipModalVisible] = useState(false);
+  const [tipAmount, setTipAmount] = useState('50');
+  const [isSendingTip, setIsSendingTip] = useState(false);
   
   const talent = useMemo(
     () => state.photographers.find((p) => p.id === params.userId) || state.models.find((m) => m.id === params.userId) || params.photographer,
@@ -34,7 +38,7 @@ const UserProfileScreen: React.FC = () => {
   );
 
   const posts = useMemo(
-    () => state.posts.filter((post) => post.user_id === params.userId),
+    () => state.posts.filter((post) => post.author_id === params.userId),
     [state.posts, params.userId]
   );
 
@@ -59,40 +63,29 @@ const UserProfileScreen: React.FC = () => {
         ]);
   };
 
-  const handleTip = () => {
-    if (!talent) return;
-    Alert.prompt(
-      'Send Tip',
-      `Enter amount in ZAR to tip ${talent.name}`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Send', 
-          onPress: async (amount?: string) => {
-            if (amount && !isNaN(Number(amount))) {
-              try {
-                const result = await sendTip(talent.id, Number(amount));
-                if (result.success) {
-                  Platform.OS === 'web' ? alert('Tip sent!') : Alert.alert('Success', `Sent R${amount} tip!`);
-                } else {
-                  const errorMsg = result.error.message || 'Unable to send tip.';
-                  Platform.OS === 'web' ? alert(errorMsg) : Alert.alert('Error', errorMsg);
-                }
-              } catch (e: any) {
-                console.warn(e);
-                const friendly = e.message || 'Something went wrong.';
-                Platform.OS === 'web' ? alert(friendly) : Alert.alert('Error', friendly);
-              }
-            }
-          }
-        }
-      ],
-      'plain-text',
-      '50'
-    );
+  const handleTip = async () => {
+    if (!talent || !tipAmount || isNaN(Number(tipAmount))) return;
+    setIsSendingTip(true);
+    try {
+      const result = await sendTip(talent.id, Number(tipAmount));
+      if (result.success) {
+        setTipModalVisible(false);
+        trackEvent('tip_sent', { creator_id: talent.id, amount: Number(tipAmount), source: 'profile' });
+        Platform.OS === 'web' ? alert('Tip sent!') : Alert.alert('Success', `Sent R${tipAmount} tip!`);
+      } else {
+        const errorMsg = result.error.message || 'Unable to send tip.';
+        Platform.OS === 'web' ? alert(errorMsg) : Alert.alert('Error', errorMsg);
+      }
+    } catch (e: any) {
+      console.warn(e);
+      const friendly = e.message || 'Something went wrong.';
+      Platform.OS === 'web' ? alert(friendly) : Alert.alert('Error', friendly);
+    } finally {
+      setIsSendingTip(false);
+    }
   };
 
-  const PLACEHOLDER_IMAGE = 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=300&q=80';
+
 
   const handleToggleFollow = async () => {
     if (!talent || !state.currentUser) return;
@@ -202,13 +195,51 @@ const UserProfileScreen: React.FC = () => {
 
             <TouchableOpacity 
               style={[styles.actionBtn, { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border }]} 
-              onPress={handleTip}
+              onPress={() => setTipModalVisible(true)}
             >
               <Ionicons name="heart" size={18} color="#ec4899" />
               <Text style={[styles.actionBtnText, { color: colors.text }]}>Send Tip</Text>
             </TouchableOpacity>
         </View>
       </View>
+
+      <Modal visible={tipModalVisible} transparent animationType="slide" onRequestClose={() => setTipModalVisible(false)}>
+        <View style={styles.modalBg}>
+          <View style={[styles.modalContent, { backgroundColor: colors.bg }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>Send Tip</Text>
+              <TouchableOpacity onPress={() => setTipModalVisible(false)} style={styles.iconBtn}>
+                <Ionicons name="close" size={24} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.modalBody}>
+              <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>Amount in ZAR</Text>
+              <TextInput
+                style={[styles.modalInput, { backgroundColor: colors.card, color: colors.text, borderColor: colors.border }]}
+                keyboardType="numeric"
+                value={tipAmount}
+                onChangeText={setTipAmount}
+                placeholder="50"
+                placeholderTextColor={colors.textMuted}
+              />
+              <View style={styles.presets}>
+                {['20', '50', '100', '250'].map(p => (
+                  <TouchableOpacity key={p} style={[styles.presetBtn, { backgroundColor: colors.card, borderColor: colors.border }, tipAmount === p && { backgroundColor: colors.accent, borderColor: colors.accent }]} onPress={() => setTipAmount(p)}>
+                    <Text style={[styles.presetText, { color: colors.text }, tipAmount === p && { color: colors.card }]}>R{p}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <TouchableOpacity 
+                style={[styles.confirmBtn, { backgroundColor: colors.accent }]} 
+                onPress={handleTip} 
+                disabled={isSendingTip}
+              >
+                <Text style={[styles.confirmBtnText, { color: colors.card }]}>{isSendingTip ? 'Sending...' : 'Send Tip'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <FlatList
         data={posts}
@@ -323,6 +354,71 @@ const styles = StyleSheet.create({
   empty: {
     textAlign: 'center',
     marginTop: 40,
+  },
+  modalBg: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    paddingBottom: 40,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+  },
+  iconBtn: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+  },
+  modalBody: {
+    gap: 16,
+  },
+  modalLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  modalInput: {
+    padding: 16,
+    borderRadius: 12,
+    fontSize: 24,
+    fontWeight: '800',
+    textAlign: 'center',
+    borderWidth: 1,
+  },
+  presets: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  presetBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+    borderWidth: 1,
+  },
+  presetText: {
+    fontWeight: '700',
+  },
+  confirmBtn: {
+    paddingVertical: 16,
+    borderRadius: 14,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  confirmBtnText: {
+    fontSize: 18,
+    fontWeight: '800',
   },
 });
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Image, Dimensions, StatusBar, Alert, Platform } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, Image, Dimensions, StatusBar, Alert, Platform, Modal, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -18,16 +18,21 @@ const PaidVideoCallScreen: React.FC = () => {
   const [isMuted, setIsMuted] = useState(false);
   const [cameraOff, setCameraOff] = useState(false);
   const [isTipping, setIsTipping] = useState(false);
+  const [tipModalVisible, setTipModalVisible] = useState(false);
+  const [tipAmount, setTipAmount] = useState('50');
 
   const creatorId = route.params?.creatorId || 'a1000001-0000-0000-0000-000000000001';
 
   const handleTip = async () => {
+    if (!tipAmount || isNaN(Number(tipAmount))) return;
     setIsTipping(true);
     try {
-      const result = await sendTip(creatorId, 50, 'Great video call!');
+      const amountNum = Number(tipAmount);
+      const result = await sendTip(creatorId, amountNum, 'Great video call!');
       if (result.success) {
-        trackEvent('tip_sent', { creator_id: creatorId, amount: 50, source: 'video_call' });
-        Platform.OS === 'web' ? alert('Tip sent!') : Alert.alert('Success', '50 ZAR tip sent!');
+        setTipModalVisible(false);
+        trackEvent('tip_sent', { creator_id: creatorId, amount: amountNum, source: 'video_call' });
+        Platform.OS === 'web' ? alert('Tip sent!') : Alert.alert('Success', `${amountNum} ZAR tip sent!`);
       } else {
         const errorMsg = result.error.message || 'Unable to send tip.';
         Platform.OS === 'web' ? alert(errorMsg) : Alert.alert('Error', errorMsg);
@@ -125,9 +130,9 @@ const PaidVideoCallScreen: React.FC = () => {
           </View>
 
           <View style={styles.bottomActions}>
-             <TouchableOpacity style={styles.tipBtn} onPress={handleTip} disabled={isTipping}>
+             <TouchableOpacity style={styles.tipBtn} onPress={() => setTipModalVisible(true)} disabled={isTipping}>
                 <Ionicons name="heart" size={20} color="#fff" />
-                <Text style={styles.tipBtnText}>{isTipping ? 'Sending...' : 'Send Tip'}</Text>
+                <Text style={styles.tipBtnText}>Send Tip</Text>
              </TouchableOpacity>
              <TouchableOpacity style={styles.effectsBtn}>
                 <Ionicons name="sparkles" size={20} color="#fff" />
@@ -135,6 +140,44 @@ const PaidVideoCallScreen: React.FC = () => {
           </View>
         </SafeAreaView>
       </LinearGradient>
+
+      <Modal visible={tipModalVisible} transparent animationType="slide" onRequestClose={() => setTipModalVisible(false)}>
+        <View style={styles.modalBg}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Send Tip</Text>
+              <TouchableOpacity onPress={() => setTipModalVisible(false)} style={styles.closeBtn}>
+                <Ionicons name="close" size={24} color="#fff" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.modalBody}>
+              <TextInput
+                style={styles.modalInput}
+                keyboardType="numeric"
+                value={tipAmount}
+                onChangeText={setTipAmount}
+                placeholder="50"
+                placeholderTextColor="rgba(255,255,255,0.4)"
+                autoFocus
+              />
+              <View style={styles.presets}>
+                {['20', '50', '100', '500'].map(p => (
+                  <TouchableOpacity key={p} style={[styles.presetBtn, tipAmount === p && styles.presetBtnActive]} onPress={() => setTipAmount(p)}>
+                    <Text style={styles.presetText}>R{p}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <TouchableOpacity 
+                style={styles.confirmBtn} 
+                onPress={handleTip} 
+                disabled={isTipping}
+              >
+                <Text style={styles.confirmBtnText}>{isTipping ? 'Sending...' : 'Confirm Tip'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -209,6 +252,77 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.2)',
+  },
+  modalBg: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#1e293b',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    paddingBottom: 40,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  modalTitle: {
+    color: '#fff',
+    fontSize: 22,
+    fontWeight: '800',
+  },
+  closeBtn: {
+    padding: 4,
+  },
+  modalBody: {
+    gap: 20,
+  },
+  modalInput: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 16,
+    padding: 20,
+    color: '#fff',
+    fontSize: 32,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  presets: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  presetBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  presetBtnActive: {
+    backgroundColor: '#ec4899',
+    borderColor: '#ec4899',
+  },
+  presetText: {
+    color: '#fff',
+    fontWeight: '700',
+  },
+  confirmBtn: {
+    backgroundColor: '#ec4899',
+    paddingVertical: 16,
+    borderRadius: 16,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  confirmBtnText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '800',
   },
 });
 

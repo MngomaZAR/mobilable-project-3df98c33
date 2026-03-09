@@ -6,6 +6,7 @@ import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useAuth } from '../store/AuthContext';
 import { useBooking } from '../store/BookingContext';
+import { useAppData } from '../store/AppDataContext';
 import { RootStackParamList } from '../navigation/types';
 import { LinearGradient } from 'expo-linear-gradient';
 import CreatePremiumBox from './CreatePremiumBox';
@@ -18,13 +19,29 @@ const ModelPremiumDashboard: React.FC = () => {
   const navigation = useNavigation<Navigation>();
   const { currentUser } = useAuth();
   const { bookings } = useBooking();
+  const { state } = useAppData();
   const [showPremiumBox, setShowPremiumBox] = React.useState(false);
 
   const earnings = useMemo(() => {
     const completed = bookings.filter(b => b.status === 'completed' || b.status === 'accepted');
-    const net = completed.reduce((sum, b) => sum + (b.payout_amount || 0), 0);
-    return { net, activeSubscribers: 124, tipsThisMonth: 8500 };
-  }, [bookings]);
+    const netBookings = completed.reduce((sum, b) => sum + (b.payout_amount || 0), 0);
+    
+    const tipEarnings = (state.earnings || [])
+      .filter((e: any) => e.source_type === 'tip')
+      .reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0);
+      
+    const subEarnings = (state.earnings || [])
+      .filter((e: any) => e.source_type === 'subscription')
+      .reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0) * 0.7; // 70% payout
+
+    const activeSubs = (state.subscriptions || []).filter((s: any) => s.status === 'active').length;
+
+    return { 
+      net: netBookings + tipEarnings + subEarnings, 
+      activeSubscribers: activeSubs || 0, 
+      tipsThisMonth: tipEarnings 
+    };
+  }, [bookings, state.earnings, state.subscriptions]);
 
   const recentInteraction = bookings[0];
 
@@ -34,7 +51,7 @@ const ModelPremiumDashboard: React.FC = () => {
         <View style={styles.header}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <TouchableOpacity 
-              onPress={() => navigation.goBack()}
+              onPress={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate('Root', { screen: 'Feed' })}
               style={{ marginRight: 12, padding: 4 }}
             >
               <Ionicons name="chevron-back" size={28} color="#fff" />
@@ -152,6 +169,27 @@ const ModelPremiumDashboard: React.FC = () => {
           )}
         </View>
 
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Top Photographers</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('Root', { screen: 'Map' })}>
+              <Text style={styles.viewAll}>Book Now</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalList}>
+            {(state.photographers || []).slice(0, 8).map(photo => (
+              <TouchableOpacity 
+                key={photo.id} 
+                style={styles.talentPill}
+                onPress={() => navigation.navigate('UserProfile', { userId: photo.id })}
+              >
+                <Image source={{ uri: photo.avatar_url }} style={styles.talentAvatar} />
+                <Text style={styles.talentName} numberOfLines={1}>{photo.name}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+
         <View style={styles.premiumCard}>
           <Ionicons name="diamond" size={32} color="#fbbf24" />
           <View style={styles.premiumText}>
@@ -251,6 +289,30 @@ const styles = StyleSheet.create({
   premiumSubtitle: { color: '#737373', fontSize: 13, marginTop: 2 },
   premiumBtn: { backgroundColor: '#262626', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 },
   premiumBtnText: { color: '#fff', fontWeight: '700' },
+  horizontalList: {
+    marginTop: 10,
+    marginBottom: 10,
+  },
+  talentPill: {
+    alignItems: 'center',
+    marginRight: 16,
+    width: 70,
+  },
+  talentAvatar: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#334155',
+    borderWidth: 2,
+    borderColor: '#ec4899',
+  },
+  talentName: {
+    color: '#fff',
+    fontSize: 12,
+    marginTop: 6,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
 });
 
 export default ModelPremiumDashboard;

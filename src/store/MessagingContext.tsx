@@ -17,6 +17,7 @@ type MessagingContextValue = {
   sendMessage: (chatId: string, text: string) => Promise<Message>;
   sendLockedMediaMessage: (chatId: string, payload: { mediaUrl: string; previewUrl?: string; text?: string; unlockBookingId: string }) => Promise<Message>;
   startConversationWithUser: (participantId: string, title?: string) => Promise<{ id: string; title: string }>;
+  subscribeToMessages: (chatId: string) => () => void;
 };
 
 const MessagingContext = createContext<MessagingContextValue | undefined>(undefined);
@@ -63,7 +64,7 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         .from('messages')
         .select('*')
         .eq('conversation_id', chatId)
-        .order('timestamp', { ascending: true });
+        .order('created_at', { ascending: true });
 
       if (error) throw error;
       setMessages(prev => ({
@@ -73,7 +74,7 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
               conversation_id: m.conversation_id,
               from_user: m.sender_id === currentUser?.id,
               text: m.text,
-              timestamp: m.timestamp,
+              timestamp: m.created_at || m.timestamp,
               message_type: m.message_type,
               media_url: m.media_url,
               preview_url: m.preview_url,
@@ -85,6 +86,48 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     } catch (err) {
       logError('Messaging:fetchMessages', err);
     }
+  }, [currentUser]);
+
+  const subscribeToMessages = useCallback((chatId: string) => {
+    if (!hasSupabase || !currentUser) return () => {};
+    
+    const channel = supabase
+      .channel(`public:messages:conversation_id=eq.${chatId}`)
+      .on('postgres_changes', { 
+        event: 'INSERT', 
+        schema: 'public', 
+        table: 'messages', 
+        filter: `conversation_id=eq.${chatId}` 
+      }, payload => {
+        const rawNewMessage = payload.new;
+        // Ignore messages sent by ourselves as they are optimistically added locally
+        if (rawNewMessage.sender_id === currentUser.id) return;
+        
+        const confirmed: Message = {
+            id: rawNewMessage.id,
+            conversation_id: rawNewMessage.conversation_id || chatId,
+            from_user: false,
+            text: rawNewMessage.text || rawNewMessage.content || rawNewMessage.body,
+            timestamp: rawNewMessage.created_at || rawNewMessage.timestamp || new Date().toISOString(),
+            message_type: rawNewMessage.message_type,
+            media_url: rawNewMessage.media_url,
+            preview_url: rawNewMessage.preview_url,
+            locked: rawNewMessage.locked,
+            unlocked: rawNewMessage.unlocked,
+            unlock_booking_id: rawNewMessage.unlock_booking_id
+        };
+        
+        setMessages(prev => {
+            const list = prev[chatId] || [];
+            if (list.some(m => m.id === confirmed.id)) return prev;
+            return { ...prev, [chatId]: [...list, confirmed] };
+        });
+      })
+      .subscribe();
+      
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [currentUser]);
 
   const sendMessage = async (chatId: string, text: string) => {
@@ -107,6 +150,38 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       return confirmed;
     } catch (err) {
       logError('Messaging:sendMessage', err);
+      throw err;
+    }
+  };
+
+  const sendLockedMediaMessage = async (chatId: string, payload: { mediaUrl: string; previewUrl?: string; text?: string; unlockBookingId: string }) => {
+    if (!currentUser || !hasSupabase) throw new Error('Auth required');
+    try {
+      const sent = await sendConversationLockedMediaMessage({
+        conversationId: chatId,
+        mediaUrl: payload.mediaUrl,
+        previewUrl: payload.previewUrl || '',
+        text: payload.text,
+        unlockBookingId: payload.unlockBookingId
+      });
+      const confirmed: Message = {
+        id: sent.id,
+        conversation_id: sent.conversation_id || chatId,
+        from_user: true,
+        text: sent.text,
+        timestamp: sent.timestamp ?? new Date().toISOString(),
+        message_type: 'media',
+        media_url: sent.media_url,
+        preview_url: sent.preview_url,
+        locked: sent.locked,
+        unlocked: sent.unlocked,
+        unlock_booking_id: sent.unlock_booking_id
+      };
+      setMessages(prev => ({ ...prev, [chatId]: [...(prev[chatId] || []), confirmed] }));
+      trackEvent('message_sent', { conversation_id: chatId, type: 'media_locked' });
+      return confirmed;
+    } catch (err) {
+      logError('Messaging:sendLockedMediaMessage', err);
       throw err;
     }
   };
@@ -139,8 +214,9 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       fetchConversations,
       fetchMessages,
       sendMessage,
-      sendLockedMediaMessage: async () => ({} as any), // Placeholder
-      startConversationWithUser
+      sendLockedMediaMessage,
+      startConversationWithUser,
+      subscribeToMessages
     }}>
       {children}
     </MessagingContext.Provider>

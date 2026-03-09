@@ -19,10 +19,11 @@ import { useTheme, ThemeMode } from '../store/ThemeContext';
 import { environment } from '../config/environment';
 import { RootStackParamList } from '../navigation/types';
 import { ActionModal } from '../components/ActionModal';
+import { LEGAL_CONTENT } from '../constants/LegalContent';
+import { requestAccountDeletion } from '../services/accountService';
+import { PLACEHOLDER_AVATAR } from '../utils/constants';
 
 type Navigation = StackNavigationProp<RootStackParamList, 'Root'>;
-const PLACEHOLDER_AVATAR =
-  'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=300&q=80';
 
 const THEME_OPTIONS: { label: string; value: ThemeMode; icon: string }[] = [
   { label: 'Light', value: 'light', icon: 'sunny' },
@@ -54,6 +55,7 @@ const SettingsScreen: React.FC = () => {
     title: '',
     content: ''
   });
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const s = makeStyles(colors, isDark);
 
@@ -80,6 +82,28 @@ const SettingsScreen: React.FC = () => {
       onConfirm: async () => {
         setModalState(p => ({ ...p, visible: false }));
         await resetState();
+      },
+      onCancel: () => setModalState(p => ({ ...p, visible: false }))
+    });
+  };
+
+  const handleDeleteAccount = () => {
+    setModalState({
+      visible: true,
+      title: 'Request Account Deletion',
+      message: 'This will submit a formal request to delete your account and all associated data. This action is permanent. Continue?',
+      isDestructive: true,
+      onConfirm: async () => {
+        setModalState(p => ({ ...p, visible: false }));
+        try {
+          setIsDeleting(true);
+          await requestAccountDeletion('User requested via settings');
+          Alert.alert('Request Sent', 'Your account deletion request has been submitted and will be processed within 30 days.');
+        } catch (err) {
+          Alert.alert('Error', 'Failed to submit request. Please contact support.');
+        } finally {
+          setIsDeleting(false);
+        }
       },
       onCancel: () => setModalState(p => ({ ...p, visible: false }))
     });
@@ -232,10 +256,9 @@ const SettingsScreen: React.FC = () => {
           </TouchableOpacity>
           <TouchableOpacity 
             style={[s.groupItem, s.groupItemBorder]} 
-            onPress={() => setLegalModal({ 
-              visible: true, 
+            onPress={() => navigation.navigate('Legal', { 
               title: 'Terms of Service', 
-              content: 'Welcome to Papzi. By using our platform, you agree to our terms regarding booking, payments, and content sharing. We facilitate connections between creators and clients. All transactions are subject to platform fees as described in our fee schedule. Please respect local laws and the privacy of others.' 
+              content: LEGAL_CONTENT.TERMS_OF_SERVICE 
             })}
           >
             <View style={s.itemLeft}>
@@ -248,10 +271,9 @@ const SettingsScreen: React.FC = () => {
           </TouchableOpacity>
           <TouchableOpacity 
             style={[s.groupItem, s.groupItemBorder]}
-            onPress={() => setLegalModal({ 
-              visible: true, 
+            onPress={() => navigation.navigate('Legal', { 
               title: 'Privacy Policy', 
-              content: 'Your privacy is important to us. We collect data necessary for providing our services, including location data for matching you with nearby talent. We do not sell your personal data to third parties. For more information on how we handle your data, please contact our support team.' 
+              content: LEGAL_CONTENT.PRIVACY_POLICY 
             })}
           >
             <View style={s.itemLeft}>
@@ -283,6 +305,13 @@ const SettingsScreen: React.FC = () => {
             disabled={saving}
           >
             <Text style={s.destructiveText}>{saving ? 'Clearing...' : 'Clear Local Cache'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[s.groupItem, s.groupItemBorder, { justifyContent: 'center' }]}
+            onPress={handleDeleteAccount}
+            disabled={isDeleting}
+          >
+            <Text style={s.destructiveText}>{isDeleting ? 'Processing...' : 'Delete Account'}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[s.groupItem, { justifyContent: 'center' }]}

@@ -85,8 +85,8 @@ export interface Booking {
   model_id?: string | null;
   service_type?: 'photography' | 'modeling' | 'combined';
   booking_date: string;
-  start_time?: string | null;
-  end_time?: string | null;
+  start_datetime?: string; // ISODateString
+  end_datetime?: string;   // ISODateString
   duration_hours?: number | null;
   pricing_mode?: string | null;
   package_type: string;
@@ -107,7 +107,7 @@ export interface Message {
   id: string;
   conversation_id: string;
   from_user: boolean;
-  text: string;
+  body: string;
   timestamp: string;
   message_type?: 'text' | 'media';
   media_url?: string | null;
@@ -119,7 +119,7 @@ export interface Message {
 
 export interface Post {
   id: string;
-  user_id: string;
+  author_id: string;
   image_url: string;
   caption: string;
   created_at: string;

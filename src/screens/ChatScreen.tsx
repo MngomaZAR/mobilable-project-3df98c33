@@ -15,6 +15,7 @@ import { useTheme } from '../store/ThemeContext';
 import { ChatSkeleton } from '../components/Skeleton';
 import { RootStackParamList } from '../navigation/types';
 import { Ionicons } from '@expo/vector-icons';
+import { PLACEHOLDER_IMAGE } from '../utils/constants';
 
 type Route = RouteProp<RootStackParamList, 'ChatThread'>;
 type Navigation = StackNavigationProp<RootStackParamList, 'ChatThread'>;
@@ -24,7 +25,7 @@ const ChatScreen: React.FC = () => {
   const route = useRoute<Route>();
   const navigation = useNavigation<Navigation>();
   const { currentUser } = useAuth();
-  const { messages: allMessages, sendMessage, sendLockedMediaMessage, fetchMessages } = useMessaging();
+  const { messages: allMessages, sendMessage, sendLockedMediaMessage, fetchMessages, subscribeToMessages } = useMessaging();
   const { bookings } = useBooking();
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
@@ -41,7 +42,7 @@ const ChatScreen: React.FC = () => {
   const messages = useMemo(() => allMessages[chatId] ?? [], [chatId, allMessages]);
   const latestUnlockBooking = useMemo(() => bookings[0] ?? null, [bookings]);
 
-  const PLACEHOLDER_IMAGE = 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=300&q=80';
+
   const otherAvatar = route.params?.avatarUrl ?? PLACEHOLDER_IMAGE;
 
   const LOCKED_MEDIA_FULL =
@@ -61,8 +62,12 @@ const ChatScreen: React.FC = () => {
       }
     };
     load();
+    
+    const unsubscribe = subscribeToMessages?.(chatId);
+    
     return () => {
       mounted = false;
+      if (unsubscribe) unsubscribe();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatId]);

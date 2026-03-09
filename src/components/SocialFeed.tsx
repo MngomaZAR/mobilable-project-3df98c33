@@ -18,6 +18,7 @@ import * as Haptics from 'expo-haptics';
 import { AnimatedHeart } from './AnimatedHeart';
 import { useTheme } from '../store/ThemeContext';
 import { useAppData } from '../store/AppDataContext';
+import { useMessaging } from '../store/MessagingContext';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
@@ -26,6 +27,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Post } from '../types';
 import { Story, StoryViewer } from './StoryViewer';
 import { HashtagText } from './HashtagText';
+import { PLACEHOLDER_IMAGE } from '../utils/constants';
 
 type SocialFeedProps = {
   onCreatePost?: () => void;
@@ -33,8 +35,7 @@ type SocialFeedProps = {
   onViewProfile?: (profileId: string) => void;
 };
 
-const PLACEHOLDER_IMAGE =
-  'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=1200&q=80&sat=-20';
+
 const PAGE_SIZE = 10;
 const WEB_PROFILE_PAGE_SIZE = 24;
 const WEB_VISIBLE_FEED_ITEMS = 40;
@@ -42,6 +43,7 @@ const WEB_VISIBLE_FEED_ITEMS = 40;
 export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost, onViewProfile }) => {
   const isWeb = Platform.OS === 'web';
   const { state: appState, toggleLike, fetchPosts, fetchProfiles } = useAppData();
+  const { startConversationWithUser } = useMessaging();
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   
@@ -128,12 +130,12 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
   }, [loadFeed]);
 
   const filteredPosts = useMemo(() => {
-    let filtered = appState.posts.filter((post) => !blockedUserIds.has(post.user_id) && !reportedPostIds.has(post.id));
+    let filtered = appState.posts.filter((post) => !blockedUserIds.has(post.author_id) && !reportedPostIds.has(post.id));
     if (selectedProfileId) {
-        filtered = filtered.filter((post) => post.user_id === selectedProfileId);
+        filtered = filtered.filter((post) => post.author_id === selectedProfileId);
     } else if (followingOnly && appState.currentUser) {
         const followings = new Set((appState.follows || []).map(f => f.following_id));
-        filtered = filtered.filter(post => followings.has(post.user_id));
+        filtered = filtered.filter(post => followings.has(post.author_id));
     }
     return filtered;
   }, [appState.posts, selectedProfileId, blockedUserIds, reportedPostIds, followingOnly, appState.currentUser, appState.follows]);
@@ -163,7 +165,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
 
   const handlePostOptions = (post: Post) => {
     const doReport = () => setReportedPostIds((prev) => new Set([...prev, post.id]));
-    const doBlock = () => setBlockedUserIds((prev) => new Set([...prev, post.user_id]));
+    const doBlock = () => setBlockedUserIds((prev) => new Set([...prev, post.author_id]));
     
     if (Platform.OS === 'web') {
       if (window.confirm('Report this content?')) doReport();
@@ -299,7 +301,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
   const renderItem = ({ item }: { item: Post }) => (
     <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
       <View style={styles.cardHeader}>
-        <TouchableOpacity style={styles.authorRow} onPress={() => onViewProfile?.(item.user_id)}>
+        <TouchableOpacity style={styles.authorRow} onPress={() => onViewProfile?.(item.author_id)}>
           <Image source={{ uri: item.profile?.avatar_url ?? PLACEHOLDER_IMAGE }} style={styles.avatar} />
           <View style={styles.authorText}>
             <Text style={[styles.authorName, { color: colors.text }]}>{item.profile?.full_name ?? 'Photographer'}</Text>
@@ -338,6 +340,19 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
           </TouchableOpacity>
           <TouchableOpacity onPress={() => onViewPost?.(item)} style={styles.iconAction}>
             <Ionicons name="chatbubble-outline" size={24} color={colors.text} />
+          </TouchableOpacity>
+          <TouchableOpacity 
+            onPress={async () => {
+              try {
+                const convo = await startConversationWithUser(item.author_id, item.profile?.full_name || 'Creator');
+                navigation.navigate('ChatThread', { conversationId: convo.id, title: convo.title });
+              } catch (e) {
+                console.warn('Feed: Failed to start chat:', e);
+              }
+            }} 
+            style={styles.iconAction}
+          >
+            <Ionicons name="paper-plane-outline" size={24} color={colors.accent} />
           </TouchableOpacity>
         </View>
       </View>

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -31,15 +31,37 @@ const PhotographerDashboardScreen: React.FC = () => {
     [bookings]
   );
   
+  const { state } = useAppData();
+  
   const earnings = useMemo(() => {
-    const completed = bookings.filter(b => b.status === 'completed' || b.status === 'accepted');
-    const total = completed.reduce((sum, b) => sum + (b.total_amount || 0), 0);
-    const net = completed.reduce((sum, b) => sum + (b.payout_amount || 0), 0);
-    const commission = completed.reduce((sum, b) => sum + (b.commission_amount || 0), 0);
-    return { total, net, commission };
-  }, [bookings]);
+    const bookingEarnings = bookings
+      .filter(b => b.status === 'completed' || b.status === 'accepted')
+      .reduce((acc, b) => ({
+        total: acc.total + (b.total_amount || 0),
+        net: acc.net + (b.payout_amount || 0),
+        commission: acc.commission + (b.commission_amount || 0)
+      }), { total: 0, net: 0, commission: 0 });
 
-  const { state } = useAppData(); // Still needed for state.photographers for now
+    const platformEarnings = (state.earnings || [])
+      .reduce((acc, e) => {
+        const amount = Number(e.amount || 0);
+        // Assuming 30% commission for non-booking earnings if not specified
+        const comm = e.source_type === 'booking' ? 0 : amount * 0.3; 
+        return {
+          total: acc.total + amount,
+          net: acc.net + (amount - comm),
+          commission: acc.commission + comm
+        };
+      }, { total: 0, net: 0, commission: 0 });
+
+    // Combine but avoid double counting bookings if they are in both sources
+    // For now, let's just use state.earnings as the primary source if it's not empty,
+    // otherwise fallback to booking calculations.
+    if ((state.earnings || []).length > 0) {
+      return platformEarnings;
+    }
+    return bookingEarnings;
+  }, [bookings, state.earnings]);
 
   const photographerProfile = useMemo(
     () => state.photographers.find((p) => p.id === activeBooking?.photographer_id) ?? state.photographers[0],
@@ -160,6 +182,27 @@ const PhotographerDashboardScreen: React.FC = () => {
           <View style={styles.infoCallout}>
             <Text style={styles.infoCalloutText}>Status updates are confirmed through secure booking and payment workflows.</Text>
           </View>
+        </View>
+
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardTitle}>Available Models</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('Root', { screen: 'Feed' })}>
+              <Text style={styles.viewAll}>Collaborate</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalList}>
+            {(state.models || []).slice(0, 8).map(model => (
+              <TouchableOpacity 
+                key={model.id} 
+                style={styles.modelPill}
+                onPress={() => navigation.navigate('UserProfile', { userId: model.id })}
+              >
+                <Image source={{ uri: model.avatar_url }} style={styles.modelAvatar} />
+                <Text style={styles.modelName} numberOfLines={1}>{model.name}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
         </View>
 
         <View style={styles.card}>
@@ -393,6 +436,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginLeft: 10,
   },
+  financeTotalValue: {
+    color: '#10b981',
+    fontWeight: '900',
+    fontSize: 22,
+  },
   financeRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -420,10 +468,33 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     fontSize: 18,
   },
-  financeTotalValue: {
-    color: '#10b981',
-    fontWeight: '900',
-    fontSize: 22,
+  horizontalList: {
+    marginTop: 10,
+    marginBottom: 10,
+  },
+  modelPill: {
+    alignItems: 'center',
+    marginRight: 16,
+    width: 70,
+  },
+  modelAvatar: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#334155',
+    borderWidth: 2,
+    borderColor: '#8b5cf6',
+  },
+  modelName: {
+    color: '#fff',
+    fontSize: 12,
+    marginTop: 6,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  viewAll: {
+    color: '#8b5cf6',
+    fontWeight: '700',
   },
 });
 

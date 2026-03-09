@@ -19,10 +19,9 @@ export const trackEvent = async (event: AnalyticsEvent, metadata: Record<string,
     const { error } = await supabase
       .from('analytics_events')
       .insert({
-        event_name: event,
-        user_id: user?.id || null,
+        name: event,          // DB column is 'name', NOT 'event_name'
+        created_by: user?.id || null,
         metadata,
-        platform: 'mobile',
         created_at: new Date().toISOString()
       });
 

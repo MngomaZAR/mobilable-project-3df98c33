@@ -33,6 +33,7 @@ import EarningsDashboardScreen from '../screens/EarningsDashboardScreen';
 import CreatorSubscriptionsScreen from '../screens/CreatorSubscriptionsScreen';
 import ReviewsScreen from '../screens/ReviewsScreen';
 import MediaLibraryScreen from '../screens/MediaLibraryScreen';
+import LegalScreen from '../screens/LegalScreen';
 import AdminModerationScreen from '../screens/AdminModerationScreen';
 import AvailabilityScreen from '../screens/AvailabilityScreen';
 import ModelReleaseScreen from '../screens/ModelReleaseScreen';
@@ -183,7 +184,8 @@ export const MainNavigator: React.FC<MainNavigatorProps> = ({ logoSource }) => {
             <Stack.Screen name="CreatorSubscriptions" component={CreatorSubscriptionsScreen} options={{ headerShown: false }} />
             <Stack.Screen name="Reviews" component={ReviewsScreen} options={{ headerShown: false }} />
             <Stack.Screen name="MediaLibrary" component={MediaLibraryScreen} options={{ headerShown: false }} />
-            <Stack.Screen name="AdminModeration" component={AdminModerationScreen} options={{ title: 'Moderation Queue' }} />
+            <Stack.Screen name="Legal" component={LegalScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="AdminModeration" component={AdminModerationScreen} options={{ headerShown: false, presentation: 'modal' }} />
             <Stack.Screen name="Availability" component={AvailabilityScreen} options={{ title: 'Manage Availability' }} />
             <Stack.Screen name="AccountConfig" component={AccountConfigScreen} options={{ title: 'Account Settings' }} />
             <Stack.Screen name="ModelRelease" component={ModelReleaseScreen} options={{ title: 'Legal Documents' }} />

@@ -15,6 +15,7 @@ import {
   sendConversationTextMessage,
 } from '../services/chatMessageService';
 import { uploadImage, uploadAvatar, uploadBlurredPreview } from '../services/uploadService';
+import { fetchCreatorEarnings } from '../services/monetisationService';
 import { registerForPushNotificationsAsync, savePushTokenAsync } from '../services/notificationService';
 import { assertSouthAfricanLocation, DEFAULT_CAPE_TOWN_COORDINATES, ensureSouthAfricanCoordinates } from '../utils/geo';
 
@@ -69,6 +70,7 @@ type AppDataContextValue = {
   resetState: () => Promise<void>;
   updateProfilePicture: (uri: string) => Promise<void>;
   updateProfile: (changes: Partial<AppUser>) => Promise<void>;
+  fetchEarnings: (userId: string) => Promise<void>;
   setState: (payload: Partial<AppState>) => void;
 }
 
@@ -411,7 +413,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
       if (postError) throw postError;
 
-      const profileIds = [...new Set((rawPosts ?? []).map((p: any) => p.user_id).filter(Boolean))];
+      const profileIds = [...new Set((rawPosts ?? []).map((p: any) => p.author_id).filter(Boolean))];
       let profilesMap: Record<string, any> = {};
       if (profileIds.length > 0) {
         const { data: profilesData } = await supabase.from('profiles').select('id, full_name, city, avatar_url').in('id', profileIds);
@@ -420,7 +422,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
       const { mapPostRow } = await import('../utils/mappings');
       let mapped = (rawPosts ?? []).map((post: any) => {
-        post.profiles = profilesMap[post.user_id] ? [profilesMap[post.user_id]] : [];
+        post.profiles = profilesMap[post.author_id] ? [profilesMap[post.author_id]] : [];
         return mapPostRow(post);
       });
 
@@ -551,7 +553,8 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
               setState({ currentUser: mapSupabaseUser(data.user, profile?.role || 'client', profile) });
               await Promise.all([
                 fetchBookings(data.user.id),
-                fetchConversations(data.user.id)
+                fetchConversations(data.user.id),
+                fetchEarnings(data.user.id)
               ]);
             } else {
               setState({ bookings: [], conversations: [] });
@@ -610,6 +613,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           // Fetch lists
           fetchBookings(session.user.id).catch(e => console.warn('Delayed booking fetch failed', e));
           fetchConversations(session.user.id).catch(e => console.warn('Delayed convo fetch failed', e));
+          fetchEarnings(session.user.id).catch(e => console.warn('Delayed earnings fetch failed', e));
         } catch (eventErr) {
           console.error('Error handling auth session change:', eventErr);
         }
@@ -646,7 +650,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           .maybeSingle();
 
         if (rawPost) {
-          const { data: profileData } = await supabase.from('profiles').select('id, full_name, city, avatar_url').eq('id', rawPost.user_id).maybeSingle();
+          const { data: profileData } = await supabase.from('profiles').select('id, full_name, city, avatar_url').eq('id', rawPost.author_id).maybeSingle();
           const postData = { ...rawPost, profiles: profileData ? [profileData] : [] };
           const { mapPostRow } = await import('../utils/mappings');
           const hydrated = mapPostRow(postData);
@@ -727,7 +731,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
             id: newRow.id,
             conversation_id: chatId,
             from_user: newRow.sender_id === currentUserId,
-            text: newRow.body ?? newRow.text ?? '',
+            body: newRow.body ?? newRow.text ?? '',
             timestamp: newRow.created_at ?? new Date().toISOString(),
             message_type: newRow.message_type ?? 'text',
             media_url: newRow.media_url ?? null,
@@ -920,8 +924,18 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return updatedBooking;
   }, []);
 
+  const fetchEarnings = useCallback(async (userId: string) => {
+    if (!hasSupabase) return;
+    try {
+      const data = await fetchCreatorEarnings(userId);
+      setState({ earnings: data });
+    } catch (err) {
+      logError('fetch_earnings', err);
+    }
+  }, []);
+
   const sendMessage = useCallback(
-    async (chatId: string, text: string, fromUser = true) => {
+    async (chatId: string, text: string, fromUser: boolean = true): Promise<Message> => {
       const senderId = stateRef.current.currentUser?.id;
       if (!senderId) {
         const message = 'You need to be signed in to send messages.';
@@ -938,7 +952,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         id: uid('msg'),
         conversation_id: chatId,
         from_user: fromUser,
-        text: trimmed,
+        body: trimmed,
         timestamp: new Date().toISOString(),
         message_type: 'text',
       };
@@ -956,7 +970,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           id: sent.id,
           conversation_id: sent.conversation_id || chatId,
           from_user: sent.sender_id === senderId,
-          text: sent.text,
+          body: sent.text,
           timestamp: sent.timestamp ?? new Date().toISOString(),
           message_type: sent.message_type,
           media_url: sent.media_url ?? null,
@@ -1004,7 +1018,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         id: uid('msg'),
         conversation_id: chatId,
         from_user: true,
-        text: payload.text || 'Shared a locked photo',
+        body: payload.text || 'Shared a locked photo',
         timestamp: new Date().toISOString(),
         message_type: 'media',
         media_url: payload.mediaUrl,
@@ -1048,7 +1062,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           id: sent.id,
           conversation_id: sent.conversation_id || chatId,
           from_user: sent.sender_id === senderId,
-          text: sent.text,
+          body: sent.text,
           timestamp: sent.timestamp ?? new Date().toISOString(),
           message_type: 'media',
           media_url: sent.media_url,
@@ -1089,13 +1103,13 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         console.warn('Skipping fetchMessages for non-UUID chatId:', chatId);
         return;
       }
-      const rows = await listConversationMessages(chatId);
-      const mapped: Message[] = rows.map((row) => ({
+      const data = await listConversationMessages(chatId);
+      const parsedMessages: Message[] = (data || []).map((row: any) => ({
         id: row.id,
         conversation_id: chatId,
         from_user: row.sender_id === currentUserId,
-        text: row.text,
-        timestamp: row.timestamp ?? new Date().toISOString(),
+        body: row.body ?? row.text,
+        timestamp: row.created_at || new Date().toISOString(),
         message_type: row.message_type ?? 'text',
         media_url: row.media_url ?? null,
         preview_url: row.preview_url ?? null,
@@ -1105,7 +1119,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }));
 
       const prevForChat = stateRef.current.messages[chatId] ?? [];
-      const combined = dedupeById([...prevForChat, ...mapped]);
+      const combined = dedupeById([...prevForChat, ...parsedMessages]);
       setState({ messages: { ...stateRef.current.messages, [chatId]: combined } });
     } catch (err) {
       logError('fetch_messages', err);
@@ -1171,6 +1185,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         // Fallback: Direct Database Insertion (Client-Side RLS Fallback)
         try {
           // 1. Create Conversation
+          // Note: RLS policy "conversations_insert_auth" allows this for authenticated users
           const { data: convData, error: convErr } = await supabase
             .from('conversations')
             .insert({
@@ -1179,10 +1194,14 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
               last_message: 'Say hello 👋',
               last_message_at: new Date().toISOString()
             })
-            .select('id')
+            .select('id, title')
             .single();
 
-          if (convErr) throw convErr;
+          if (convErr) {
+            // If we get an RLS error here, it's likely the migration wasn't applied or user is not logged in
+            console.error('RLS Error creating conversation:', convErr);
+            throw convErr;
+          }
           if (!convData) throw new Error('No conversation data returned');
 
           // 2. Add Self as Participant (Allowed by RLS)
@@ -1192,7 +1211,10 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
               conversation_id: convData.id,
               user_id: currentUserId
             });
-          if (partSelfErr) throw partSelfErr;
+          if (partSelfErr) {
+            console.error('RLS Error adding self as participant:', partSelfErr);
+            throw partSelfErr;
+          }
 
           // 3. Add Other Participant
           const { error: partOtherErr } = await supabase
@@ -1201,13 +1223,17 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
               conversation_id: convData.id,
               user_id: participantId,
             });
+          
           if (partOtherErr) {
-            console.warn('Fallback participant add failed for other user:', partOtherErr);
+             // We don't throw here to avoid failing the whole flow if the other person's insert fails, 
+             // but usually it won't with the new "participants_insert_auth" policy.
+             console.warn('Fallback participant add failed for other user:', partOtherErr);
           }
 
           const confirmedConvo: ConversationSummary = {
             ...convo,
             id: convData.id,
+            title: convData.title || convoTitle,
           };
 
           const updatedConversations = stateRef.current.conversations.map((c) => c.id === convo.id ? confirmedConvo : c);
@@ -1218,7 +1244,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           // Revert optimistic update only if even the fallback fails
           setState({ conversations: originalConversations });
           logError('start_conversation_fallback_failed', fallbackErr);
-          const friendly = formatErrorMessage(fallbackErr, 'Unable to start a chat right now.');
+          const friendly = formatErrorMessage(fallbackErr, 'Unable to start a chat right now. Please ensure your migration is applied.');
           setError(friendly);
           throw new Error(friendly);
         }
@@ -1239,7 +1265,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
         const post: Post = {
             id: uid('post'),
-            user_id: ownerId,
+            author_id: ownerId,
             caption,
             image_url: imageUri,
             created_at: new Date().toISOString(),
@@ -1264,11 +1290,13 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 .from('posts')
                 .insert({
                     user_id: ownerId,
+                    author_id: ownerId,   // set both for RLS policy compatibility
+                    profile_id: ownerId,  // and the third FK alias too
                     caption,
                     location,
                     image_url: finalImageUrl,
                 })
-                .select('id, user_id, caption, location, comment_count, created_at, image_url, likes_count')
+                .select('id, author_id, caption, location, comment_count, created_at, image_url, likes_count')
                 .single();
 
                 if (insertError) {
@@ -1388,8 +1416,8 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         try {
             const { data, error } = await supabase
               .from('post_comments')
-              .insert([{ post_id: postId, user_id: resolvedUserId, body: text }])
-              .select('id, post_id, user_id, body, created_at')
+              .insert([{ post_id: postId, author_id: resolvedUserId, body: text }])
+              .select('id, post_id, author_id, body, created_at')
               .single();
 
             if (error) throw error;
@@ -1398,7 +1426,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
               const persistedComment: Comment = {
                 id: data.id,
                 post_id: data.post_id ?? postId,
-                user_id: data.user_id ?? resolvedUserId,
+                user_id: data.author_id,
                 text: data.body ?? text,
                 created_at: data.created_at ?? comment.created_at,
               };
@@ -1427,7 +1455,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     try {
       const { data, error } = await supabase
         .from('post_comments')
-        .select('id, post_id, user_id, body, created_at')
+        .select('id, post_id, author_id, body, created_at')
         .eq('post_id', postId)
         .order('created_at', { ascending: true })
         .limit(100);
@@ -1656,11 +1684,21 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setLoading(true);
     try {
       const currentUser = await revalidateSession();
-      await Promise.all([fetchPhotographers(), fetchModels(), fetchBookings(currentUser?.id ?? null)]);
+      const userId = currentUser?.id ?? null;
+      await Promise.all([
+        fetchPhotographers(), 
+        fetchModels(), 
+        fetchBookings(userId),
+        fetchConversations(userId),
+        fetchEarnings(userId || ''),
+        fetchPosts({ reset: true })
+      ]);
+    } catch (err) {
+      logError('refresh', err);
     } finally {
       setLoading(false);
     }
-  }, [fetchBookings, fetchPhotographers, revalidateSession]);
+  }, [fetchBookings, fetchConversations, fetchEarnings, fetchModels, fetchPhotographers, fetchPosts, revalidateSession]);
 
   const resetState = useCallback(async () => {
     setSaving(true);
@@ -1885,8 +1923,9 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       resetState,
       updateProfilePicture,
       updateProfile,
+      fetchEarnings,
     }),
-    [state, createBooking, updateBookingStatus, sendMessage, sendLockedMediaMessage, fetchMessages, fetchMessagesForChat, fetchComments, updateBookingClientLocation, updatePhotographerLocation, startConversationWithUser, addPost, toggleLike, addComment, setState, signUp, signIn, signOut, updatePrivacy, requestDataDeletion, refresh, revalidateSession, resetState, updateProfilePicture, updateProfile]
+    [state, createBooking, updateBookingStatus, sendMessage, sendLockedMediaMessage, fetchMessages, fetchMessagesForChat, fetchComments, updateBookingClientLocation, updatePhotographerLocation, startConversationWithUser, addPost, toggleLike, addComment, setState, signUp, signIn, signOut, updatePrivacy, requestDataDeletion, refresh, revalidateSession, resetState, updateProfilePicture, updateProfile, fetchEarnings]
   );
 
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>;

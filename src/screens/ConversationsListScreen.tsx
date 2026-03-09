@@ -10,11 +10,13 @@ import {
   Image,
 } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppData } from '../store/AppDataContext';
 import { useTheme } from '../store/ThemeContext';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { hasSupabase } from '../config/supabaseClient';
 import { RootStackParamList } from '../navigation/types';
+import { PLACEHOLDER_AVATAR } from '../utils/constants';
 
 type Navigation = StackNavigationProp<RootStackParamList, 'Root'>;
 
@@ -39,6 +41,7 @@ const ConversationsListScreen: React.FC = () => {
   const navigation = useNavigation<Navigation>();
   const { state: appState } = useAppData();
   const { colors, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -100,7 +103,7 @@ const ConversationsListScreen: React.FC = () => {
 
   const listHeader = useMemo(
     () => (
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, 16) }]}>
         <View>
           <Text style={[styles.title, { color: colors.text }]}>Conversations</Text>
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Keep your conversations in one place.</Text>
@@ -114,7 +117,7 @@ const ConversationsListScreen: React.FC = () => {
     [error, handleNewChat, colors, isDark]
   );
 
-  const PLACEHOLDER_AVATAR = 'https://images.unsplash.com/photo-1508214751196-bcfd4ca60f91?auto=format&fit=crop&w=300&q=80';
+
 
   const renderItem = ({ item }: { item: Conversation }) => {
     const timestamp = item.last_message_at ?? item.created_at;

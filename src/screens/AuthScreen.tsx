@@ -144,24 +144,44 @@ const AuthScreen: React.FC = () => {
     }
   };
 
+  // Exchange the ?code= param from the OAuth redirect URL for a Supabase session.
+  // Shared between iOS (captured by openAuthSessionAsync) and Android (Linking deep link).
+  const exchangeOAuthCode = async (url: string) => {
+    try {
+      const parsedUrl = new URL(url);
+      const code = parsedUrl.searchParams.get('code');
+      if (!code) return;
+      const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+      if (exchangeError) setLocalMessage(exchangeError.message);
+    } catch (err: any) {
+      setLocalMessage(err.message || 'Authentication failed');
+    }
+  };
+
+  // Listen for the deep-link callback (needed on Android where the system browser
+  // handles the redirect and re-opens the app via papzi://auth?code=...)
+  React.useEffect(() => {
+    // Cold start: app was opened via deep link
+    Linking.getInitialURL().then((url) => {
+      if (url && url.startsWith('papzi://auth')) exchangeOAuthCode(url);
+    });
+    // Warm start: app was already running in foreground/background
+    const subscription = Linking.addEventListener('url', ({ url }) => {
+      if (url && url.startsWith('papzi://auth')) exchangeOAuthCode(url);
+    });
+    return () => subscription.remove();
+  }, []);
+
   const handleOAuth = async (provider: 'google' | 'apple') => {
     setLocalMessage(null);
-    if (!hasSupabase) {
-      setLocalMessage('Supabase not configured.');
-      return;
-    }
+    if (!hasSupabase) { setLocalMessage('Supabase not configured.'); return; }
     try {
-      // Use makeRedirectUri for a far more reliable callback system in Expo apps.
-      const redirectUri = makeRedirectUri({
-        scheme: 'papzi',
-        path: 'auth',
-      });
-      console.log('Using Dynamic Redirect URI:', redirectUri);
-      
+      const redirectUri = makeRedirectUri({ scheme: 'papzi', path: 'auth' });
+
       const { data, error: oauthErr } = await supabase.auth.signInWithOAuth({
         provider,
-        options: { 
-          redirectTo: redirectUri, 
+        options: {
+          redirectTo: redirectUri,
           skipBrowserRedirect: true,
           queryParams: provider === 'apple' ? { response_type: 'code' } : undefined,
         },
@@ -169,26 +189,14 @@ const AuthScreen: React.FC = () => {
       if (oauthErr) throw oauthErr;
 
       if (data?.url) {
-        console.log('Opening Auth Session with URL:', data.url);
         const res = await WebBrowser.openAuthSessionAsync(data.url, redirectUri);
-        console.log('Auth Session Result:', res.type);
-        
         if (res.type === 'success' && 'url' in res) {
-          const { url } = res;
-          console.log('Auth Success URL:', url);
-          // Parse the code from the redirect URL and exchange it for a session
-          const parsedUrl = new URL(url);
-          const code = parsedUrl.searchParams.get('code');
-          let sessionError: any = null;
-          if (code) {
-            const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-            sessionError = exchangeError;
-          }
-          if (sessionError) throw sessionError;
+          // iOS: WebBrowser intercepted the redirect — exchange code directly
+          await exchangeOAuthCode(res.url);
         }
+        // Android: res.type === 'dismiss' — session comes via Linking listener above
       }
     } catch (err: any) {
-      console.error('OAuth Error:', err);
       setLocalMessage(err.message || 'Authentication failed');
     }
   };

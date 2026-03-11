@@ -28,7 +28,16 @@ export default {
         foregroundImage: "./assets/adaptive-icon.png",
         backgroundColor: "#ffffff"
       },
-      package: "com.papzi.app"
+      package: "com.papzi.app",
+      // Deep link intent filter so Android re-opens the app after OAuth redirect
+      intentFilters: [
+        {
+          action: "VIEW",
+          autoVerify: true,
+          data: [{ scheme: "papzi", host: "auth" }],
+          category: ["BROWSABLE", "DEFAULT"]
+        }
+      ]
     },
     web: {
       favicon: "./assets/favicon.png"

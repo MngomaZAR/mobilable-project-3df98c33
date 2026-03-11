@@ -87,7 +87,7 @@ export const uploadBlurredPreview = async (uri: string): Promise<Result<string>>
  * Uploads a premium media asset and registers it in the media_assets table.
  * bookingId is required — media_assets.booking_id is NOT NULL in the DB schema.
  */
-export const uploadMediaAsset = async (uri: string, ownerId: string, bookingId: string, priceZar?: number | null, title?: string | null): Promise<Result<any>> => {
+export const uploadMediaAsset = async (uri: string, ownerId: string, bookingId: string | null, priceZar?: number | null, title?: string | null): Promise<Result<any>> => {
   try {
     if (!bookingId) throw new Error('bookingId is required for media_assets upload.');
 

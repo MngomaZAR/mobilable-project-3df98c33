@@ -9,5 +9,10 @@
     "noImplicitAny": true,
     "types": ["react", "react-native", "jest", "node"]
   },
-  "exclude": ["__tests__"]
+  "exclude": [
+    "__tests__",
+    "supabase/functions",
+    "node_modules",
+    "dist"
+  ]
 }

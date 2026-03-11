@@ -223,7 +223,7 @@ const PhotographerDashboardScreen: React.FC = () => {
                       ? new Date(booking.booking_date).toLocaleString('en-ZA', { dateStyle: 'medium', timeStyle: 'short' })
                       : 'Date TBD'}
                   </Text>
-                  <Text style={s.requestAmount}>R{(booking.total_amount ?? booking.price_total ?? 0).toLocaleString('en-ZA')}</Text>
+                  <Text style={s.requestAmount}>R{(booking.total_amount ?? booking.total_amount ?? 0).toLocaleString('en-ZA')}</Text>
                 </View>
                 <View style={s.requestActions}>
                   <TouchableOpacity

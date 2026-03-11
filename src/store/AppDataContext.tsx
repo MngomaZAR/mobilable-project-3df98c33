@@ -1,0 +1,1940 @@
+
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { initialState } from '../data/initialData';
+import { supabase, hasSupabase } from '../config/supabaseClient';
+import { BUCKETS } from '../config/environment';
+import { AppState, AppUser, Booking, BookingStatus, Comment, ConversationSummary, Message, Model, Post, PrivacySettings, Review, UserRole } from '../types';
+import { uid } from '../utils/id';
+import { formatAuthError, formatErrorMessage, logError } from '../utils/errors';
+import { mapPhotographerRow, mapSupabaseUser } from '../utils/mappings';
+import { startConversationViaEdge } from '../services/chatService';
+import {
+  listConversationMessages,
+  sendConversationLockedMediaMessage,
+  sendConversationTextMessage,
+} from '../services/chatMessageService';
+import { uploadImage, uploadAvatar, uploadBlurredPreview } from '../services/uploadService';
+import { fetchCreatorEarnings } from '../services/monetisationService';
+import { registerForPushNotificationsAsync, savePushTokenAsync } from '../services/notificationService';
+import { assertSouthAfricanLocation, DEFAULT_CAPE_TOWN_COORDINATES, ensureSouthAfricanCoordinates } from '../utils/geo';
+
+type CreateBookingInput = {
+  photographer_id?: string;
+  talent_id?: string;
+  booking_date: string;
+  package_type: string;
+  notes?: string;
+  /** Base session price in ZAR */
+  base_amount?: number;
+  /** Travel / distance surcharge in ZAR (Uber-style) */
+  travel_amount?: number;
+};
+
+type CreatePostInput = {
+  caption: string;
+  imageUri: string;
+  location?: string;
+  userId?: string;
+};
+
+type AppDataContextValue = {
+  state: AppState;
+  loading: boolean;
+  saving: boolean;
+  authenticating: boolean;
+  error: string | null;
+  currentUser: AppUser | null;
+  refresh: () => Promise<void>;
+  revalidateSession: () => Promise<AppUser | null>;
+  createBooking: (payload: CreateBookingInput) => Promise<Booking>;
+  updateBookingStatus: (bookingId: string, targetStatus?: BookingStatus) => Promise<Booking | undefined>;
+  sendMessage: (chatId: string, text: string, fromUser?: boolean) => Promise<Message>;
+  sendLockedMediaMessage: (chatId: string, payload: { mediaUrl: string; previewUrl?: string; text?: string; unlockBookingId: string }) => Promise<Message>;
+  fetchMessages: (chatId: string) => Promise<void>;
+  fetchMessagesForChat: (chatId: string) => Promise<void>;
+  fetchComments: (postId: string) => Promise<void>;
+  updateBookingClientLocation: (bookingId: string, latitude: number, longitude: number) => Promise<void>;
+  updatePhotographerLocation: (latitude: number, longitude: number) => Promise<void>;
+  startConversationWithUser: (participantId: string, title?: string) => Promise<{ id: string; title: string }>;
+  addPost: (payload: CreatePostInput) => Promise<Post>;
+  toggleLike: (postId: string) => Promise<Post | undefined>;
+  addComment: (postId: string, text: string, userId?: string) => Promise<Comment>;
+  fetchPosts: (options?: { reset: boolean }) => Promise<{ hasMore: boolean }>;
+  fetchProfiles: () => Promise<void>;
+  signUp: (email: string, password: string, role?: AppUser['role'], fullName?: string) => Promise<AppUser | null>;
+  signIn: (email: string, password: string) => Promise<AppUser | null>;
+  signOut: () => Promise<void>;
+  updatePrivacy: (changes: Partial<PrivacySettings>) => Promise<void>;
+  requestDataDeletion: () => Promise<void>;
+  resetState: () => Promise<void>;
+  updateProfilePicture: (uri: string) => Promise<void>;
+  updateProfile: (changes: Partial<AppUser>) => Promise<void>;
+  fetchEarnings: (userId: string) => Promise<void>;
+  setState: (payload: Partial<AppState>) => void;
+}
+
+const STORAGE_KEY = 'movable-app-state-v2';
+const MAX_PHOTOGRAPHERS = 120;
+
+const dedupeById = <T extends { id: string }>(items: T[]): T[] => {
+  const seen = new Set();
+  return items.filter(item => {
+    if (!item.id || seen.has(item.id)) return false;
+    seen.add(item.id);
+    return true;
+  });
+};
+const BOOKING_SELECT = `
+  id, 
+  photographer_id, 
+  client_id, 
+  booking_date, 
+  package_type, 
+  notes, 
+  status, 
+  created_at, 
+  user_latitude, 
+  user_longitude,
+  price_total,
+  commission_amount,
+  photographer_payout
+`;
+
+const AppDataContext = createContext<AppDataContextValue | undefined>(undefined);
+
+type ProfileRow = { role?: AppUser['role']; verified?: boolean } | null;
+type BookingRow = {
+  id: string;
+  photographer_id: string;
+  booking_date: string | null;
+  package_type: string | null;
+  notes: string | null;
+  status: BookingStatus | null;
+  created_at: string | null;
+  user_latitude: number | null;
+  user_longitude: number | null;
+  price_total: number | null;
+  commission_amount: number | null;
+  photographer_payout: number | null;
+};
+
+const PROFILE_SELECT = `
+  id, 
+  full_name, 
+  avatar_url, 
+  city, 
+  role, 
+  verified, 
+  bio, 
+  phone, 
+  push_token, 
+  contact_details
+`;
+
+const PHOTOGRAPHER_SELECT = `
+  id,
+  rating,
+  location,
+  latitude,
+  longitude,
+  price_range,
+  style,
+  bio,
+  tags
+`;
+
+const mapBookingRow = (row: any): Booking => ({
+  id: row.id,
+  photographer_id: row.photographer_id,
+  client_id: row.client_id,
+  booking_date: row.booking_date ?? '',
+  package_type: row.package_type ?? 'Photography booking',
+  notes: row.notes ?? '',
+  status: (row.status ?? 'pending') as BookingStatus,
+  created_at: row.created_at ?? new Date().toISOString(),
+  user_latitude: row.user_latitude ?? null,
+  user_longitude: row.user_longitude ?? null,
+  total_amount: Number(row.price_total || 0),
+  commission_amount: Number(row.commission_amount || 0),
+  payout_amount: Number(row.photographer_payout || 0),
+  photographer: row.photographer ? {
+    id: row.photographer.id,
+    name: row.photographer.full_name,
+    avatar_url: row.photographer.avatar_url,
+    city: row.photographer.city
+  } : undefined,
+  client: row.client ? {
+    id: row.client.id,
+    name: row.client.full_name,
+    avatar_url: row.client.avatar_url,
+    city: row.client.city
+  } : undefined
+});
+
+// REDUCER
+
+type Action = 
+  | { type: 'SET_STATE', payload: Partial<AppState> }
+  | { type: 'SET_LOADING', payload: boolean }
+  | { type: 'SET_SAVING', payload: boolean }
+  | { type: 'SET_AUTHENTICATING', payload: boolean }
+  | { type: 'SET_ERROR', payload: string | null };
+
+const appReducer = (state: AppState, action: Action): AppState => {
+  switch (action.type) {
+    case 'SET_STATE': {
+      const payload = action.payload;
+      const nextState = { ...state, ...payload };
+      
+      // Automatic Deduplication for lists
+      if (payload.posts) nextState.posts = dedupeById(payload.posts);
+      if (payload.bookings) nextState.bookings = dedupeById(payload.bookings);
+      if (payload.conversations) nextState.conversations = dedupeById(payload.conversations);
+      if (payload.profiles) nextState.profiles = dedupeById(payload.profiles);
+      if (payload.photographers) nextState.photographers = dedupeById(payload.photographers);
+      if (payload.models) nextState.models = dedupeById(payload.models);
+      if (payload.mediaAssets) nextState.mediaAssets = dedupeById(payload.mediaAssets);
+      if (payload.earnings) nextState.earnings = dedupeById(payload.earnings);
+      if (payload.tips) nextState.tips = dedupeById(payload.tips);
+      if (payload.subscriptions) nextState.subscriptions = dedupeById(payload.subscriptions);
+      
+      if (payload.messages) {
+        const nextMessages = { ...state.messages, ...payload.messages };
+        Object.keys(payload.messages).forEach(chatId => {
+          if (nextMessages[chatId]) nextMessages[chatId] = dedupeById(nextMessages[chatId]);
+        });
+        nextState.messages = nextMessages;
+      }
+      
+      return nextState;
+    }
+    case 'SET_LOADING':
+      return { ...state, loading: action.payload };
+    case 'SET_SAVING':
+        return { ...state, saving: action.payload };
+    case 'SET_AUTHENTICATING':
+        return { ...state, authenticating: action.payload };
+    case 'SET_ERROR':
+        return { ...state, error: action.payload };
+    default:
+      return state;
+  }
+};
+
+export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [state, dispatch] = useReducer(appReducer, initialState);
+  const stateRef = useRef(state);
+
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
+
+  const setState = useCallback((payload: Partial<AppState>) => dispatch({ type: 'SET_STATE', payload }), []);
+  const setLoading = (payload: boolean) => dispatch({ type: 'SET_LOADING', payload });
+  const setSaving = (payload: boolean) => dispatch({ type: 'SET_SAVING', payload });
+  const setAuthenticating = (payload: boolean) => dispatch({ type: 'SET_AUTHENTICATING', payload });
+  const setError = (payload: string | null) => dispatch({ type: 'SET_ERROR', payload });
+
+  const fetchProfile = useCallback(async (userId: string): Promise<ProfileRow> => {
+    if (!hasSupabase) return null;
+    console.log('Fetching profile for:', userId);
+    try {
+      const { data, error } = await supabase.from('profiles').select(PROFILE_SELECT).eq('id', userId).maybeSingle();
+      if (error) throw error;
+      console.log('Profile fetch result:', data);
+      return (data as any) ?? null;
+    } catch (err) {
+      logError('fetchProfile', err);
+      return null;
+    }
+  }, []);
+
+  const fetchPhotographers = useCallback(async () => {
+    if (!hasSupabase) return;
+    try {
+      const { data: rawPhotographers, error: photographerError } = await supabase
+        .from('photographers')
+        .select(PHOTOGRAPHER_SELECT)
+        .limit(MAX_PHOTOGRAPHERS)
+        .order('rating', { ascending: false });
+      
+      if (photographerError) throw photographerError;
+
+      const profileIds = [...new Set((rawPhotographers ?? []).map((p: any) => p.id).filter(Boolean))];
+      let profilesMap: Record<string, any> = {};
+      if (profileIds.length > 0) {
+        const { data: profilesData } = await supabase.from('profiles').select(PROFILE_SELECT).in('id', profileIds);
+        (profilesData ?? []).forEach((p: any) => { profilesMap[p.id] = p; });
+      }
+
+      const photographers = (rawPhotographers ?? []).map((row: any) => {
+        row.profiles = profilesMap[row.id];
+        return mapPhotographerRow(row);
+      }).slice(0, MAX_PHOTOGRAPHERS);
+
+      setState({ photographers });
+    } catch (err: any) {
+      const message = formatErrorMessage(err, 'Unable to load photographers right now.');
+      if (!/failed to fetch|network/i.test(message) && stateRef.current.photographers.length === 0) {
+        logError('fetch_photographers', err);
+        setError(message);
+      } else {
+        console.warn('Network offline, using cached photographers.');
+      }
+    }
+  }, []);
+
+  const fetchModels = useCallback(async () => {
+    if (!hasSupabase) return;
+    try {
+      const { data: rawModels, error: modelError } = await supabase
+        .from('models')
+        .select(`
+          id,
+          rating,
+          location,
+          latitude,
+          longitude,
+          price_range,
+          style,
+          bio,
+          tags,
+          portfolio_urls
+        `)
+        .limit(MAX_PHOTOGRAPHERS)
+        .order('rating', { ascending: false });
+        
+      if (modelError) throw modelError;
+
+      const profileIds = [...new Set((rawModels ?? []).map((m: any) => m.id).filter(Boolean))];
+      let profilesMap: Record<string, any> = {};
+      if (profileIds.length > 0) {
+        const { data: profilesData } = await supabase.from('profiles').select(PROFILE_SELECT).in('id', profileIds);
+        (profilesData ?? []).forEach((p: any) => { profilesMap[p.id] = p; });
+      }
+      
+      const mapped = (rawModels ?? []).map((row: any) => {
+        row.profiles = profilesMap[row.id];
+        return {
+        id: row.id,
+        name: row.profiles?.full_name ?? 'Model',
+        style: row.style ?? 'Generic',
+        location: row.location ?? row.profiles?.city ?? 'Unknown',
+        latitude: row.latitude ?? 0,
+        longitude: row.longitude ?? 0,
+        avatar_url: row.profiles?.avatar_url ?? '',
+        bio: row.bio ?? '',
+        rating: row.rating ?? 5.0,
+        price_range: row.price_range ?? '$$',
+        tags: row.tags ?? [],
+        portfolio_urls: row.portfolio_urls ?? [],
+      };
+      });
+
+      setState({ models: mapped });
+    } catch (err: any) {
+      console.warn('Network offline, using cached models.');
+    }
+  }, []);
+
+  const fetchBookings = useCallback(
+    async (userId?: string | null) => {
+      if (!hasSupabase) return;
+      const targetUserId = userId ?? stateRef.current.currentUser?.id;
+      if (!targetUserId) {
+        setState({ bookings: [] });
+        return;
+      }
+
+      try {
+        const { data: rawBookings, error } = await supabase
+          .from('bookings')
+          .select(BOOKING_SELECT)
+          .or(`client_id.eq.${targetUserId},photographer_id.eq.${targetUserId}`)
+          .order('created_at', { ascending: false })
+          .limit(80);
+
+        if (error) throw error;
+
+        // Manual Join to Avoid Supabase FK Errors
+        const profileIds = [...new Set(
+          (rawBookings ?? []).flatMap((b: any) => [b.client_id, b.photographer_id]).filter(Boolean)
+        )];
+        let profilesMap: Record<string, any> = {};
+        if (profileIds.length > 0) {
+          const { data: profilesData } = await supabase
+            .from('profiles')
+            .select(PROFILE_SELECT)
+            .in('id', profileIds);
+          (profilesData ?? []).forEach((p: any) => { profilesMap[p.id] = p; });
+        }
+
+        const bookings = (rawBookings ?? []).map((row: any) => {
+          row.photographer = profilesMap[row.photographer_id];
+          row.client = profilesMap[row.client_id];
+          return mapBookingRow(row as BookingRow);
+        });
+        setState({ bookings });
+      } catch (err: any) {
+        const message = formatErrorMessage(err, `Error loading bookings: ${err?.message || 'Unknown error'}`);
+        if (!/failed to fetch|network/i.test(message) && stateRef.current.bookings.length === 0) {
+          logError('fetch_bookings', err);
+          setError(message);
+        } else {
+          console.warn('Network offline, using cached bookings.');
+        }
+      }
+    },
+    []
+  );
+
+  const fetchPosts = useCallback(async ({ reset = true }: { reset?: boolean } = { reset: true }): Promise<{ hasMore: boolean }> => {
+    if (!hasSupabase) return { hasMore: false };
+    setError(null);
+    try {
+      const start = reset ? 0 : stateRef.current.posts.length;
+      const end = start + 11; // Fetch 12 at a time
+
+      const { data: rawPosts, error: postError } = await supabase
+        .from('posts')
+        .select(`
+          id, author_id, caption, location, comment_count, created_at, image_url, likes_count
+        `)
+        .order('created_at', { ascending: false })
+        .range(start, end);
+
+      if (postError) throw postError;
+
+      const profileIds = [...new Set((rawPosts ?? []).map((p: any) => p.author_id).filter(Boolean))];
+      let profilesMap: Record<string, any> = {};
+      if (profileIds.length > 0) {
+        const { data: profilesData } = await supabase.from('profiles').select('id, full_name, city, avatar_url').in('id', profileIds);
+        (profilesData ?? []).forEach((p: any) => { profilesMap[p.id] = p; });
+      }
+
+      const { mapPostRow } = await import('../utils/mappings');
+      let mapped = (rawPosts ?? []).map((post: any) => {
+        post.profiles = profilesMap[post.author_id] ? [profilesMap[post.author_id]] : [];
+        return mapPostRow(post);
+      });
+
+      // Resolve liked state if user is logged in
+      const currentUserId = stateRef.current.currentUser?.id;
+      if (currentUserId && mapped.length > 0) {
+        const postIds = mapped.map(p => p.id);
+        const { data: likesData } = await supabase
+          .from('post_likes')
+          .select('post_id')
+          .eq('user_id', currentUserId)
+          .in('post_id', postIds);
+        
+        if (likesData) {
+          const likedSet = new Set(likesData.map(l => l.post_id));
+          mapped = mapped.map(p => ({ ...p, liked: likedSet.has(p.id) }));
+        }
+      }
+
+      if (reset) {
+        setState({ posts: mapped });
+      } else {
+        const prevPosts = stateRef.current.posts;
+        const seen = new Set(prevPosts.map(p => p.id));
+        const combined = [...prevPosts, ...mapped.filter(p => !seen.has(p.id))];
+        setState({ posts: combined });
+      }
+      return { hasMore: rawPosts ? rawPosts.length >= 12 : false };
+    } catch (err: any) {
+      logError('fetch_posts', err);
+      setError(formatErrorMessage(err, `Error loading feed: ${err?.message || 'Unknown error'}`));
+      return { hasMore: false };
+    }
+  }, []);
+
+  const fetchProfiles = useCallback(async () => {
+    if (!hasSupabase) return;
+    try {
+      const { data, error: profileError } = await supabase
+        .from('profiles')
+        .select(PROFILE_SELECT)
+        .limit(40)
+      if (profileError) throw profileError;
+      setState({ profiles: data ?? [] });
+    } catch (err: any) {
+      logError('fetch_profiles', err);
+    }
+  }, []);
+
+  const fetchConversations = useCallback(async (userId?: string | null) => {
+    if (!hasSupabase) return;
+    const targetUserId = userId ?? stateRef.current.currentUser?.id;
+    if (!targetUserId) { setState({ conversations: [] }); return; }
+
+    try {
+      // Step 1: Get conversation IDs for this user
+      const { data: myParticipants, error: p1 } = await supabase
+        .from('conversation_participants')
+        .select('conversation_id')
+        .eq('user_id', targetUserId);
+      if (p1) throw p1;
+
+      const conversationIds = [...new Set(
+        (myParticipants ?? []).map((r: any) => r.conversation_id).filter(Boolean)
+      )];
+      if (!conversationIds.length) { setState({ conversations: [] }); return; }
+
+      // Step 2: Get conversations
+      const { data: convRows, error: p2 } = await supabase
+        .from('conversations')
+        .select('id, title, last_message, last_message_at, created_at')
+        .in('id', conversationIds)
+        .order('last_message_at', { ascending: false });
+      if (p2) throw p2;
+
+      // Step 3: Get all participants manually to bypass Supabase FK errors
+      const { data: allParticipants, error: p3 } = await supabase
+        .from('conversation_participants')
+        .select('conversation_id, user_id')
+        .in('conversation_id', conversationIds);
+      if (p3) throw p3;
+
+      const profileIds = [...new Set((allParticipants ?? []).map((p: any) => p.user_id).filter(Boolean))];
+      let profilesMap: Record<string, any> = {};
+      if (profileIds.length > 0) {
+        const { data: profilesData } = await supabase.from('profiles').select('id, full_name, avatar_url').in('id', profileIds);
+        (profilesData ?? []).forEach((p: any) => { profilesMap[p.id] = p; });
+      }
+
+      const conversations: ConversationSummary[] = (convRows ?? []).map((row: any) => {
+        const rowParticipants = (allParticipants ?? []).filter(
+          (p: any) => p.conversation_id === row.id
+        );
+        const other = rowParticipants.find((p: any) => p.user_id !== targetUserId);
+        const otherProfile = other ? profilesMap[other.user_id] : null;
+        return {
+          id: row.id,
+          title: row.title || otherProfile?.full_name || 'Conversation',
+          last_message: row.last_message,
+          last_message_at: row.last_message_at ?? row.created_at,
+          created_at: row.created_at,
+          participant: otherProfile
+            ? { id: otherProfile.id, name: otherProfile.full_name, avatar_url: otherProfile.avatar_url }
+            : undefined,
+        };
+      });
+
+      setState({ conversations });
+    } catch (err: any) {
+      logError('fetch_conversations', err);
+    }
+  }, []);
+
+  
+  const persistDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      try {
+        const stored = await AsyncStorage.getItem(STORAGE_KEY);
+        if (stored) {
+          const parsed: AppState = JSON.parse(stored);
+          setState({ ...initialState, ...parsed, currentUser: parsed.currentUser ? { ...parsed.currentUser, verified: Boolean((parsed.currentUser as any).verified) }: null });
+        }
+
+        if (hasSupabase) {
+          try {
+            const { data } = await supabase.auth.getUser();
+            if (data.user) {
+              const profile = await fetchProfile(data.user.id);
+              setState({ currentUser: mapSupabaseUser(data.user, profile?.role || 'client', profile) });
+              await Promise.all([
+                fetchBookings(data.user.id),
+                fetchConversations(data.user.id),
+                fetchEarnings(data.user.id)
+              ]);
+            } else {
+              setState({ bookings: [], conversations: [] });
+            }
+          } catch (authErr) {
+            console.warn('Network offline or auth failed, skipping live session check and using cache.');
+          }
+          await Promise.all([fetchPhotographers(), fetchModels()]);
+        }
+      } catch (err) {
+        logError('load_state', err);
+        // Do not ruin the user experience by throwing a hard UI error overlay for local cache misses
+        console.warn('Unable to load saved data, initializing fresh.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    load();
+  }, [fetchBookings, fetchConversations, fetchPhotographers, fetchProfile, fetchModels]);
+
+  useEffect(() => {
+    if (!hasSupabase) return;
+    const { data } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('Auth State Change Event:', event);
+      if (session?.user) {
+        try {
+          let profile = await fetchProfile(session.user.id);
+          
+          // Handle OAuth sign-ups where profile doesn't exist yet
+          if (!profile) {
+            console.log('No profile found, creating default for:', session.user.id);
+            const authMeta = session.user.user_metadata || {};
+            const fullName = authMeta.full_name || authMeta.name || null;
+            const avatarUrl = authMeta.avatar_url || authMeta.picture || null;
+            
+            const { error: upsertErr } = await supabase.from('profiles').upsert({
+              id: session.user.id,
+              role: 'client',
+              verified: false,
+              full_name: fullName,
+              avatar_url: avatarUrl,
+            });
+            if (upsertErr) console.error('Auto-profile creation failed:', upsertErr);
+            profile = { role: 'client', verified: false };
+          }
+
+          const currentRole = stateRef.current.currentUser?.role ?? profile?.role ?? 'client';
+          setState({ currentUser: mapSupabaseUser(session.user, currentRole as any, profile)});
+
+          // Register for push notifications (Async, don't block auth flow)
+          registerForPushNotificationsAsync()
+            .then(token => { if (token) savePushTokenAsync(session.user!.id, token); })
+            .catch(e => console.warn('Push registration failed', e));
+
+          // Fetch lists
+          fetchBookings(session.user.id).catch(e => console.warn('Delayed booking fetch failed', e));
+          fetchConversations(session.user.id).catch(e => console.warn('Delayed convo fetch failed', e));
+          fetchEarnings(session.user.id).catch(e => console.warn('Delayed earnings fetch failed', e));
+        } catch (eventErr) {
+          console.error('Error handling auth session change:', eventErr);
+        }
+      } else {
+        setState({ currentUser: null,  subscriptions: [],
+  tips: [],
+  earnings: [],
+  mediaAssets: [],
+  notifications: [], messages: {} });
+      }
+    });
+
+    const postsChannel = supabase
+      .channel('global:posts-sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, async (payload) => {
+        if (payload.eventType === 'DELETE') {
+          const deletedId = (payload.old as any)?.id;
+          if (deletedId) {
+            setState({ posts: stateRef.current.posts.filter(p => p.id !== deletedId) });
+          }
+          return;
+        }
+        
+        // For INSERT/UPDATE, we re-fetch the specific post to get profile joins
+        const targetId = (payload.new as any)?.id;
+        if (!targetId) return;
+
+        const { data: rawPost } = await supabase
+          .from('posts')
+          .select(`
+            id, author_id, caption, location, comment_count, created_at, image_url, likes_count
+          `)
+          .eq('id', targetId)
+          .maybeSingle();
+
+        if (rawPost) {
+          const { data: profileData } = await supabase.from('profiles').select('id, full_name, city, avatar_url').eq('id', rawPost.author_id).maybeSingle();
+          const postData = { ...rawPost, profiles: profileData ? [profileData] : [] };
+          const { mapPostRow } = await import('../utils/mappings');
+          const hydrated = mapPostRow(postData);
+          
+          // Check if liked by current user
+          const currentUserId = stateRef.current.currentUser?.id;
+          if (currentUserId) {
+            const { data: likeData } = await supabase
+              .from('post_likes')
+              .select('id')
+              .eq('user_id', currentUserId)
+              .eq('post_id', hydrated.id)
+              .maybeSingle();
+            hydrated.liked = !!likeData;
+          }
+
+          setState({
+            posts: stateRef.current.posts.some(p => p.id === hydrated.id)
+              ? stateRef.current.posts.map(p => p.id === hydrated.id ? hydrated : p)
+              : [hydrated, ...stateRef.current.posts].slice(0, 100)
+          });
+        }
+      })
+      .subscribe();
+
+    // Unified Profile Sync
+    const profileChannel = supabase
+      .channel('global:profiles-sync')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles' }, async (payload) => {
+        const updatedProfile = payload.new as any;
+        const currentUserId = stateRef.current.currentUser?.id;
+
+        if (updatedProfile.id === currentUserId) {
+          setState({ currentUser: mapSupabaseUser(stateRef.current.currentUser, updatedProfile.role, updatedProfile) });
+        }
+
+        // Update list views if the profile belongs to a photographer or model
+        if (stateRef.current.photographers.some(p => p.id === updatedProfile.id)) {
+            fetchPhotographers();
+        }
+        if (stateRef.current.models.some(m => m.id === updatedProfile.id)) {
+            fetchModels();
+        }
+      })
+      .subscribe();
+
+    // Booking Sync
+    const bookingChannel = supabase
+      .channel('global:bookings-sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, async (payload) => {
+        const currentUserId = stateRef.current.currentUser?.id;
+        if (!currentUserId) return;
+
+        const booking = (payload.new || payload.old) as any;
+        if (booking.client_id === currentUserId || booking.photographer_id === currentUserId) {
+            fetchBookings(currentUserId);
+        }
+      })
+      .subscribe();
+
+    // Messages Realtime — live chat updates
+    const messagesChannel = supabase
+      .channel('global:messages-sync')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'messages' },
+        async (payload) => {
+          const newRow = payload.new as any;
+          const currentUserId = stateRef.current.currentUser?.id;
+          const chatId = newRow.chat_id || newRow.conversation_id;
+          if (!chatId) return;
+
+          // Only process if current user participates in this conversation
+          const isParticipant = stateRef.current.conversations.some(c => c.id === chatId);
+          if (!isParticipant) {
+             fetchConversations(currentUserId).catch(e => console.warn('Delayed new conversation fetch failed', e));
+             return;
+          }
+
+          const newMessage: Message = {
+            id: newRow.id,
+            conversation_id: chatId,
+            from_user: newRow.sender_id === currentUserId,
+            body: newRow.body ?? newRow.text ?? '',
+            timestamp: newRow.created_at ?? new Date().toISOString(),
+            message_type: newRow.message_type ?? 'text',
+            media_url: newRow.media_url ?? null,
+            preview_url: newRow.preview_url ?? null,
+            locked: newRow.locked ?? false,
+            unlocked: newRow.unlocked ?? true,
+            unlock_booking_id: newRow.unlock_booking_id ?? null,
+          };
+
+          const existing = stateRef.current.messages[chatId] ?? [];
+          // Avoid duplicates from optimistic update
+          if (existing.some(m => m.id === newMessage.id)) return;
+          setState({
+            messages: {
+              ...stateRef.current.messages,
+              [chatId]: [...existing, newMessage],
+            },
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      data.subscription?.unsubscribe();
+      supabase.removeChannel(postsChannel);
+      supabase.removeChannel(profileChannel);
+      supabase.removeChannel(bookingChannel);
+      supabase.removeChannel(messagesChannel);
+    };
+  }, [fetchBookings, fetchConversations, fetchProfile]);
+
+  useEffect(() => {
+    const persist = async () => {
+      try {
+        const persistedState: AppState = {
+          ...state,
+          loading: false,
+          saving: false,
+          authenticating: false,
+          error: null,
+        };
+        const serialized = JSON.stringify(persistedState);
+        await AsyncStorage.setItem(STORAGE_KEY, serialized);
+      } catch (err) {
+        logError('persist_state', err);
+        setError('Unable to save data locally.');
+      }
+    };
+
+    if (persistDebounceRef.current) clearTimeout(persistDebounceRef.current);
+    persistDebounceRef.current = setTimeout(persist, 400);
+  }, [state]);
+
+    const createBooking = useCallback(
+    async (payload: CreateBookingInput) => {
+      const currentUser = stateRef.current.currentUser;
+      if (!currentUser) {
+        throw new Error('You must be logged in to create a booking.');
+      }
+
+      // Assertions for financial integrity
+      if (!payload.base_amount || payload.base_amount < 0) {
+        throw new Error('Invalid base amount: must be non-negative');
+      }
+      if ((payload.travel_amount ?? 0) < 0) {
+        throw new Error('Invalid travel amount: must be non-negative');
+      }
+
+      // Papzi dynamic pricing: base fee + Uber-style travel surcharge
+      const base = payload.base_amount ?? 1200;
+      const travel = payload.travel_amount ?? 0;
+      const total = base + travel;
+      const commission = Math.round(total * 0.30);
+      const payout = total - commission;
+
+      const booking: Booking = {
+        id: uid('booking'),
+        photographer_id: payload.talent_id || payload.photographer_id || '',
+        client_id: currentUser.id,
+        booking_date: payload.booking_date,
+        package_type: payload.package_type,
+        notes: payload.notes,
+        status: 'pending',
+        created_at: new Date().toISOString(),
+        total_amount: total,
+        commission_amount: commission,
+        payout_amount: payout,
+      };
+
+      let persistedBooking = booking;
+
+      if (hasSupabase) {
+        const bookingDate = payload.booking_date.split('|')[0]?.trim().slice(0, 10);
+        const { data, error } = await supabase
+          .from('bookings')
+          .insert([
+            {
+              client_id: currentUser.id,
+              photographer_id: payload.talent_id || payload.photographer_id,
+              booking_date: bookingDate || null,
+              package_type: booking.package_type,
+              notes: booking.notes,
+              status: booking.status,
+              price_total: booking.total_amount,
+              commission_amount: booking.commission_amount,
+              photographer_payout: booking.payout_amount,
+            },
+          ])
+          .select(BOOKING_SELECT)
+          .single();
+
+        if (error) {
+          logError('createBooking', error);
+          setError(formatErrorMessage(error, 'Unable to create booking.'));
+          throw error;
+        }
+
+      persistedBooking = {
+        id: data?.id ?? booking.id,
+        photographer_id: data?.photographer_id ?? booking.photographer_id,
+        client_id: currentUser.id,
+        booking_date: data?.booking_date ? new Date(data.booking_date).toISOString() : booking.booking_date,
+        package_type: data?.package_type ?? booking.package_type,
+        notes: data?.notes ?? booking.notes,
+        status: (data?.status as BookingStatus) ?? booking.status,
+        created_at: data?.created_at ?? booking.created_at,
+        user_latitude: null,
+        user_longitude: null,
+        total_amount: data?.price_total ?? booking.total_amount,
+        commission_amount: data?.commission_amount ?? booking.commission_amount,
+        payout_amount: data?.photographer_payout ?? booking.payout_amount,
+      };
+      }
+
+      setState({ bookings: [persistedBooking, ...stateRef.current.bookings] });
+      return persistedBooking;
+    },
+    []
+  );
+
+    const updateBookingStatus = useCallback(async (bookingId: string, targetStatus?: BookingStatus) => {
+    const nextStatus = (current: BookingStatus): BookingStatus => {
+      if (targetStatus) return targetStatus;
+      const order: BookingStatus[] = ['pending', 'accepted', 'completed'];
+      const index = order.indexOf(current);
+      if (index < 0) return current;
+      return order[Math.min(index + 1, order.length - 1)];
+    };
+
+    const originalBookings = stateRef.current.bookings;
+    const booking = originalBookings.find(b => b.id === bookingId);
+    if (!booking) {
+        logError('updateBookingStatus', new Error('Booking not found'));
+        return;
+    }
+
+    const newStatus = nextStatus(booking.status);
+    let updatedBooking: Booking | undefined;
+
+    // Optimistic update
+    const bookings: Booking[] = originalBookings.map((b) => {
+        if (b.id !== bookingId) return b;
+        updatedBooking = { ...b, status: newStatus };
+        return updatedBooking;
+    });
+    setState({ bookings });
+
+
+    if (hasSupabase) {
+        try {
+            const { error } = await supabase
+                .from('bookings')
+                .update({ status: newStatus })
+                .eq('id', bookingId);
+            
+            if (error) {
+                // Revert optimistic update
+                setState({ bookings: originalBookings });
+                logError('updateBookingStatus', error);
+                setError(formatErrorMessage(error, 'Unable to update booking status.'));
+                throw error;
+            }
+        } catch(err) {
+             // Revert optimistic update
+             setState({ bookings: originalBookings });
+             logError('updateBookingStatus', err);
+             setError(formatErrorMessage(err, 'Unable to update booking status.'));
+             throw err;
+        }
+    }
+
+    return updatedBooking;
+  }, []);
+
+  const fetchEarnings = useCallback(async (userId: string) => {
+    if (!hasSupabase) return;
+    try {
+      const data = await fetchCreatorEarnings(userId);
+      setState({ earnings: data });
+    } catch (err) {
+      logError('fetch_earnings', err);
+    }
+  }, []);
+
+  const sendMessage = useCallback(
+    async (chatId: string, text: string, fromUser: boolean = true): Promise<Message> => {
+      const senderId = stateRef.current.currentUser?.id;
+      if (!senderId) {
+        const message = 'You need to be signed in to send messages.';
+        setError(message);
+        throw new Error(message);
+      }
+
+      const trimmed = text.trim();
+      if (!trimmed) {
+        throw new Error('Message text is required.');
+      }
+
+      const optimisticMessage: Message = {
+        id: uid('msg'),
+        conversation_id: chatId,
+        from_user: fromUser,
+        body: trimmed,
+        timestamp: new Date().toISOString(),
+        message_type: 'text',
+      };
+
+      const prevMsgs = stateRef.current.messages[chatId] ?? [];
+      setState({ messages: { ...stateRef.current.messages, [chatId]: [...prevMsgs, optimisticMessage] } });
+
+      if (!hasSupabase) {
+        return optimisticMessage;
+      }
+
+      try {
+        const sent = await sendConversationTextMessage({ conversationId: chatId, text: trimmed });
+        const confirmed: Message = {
+          id: sent.id,
+          conversation_id: sent.conversation_id || chatId,
+          from_user: sent.sender_id === senderId,
+          body: sent.body,
+          timestamp: sent.timestamp ?? new Date().toISOString(),
+          message_type: sent.message_type,
+          media_url: sent.media_url ?? null,
+          preview_url: sent.preview_url ?? null,
+          locked: sent.locked ?? false,
+          unlocked: sent.unlocked ?? true,
+          unlock_booking_id: sent.unlock_booking_id ?? null,
+        };
+        const latestForChat = stateRef.current.messages[chatId] ?? [];
+        setState({
+          messages: {
+            ...stateRef.current.messages,
+            [chatId]: latestForChat.map(m => m.id === optimisticMessage.id ? confirmed : m),
+          },
+        });
+        return confirmed;
+      } catch (err: any) {
+        const revertMsgs = stateRef.current.messages[chatId] ?? [];
+        setState({ messages: { ...stateRef.current.messages, [chatId]: revertMsgs.filter(m => m.id !== optimisticMessage.id) } });
+        logError('send_message', err);
+        const friendly = formatErrorMessage(err, 'Unable to send your message right now.');
+        setError(friendly);
+        throw new Error(friendly);
+      }
+    },
+    []
+  );
+
+  const sendLockedMediaMessage = useCallback(
+    async (
+      chatId: string,
+      payload: { mediaUrl: string; previewUrl?: string; text?: string; unlockBookingId: string }
+    ) => {
+      const senderId = stateRef.current.currentUser?.id;
+      if (!senderId) {
+        const message = 'You need to be signed in to send media.';
+        setError(message);
+        throw new Error(message);
+      }
+      if (!hasSupabase) {
+        throw new Error('Media messages require a backend connection.');
+      }
+
+      const optimisticMessage: Message = {
+        id: uid('msg'),
+        conversation_id: chatId,
+        from_user: true,
+        body: payload.text || 'Shared a locked photo',
+        timestamp: new Date().toISOString(),
+        message_type: 'media',
+        media_url: payload.mediaUrl,
+        preview_url: payload.previewUrl || payload.mediaUrl,
+        locked: true,
+        unlocked: false,
+        unlock_booking_id: payload.unlockBookingId,
+      };
+
+      const prevLockedMsgs = stateRef.current.messages[chatId] ?? [];
+      setState({ messages: { ...stateRef.current.messages, [chatId]: [...prevLockedMsgs, optimisticMessage] } });
+
+      if (!hasSupabase) {
+        return optimisticMessage;
+      }
+
+      try {
+        let finalMediaUrl = payload.mediaUrl;
+        let finalPreviewUrl = payload.previewUrl;
+
+        // Perform cloud uploads if it's a local URI
+        if (payload.mediaUrl.startsWith('file://') || payload.mediaUrl.startsWith('content://')) {
+          setSaving(true);
+          try {
+            // Chat media goes to 'chat-media' bucket per backend spec (private, signed URLs)
+            finalMediaUrl = await uploadImage(payload.mediaUrl, 'chat-media');
+            const previewRes = await uploadBlurredPreview(payload.mediaUrl);
+            finalPreviewUrl = previewRes.success ? previewRes.data : payload.mediaUrl;
+          } finally {
+            setSaving(false);
+          }
+        }
+
+        const sent = await sendConversationLockedMediaMessage({
+          conversationId: chatId,
+          mediaUrl: finalMediaUrl,
+          previewUrl: finalPreviewUrl || finalMediaUrl,
+          text: payload.text,
+          unlockBookingId: payload.unlockBookingId,
+        });
+        const confirmed: Message = {
+          id: sent.id,
+          conversation_id: sent.conversation_id || chatId,
+          from_user: sent.sender_id === senderId,
+          body: sent.body,
+          timestamp: sent.timestamp ?? new Date().toISOString(),
+          message_type: 'media',
+          media_url: sent.media_url,
+          preview_url: sent.preview_url,
+          locked: sent.locked,
+          unlocked: sent.unlocked,
+          unlock_booking_id: sent.unlock_booking_id,
+        };
+        const latestLockedMsgs = stateRef.current.messages[chatId] ?? [];
+        setState({
+          messages: {
+            ...stateRef.current.messages,
+            [chatId]: latestLockedMsgs.map(m => m.id === optimisticMessage.id ? confirmed : m),
+          },
+        });
+        return confirmed;
+      } catch (err: any) {
+        const revertLockedMsgs = stateRef.current.messages[chatId] ?? [];
+        setState({ messages: { ...stateRef.current.messages, [chatId]: revertLockedMsgs.filter(m => m.id !== optimisticMessage.id) } });
+        logError('send_locked_media', err);
+        const friendly = formatErrorMessage(err, 'Unable to send media right now.');
+        setError(friendly);
+        throw new Error(friendly);
+      }
+    },
+    []
+  );
+
+  const fetchMessages = useCallback(async (chatId: string) => {
+    if (!hasSupabase) return;
+    const currentUserId = stateRef.current.currentUser?.id;
+    if (!currentUserId) return;
+
+    try {
+      // Guard against local optimistic IDs like "conv-xxx" that aren't real UUIDs
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(chatId)) {
+        console.warn('Skipping fetchMessages for non-UUID chatId:', chatId);
+        return;
+      }
+      const data = await listConversationMessages(chatId);
+      const parsedMessages: Message[] = (data || []).map((row: any) => ({
+        id: row.id,
+        conversation_id: chatId,
+        from_user: row.sender_id === currentUserId,
+        body: row.body ?? row.text,
+        timestamp: row.created_at || new Date().toISOString(),
+        message_type: row.message_type ?? 'text',
+        media_url: row.media_url ?? null,
+        preview_url: row.preview_url ?? null,
+        locked: row.locked ?? false,
+        unlocked: row.unlocked ?? true,
+        unlock_booking_id: row.unlock_booking_id ?? null,
+      }));
+
+      const prevForChat = stateRef.current.messages[chatId] ?? [];
+      const combined = dedupeById([...prevForChat, ...parsedMessages]);
+      setState({ messages: { ...stateRef.current.messages, [chatId]: combined } });
+    } catch (err) {
+      logError('fetch_messages', err);
+      setError('Unable to load messages for this chat.');
+    }
+  }, []);
+
+  const fetchMessagesForChat = useCallback(async (chatId: string) => {
+    // backwards compatible alias
+    return fetchMessages(chatId);
+  }, [fetchMessages]);
+
+  const startConversationWithUser = useCallback(async (participantId: string, title?: string) => {
+    const currentState = stateRef.current;
+    const currentUserId = currentState.currentUser?.id;
+    if (!currentUserId) {
+      const msg = 'You need to be signed in to message users.';
+      setError(msg);
+      throw new Error(msg);
+    }
+    if (participantId === currentUserId) {
+      const msg = 'You cannot start a chat with yourself.';
+      setError(msg);
+      throw new Error(msg);
+    }
+
+    // Check if a conversation with this user already exists
+    const existingConversation = currentState.conversations.find((c) => c.participant?.id === participantId);
+    if (existingConversation) {
+        return { id: existingConversation.id, title: existingConversation.title };
+    }
+
+    const convoTitle = title ?? `Chat with ${participantId}`;
+
+    const convo: ConversationSummary = {
+        id: uid('conv'),
+        title: convoTitle,
+        participants: [currentUserId, participantId],
+        last_message: 'Say hello 👋',
+        last_message_at: new Date().toISOString(),
+        created_at: new Date().toISOString(),
+    };
+
+    // Optimistic update
+    const originalConversations = currentState.conversations;
+    setState({ conversations: [convo, ...originalConversations] });
+
+
+    if (hasSupabase) {
+      try {
+        const data = await startConversationViaEdge({ participantId, title: convoTitle });
+        const newConvo: ConversationSummary = {
+          ...convo,
+          id: data.id,
+          title: data.title,
+        };
+        const updatedConversations = stateRef.current.conversations.map((c) => c.id === convo.id ? newConvo : c);
+        setState({ conversations: updatedConversations });
+        return { id: newConvo.id, title: newConvo.title };
+      } catch (err: any) {
+        logError('start_conversation_edge_failed', err);
+        
+        // Fallback: Direct Database Insertion (Client-Side RLS Fallback)
+        try {
+          // 1. Create Conversation
+          // Note: RLS policy "conversations_insert_auth" allows this for authenticated users
+          const { data: convData, error: convErr } = await supabase
+            .from('conversations')
+            .insert({
+              title: convoTitle,
+              created_by: currentUserId,
+              last_message: 'Say hello 👋',
+              last_message_at: new Date().toISOString()
+            })
+            .select('id, title')
+            .single();
+
+          if (convErr) {
+            // If we get an RLS error here, it's likely the migration wasn't applied or user is not logged in
+            console.error('RLS Error creating conversation:', convErr);
+            throw convErr;
+          }
+          if (!convData) throw new Error('No conversation data returned');
+
+          // 2. Add Self as Participant (Allowed by RLS)
+          const { error: partSelfErr } = await supabase
+            .from('conversation_participants')
+            .insert({
+              conversation_id: convData.id,
+              user_id: currentUserId
+            });
+          // 23505 = duplicate key (Trigger already added us)
+          if (partSelfErr && partSelfErr.code !== '23505') {
+            console.error('RLS Error adding self as participant:', partSelfErr);
+            throw partSelfErr;
+          }
+
+          // 3. Add Other Participant
+          const { error: partOtherErr } = await supabase
+            .from('conversation_participants')
+            .insert({
+              conversation_id: convData.id,
+              user_id: participantId,
+            });
+          
+          if (partOtherErr && partOtherErr.code !== '23505') {
+             console.warn('Fallback participant add failed for other user:', partOtherErr);
+          }
+
+          const confirmedConvo: ConversationSummary = {
+            ...convo,
+            id: convData.id,
+            title: convData.title || convoTitle,
+          };
+
+          const updatedConversations = stateRef.current.conversations.map((c) => c.id === convo.id ? confirmedConvo : c);
+          setState({ conversations: updatedConversations });
+          return { id: confirmedConvo.id, title: confirmedConvo.title };
+
+        } catch (fallbackErr: any) {
+          // Revert optimistic update only if even the fallback fails
+          setState({ conversations: originalConversations });
+          logError('start_conversation_fallback_failed', fallbackErr);
+          const friendly = formatErrorMessage(fallbackErr, 'Unable to start a chat right now. Please ensure your migration is applied.');
+          setError(friendly);
+          throw new Error(friendly);
+        }
+      }
+    }
+
+    return { id: convo.id, title: convo.title };
+  }, []);
+
+  const addPost = useCallback(
+    async ({ caption, imageUri, location, userId }: CreatePostInput) => {
+      const ownerId = userId ?? stateRef.current.currentUser?.id;
+      if (!ownerId) {
+        const message = 'You need an account to publish a post.';
+        setError(message);
+        throw new Error(message);
+      }
+
+        const post: Post = {
+            id: uid('post'),
+            author_id: ownerId,
+            caption,
+            image_url: imageUri,
+            created_at: new Date().toISOString(),
+            likes_count: 0,
+            liked: false,
+            comment_count: 0,
+            location,
+        };
+
+        // Optimistic update
+        const originalPosts = stateRef.current.posts;
+        setState({ posts: [post, ...originalPosts] });
+
+        if (hasSupabase) {
+            try {
+                let finalImageUrl = imageUri;
+                if (imageUri.startsWith('file://') || imageUri.startsWith('content://')) {
+                  finalImageUrl = await uploadImage(imageUri, 'posts');
+                }
+
+                const { data, error: insertError } = await supabase
+                .from('posts')
+                .insert({
+                    author_id: ownerId,
+                    caption,
+                    location,
+                    image_url: finalImageUrl,
+                })
+                .select('id, author_id, caption, location, comment_count, created_at, image_url, likes_count')
+                .single();
+
+                if (insertError) {
+                    throw insertError;
+                }
+
+                const newPost = {
+                    ...post,
+                    id: data?.id ?? post.id,
+                    likes_count: data?.likes_count ?? 0,
+                    comment_count: data?.comment_count ?? 0,
+                    created_at: data?.created_at ?? new Date().toISOString(),
+                };
+
+                // Replace optimistic post with the real one
+                const latestPosts = stateRef.current.posts;
+                setState({ posts: latestPosts.map(p => p.id === post.id ? newPost : p) });
+                return newPost;
+
+            } catch (err: any) {
+                // Revert optimistic update
+                setState({ posts: originalPosts });
+                logError('add_post', err);
+                const message = formatErrorMessage(err, 'Unable to publish your post right now.');
+                setError(message);
+                throw err;
+            }
+        }
+
+      return post;
+    },
+    []
+  );
+
+  const toggleLike = useCallback(async (postId: string) => {
+    const userId = stateRef.current.currentUser?.id;
+    if (!userId) {
+      const msg = 'You need to be signed in to like posts.';
+      setError(msg);
+      throw new Error(msg);
+    }
+
+    // Optimistic update locally
+    const originalPosts = stateRef.current.posts;
+    let optimistic: Post | undefined;
+    const posts = originalPosts.map((post) => {
+        if (post.id !== postId) return post;
+        const liked = !post.liked;
+        optimistic = { ...post, liked, likes_count: liked ? post.likes_count + 1 : Math.max(0, post.likes_count - 1) };
+        return optimistic;
+    });
+    setState({ posts });
+
+    if (hasSupabase) {
+      try {
+        const { data, error } = await supabase.rpc('toggle_post_like', {
+          p_post_id: postId,
+          p_user_id: userId,
+        });
+
+        if (error) throw error;
+
+        // RPC returns boolean: true = now liked, false = now unliked
+        const nowLiked = data as unknown as boolean;
+        setState({
+          posts: stateRef.current.posts.map((p) => {
+            if (p.id !== postId) return p;
+            return {
+              ...p,
+              liked: nowLiked,
+              likes_count: nowLiked
+                ? p.likes_count + 1
+                : Math.max(0, p.likes_count - 1),
+            };
+          }),
+        });
+      } catch (err: any) {
+        // Roll back optimistic toggled like
+        setState({ posts: originalPosts });
+        const message = formatErrorMessage(err, 'Unable to update like right now.');
+        setError(message);
+        logError('toggle_like', err);
+        throw err;
+      }
+    }
+
+    return optimistic;
+  }, []);
+
+  const addComment = useCallback(async (postId: string, text: string, userId?: string) => {
+    const currentState = stateRef.current;
+    const resolvedUserId = userId ?? currentState.currentUser?.id;
+    if (!resolvedUserId) {
+      const message = 'You need to be signed in to comment.';
+      setError(message);
+      throw new Error(message);
+    }
+
+    const comment: Comment = {
+      id: uid('comment'),
+      post_id: postId,
+      user_id: resolvedUserId,
+      body: text,
+      created_at: new Date().toISOString(),
+    };
+
+    // Optimistic update — comments is now Record<postId, Comment[]>
+    const originalPosts = currentState.posts;
+    const originalComments = currentState.comments;
+    const existingForPost = originalComments[postId] ?? [];
+    const posts = originalPosts.map((post) =>
+        post.id === postId ? { ...post, comment_count: post.comment_count + 1 } : post
+    );
+    setState({ comments: { ...originalComments, [postId]: [...existingForPost, comment] }, posts });
+
+    if (hasSupabase) {
+        try {
+            const { data, error } = await supabase
+              .from('post_comments')
+              .insert([{ post_id: postId, author_id: resolvedUserId, body: text }])
+              .select('id, post_id, author_id, body, created_at')
+              .single();
+
+            if (error) throw error;
+
+            if (data?.id) {
+              const persistedComment: Comment = {
+                id: data.id,
+                post_id: data.post_id ?? postId,
+                user_id: data.author_id,
+                body: data.body ?? text,
+                created_at: data.created_at ?? comment.created_at,
+              };
+              const latestForPost = stateRef.current.comments[postId] ?? [];
+              setState({
+                comments: {
+                  ...stateRef.current.comments,
+                  [postId]: latestForPost.map((item) => item.id === comment.id ? persistedComment : item),
+                },
+              });
+              return persistedComment;
+            }
+        } catch (err: any) {
+            setState({ comments: originalComments, posts: originalPosts });
+            logError('addComment', err);
+            setError(formatErrorMessage(err, 'Unable to add comment.'));
+            throw err;
+        }
+    }
+
+    return comment;
+  }, []);
+
+  const fetchComments = useCallback(async (postId: string) => {
+    if (!hasSupabase) return;
+    try {
+      const { data, error } = await supabase
+        .from('post_comments')
+        .select('id, post_id, author_id, body, created_at')
+        .eq('post_id', postId)
+        .order('created_at', { ascending: true })
+        .limit(100);
+      if (error) throw error;
+      const mapped: Comment[] = (data ?? []).map((row: any) => ({
+        id: row.id,
+        post_id: row.post_id,
+        user_id: row.user_id,
+        body: row.body ?? '',
+        created_at: row.created_at,
+      }));
+      setState({ comments: { ...stateRef.current.comments, [postId]: mapped } });
+    } catch (err) {
+      logError('fetchComments', err);
+    }
+  }, []);
+
+  const updateBookingClientLocation = useCallback(async (bookingId: string, latitude: number, longitude: number) => {
+    if (!hasSupabase) return;
+    const userId = stateRef.current.currentUser?.id;
+    if (!userId) return;
+
+    // Reliability Assertion: Deterministic boundary check
+    try {
+      assertSouthAfricanLocation(latitude, longitude);
+    } catch (err: any) {
+      logError('geo_assertion_client', err);
+      // Log and ignore invalid data to prevent out-of-bounds telemetry
+      return;
+    }
+
+    await supabase
+      .from('bookings')
+      .update({ user_latitude: latitude, user_longitude: longitude, updated_at: new Date().toISOString() })
+      .eq('id', bookingId)
+      .eq('client_id', userId);
+
+    const updated = stateRef.current.bookings.map((booking) =>
+      booking.id === bookingId ? { ...booking, user_latitude: latitude, user_longitude: longitude } : booking
+    );
+    setState({ bookings: updated });
+  }, []);
+
+  const updatePhotographerLocation = useCallback(async (latitude: number, longitude: number) => {
+    if (!hasSupabase) return;
+    const userId = stateRef.current.currentUser?.id;
+    if (!userId) return;
+
+    // Reliability Assertion: Deterministic boundary check
+    try {
+      assertSouthAfricanLocation(latitude, longitude);
+    } catch (err: any) {
+      logError('geo_assertion_photog', err);
+      // Log and ignore invalid data
+      return;
+    }
+
+    await supabase
+      .from('photographers')
+      .update({ latitude, longitude })
+      .eq('id', userId);
+
+    const updated = stateRef.current.photographers.map((photographer) =>
+      photographer.id === userId ? { ...photographer, latitude, longitude } : photographer
+    );
+    setState({ photographers: updated });
+  }, []);
+
+  const signUp = useCallback(
+    async (email: string, password: string, role: UserRole = 'client', fullName?: string) => {
+      setAuthenticating(true);
+      setError(null);
+      try {
+        const { data, error: signUpError } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: { verified: false },
+          },
+        });
+        if (signUpError) {
+          setError(formatAuthError(signUpError));
+          return null;
+        }
+        if (data.user) {
+          // Save full_name and role to profiles on signup
+          await supabase.from('profiles').upsert({
+            id: data.user.id,
+            role,
+            verified: false,
+            full_name: fullName ?? null,
+          });
+
+          // Auto-create photographer row if user signs up as photographer
+          if (role === 'photographer') {
+            await supabase.from('photographers').upsert({
+              id: data.user.id,
+              rating: 5.0,
+              location: '',
+              price_range: '',
+              style: '',
+              bio: '',
+              tags: [],
+              name: fullName ?? null,
+            });
+          }
+
+          // Auto-create model row if user signs up as model
+          if (role === 'model') {
+            await supabase.from('models').upsert({
+              id: data.user.id,
+              rating: 5.0,
+              location: '',
+              price_range: '',
+              style: '',
+              bio: '',
+              tags: [],
+              portfolio_urls: [],
+            });
+          }
+        }
+        const user: AppUser | null = data.user ? mapSupabaseUser(data.user, role, { role, verified: false }) : null;
+        setState({ currentUser: user });
+        return user;
+      } catch (err: any) {
+        logError('sign_up', err);
+        setError(formatAuthError(err, 'Unable to sign up.'));
+        return null;
+      } finally {
+        setAuthenticating(false);
+      }
+    },
+    []
+  );
+
+  const signIn = useCallback(async (email: string, password: string) => {
+    setAuthenticating(true);
+    setError(null);
+    try {
+      console.log('Attempting sign in for:', email);
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+      if (signInError) {
+        console.error('SignIn Error:', signInError);
+        setError(signInError.message);
+        return null;
+      }
+      console.log('SignIn Successful, fetching profile for:', data.user?.id);
+      const profile = data.user ? await fetchProfile(data.user.id) : null;
+      console.log('Profile fetched:', profile);
+      const user: AppUser | null = data.user ? mapSupabaseUser(data.user, 'client', profile) : null;
+      setState({ currentUser: user });
+      return user;
+    } catch (err: any) {
+      console.error('SignIn Catch Block:', err);
+      setError(err.message ?? 'Unable to sign in.');
+      return null;
+    } finally {
+      setAuthenticating(false);
+    }
+  }, [fetchProfile]);
+
+  const signOut = useCallback(async () => {
+    setAuthenticating(true);
+    setError(null);
+    try {
+      if (hasSupabase) {
+        try {
+          await supabase.auth.signOut();
+        } catch (e) {
+          logError('supabase_sign_out', e);
+        }
+      }
+      
+      // Force clear cache the moment they click sign out
+      await AsyncStorage.removeItem(STORAGE_KEY);
+      
+      setState({ 
+        ...initialState, 
+        currentUser: null, 
+        loading: false, // Don't show loader on login screen
+        bookings: [], 
+        conversations: [], 
+        messages: {},
+        profiles: [],
+        posts: stateRef.current.posts.map(p => ({ ...p, liked: false }))
+      });
+
+      if (hasSupabase && typeof window !== 'undefined') {
+        window.localStorage?.removeItem('supabase.auth.token');
+      }
+    } catch (err: any) {
+      setError(err.message ?? 'Unable to sign out.');
+    } finally {
+      setAuthenticating(false);
+    }
+  }, []);
+
+  const revalidateSession = useCallback(async (): Promise<AppUser | null> => {
+    if (!hasSupabase) {
+      return stateRef.current.currentUser;
+    }
+
+    try {
+      const { data, error: userError } = await supabase.auth.getUser();
+      if (userError) throw userError;
+
+      if (!data.user) {
+        setState({ currentUser: null });
+        return null;
+      }
+
+      const profile = await fetchProfile(data.user.id);
+      const currentRole = profile?.role || stateRef.current.currentUser?.role || 'client';
+      const user = mapSupabaseUser(data.user, currentRole as any, profile);
+      setState({ currentUser: user });
+      return user;
+    } catch (err) {
+      logError('revalidate_session', err);
+      setError(formatErrorMessage(err, 'Unable to validate your current session.'));
+      return null;
+    }
+  }, [fetchProfile]);
+
+  const refresh = useCallback(async () => {
+    setError(null);
+    setLoading(true);
+    try {
+      const currentUser = await revalidateSession();
+      const userId = currentUser?.id ?? null;
+      await Promise.all([
+        fetchPhotographers(), 
+        fetchModels(), 
+        fetchBookings(userId),
+        fetchConversations(userId),
+        fetchEarnings(userId || ''),
+        fetchPosts({ reset: true })
+      ]);
+    } catch (err) {
+      logError('refresh', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchBookings, fetchConversations, fetchEarnings, fetchModels, fetchPhotographers, fetchPosts, revalidateSession]);
+
+  const resetState = useCallback(async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      const currentUser = stateRef.current.currentUser;
+      await AsyncStorage.removeItem(STORAGE_KEY);
+      setState({ ...initialState, currentUser });
+    } catch (err) {
+      logError('reset_state', err);
+      setError('Unable to reset local data.');
+    } finally {
+      setSaving(false);
+    }
+  }, []);
+
+  const updatePrivacy = useCallback(async (changes: Partial<PrivacySettings>) => {
+    const currentState = stateRef.current;
+    const userId = currentState.currentUser?.id;
+    if (!userId) {
+      const msg = 'You need to be logged in to change your privacy settings';
+      setError(msg);
+      throw new Error(msg);
+    }
+
+    // Optimistic update
+    const originalPrivacy = currentState.privacy;
+    const privacy = { ...originalPrivacy, ...changes };
+    setState({ privacy });
+
+    if (hasSupabase) {
+        try {
+            const consentTypeBySetting: Record<'marketingOptIn' | 'personalizedAds' | 'locationEnabled', string> = {
+              marketingOptIn: 'marketing',
+              personalizedAds: 'personalized_ads',
+              locationEnabled: 'location_tracking',
+            };
+
+            const consentEntries = (Object.entries(changes) as Array<[keyof PrivacySettings, unknown]>)
+              .filter(([key, value]) =>
+                (key === 'marketingOptIn' || key === 'personalizedAds' || key === 'locationEnabled') &&
+                typeof value === 'boolean'
+              ) as Array<['marketingOptIn' | 'personalizedAds' | 'locationEnabled', boolean]>;
+
+            for (const [setting, enabled] of consentEntries) {
+              const consentType = consentTypeBySetting[setting];
+              if (enabled) {
+                const { error } = await supabase.from('user_consents').upsert(
+                  {
+                    user_id: userId,
+                    consent_type: consentType,
+                    accepted_at: new Date().toISOString(),
+                  },
+                  { onConflict: 'user_id,consent_type' }
+                );
+                if (error) throw error;
+              } else {
+                const { error } = await supabase
+                  .from('user_consents')
+                  .delete()
+                  .eq('user_id', userId)
+                  .eq('consent_type', consentType);
+                if (error) throw error;
+              }
+            }
+        } catch(err: any) {
+            // Revert
+            setState({ privacy: originalPrivacy });
+            const msg = formatErrorMessage(err, 'Unable to update your privacy settings.');
+            setError(msg);
+            throw new Error(msg);
+        }
+    }
+  }, []);
+
+  const requestDataDeletion = useCallback(async () => {
+    const currentState = stateRef.current;
+    const userId = currentState.currentUser?.id;
+    if (!userId) {
+      const msg = 'You need to be logged in to delete your data';
+      setError(msg);
+      throw new Error(msg);
+    }
+
+    const originalPrivacy = currentState.privacy;
+    const requestedAt = new Date().toISOString();
+    setState({ privacy: { ...originalPrivacy, dataDeletionRequestedAt: requestedAt } });
+
+    if (hasSupabase) {
+        try {
+            const { error } = await supabase.from('account_deletion_requests').insert({
+              created_by: userId,
+              reason: 'Requested from mobile app settings',
+            });
+            if (error) throw error;
+        } catch(err: any) {
+            setState({ privacy: originalPrivacy });
+            const msg = formatErrorMessage(err, 'Unable to request data deletion.');
+            setError(msg);
+            throw new Error(msg);
+        }
+    }
+  }, []);
+
+  const updateProfilePicture = useCallback(async (uri: string) => {
+    const currentState = stateRef.current;
+    const userId = currentState.currentUser?.id;
+    if (!userId || !hasSupabase) {
+      const msg = 'You need to be logged in and online to update your profile picture.';
+      setError(msg);
+      throw new Error(msg);
+    }
+    setSaving(true);
+    try {
+      const finalUrl = await uploadAvatar(uri, userId);
+      const { error: authError } = await supabase.auth.updateUser({
+        data: { avatar_url: finalUrl }
+      });
+      if (authError) throw authError;
+
+      const { error: dbError } = await supabase
+        .from('profiles')
+        .update({ avatar_url: finalUrl })
+        .eq('id', userId);
+      if (dbError) throw dbError;
+
+      await supabase.auth.refreshSession();
+    } catch (err: any) {
+      logError('updateProfilePicture', err);
+      const msg = formatErrorMessage(err, 'Unable to update profile picture.');
+      setError(msg);
+      throw new Error(msg);
+    } finally {
+      setSaving(false);
+    }
+  }, []);
+
+  const updateProfile = useCallback(async (changes: Partial<AppUser>) => {
+    const userId = stateRef.current.currentUser?.id;
+    const role = stateRef.current.currentUser?.role;
+    if (!userId || !hasSupabase) {
+      const msg = 'You need to be logged in and online to update your profile.';
+      setError(msg);
+      throw new Error(msg);
+    }
+
+    setSaving(true);
+    try {
+      // 1. Write to profiles table
+      const profileChanges: any = {};
+      if (changes.full_name !== undefined) profileChanges.full_name = changes.full_name;
+      if (changes.bio !== undefined) profileChanges.bio = changes.bio;
+      if (changes.phone !== undefined) profileChanges.phone = changes.phone;
+      if (changes.city !== undefined) profileChanges.city = changes.city;
+      if (changes.username !== undefined) profileChanges.username = changes.username;
+      if (changes.website !== undefined) profileChanges.website = changes.website;
+      if (changes.instagram !== undefined) profileChanges.instagram = changes.instagram;
+      if (changes.avatar_url !== undefined) profileChanges.avatar_url = changes.avatar_url;
+      if (changes.contact_details !== undefined)
+        profileChanges.contact_details = changes.contact_details;
+      if (changes.push_token !== undefined) profileChanges.push_token = changes.push_token;
+
+      if (Object.keys(profileChanges).length > 0) {
+        const { error } = await supabase
+          .from('profiles')
+          .update(profileChanges)
+          .eq('id', userId);
+        if (error) throw error;
+      }
+
+      // 2. Sync bio to role-specific table so Home/Discover screens see the update
+      if (changes.bio !== undefined) {
+        if (role === 'photographer') {
+          await supabase.from('photographers').update({ bio: changes.bio }).eq('id', userId);
+        } else if (role === 'model') {
+          await supabase.from('models').update({ bio: changes.bio }).eq('id', userId);
+        }
+      }
+
+      // 3. Immediate local state feedback — no need to wait for Realtime
+      setState({ currentUser: { ...stateRef.current.currentUser!, ...changes } });
+    } catch (err: any) {
+      logError('updateProfile', err);
+      const msg = formatErrorMessage(err, 'Unable to update profile.');
+      setError(msg);
+      throw new Error(msg);
+    } finally {
+      setSaving(false);
+    }
+  }, []);
+
+  const value = useMemo<AppDataContextValue>(() => ({
+      state,
+      loading: state.loading,
+      saving: state.saving,
+      authenticating: state.authenticating,
+      error: state.error,
+      currentUser: state.currentUser,
+      createBooking,
+      updateBookingStatus,
+      sendMessage,
+      sendLockedMediaMessage,
+      fetchMessages,
+      fetchMessagesForChat,
+      fetchComments,
+      updateBookingClientLocation,
+      updatePhotographerLocation,
+      startConversationWithUser,
+      addPost,
+      toggleLike,
+      addComment,
+      setState,
+      signUp,
+      signIn,
+      signOut,
+      fetchPosts,
+      fetchProfiles,
+      updatePrivacy,
+      requestDataDeletion,
+      refresh,
+      revalidateSession,
+      resetState,
+      updateProfilePicture,
+      updateProfile,
+      fetchEarnings,
+    }),
+    [state, createBooking, updateBookingStatus, sendMessage, sendLockedMediaMessage, fetchMessages, fetchMessagesForChat, fetchComments, updateBookingClientLocation, updatePhotographerLocation, startConversationWithUser, addPost, toggleLike, addComment, setState, signUp, signIn, signOut, updatePrivacy, requestDataDeletion, refresh, revalidateSession, resetState, updateProfilePicture, updateProfile, fetchEarnings]
+  );
+
+  return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>;
+};
+
+export const useAppData = (): AppDataContextValue => {
+  const context = useContext(AppDataContext);
+  if (!context) {
+    throw new Error('useAppData must be used within an AppDataProvider');
+  }
+  return context;
+};

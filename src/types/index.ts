@@ -1,0 +1,270 @@
+export type BookingStatus = 'pending' | 'accepted' | 'completed' | 'reviewed' | 'cancelled' | 'declined';
+
+export type UserRole = 'client' | 'photographer' | 'model' | 'admin';
+
+export interface AppUser {
+  id: string;
+  email: string;
+  role: UserRole;
+  verified?: boolean;
+  full_name?: string | null;
+  avatar_url?: string | null;
+  bio?: string | null;
+  phone?: string | null;
+  push_token?: string | null;
+  city?: string | null;
+  username?: string | null;
+  website?: string | null;
+  instagram?: string | null;
+  contact_details?: Record<string, any>;
+}
+
+export type ProfileSummary = {
+  id: string;
+  full_name: string | null;
+  city: string | null;
+  avatar_url: string | null;
+  bio?: string | null;
+  username?: string | null;
+};
+
+export interface PrivacySettings {
+  marketingOptIn: boolean;
+  personalizedAds: boolean;
+  dataDeletionRequestedAt: string | null;
+  locationEnabled: boolean;
+}
+
+export interface Photographer {
+  id: string;
+  name: string;
+  style: string;
+  location: string;
+  latitude: number;
+  longitude: number;
+  avatar_url: string;
+  bio: string;
+  rating: number;
+  price_range: string;
+  tags: string[];
+  /** ZAR per hour */
+  hourly_rate?: number | null;
+  experience_years?: number | null;
+  specialties?: string[] | null;
+  phone?: string | null;
+  portfolio_urls?: string[] | null;
+  subscription_tiers?: SubscriptionTier[];
+  created_at?: string;
+}
+
+export interface SubscriptionTier {
+  id: string;
+  name: string;
+  price_zar: number;
+  benefits: string[];
+}
+
+export interface Model {
+  id: string;
+  name: string;
+  style: string;
+  location: string;
+  latitude: number;
+  longitude: number;
+  avatar_url: string;
+  bio: string;
+  rating: number;
+  price_range: string;
+  tags: string[];
+  portfolio_urls: string[];
+  created_at?: string;
+}
+
+export interface Booking {
+  id: string;
+  photographer_id: string;
+  client_id: string;
+  model_id?: string | null;
+  service_type?: 'photography' | 'modeling' | 'combined';
+  booking_date: string;
+  start_datetime?: string; // ISODateString
+  end_datetime?: string;   // ISODateString
+  duration_hours?: number | null;
+  pricing_mode?: string | null;
+  package_type: string;
+  notes?: string;
+  status: BookingStatus;
+  created_at: string;
+  user_latitude?: number | null;
+  user_longitude?: number | null;
+  total_amount: number;
+  commission_amount: number;
+  payout_amount: number;
+  currency?: string;
+  photographer?: { id: string; name: string; avatar_url: string; city: string | null };
+  client?: { id: string; name: string; avatar_url: string; city: string | null };
+}
+
+export interface Message {
+  id: string;
+  conversation_id: string;
+  from_user: boolean;
+  body: string;
+  timestamp: string;
+  message_type?: 'text' | 'media';
+  media_url?: string | null;
+  preview_url?: string | null;
+  locked?: boolean;
+  unlocked?: boolean;
+  unlock_booking_id?: string | null;
+}
+
+export interface Post {
+  id: string;
+  author_id: string;
+  image_url: string;
+  caption: string;
+  created_at: string;
+  location?: string;
+  likes_count: number;
+  liked: boolean;
+  comment_count: number;
+  profile?: ProfileSummary;
+}
+
+export interface Comment {
+  id: string;
+  post_id: string;
+  user_id: string;
+  body: string;
+  created_at: string;
+  profile?: ProfileSummary;
+}
+
+export interface ConversationSummary {
+  id: string;
+  title: string;
+  last_message?: string | null;
+  last_message_at: string | null;
+  created_at?: string | null;
+  participants?: string[];
+  participant?: { id: string; name: string; avatar_url: string };
+}
+
+export interface Review {
+  id: string;
+  booking_id: string;
+  client_id: string;
+  photographer_id: string;
+  rating: number;
+  comment: string | null;
+  moderation_status: 'pending' | 'approved' | 'rejected';
+  created_at: string;
+  client?: ProfileSummary;
+}
+
+export interface Payment {
+  id: string;
+  booking_id: string;
+  customer_id: string;
+  amount: number;
+  currency: string;
+  description: string;
+  status: 'pending' | 'completed' | 'failed' | 'cancelled';
+  provider: string;
+  provider_payment_id: string | null;
+  created_at: string;
+  processed_at: string | null;
+  payment_type?: 'booking' | 'tip' | 'subscription' | 'video_call';
+}
+
+export interface Subscription {
+  id: string;
+  creator_id: string;
+  subscriber_id: string;
+  tier_id: string;
+  status: 'active' | 'cancelled';
+  current_period_start: string;
+  current_period_end: string;
+}
+
+export interface Tip {
+  id: string;
+  sender_id: string;
+  receiver_id: string;
+  amount: number;
+  message?: string;
+  created_at: string;
+}
+
+export interface Earning {
+  id: string;
+  user_id: string;
+  amount: number;
+  source_type: 'booking' | 'tip' | 'subscription' | 'video_call';
+  source_id: string;
+  created_at: string;
+}
+
+export interface NotificationEvent {
+  id: string;
+  user_id: string;
+  event_type: 'booking_confirmed' | 'new_message';
+  title: string;
+  body: string;
+  data: Record<string, any>;
+  status: 'queued' | 'sent' | 'failed';
+  created_at: string;
+}
+
+export interface AppState {
+  photographers: Photographer[];
+  models: Model[];
+  bookings: Booking[];
+  conversations: ConversationSummary[];
+  messages: Record<string, Message[]>; // keyed by conversation_id
+  posts: Post[];
+  profiles: ProfileSummary[];
+  comments: Record<string, Comment[]>; // keyed by post_id
+  reviews: Record<string, Review[]>;   // keyed by photographer_id
+  payments: Payment[];
+  subscriptions: Subscription[];
+  tips: Tip[];
+  earnings: Earning[];
+  mediaAssets: MediaAsset[];
+  follows: Follow[];
+  notifications: NotificationEvent[];
+  currentUser: AppUser | null;
+  privacy: PrivacySettings;
+  loading: boolean;
+  saving: boolean;
+  authenticating: boolean;
+  error: string | null;
+}
+
+export interface MediaAsset {
+  id: string;
+  owner_id: string;
+  booking_id?: string | null;
+  bucket: string;
+  object_path: string;
+  is_locked: boolean;
+  price_zar?: number | null;
+  title?: string | null;
+  created_at: string;
+  preview_url?: string | null;
+  full_url?: string | null;
+}
+
+export interface Follow {
+  follower_id: string;
+  following_id: string;
+  created_at: string;
+}
+
+export interface MediaAccessLog {
+  id: string;
+  asset_id: string;
+  user_id: string;
+  accessed_at: string;
+}

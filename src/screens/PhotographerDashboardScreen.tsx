@@ -1,0 +1,452 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  Alert, RefreshControl, ScrollView, StyleSheet, Text,
+  TouchableOpacity, View, Image, Switch, Modal, TextInput,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
+import * as Location from 'expo-location';
+import { LinearGradient } from 'expo-linear-gradient';
+import { MapTracker } from '../components/MapTracker';
+import { useAuth } from '../store/AuthContext';
+import { useBooking } from '../store/BookingContext';
+import { useMessaging } from '../store/MessagingContext';
+import { useAppData } from '../store/AppDataContext';
+import { RootStackParamList } from '../navigation/types';
+import { supabase } from '../config/supabaseClient';
+import { DEFAULT_CAPE_TOWN_COORDINATES, ensureSouthAfricanCoordinates } from '../utils/geo';
+
+type Navigation = StackNavigationProp<RootStackParamList, 'Root'>;
+
+const PhotographerDashboardScreen: React.FC = () => {
+  const navigation = useNavigation<Navigation>();
+  const { currentUser } = useAuth();
+  const { bookings, acceptBooking, declineBooking, refreshBookings } = useBooking();
+  const { startConversationWithUser } = useMessaging();
+  const { state, refresh, updatePhotographerLocation } = useAppData();
+  const [isOnline, setIsOnline] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [acceptingId, setAcceptingId] = useState<string | null>(null);
+  const [showEarningsDetail, setShowEarningsDetail] = useState(false);
+
+  const activeBooking = useMemo(
+    () => bookings.find(b => b.status === 'accepted') ?? bookings.find(b => b.status === 'pending'),
+    [bookings]
+  );
+  const pendingBookings = useMemo(() => bookings.filter(b => b.status === 'pending'), [bookings]);
+  const acceptedBookings = useMemo(() => bookings.filter(b => b.status === 'accepted'), [bookings]);
+  const completedBookings = useMemo(() => bookings.filter(b => b.status === 'completed'), [bookings]);
+
+  const earnings = useMemo(() => {
+    const earningsRows = state.earnings ?? [];
+    if (earningsRows.length > 0) {
+      return earningsRows.reduce((acc, e) => {
+        const amount = Number(e.amount || 0);
+        const gross = Number((e as any).gross_amount || amount / 0.7);
+        return {
+          total: acc.total + gross,
+          commission: acc.commission + (gross - amount),
+          net: acc.net + amount,
+          count: acc.count + 1,
+        };
+      }, { total: 0, net: 0, commission: 0, count: 0 });
+    }
+    return bookings
+      .filter(b => b.status === 'completed' || b.status === 'accepted')
+      .reduce((acc, b) => ({
+        total: acc.total + (b.total_amount || 0),
+        net: acc.net + (b.payout_amount || 0),
+        commission: acc.commission + (b.commission_amount || 0),
+        count: acc.count + 1,
+      }), { total: 0, net: 0, commission: 0, count: 0 });
+  }, [bookings, state.earnings]);
+
+  const photographerProfile = useMemo(
+    () => state.photographers.find(p => p.id === currentUser?.id) ?? state.photographers[0],
+    [currentUser?.id, state.photographers]
+  );
+
+  const photographerLocation = useMemo(() => ensureSouthAfricanCoordinates({
+    latitude: photographerProfile?.latitude ?? -26.2041,
+    longitude: photographerProfile?.longitude ?? 28.0473,
+  }), [photographerProfile?.latitude, photographerProfile?.longitude]);
+
+  // GPS tracking for accepted bookings
+  useEffect(() => {
+    if (!currentUser || !isOnline || activeBooking?.status !== 'accepted') return;
+    let mounted = true;
+    let subscription: Location.LocationSubscription | null = null;
+
+    const startTracking = async () => {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted' || !mounted) return;
+      subscription = await Location.watchPositionAsync(
+        { accuracy: Location.Accuracy.Balanced, distanceInterval: 20, timeInterval: 8000 },
+        async ({ coords }) => {
+          if (!mounted) return;
+          const { latitude, longitude } = coords;
+          if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
+          try { await updatePhotographerLocation(latitude, longitude); } catch { /* soft fail */ }
+        }
+      );
+    };
+
+    startTracking();
+    return () => { mounted = false; subscription?.remove(); };
+  }, [activeBooking?.status, currentUser, isOnline, updatePhotographerLocation]);
+
+  const handleAcceptBooking = async (bookingId: string) => {
+    setAcceptingId(bookingId);
+    try {
+      await acceptBooking(bookingId);
+      Alert.alert('✅ Booking Accepted', 'The client has been notified. Navigate to their location.');
+    } catch (err: any) {
+      Alert.alert('Error', err?.message ?? 'Could not accept booking.');
+    } finally {
+      setAcceptingId(null);
+    }
+  };
+
+  const handleDeclineBooking = async (bookingId: string) => {
+    Alert.alert('Decline Booking', 'Are you sure? The client will be refunded.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Decline', style: 'destructive', onPress: async () => {
+          try {
+            await declineBooking(bookingId);
+          } catch (err: any) {
+            Alert.alert('Error', err?.message ?? 'Could not decline booking.');
+          }
+        },
+      },
+    ]);
+  };
+
+  const handleCompleteBooking = async (bookingId: string) => {
+    Alert.alert('Mark Complete', 'Confirm this session is done? Payment will be processed.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Complete', onPress: async () => {
+          try {
+            const { error } = await supabase
+              .from('bookings')
+              .update({ status: 'completed', updated_at: new Date().toISOString() })
+              .eq('id', bookingId);
+            if (error) throw error;
+            await refreshBookings();
+            Alert.alert('✅ Session Complete', 'Your earnings have been recorded.');
+          } catch (err: any) {
+            Alert.alert('Error', err?.message ?? 'Could not mark as complete.');
+          }
+        },
+      },
+    ]);
+  };
+
+  const openChatWithClient = async (clientId?: string | null, clientName?: string) => {
+    if (!clientId) {
+      navigation.navigate('Root', { screen: 'Chat' });
+      return;
+    }
+    try {
+      const convo = await startConversationWithUser(clientId, clientName ?? 'Client');
+      navigation.navigate('ChatThread', { conversationId: convo.id, title: convo.title });
+    } catch {
+      navigation.navigate('Root', { screen: 'Chat' });
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await refresh();
+    setRefreshing(false);
+  };
+
+  return (
+    <SafeAreaView style={s.safeArea}>
+      <ScrollView
+        contentContainerStyle={s.container}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#8b5cf6" />}
+      >
+        {/* Header */}
+        <View style={s.headerRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={s.eyebrow}>Photographer Mode</Text>
+            <Text style={s.title} numberOfLines={1}>
+              {currentUser?.full_name?.split(' ')[0] ?? 'Photographer'}'s Dashboard
+            </Text>
+          </View>
+          <View style={s.onlineRow}>
+            <Text style={[s.onlineLabel, { color: isOnline ? '#10b981' : '#64748b' }]}>
+              {isOnline ? 'LIVE' : 'OFFLINE'}
+            </Text>
+            <Switch
+              value={isOnline}
+              onValueChange={setIsOnline}
+              trackColor={{ false: '#334155', true: '#10b981' }}
+              thumbColor="#fff"
+            />
+          </View>
+        </View>
+
+        {/* Stats row */}
+        <View style={s.statsRow}>
+          <TouchableOpacity style={s.statCard} onPress={() => setShowEarningsDetail(true)}>
+            <Text style={s.statLabel}>Net Earnings</Text>
+            <Text style={s.statValue}>R{earnings.net.toLocaleString('en-ZA')}</Text>
+            <Text style={s.statMeta}>Tap for breakdown</Text>
+          </TouchableOpacity>
+          <View style={[s.statCard, { marginRight: 0 }]}>
+            <Text style={s.statLabel}>Queue</Text>
+            <Text style={[s.statValue, { color: pendingBookings.length > 0 ? '#f59e0b' : '#fff' }]}>
+              {pendingBookings.length}
+            </Text>
+            <Text style={s.statMeta}>{acceptedBookings.length} active · {completedBookings.length} done</Text>
+          </View>
+        </View>
+
+        {/* Pending booking requests */}
+        {pendingBookings.length > 0 && (
+          <View style={s.card}>
+            <View style={s.cardHeader}>
+              <Text style={s.cardTitle}>🔔 New Requests</Text>
+              <Text style={s.cardMeta}>{pendingBookings.length} waiting</Text>
+            </View>
+            {pendingBookings.map(booking => (
+              <View key={booking.id} style={s.requestCard}>
+                <View style={s.requestInfo}>
+                  <Text style={s.requestPackage}>{booking.package_type ?? 'Photography'}</Text>
+                  <Text style={s.requestDate}>
+                    {booking.booking_date
+                      ? new Date(booking.booking_date).toLocaleString('en-ZA', { dateStyle: 'medium', timeStyle: 'short' })
+                      : 'Date TBD'}
+                  </Text>
+                  <Text style={s.requestAmount}>R{(booking.total_amount ?? booking.price_total ?? 0).toLocaleString('en-ZA')}</Text>
+                </View>
+                <View style={s.requestActions}>
+                  <TouchableOpacity
+                    style={s.acceptBtn}
+                    onPress={() => handleAcceptBooking(booking.id)}
+                    disabled={acceptingId === booking.id}
+                  >
+                    <Ionicons name="checkmark" size={18} color="#fff" />
+                    <Text style={s.acceptBtnText}>{acceptingId === booking.id ? '...' : 'Accept'}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={s.declineBtn} onPress={() => handleDeclineBooking(booking.id)}>
+                    <Ionicons name="close" size={18} color="#ef4444" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={s.chatBtn}
+                    onPress={() => openChatWithClient(booking.client_id, 'Client')}
+                  >
+                    <Ionicons name="chatbubble-outline" size={18} color="#8b5cf6" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Active accepted bookings */}
+        {acceptedBookings.length > 0 && (
+          <View style={s.card}>
+            <Text style={s.cardTitle}>📍 Active Bookings</Text>
+            {acceptedBookings.map(booking => (
+              <View key={booking.id} style={s.activeCard}>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.requestPackage}>{booking.package_type ?? 'Session'}</Text>
+                  <Text style={s.requestDate}>
+                    {booking.booking_date
+                      ? new Date(booking.booking_date).toLocaleString('en-ZA', { dateStyle: 'medium', timeStyle: 'short' })
+                      : 'In progress'}
+                  </Text>
+                </View>
+                <View style={s.activeActions}>
+                  <TouchableOpacity
+                    style={s.completeBtn}
+                    onPress={() => handleCompleteBooking(booking.id)}
+                  >
+                    <Text style={s.completeBtnText}>Mark Done</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={s.chatBtn}
+                    onPress={() => openChatWithClient(booking.client_id, 'Client')}
+                  >
+                    <Ionicons name="chatbubble" size={18} color="#8b5cf6" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Live map */}
+        <View style={s.mapCard}>
+          <View style={s.cardHeader}>
+            <Text style={s.cardTitle}>📍 Live Route</Text>
+            {activeBooking && (
+              <Text style={[s.cardMeta, { color: activeBooking.status === 'accepted' ? '#10b981' : '#f59e0b' }]}>
+                {activeBooking.status.toUpperCase()}
+              </Text>
+            )}
+          </View>
+          <MapTracker
+            client={DEFAULT_CAPE_TOWN_COORDINATES}
+            photographer={photographerLocation}
+            status={activeBooking?.status ?? 'pending'}
+          />
+          <TouchableOpacity style={s.navBtn} onPress={() => navigation.navigate('Root', { screen: 'Map' })}>
+            <Ionicons name="navigate" size={16} color="#8b5cf6" />
+            <Text style={s.navBtnText}>Open Full Map</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Quick tools */}
+        <View style={s.card}>
+          <Text style={s.cardTitle}>Quick Tools</Text>
+          <View style={s.toolGrid}>
+            {[
+              { icon: 'calendar', label: 'Schedule', color: '#3b82f6', action: () => navigation.navigate('Root', { screen: 'Bookings' }) },
+              { icon: 'time', label: 'Availability', color: '#8b5cf6', action: () => navigation.navigate('Availability') },
+              { icon: 'chatbubbles', label: 'Messages', color: '#10b981', action: () => navigation.navigate('Root', { screen: 'Chat' }) },
+              { icon: 'document-text', label: 'Model Release', color: '#f59e0b', action: () => activeBooking ? navigation.navigate('ModelRelease', { bookingId: activeBooking.id }) : Alert.alert('No active booking', 'Accept a booking first.') },
+              { icon: 'card', label: 'Payments', color: '#ec4899', action: () => navigation.navigate('PaymentHistory') },
+              { icon: 'stats-chart', label: 'Earnings', color: '#06b6d4', action: () => navigation.navigate('EarningsDashboard') },
+            ].map(tool => (
+              <TouchableOpacity key={tool.label} style={s.toolBtn} onPress={tool.action}>
+                <View style={[s.toolIcon, { backgroundColor: tool.color + '20' }]}>
+                  <Ionicons name={tool.icon as any} size={22} color={tool.color} />
+                </View>
+                <Text style={s.toolLabel}>{tool.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        {/* Available models to collaborate with */}
+        {(state.models ?? []).length > 0 && (
+          <View style={s.card}>
+            <View style={s.cardHeader}>
+              <Text style={s.cardTitle}>Models to Collaborate</Text>
+              <TouchableOpacity onPress={() => navigation.navigate('Root', { screen: 'Feed' })}>
+                <Text style={s.viewAll}>View All</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              {(state.models ?? []).slice(0, 8).map(model => (
+                <TouchableOpacity
+                  key={model.id}
+                  style={s.modelPill}
+                  onPress={() => navigation.navigate('UserProfile', { userId: model.id })}
+                >
+                  <Image source={{ uri: model.avatar_url ?? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200' }} style={s.modelAvatar} />
+                  <Text style={s.modelName} numberOfLines={1}>{model.name}</Text>
+                  <TouchableOpacity
+                    style={s.modelChatBtn}
+                    onPress={() => openChatWithClient(model.id, model.name)}
+                  >
+                    <Text style={s.modelChatBtnText}>Chat</Text>
+                  </TouchableOpacity>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
+        {/* Profile settings CTA */}
+        <TouchableOpacity style={s.settingsCard} onPress={() => navigation.navigate('AccountConfig')}>
+          <Ionicons name="settings-outline" size={20} color="#8b5cf6" />
+          <Text style={s.settingsText}>Profile & Portfolio Settings</Text>
+          <Ionicons name="chevron-forward" size={18} color="#64748b" />
+        </TouchableOpacity>
+      </ScrollView>
+
+      {/* Earnings breakdown modal */}
+      <Modal visible={showEarningsDetail} transparent animationType="slide" onRequestClose={() => setShowEarningsDetail(false)}>
+        <View style={s.modalBg}>
+          <View style={s.modalContent}>
+            <View style={s.modalHeader}>
+              <Text style={s.modalTitle}>Earnings Breakdown</Text>
+              <TouchableOpacity onPress={() => setShowEarningsDetail(false)}>
+                <Ionicons name="close" size={24} color="#fff" />
+              </TouchableOpacity>
+            </View>
+            <View style={s.earningsRow}><Text style={s.earningsLabel}>Gross Revenue</Text><Text style={s.earningsValue}>R{earnings.total.toLocaleString('en-ZA')}</Text></View>
+            <View style={s.earningsRow}><Text style={s.earningsLabel}>Platform Fee (30%)</Text><Text style={[s.earningsValue, { color: '#ef4444' }]}>-R{earnings.commission.toLocaleString('en-ZA')}</Text></View>
+            <View style={[s.earningsRow, s.earningsTotalRow]}><Text style={s.earningsTotalLabel}>Your Net Pay</Text><Text style={s.earningsTotalValue}>R{earnings.net.toLocaleString('en-ZA')}</Text></View>
+            <Text style={s.earningsMeta}>{earnings.count} completed session{earnings.count !== 1 ? 's' : ''} · Payout within 5 business days</Text>
+            <TouchableOpacity style={s.earningsCTA} onPress={() => { setShowEarningsDetail(false); navigation.navigate('EarningsDashboard'); }}>
+              <Text style={s.earningsCTAText}>Full Earnings Report</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </SafeAreaView>
+  );
+};
+
+const s = StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: '#0a0a14' },
+  container: { padding: 16, paddingBottom: 120 },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  eyebrow: { color: '#8b5cf6', fontWeight: '800', fontSize: 11, textTransform: 'uppercase', letterSpacing: 1.5 },
+  title: { color: '#fff', fontSize: 22, fontWeight: '900', marginTop: 2 },
+  onlineRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  onlineLabel: { fontWeight: '800', fontSize: 12, letterSpacing: 1 },
+  statsRow: { flexDirection: 'row', marginBottom: 16, gap: 12 },
+  statCard: { flex: 1, backgroundColor: '#1e293b', borderRadius: 18, padding: 18, borderWidth: 1, borderColor: '#334155' },
+  statLabel: { color: '#64748b', fontWeight: '700', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 },
+  statValue: { fontSize: 26, fontWeight: '900', color: '#fff', marginTop: 4 },
+  statMeta: { color: '#475569', marginTop: 4, fontSize: 12 },
+  card: { backgroundColor: '#1e293b', borderRadius: 20, padding: 18, borderWidth: 1, borderColor: '#334155', marginBottom: 14 },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
+  cardTitle: { fontSize: 16, fontWeight: '800', color: '#fff' },
+  cardMeta: { color: '#8b5cf6', fontWeight: '700', fontSize: 11, textTransform: 'uppercase' },
+  viewAll: { color: '#8b5cf6', fontWeight: '700' },
+  requestCard: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#0f172a' },
+  requestInfo: { flex: 1 },
+  requestPackage: { color: '#fff', fontWeight: '800', fontSize: 15 },
+  requestDate: { color: '#64748b', fontSize: 13, marginTop: 2 },
+  requestAmount: { color: '#10b981', fontWeight: '700', fontSize: 14, marginTop: 2 },
+  requestActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  acceptBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#10b981', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, gap: 4 },
+  acceptBtnText: { color: '#fff', fontWeight: '800', fontSize: 13 },
+  declineBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(239,68,68,0.1)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(239,68,68,0.3)' },
+  chatBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(139,92,246,0.1)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(139,92,246,0.3)' },
+  activeCard: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#0f172a' },
+  activeActions: { flexDirection: 'row', gap: 8 },
+  completeBtn: { backgroundColor: '#3b82f6', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 },
+  completeBtnText: { color: '#fff', fontWeight: '800', fontSize: 13 },
+  mapCard: { backgroundColor: '#1e293b', borderRadius: 20, padding: 16, borderWidth: 1, borderColor: '#334155', marginBottom: 14 },
+  navBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12, padding: 10, backgroundColor: 'rgba(139,92,246,0.1)', borderRadius: 10, alignSelf: 'flex-start' },
+  navBtnText: { color: '#8b5cf6', fontWeight: '700' },
+  toolGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 4 },
+  toolBtn: { width: '30%', alignItems: 'center' },
+  toolIcon: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
+  toolLabel: { color: '#94a3b8', fontSize: 12, fontWeight: '600', textAlign: 'center' },
+  modelPill: { alignItems: 'center', marginRight: 14, width: 72 },
+  modelAvatar: { width: 58, height: 58, borderRadius: 29, backgroundColor: '#334155', borderWidth: 2, borderColor: '#8b5cf6', marginBottom: 6 },
+  modelName: { color: '#fff', fontSize: 11, fontWeight: '600', textAlign: 'center', marginBottom: 4 },
+  modelChatBtn: { backgroundColor: 'rgba(139,92,246,0.2)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  modelChatBtnText: { color: '#8b5cf6', fontSize: 10, fontWeight: '700' },
+  settingsCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1e293b', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#334155', gap: 12 },
+  settingsText: { flex: 1, color: '#94a3b8', fontWeight: '600' },
+  // Modal
+  modalBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
+  modalContent: { backgroundColor: '#1e293b', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
+  modalTitle: { color: '#fff', fontSize: 20, fontWeight: '800' },
+  earningsRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#334155' },
+  earningsLabel: { color: '#94a3b8', fontSize: 15 },
+  earningsValue: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  earningsTotalRow: { borderBottomWidth: 0, marginTop: 8, paddingTop: 16 },
+  earningsTotalLabel: { color: '#fff', fontWeight: '900', fontSize: 18 },
+  earningsTotalValue: { color: '#10b981', fontWeight: '900', fontSize: 22 },
+  earningsMeta: { color: '#475569', fontSize: 13, marginTop: 12, textAlign: 'center' },
+  earningsCTA: { backgroundColor: '#8b5cf6', borderRadius: 14, padding: 14, alignItems: 'center', marginTop: 16 },
+  earningsCTAText: { color: '#fff', fontWeight: '800', fontSize: 15 },
+});
+
+export default PhotographerDashboardScreen;

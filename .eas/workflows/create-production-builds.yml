@@ -1,0 +1,15 @@
+name: Create Production Builds
+
+# iOS production builds require ascAppId in eas.json submit.production for auto-submit.
+# Use build-ios-preview.yml instead for a build you can install without App Store setup.
+
+jobs:
+  build_android:
+    type: build
+    params:
+      platform: android
+  build_ios:
+    type: build
+    params:
+      platform: ios
+      profile: preview

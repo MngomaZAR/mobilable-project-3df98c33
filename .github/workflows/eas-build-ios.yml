@@ -1,0 +1,38 @@
+name: EAS Build iOS
+
+# Builds iOS app via GitHub Actions using your EXPO_TOKEN.
+# Uses PREVIEW profile - same auth path as web deploy.
+# Trigger: Manual or push to main.
+#
+# Required: EXPO_TOKEN in repo secrets
+# Credentials: Must be set up once via `npx eas-cli credentials --platform ios`
+#              Choose "production" build profile when prompted to set up App Store creds.
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  build_ios:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund --no-optional
+
+      - name: Build iOS (preview profile)
+        run: npx eas-cli build --platform ios --profile preview --non-interactive
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}

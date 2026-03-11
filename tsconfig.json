@@ -1,0 +1,13 @@
+{
+  "extends": "./node_modules/expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "jsx": "react-native",
+    "allowJs": false,
+    "noEmit": true,
+    "resolveJsonModule": true,
+    "noImplicitAny": true,
+    "types": ["react", "react-native", "jest", "node"]
+  },
+  "exclude": ["__tests__"]
+}

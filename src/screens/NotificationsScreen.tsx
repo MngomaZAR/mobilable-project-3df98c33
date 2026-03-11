@@ -44,7 +44,19 @@ const NotificationsScreen: React.FC = () => {
         .eq('user_id', state.currentUser.id)
         .order('created_at', { ascending: false })
         .limit(50);
-      if (!error) setNotifications((data ?? []) as NotificationItem[]);
+      if (!error) {
+        setNotifications((data ?? []) as NotificationItem[]);
+        // Mark all queued notifications as 'sent' (read) so push-dispatcher doesn't re-fire them
+        const queuedIds = (data ?? [])
+          .filter((n: any) => n.status === 'queued')
+          .map((n: any) => n.id);
+        if (queuedIds.length > 0) {
+          await supabase
+            .from('notification_events')
+            .update({ status: 'sent' })
+            .in('id', queuedIds);
+        }
+      }
     } finally {
       setLoading(false);
     }

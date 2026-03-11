@@ -17,6 +17,7 @@ const statusColors: Record<Booking['status'], string> = {
   completed: '#10b981',
   reviewed: '#8b5cf6',
   cancelled: '#94a3b8',
+  declined: '#ef4444',
 };
 
 const BookingsScreen: React.FC = () => {

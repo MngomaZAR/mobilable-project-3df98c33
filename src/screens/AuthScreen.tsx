@@ -26,7 +26,7 @@ WebBrowser.maybeCompleteAuthSession();
 
 type Mode = 'signin' | 'signup';
 
-const SUPABASE_CALLBACK = 'https://mizdvqhvspkjayffaqqd.supabase.co/auth/v1/callback';
+// SUPABASE_CALLBACK removed — dynamic redirect via Linking.createURL('auth') is used
 
 // Map raw Supabase auth errors to human-friendly messages
 const friendlyAuthError = (raw: string): string => {
@@ -75,6 +75,7 @@ const ROLE_OPTIONS: RoleOption[] = [
 const AuthScreen: React.FC = () => {
   const { signIn, signUp, resetState, authenticating, error } = useAppData();
   const [mode, setMode] = useState<Mode>('signin');
+  const [localSubmitting, setLocalSubmitting] = useState(false);
 
   const handleClearCache = async () => {
     Alert.alert(
@@ -104,32 +105,42 @@ const AuthScreen: React.FC = () => {
   const displayError = error ? friendlyAuthError(error) : localMessage;
 
   const submit = async () => {
+    if (localSubmitting || authenticating) return;
+    setLocalSubmitting(true);
     setLocalMessage(null);
     setLocalSuccess(null);
-    if (!email.trim() || !password) {
-      setLocalMessage('Please enter your email and password.');
-      return;
-    }
-    const emailRx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRx.test(email.trim())) {
-      setLocalMessage('Please enter a valid email address.');
-      return;
-    }
-    if (mode === 'signin') {
-      await signIn(email.trim(), password);
-    } else {
-      if (!fullName.trim()) {
-        setLocalMessage('Please enter your full name.');
+    try {
+      if (!email.trim() || !password) {
+        setLocalMessage('Please enter your email and password.');
         return;
       }
-      const user = await signUp(email.trim(), password, selectedRole, fullName.trim());
-      if (user) {
-        setLocalSuccess('🎉 Account created! Check your email to verify, then sign in.');
-        setEmail('');
-        setPassword('');
-        setFullName('');
-        setMode('signin');
+      const emailRx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRx.test(email.trim())) {
+        setLocalMessage('Please enter a valid email address.');
+        return;
       }
+      if (mode === 'signin') {
+        await signIn(email.trim(), password);
+      } else {
+        if (!fullName.trim()) {
+          setLocalMessage('Please enter your full name.');
+          return;
+        }
+        if (password.length < 6) {
+          setLocalMessage('Your password must be at least 6 characters long.');
+          return;
+        }
+        const user = await signUp(email.trim(), password, selectedRole, fullName.trim());
+        if (user) {
+          setLocalSuccess('🎉 Account created! Check your email to verify, then sign in.');
+          setEmail('');
+          setPassword('');
+          setFullName('');
+          setMode('signin');
+        }
+      }
+    } finally {
+      setLocalSubmitting(false);
     }
   };
 
@@ -140,13 +151,17 @@ const AuthScreen: React.FC = () => {
       return;
     }
     try {
-      const redirectTo = Linking.createURL('auth');
-      console.log('Using Dynamic Redirect URI:', redirectTo);
+      // Use makeRedirectUri for a far more reliable callback system in Expo apps.
+      const redirectUri = makeRedirectUri({
+        scheme: 'papzi',
+        path: 'auth',
+      });
+      console.log('Using Dynamic Redirect URI:', redirectUri);
       
       const { data, error: oauthErr } = await supabase.auth.signInWithOAuth({
         provider,
         options: { 
-          redirectTo, 
+          redirectTo: redirectUri, 
           skipBrowserRedirect: true,
           queryParams: provider === 'apple' ? { response_type: 'code' } : undefined,
         },
@@ -155,17 +170,14 @@ const AuthScreen: React.FC = () => {
 
       if (data?.url) {
         console.log('Opening Auth Session with URL:', data.url);
-        const res = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+        const res = await WebBrowser.openAuthSessionAsync(data.url, redirectUri);
         console.log('Auth Session Result:', res.type);
         
         if (res.type === 'success' && 'url' in res) {
           const { url } = res;
           console.log('Auth Success URL:', url);
-          const params = new URLSearchParams(url.split('#')[1] || url.split('?')[1]);
-          const { error: sessionError } = await supabase.auth.setSession({
-            access_token: params.get('access_token') || '',
-            refresh_token: params.get('refresh_token') || '',
-          });
+          // Use the official Supabase helper — handles both hash and query-string redirects
+          const { error: sessionError } = await (supabase.auth as any).getSessionFromUrl({ url });
           if (sessionError) throw sessionError;
         }
       }
@@ -212,6 +224,7 @@ const AuthScreen: React.FC = () => {
               <Text style={[styles.switchTxt, mode === 'signup' && styles.switchTxtActive]}>Create Account</Text>
             </TouchableOpacity>
           </View>
+          {/* Note: context error is cleared on next submit attempt via setLocalMessage(null) */}
 
           {/* Role Picker — only on signup */}
           {mode === 'signup' && (

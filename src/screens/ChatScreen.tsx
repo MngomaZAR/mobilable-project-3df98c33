@@ -16,6 +16,7 @@ import { ChatSkeleton } from '../components/Skeleton';
 import { RootStackParamList } from '../navigation/types';
 import { Ionicons } from '@expo/vector-icons';
 import { PLACEHOLDER_IMAGE } from '../utils/constants';
+import { uploadBlurredPreview } from '../services/uploadService';
 
 type Route = RouteProp<RootStackParamList, 'ChatThread'>;
 type Navigation = StackNavigationProp<RootStackParamList, 'ChatThread'>;
@@ -62,31 +63,20 @@ const ChatScreen: React.FC = () => {
       }
     };
     load();
-    
-    const unsubscribe = subscribeToMessages?.(chatId);
-    
-    return () => {
-      mounted = false;
-      if (unsubscribe) unsubscribe();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chatId]);
 
-  useEffect(() => {
-    if (listRef.current) {
-      try {
-        listRef.current.scrollToOffset({ offset: 999999, animated: true });
-      } catch (e) {
-        // ignore scroll failures
-      }
-    }
-  }, [messages.length]);
-
-  useEffect(() => {
     if (route.params?.title) {
       navigation.setOptions({ title: route.params.title });
     }
-  }, [navigation, route.params?.title]);
+
+    // Subscribe to realtime messages and store cleanup fn to prevent memory leak
+    const unsubscribe = subscribeToMessages?.(chatId);
+
+    return () => {
+      mounted = false;
+      if (typeof unsubscribe === 'function') unsubscribe();
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatId]);
 
 
 
@@ -117,10 +107,22 @@ const ChatScreen: React.FC = () => {
 
     if (!result.canceled && result.assets[0]) {
       const asset = result.assets[0];
-      setPendingMedia({
-        uri: asset.uri,
-        preview: asset.uri, // In a real app, generate a low-res blurred preview here
-      });
+      // Enforce 5MB file size limit
+      if ((asset.fileSize ?? 0) > 5 * 1024 * 1024) {
+        Alert.alert('Image too large', 'Please choose an image under 5MB.');
+        return;
+      }
+      // Generate a real blurred low-res preview for locked content
+      setSending(true);
+      try {
+        const previewRes = await uploadBlurredPreview(asset.uri);
+        setPendingMedia({
+          uri: asset.uri,
+          preview: previewRes.success ? previewRes.data : asset.uri,
+        });
+      } finally {
+        setSending(false);
+      }
       setIsLockedPending(true);
     }
   };
@@ -161,15 +163,9 @@ const ChatScreen: React.FC = () => {
         <ChatSkeleton />
       ) : !messagesLoading && messages.length === 0 ? (
         <View style={styles.errorContainer}>
-          <Ionicons name="cloud-offline" size={48} color={colors.textSecondary} />
-          <Text style={[styles.errorTitle, { color: colors.text }]}>Connection Problem</Text>
-          <Text style={[styles.errorText, { color: colors.textSecondary }]}>We couldn't load your messages. This might be due to a temporary service interruption.</Text>
-          <TouchableOpacity 
-            style={[styles.retryButton, { backgroundColor: colors.accent }]} 
-            onPress={() => fetchMessages(chatId)}
-          >
-            <Text style={[styles.retryButtonText, { color: isDark ? colors.bg : '#fff' }]}>Retry</Text>
-          </TouchableOpacity>
+          <Ionicons name="chatbubble-outline" size={48} color={colors.textSecondary} />
+          <Text style={[styles.errorTitle, { color: colors.text }]}>No messages yet</Text>
+          <Text style={[styles.errorText, { color: colors.textSecondary }]}>Start the conversation below!</Text>
         </View>
       ) : (
         <FlatList

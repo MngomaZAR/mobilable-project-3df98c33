@@ -32,6 +32,7 @@ type PhotographerRow = {
   style: string | null;
   bio: string | null;
   tags: string[] | null;
+  created_at?: string;
   profiles: PhotographerProfileRow[] | null;
 };
 
@@ -79,6 +80,7 @@ export const mapPhotographerRow = (row: PhotographerRow): Photographer => {
     bio: profile?.bio ?? row.bio ?? '', // Prefer profile bio
     price_range: row.price_range ?? 'R1500',
     tags: row.tags ?? [],
+    created_at: row.created_at,
   };
 };
 

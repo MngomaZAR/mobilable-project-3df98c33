@@ -13,7 +13,7 @@ export type TabParamList = {
 export type RootStackParamList = {
   Root: NavigatorScreenParams<TabParamList>;
   Profile: { userId: string; photographer?: Photographer };
-  BookingForm: { photographerId: string };
+  BookingForm: { photographerId?: string; modelId?: string };
   BookingDetail: { bookingId: string };
   BookingTracking: { bookingId: string };
   Payment: { bookingId: string };
@@ -25,7 +25,7 @@ export type RootStackParamList = {
   ChatThread: { conversationId: string; title?: string; avatarUrl?: string };
   AccountConfig: undefined;
   ModelPremiumDashboard: undefined;
-  PaidVideoCall: undefined;
+  PaidVideoCall: { creatorId?: string } | undefined;
   Notifications: undefined;
   PaymentHistory: undefined;
   Support: undefined;

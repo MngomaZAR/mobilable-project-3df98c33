@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export interface Story {
   id: string;
-  user_id: string;
+  author_id: string;
   media_url: string;
   media_type: 'image' | 'video';
   created_at: string;

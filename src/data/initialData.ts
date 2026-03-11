@@ -92,7 +92,7 @@ export const initialState: AppState = {
   posts: [
     {
       id: '00000000-0000-0000-0000-000000000006',
-      user_id: 'a1000001-0000-0000-0000-000000000001',
+      author_id: 'a1000001-0000-0000-0000-000000000001',
       image_url: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=1200&q=80',
       caption: 'Golden hour bridal portraits in the hills.',
       created_at: new Date().toISOString(),

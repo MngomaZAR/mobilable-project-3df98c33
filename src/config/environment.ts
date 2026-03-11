@@ -15,8 +15,9 @@ export const environment = {
 export const BUCKETS = {
   posts: 'post-images',
   avatars: 'avatars',
-  previews: 'previews',
-  media: 'media-assets',
+  previews: 'chat-media',   // chat previews go into chat-media bucket
+  media: 'media',           // premium booking media bucket
+  mediaAssets: 'media',     // alias — same as media
 } as const;
 
 export default environment;

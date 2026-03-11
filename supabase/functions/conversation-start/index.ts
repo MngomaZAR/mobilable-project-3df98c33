@@ -41,17 +41,11 @@ serve(async (req) => {
       return jsonResponse(401, { error: 'Missing Authorization header' });
     }
 
-    const supabaseUser = createClient(supabaseUrl, anonKey, {
-      global: {
-        headers: { Authorization: authHeader },
-      },
-    });
-    const {
-      data: { user },
-      error: authError,
-    } = await supabaseUser.auth.getUser();
+    const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+    
     if (authError || !user) {
-      return jsonResponse(401, { error: 'Unauthorized' });
+      return jsonResponse(401, { error: `Unauthorized: ${authError?.message || 'Invalid user'}` });
     }
 
     const payload = await req.json().catch(() => null);

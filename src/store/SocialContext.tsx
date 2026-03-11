@@ -31,6 +31,7 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       if (error) throw error;
       setPosts(data.map((p: any) => ({
           ...p,
+          author_id: p.author_id,
           user_name: p.profiles?.full_name,
           user_avatar: p.profiles?.avatar_url
       })));

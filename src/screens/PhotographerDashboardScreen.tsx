@@ -33,34 +33,35 @@ const PhotographerDashboardScreen: React.FC = () => {
   
   const { state } = useAppData();
   
+  /**
+   * Single source of truth for earnings — uses state.earnings (from the earnings table).
+   * If the earnings table is empty (e.g., first session), falls back to completed bookings.
+   * This avoids double-counting a booking that also has an earnings row.
+   */
   const earnings = useMemo(() => {
-    const bookingEarnings = bookings
+    const earningsRows = state.earnings || [];
+
+    if (earningsRows.length > 0) {
+      // Primary: use the earnings table (covers bookings, tips, subscriptions, video calls)
+      return earningsRows.reduce((acc, e) => {
+        const amount = Number(e.amount || 0);
+        const commRate = 0.30; // platform commission
+        return {
+          total: acc.total + amount,
+          commission: acc.commission + Math.round(amount * commRate * 100) / 100,
+          net: acc.net + Math.round(amount * (1 - commRate) * 100) / 100,
+        };
+      }, { total: 0, net: 0, commission: 0 });
+    }
+
+    // Fallback: derive from completed/accepted bookings when earnings table is empty
+    return bookings
       .filter(b => b.status === 'completed' || b.status === 'accepted')
       .reduce((acc, b) => ({
         total: acc.total + (b.total_amount || 0),
         net: acc.net + (b.payout_amount || 0),
-        commission: acc.commission + (b.commission_amount || 0)
+        commission: acc.commission + (b.commission_amount || 0),
       }), { total: 0, net: 0, commission: 0 });
-
-    const platformEarnings = (state.earnings || [])
-      .reduce((acc, e) => {
-        const amount = Number(e.amount || 0);
-        // Assuming 30% commission for non-booking earnings if not specified
-        const comm = e.source_type === 'booking' ? 0 : amount * 0.3; 
-        return {
-          total: acc.total + amount,
-          net: acc.net + (amount - comm),
-          commission: acc.commission + comm
-        };
-      }, { total: 0, net: 0, commission: 0 });
-
-    // Combine but avoid double counting bookings if they are in both sources
-    // For now, let's just use state.earnings as the primary source if it's not empty,
-    // otherwise fallback to booking calculations.
-    if ((state.earnings || []).length > 0) {
-      return platformEarnings;
-    }
-    return bookingEarnings;
   }, [bookings, state.earnings]);
 
   const photographerProfile = useMemo(
@@ -80,7 +81,9 @@ const PhotographerDashboardScreen: React.FC = () => {
   }, [photographerProfile?.latitude, photographerProfile?.longitude]);
 
   useEffect(() => {
-    if (!currentUser || currentUser.role !== 'photographer' || !activeBooking) return;
+    // Only start GPS tracking on ACCEPTED bookings — not pending.
+    // Prevents leaking photographer location to the client before they accept.
+    if (!currentUser || currentUser.role !== 'photographer' || activeBooking?.status !== 'accepted') return;
     let mounted = true;
     let subscription: Location.LocationSubscription | null = null;
 
@@ -147,7 +150,7 @@ const PhotographerDashboardScreen: React.FC = () => {
         <View style={styles.statsRow}>
           <View style={styles.statCard}>
             <Text style={styles.statLabel}>Active jobs</Text>
-            <Text style={styles.statValue}>{pendingBookings.length || 1}</Text>
+            <Text style={styles.statValue}>{pendingBookings.length}</Text>
             <Text style={styles.statMeta}>Accept and route to client</Text>
           </View>
           <View style={[styles.statCard, { marginRight: 0 }]}>

@@ -22,7 +22,10 @@ export const fetchBookingContracts = async (bookingId: string) => {
     .select('*')
     .eq('booking_id', bookingId);
     
-  if (error) throw error;
+  if (error) {
+    console.error('fetchBookingContracts error:', error);
+    throw error;
+  }
   return data as Contract[];
 };
 

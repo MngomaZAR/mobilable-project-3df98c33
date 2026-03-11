@@ -60,7 +60,7 @@ type AppDataContextValue = {
   addPost: (payload: CreatePostInput) => Promise<Post>;
   toggleLike: (postId: string) => Promise<Post | undefined>;
   addComment: (postId: string, text: string, userId?: string) => Promise<Comment>;
-  fetchPosts: (options?: { reset: boolean }) => Promise<void>;
+  fetchPosts: (options?: { reset: boolean }) => Promise<{ hasMore: boolean }>;
   fetchProfiles: () => Promise<void>;
   signUp: (email: string, password: string, role?: AppUser['role'], fullName?: string) => Promise<AppUser | null>;
   signIn: (email: string, password: string) => Promise<AppUser | null>;
@@ -194,7 +194,6 @@ const appReducer = (state: AppState, action: Action): AppState => {
       if (payload.profiles) nextState.profiles = dedupeById(payload.profiles);
       if (payload.photographers) nextState.photographers = dedupeById(payload.photographers);
       if (payload.models) nextState.models = dedupeById(payload.models);
-      if (payload.models) nextState.models = dedupeById(payload.models);
       if (payload.mediaAssets) nextState.mediaAssets = dedupeById(payload.mediaAssets);
       if (payload.earnings) nextState.earnings = dedupeById(payload.earnings);
       if (payload.tips) nextState.tips = dedupeById(payload.tips);
@@ -241,13 +240,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (!hasSupabase) return null;
     console.log('Fetching profile for:', userId);
     try {
-      // 15-second race timeout for profile fetch
-      const result = await Promise.race([
-        supabase.from('profiles').select(PROFILE_SELECT).eq('id', userId).maybeSingle(),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Profile fetch timeout')), 15000))
-      ]) as any;
-      
-      const { data, error } = result;
+      const { data, error } = await supabase.from('profiles').select(PROFILE_SELECT).eq('id', userId).maybeSingle();
       if (error) throw error;
       console.log('Profile fetch result:', data);
       return (data as any) ?? null;
@@ -396,8 +389,8 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     []
   );
 
-  const fetchPosts = useCallback(async ({ reset = true }: { reset?: boolean } = { reset: true }) => {
-    if (!hasSupabase) return;
+  const fetchPosts = useCallback(async ({ reset = true }: { reset?: boolean } = { reset: true }): Promise<{ hasMore: boolean }> => {
+    if (!hasSupabase) return { hasMore: false };
     setError(null);
     try {
       const start = reset ? 0 : stateRef.current.posts.length;
@@ -406,7 +399,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const { data: rawPosts, error: postError } = await supabase
         .from('posts')
         .select(`
-          id, user_id, caption, location, comment_count, created_at, image_url, likes_count
+          id, author_id, caption, location, comment_count, created_at, image_url, likes_count
         `)
         .order('created_at', { ascending: false })
         .range(start, end);
@@ -450,9 +443,11 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const combined = [...prevPosts, ...mapped.filter(p => !seen.has(p.id))];
         setState({ posts: combined });
       }
+      return { hasMore: rawPosts ? rawPosts.length >= 12 : false };
     } catch (err: any) {
       logError('fetch_posts', err);
       setError(formatErrorMessage(err, `Error loading feed: ${err?.message || 'Unknown error'}`));
+      return { hasMore: false };
     }
   }, []);
 
@@ -535,6 +530,8 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, []);
 
   
+  const persistDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     const load = async () => {
       setLoading(true);
@@ -644,7 +641,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const { data: rawPost } = await supabase
           .from('posts')
           .select(`
-            id, user_id, caption, location, comment_count, created_at, image_url, likes_count
+            id, author_id, caption, location, comment_count, created_at, image_url, likes_count
           `)
           .eq('id', targetId)
           .maybeSingle();
@@ -725,7 +722,10 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
           // Only process if current user participates in this conversation
           const isParticipant = stateRef.current.conversations.some(c => c.id === chatId);
-          if (!isParticipant) return;
+          if (!isParticipant) {
+             fetchConversations(currentUserId).catch(e => console.warn('Delayed new conversation fetch failed', e));
+             return;
+          }
 
           const newMessage: Message = {
             id: newRow.id,
@@ -780,7 +780,9 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         setError('Unable to save data locally.');
       }
     };
-    persist();
+
+    if (persistDebounceRef.current) clearTimeout(persistDebounceRef.current);
+    persistDebounceRef.current = setTimeout(persist, 400);
   }, [state]);
 
     const createBooking = useCallback(
@@ -970,7 +972,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           id: sent.id,
           conversation_id: sent.conversation_id || chatId,
           from_user: sent.sender_id === senderId,
-          body: sent.text,
+          body: sent.body,
           timestamp: sent.timestamp ?? new Date().toISOString(),
           message_type: sent.message_type,
           media_url: sent.media_url ?? null,
@@ -1043,7 +1045,8 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (payload.mediaUrl.startsWith('file://') || payload.mediaUrl.startsWith('content://')) {
           setSaving(true);
           try {
-            finalMediaUrl = await uploadImage(payload.mediaUrl, 'post-images');
+            // Chat media goes to 'chat-media' bucket per backend spec (private, signed URLs)
+            finalMediaUrl = await uploadImage(payload.mediaUrl, 'chat-media');
             const previewRes = await uploadBlurredPreview(payload.mediaUrl);
             finalPreviewUrl = previewRes.success ? previewRes.data : payload.mediaUrl;
           } finally {
@@ -1062,7 +1065,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           id: sent.id,
           conversation_id: sent.conversation_id || chatId,
           from_user: sent.sender_id === senderId,
-          body: sent.text,
+          body: sent.body,
           timestamp: sent.timestamp ?? new Date().toISOString(),
           message_type: 'media',
           media_url: sent.media_url,
@@ -1211,7 +1214,8 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
               conversation_id: convData.id,
               user_id: currentUserId
             });
-          if (partSelfErr) {
+          // 23505 = duplicate key (Trigger already added us)
+          if (partSelfErr && partSelfErr.code !== '23505') {
             console.error('RLS Error adding self as participant:', partSelfErr);
             throw partSelfErr;
           }
@@ -1224,9 +1228,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
               user_id: participantId,
             });
           
-          if (partOtherErr) {
-             // We don't throw here to avoid failing the whole flow if the other person's insert fails, 
-             // but usually it won't with the new "participants_insert_auth" policy.
+          if (partOtherErr && partOtherErr.code !== '23505') {
              console.warn('Fallback participant add failed for other user:', partOtherErr);
           }
 
@@ -1289,9 +1291,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 const { data, error: insertError } = await supabase
                 .from('posts')
                 .insert({
-                    user_id: ownerId,
-                    author_id: ownerId,   // set both for RLS policy compatibility
-                    profile_id: ownerId,  // and the third FK alias too
+                    author_id: ownerId,
                     caption,
                     location,
                     image_url: finalImageUrl,
@@ -1399,7 +1399,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       id: uid('comment'),
       post_id: postId,
       user_id: resolvedUserId,
-      text,
+      body: text,
       created_at: new Date().toISOString(),
     };
 
@@ -1427,7 +1427,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 id: data.id,
                 post_id: data.post_id ?? postId,
                 user_id: data.author_id,
-                text: data.body ?? text,
+                body: data.body ?? text,
                 created_at: data.created_at ?? comment.created_at,
               };
               const latestForPost = stateRef.current.comments[postId] ?? [];
@@ -1464,7 +1464,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         id: row.id,
         post_id: row.post_id,
         user_id: row.user_id,
-        text: row.body ?? '',
+        body: row.body ?? '',
         created_at: row.created_at,
       }));
       setState({ comments: { ...stateRef.current.comments, [postId]: mapped } });
@@ -1813,7 +1813,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
     setSaving(true);
     try {
-      const finalUrl = await uploadAvatar(uri);
+      const finalUrl = await uploadAvatar(uri, userId);
       const { error: authError } = await supabase.auth.updateUser({
         data: { avatar_url: finalUrl }
       });

@@ -42,14 +42,19 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         .order('last_message_at', { ascending: false });
 
       if (error) throw error;
-      setConversations(data.map((c: any) => ({
+      const mapped = data.map((c: any) => ({
           id: c.id,
           title: c.title,
           last_message: c.last_message,
           last_message_at: c.last_message_at,
           created_at: c.created_at,
           participants: c.conversation_participants.map((p: any) => p.user_id)
-      })));
+      }));
+      setConversations(prev => {
+        const combined = [...prev, ...mapped];
+        const unique = Array.from(new Map(combined.map(item => [item.id, item])).values());
+        return unique;
+      });
     } catch (err) {
       logError('Messaging:fetchConversations', err);
     } finally {
@@ -63,7 +68,7 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       const { data, error } = await supabase
         .from('messages')
         .select('*')
-        .eq('conversation_id', chatId)
+        .eq('chat_id', chatId)
         .order('created_at', { ascending: true });
 
       if (error) throw error;
@@ -73,7 +78,7 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
               id: m.id,
               conversation_id: m.conversation_id,
               from_user: m.sender_id === currentUser?.id,
-              text: m.text,
+              body: m.text ?? m.body ?? '',
               timestamp: m.created_at || m.timestamp,
               message_type: m.message_type,
               media_url: m.media_url,
@@ -92,12 +97,12 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     if (!hasSupabase || !currentUser) return () => {};
     
     const channel = supabase
-      .channel(`public:messages:conversation_id=eq.${chatId}`)
+      .channel(`public:messages:chat_id=eq.${chatId}`)
       .on('postgres_changes', { 
         event: 'INSERT', 
         schema: 'public', 
         table: 'messages', 
-        filter: `conversation_id=eq.${chatId}` 
+        filter: `chat_id=eq.${chatId}` 
       }, payload => {
         const rawNewMessage = payload.new;
         // Ignore messages sent by ourselves as they are optimistically added locally
@@ -107,7 +112,7 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             id: rawNewMessage.id,
             conversation_id: rawNewMessage.conversation_id || chatId,
             from_user: false,
-            text: rawNewMessage.text || rawNewMessage.content || rawNewMessage.body,
+            body: rawNewMessage.text || rawNewMessage.content || rawNewMessage.body,
             timestamp: rawNewMessage.created_at || rawNewMessage.timestamp || new Date().toISOString(),
             message_type: rawNewMessage.message_type,
             media_url: rawNewMessage.media_url,
@@ -141,7 +146,7 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         id: sent.id,
         conversation_id: sent.conversation_id || chatId,
         from_user: true,
-        text: sent.text,
+        body: sent.body ?? '',
         timestamp: sent.timestamp ?? new Date().toISOString(),
         message_type: sent.message_type,
       };
@@ -168,7 +173,7 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         id: sent.id,
         conversation_id: sent.conversation_id || chatId,
         from_user: true,
-        text: sent.text,
+        body: sent.body ?? '',
         timestamp: sent.timestamp ?? new Date().toISOString(),
         message_type: 'media',
         media_url: sent.media_url,

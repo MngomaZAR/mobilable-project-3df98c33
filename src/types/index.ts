@@ -54,6 +54,7 @@ export interface Photographer {
   phone?: string | null;
   portfolio_urls?: string[] | null;
   subscription_tiers?: SubscriptionTier[];
+  created_at?: string;
 }
 
 export interface SubscriptionTier {
@@ -76,6 +77,7 @@ export interface Model {
   price_range: string;
   tags: string[];
   portfolio_urls: string[];
+  created_at?: string;
 }
 
 export interface Booking {
@@ -134,7 +136,7 @@ export interface Comment {
   id: string;
   post_id: string;
   user_id: string;
-  text: string;
+  body: string;
   created_at: string;
   profile?: ProfileSummary;
 }

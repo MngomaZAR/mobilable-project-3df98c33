@@ -28,6 +28,8 @@ import PaidVideoCallScreen from '../screens/PaidVideoCallScreen';
 import AccountConfigScreen from '../screens/AccountConfigScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
 import PaymentHistoryScreen from '../screens/PaymentHistoryScreen';
+import SplashLoadingScreen from '../screens/SplashLoadingScreen';
+
 import SupportScreen from '../screens/SupportScreen';
 import EarningsDashboardScreen from '../screens/EarningsDashboardScreen';
 import CreatorSubscriptionsScreen from '../screens/CreatorSubscriptionsScreen';
@@ -99,7 +101,7 @@ export const MainNavigator: React.FC<MainNavigatorProps> = ({ logoSource }) => {
   const { currentUser, loading } = useAppData();
 
   if (loading) {
-    return null; // or a splash screen
+    return <SplashLoadingScreen />;
   }
 
   const linking = {

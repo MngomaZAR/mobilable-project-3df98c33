@@ -13,7 +13,7 @@ export type MessageRow = {
   id: string;
   conversation_id: string;
   sender_id: string;
-  text: string;
+  body: string;
   message_type: 'text' | 'media';
   media_url: string | null;
   preview_url: string | null;
@@ -44,7 +44,7 @@ export const listConversationMessages = async (
     id: msg.id,
     conversation_id: msg.chatId ?? msg.chat_id ?? msg.conversation_id ?? conversationId,
     sender_id: msg.senderId ?? msg.sender_id,
-    text: msg.text ?? msg.body ?? '',
+    body: msg.body ?? msg.text ?? '',
     message_type: msg.messageType ?? msg.message_type ?? 'text',
     media_url: msg.mediaUrl ?? msg.media_url ?? null,
     preview_url: msg.previewUrl ?? msg.preview_url ?? null,
@@ -83,7 +83,7 @@ export const sendConversationTextMessage = async ({
     id: msg.id,
     conversation_id: msg.chatId ?? msg.chat_id ?? msg.conversation_id ?? conversationId,
     sender_id: msg.senderId ?? msg.senderId,
-    text: msg.text ?? msg.body ?? text,
+    body: msg.body ?? msg.text ?? text,
     message_type: msg.message_type ?? msg.messageType ?? 'text',
     media_url: msg.media_url ?? msg.mediaUrl ?? null,
     preview_url: msg.preview_url ?? msg.previewUrl ?? null,
@@ -131,7 +131,7 @@ export const sendConversationLockedMediaMessage = async ({
     id: msg.id,
     conversation_id: msg.chatId ?? msg.chat_id ?? msg.conversation_id ?? conversationId,
     sender_id: msg.sender_id ?? msg.senderId,
-    text: msg.text ?? msg.body ?? text ?? '',
+    body: msg.body ?? msg.text ?? text ?? '',
     message_type: 'media',
     media_url: msg.media_url ?? msg.mediaUrl ?? mediaUrl,
     preview_url: msg.preview_url ?? msg.previewUrl ?? previewUrl,

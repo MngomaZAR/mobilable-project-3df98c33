@@ -42,10 +42,15 @@ const BookingFormScreen: React.FC = () => {
     return `${selectedDate.toDateString()} · ${timeSlot}`;
   }, [selectedDate, timeSlot]);
 
-  const estimatedRate = useMemo(() => {
+  /** Base rate in ZAR derived from price-tier (number of $ signs) */
+  const estimatedBaseAmount = useMemo(() => {
     const level = ((talent?.price_range || '').match(/\$/g) || []).length || 2;
-    return `From R${(level * 1200).toLocaleString('en-ZA')}`;
+    return level * 1200;
   }, [talent.price_range]);
+
+  const estimatedRate = `From R${estimatedBaseAmount.toLocaleString('en-ZA')}`;
+  const commissionAmount = Math.round(estimatedBaseAmount * 0.30);
+  const photographerPayout = estimatedBaseAmount - commissionAmount;
 
   const handleSubmit = async () => {
     if (!selectedDate) {
@@ -55,14 +60,17 @@ const BookingFormScreen: React.FC = () => {
 
     try {
       setSubmitting(true);
+      // Store booking_date as clean ISO date (YYYY-MM-DD) — Postgres date column compatible
       const normalizedDate = new Date(selectedDate);
       normalizedDate.setUTCHours(12, 0, 0, 0);
-      const bookingDate = `${normalizedDate.toISOString()} | ${timeSlot}`;
+      const bookingDate = normalizedDate.toISOString().split('T')[0]; // e.g. '2026-03-15'
       const booking = await createBooking({
         talent_id: talent.id,
         booking_date: bookingDate,
-        package_type: packageType,
+        package_type: `${packageType} · ${timeSlot}`,
         notes,
+        base_amount: estimatedBaseAmount,
+        travel_amount: 0,
       });
       Alert.alert('Request sent', 'Your booking request was submitted and is ready to review.', [
         {
@@ -70,8 +78,8 @@ const BookingFormScreen: React.FC = () => {
           onPress: () => navigation.replace('BookingDetail', { bookingId: booking.id }),
         },
       ]);
-    } catch (err) {
-      Alert.alert('Unable to save', 'Please try again.');
+    } catch (err: any) {
+      Alert.alert('Unable to save', err?.message || 'Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -129,7 +137,30 @@ const BookingFormScreen: React.FC = () => {
         />
       </View>
 
-      <TouchableOpacity style={styles.cta} onPress={handleSubmit} disabled={submitting}>
+      {/* Price Breakdown */}
+      <View style={styles.breakdownCard}>
+        <Text style={styles.breakdownTitle}>Estimated Cost</Text>
+        <View style={styles.breakdownRow}>
+          <Text style={styles.breakdownLabel}>Session rate</Text>
+          <Text style={styles.breakdownValue}>R{estimatedBaseAmount.toLocaleString('en-ZA')}</Text>
+        </View>
+        <View style={styles.breakdownRow}>
+          <Text style={styles.breakdownLabel}>Platform fee (30%)</Text>
+          <Text style={[styles.breakdownValue, { color: '#ef4444' }]}>−R{commissionAmount.toLocaleString('en-ZA')}</Text>
+        </View>
+        <View style={[styles.breakdownRow, styles.breakdownTotal]}>
+          <Text style={[styles.breakdownLabel, { fontWeight: '800', color: '#0f172a' }]}>Talent payout</Text>
+          <Text style={[styles.breakdownValue, { color: '#16a34a', fontWeight: '800' }]}>R{photographerPayout.toLocaleString('en-ZA')}</Text>
+        </View>
+        <Text style={styles.breakdownNote}>* Exact total calculated at checkout based on final scope</Text>
+      </View>
+
+      <TouchableOpacity
+        style={[styles.cta, submitting && { opacity: 0.7 }]}
+        onPress={handleSubmit}
+        disabled={submitting}
+        activeOpacity={submitting ? 1 : 0.8}
+      >
         <Text style={styles.ctaText}>{submitting ? 'Saving...' : 'Send request'}</Text>
       </TouchableOpacity>
     </ScrollView>
@@ -248,6 +279,47 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 16,
   },
+  breakdownCard: {
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#e5e7eb',
+    padding: 14,
+    marginTop: 14,
+    gap: 8,
+  },
+  breakdownTitle: {
+    fontWeight: '800',
+    fontSize: 14,
+    color: '#0f172a',
+    marginBottom: 4,
+  },
+  breakdownRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  breakdownTotal: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#e5e7eb',
+    paddingTop: 8,
+    marginTop: 4,
+  },
+  breakdownLabel: {
+    fontSize: 13,
+    color: '#475569',
+  },
+  breakdownValue: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  breakdownNote: {
+    fontSize: 11,
+    color: '#94a3b8',
+    marginTop: 4,
+  },
 });
 
 export default BookingFormScreen;
+

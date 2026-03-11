@@ -6,6 +6,7 @@
     "allowJs": false,
     "noEmit": true,
     "resolveJsonModule": true,
+    "noImplicitAny": true,
     "types": ["react", "react-native", "jest", "node"]
   },
   "exclude": ["__tests__"]

@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View, Image, Dimensions, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,6 +10,9 @@ import { useAppData } from '../store/AppDataContext';
 import { RootStackParamList } from '../navigation/types';
 import { LinearGradient } from 'expo-linear-gradient';
 import CreatePremiumBox from './CreatePremiumBox';
+import { supabase } from '../config/supabaseClient';
+
+
 
 const { width } = Dimensions.get('window');
 
@@ -21,6 +24,27 @@ const ModelPremiumDashboard: React.FC = () => {
   const { bookings } = useBooking();
   const { state } = useAppData();
   const [showPremiumBox, setShowPremiumBox] = React.useState(false);
+  const [tierPayoutRate, setTierPayoutRate] = useState(0.70);
+
+  // Fetch the actual payout rate from subscription_tiers (basic tier as default)
+  useEffect(() => {
+    const fetchTiers = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('subscription_tiers')
+          .select('id, payout_rate');
+          
+        if (data) {
+          const basic = data.find((t: any) => t.id === 'basic');
+          if (basic) setTierPayoutRate(Number(basic.payout_rate));
+        }
+      } catch (err) {
+        console.warn(err);
+      }
+    };
+    
+    fetchTiers();
+  }, []);
 
   const earnings = useMemo(() => {
     const completed = bookings.filter(b => b.status === 'completed' || b.status === 'accepted');
@@ -32,7 +56,7 @@ const ModelPremiumDashboard: React.FC = () => {
       
     const subEarnings = (state.earnings || [])
       .filter((e: any) => e.source_type === 'subscription')
-      .reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0) * 0.7; // 70% payout
+      .reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0) * tierPayoutRate;
 
     const activeSubs = (state.subscriptions || []).filter((s: any) => s.status === 'active').length;
 
@@ -41,7 +65,7 @@ const ModelPremiumDashboard: React.FC = () => {
       activeSubscribers: activeSubs || 0, 
       tipsThisMonth: tipEarnings 
     };
-  }, [bookings, state.earnings, state.subscriptions]);
+  }, [bookings, state.earnings, state.subscriptions, tierPayoutRate]);
 
   const recentInteraction = bookings[0];
 
@@ -120,7 +144,15 @@ const ModelPremiumDashboard: React.FC = () => {
           </TouchableOpacity>
           <TouchableOpacity 
             style={styles.actionBtn}
-            onPress={() => Alert.alert('Go Live', 'Live streaming is a premium feature. Apply for Elite Gold to unlock.')}
+            onPress={() => {
+              // Go Live navigates to CreatorSubscriptions (subscriber management)
+              // Full live streaming requires LiveKit integration (Phase 4)
+              if (currentUser?.id) {
+                navigation.navigate('CreatorSubscriptions', { creatorId: currentUser.id });
+              } else {
+                Alert.alert('Not available', 'Please complete your profile to go live.');
+              }
+            }}
           >
             <View style={[styles.iconWrap, { backgroundColor: '#ecfdf5' }]}>
               <Ionicons name="radio" size={24} color="#059669" />
@@ -141,24 +173,33 @@ const ModelPremiumDashboard: React.FC = () => {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Active Engagements</Text>
-            <TouchableOpacity><Text style={styles.viewAll}>View History</Text></TouchableOpacity>
+            <TouchableOpacity onPress={() => navigation.navigate('PaymentHistory')}>
+              <Text style={styles.viewAll}>View History</Text>
+            </TouchableOpacity>
           </View>
           
           {recentInteraction ? (
-            <TouchableOpacity style={styles.engagementCard}>
+            <TouchableOpacity 
+              style={styles.engagementCard}
+              onPress={() => navigation.navigate('BookingDetail', { bookingId: recentInteraction.id })}
+            >
               <View style={styles.engMeta}>
                 <Ionicons name="time-outline" size={16} color="#64748b" />
-                <Text style={styles.engTime}>Starting in 15 mins</Text>
+                <Text style={styles.engTime}>
+                  {recentInteraction.booking_date
+                    ? new Date(recentInteraction.booking_date).toLocaleDateString('en-ZA', { dateStyle: 'medium' })
+                    : 'Date TBD'}
+                </Text>
               </View>
-              <Text style={styles.engTitle}>Video Consultation: {recentInteraction.package_type}</Text>
+              <Text style={styles.engTitle}>{recentInteraction.package_type || 'Booking'}</Text>
               <View style={styles.engClientRow}>
                 <View style={styles.clientInfo}>
                   <View style={styles.clientAvatarPlace} />
-                  <Text style={styles.clientName}>Private Client</Text>
+                  <Text style={styles.clientName}>{recentInteraction.status === 'accepted' ? 'Confirmed' : 'Pending'}</Text>
                 </View>
                 <TouchableOpacity 
                   style={styles.joinBtn}
-                  onPress={() => navigation.navigate('PaidVideoCall')}
+                  onPress={() => currentUser?.id && navigation.navigate('PaidVideoCall', { creatorId: currentUser.id })}
                 >
                   <Text style={styles.joinBtnText}>Join Room</Text>
                 </TouchableOpacity>
@@ -196,7 +237,10 @@ const ModelPremiumDashboard: React.FC = () => {
             <Text style={styles.premiumTitle}>Upgrade to Elite Gold</Text>
             <Text style={styles.premiumSubtitle}>Lower fees (15%) and verified badge.</Text>
           </View>
-          <TouchableOpacity style={styles.premiumBtn}>
+          <TouchableOpacity
+            style={styles.premiumBtn}
+            onPress={() => navigation.navigate('Support')}
+          >
             <Text style={styles.premiumBtnText}>Apply</Text>
           </TouchableOpacity>
         </View>

@@ -2,6 +2,7 @@ import { supabase } from '../config/supabaseClient';
 import { BUCKETS } from '../config/environment';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { Result, success, failure } from '../utils/result';
+import { uid } from '../utils/id';
 
 /**
  * Uploads an image to Supabase Storage and returns the public URL.
@@ -17,8 +18,12 @@ export const uploadImage = async (uri: string, bucket: string = BUCKETS.posts): 
 
     const response = await fetch(manipulated.uri);
     const blob = await response.blob();
+    
+    if (blob.size > 5 * 1024 * 1024) {
+      throw new Error('Image must be under 5MB.');
+    }
 
-    const fileName = `${Math.random().toString(36).substring(2)}-${Date.now()}.jpg`;
+    const fileName = `${uid()}-${Date.now()}.jpg`;
     const filePath = `uploads/${fileName}`;
 
     const { error: uploadError } = await supabase.storage
@@ -39,10 +44,26 @@ export const uploadImage = async (uri: string, bucket: string = BUCKETS.posts): 
 };
 
 /**
- * Uploads an avatar image; uses the dedicated avatars bucket.
+ * Uploads an avatar image for a specific user.
+ * Uses uid-scoped path ({userId}/avatar.jpg) with upsert so it always replaces
+ * the existing avatar rather than creating duplicate files.
+ * Returns the public URL (avatars bucket is public — no signed URL needed).
  */
-export const uploadAvatar = async (uri: string): Promise<string> => {
-  return uploadImage(uri, BUCKETS.avatars);
+export const uploadAvatar = async (uri: string, userId: string): Promise<string> => {
+  const manipulated = await ImageManipulator.manipulateAsync(
+    uri,
+    [{ resize: { width: 400 } }],
+    { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
+  );
+  const blob = await (await fetch(manipulated.uri)).blob();
+  const { error } = await supabase.storage
+    .from(BUCKETS.avatars)
+    .upload(`${userId}/avatar.jpg`, blob, { contentType: 'image/jpeg', upsert: true });
+  if (error) throw new Error(error.message || 'Avatar upload failed');
+  const { data: { publicUrl } } = supabase.storage
+    .from(BUCKETS.avatars)
+    .getPublicUrl(`${userId}/avatar.jpg`);
+  return publicUrl;
 };
 
 /**
@@ -63,10 +84,13 @@ export const uploadBlurredPreview = async (uri: string): Promise<Result<string>>
 };
 
 /**
- * Uploads a premium media asset and registers it in the media_assets table
+ * Uploads a premium media asset and registers it in the media_assets table.
+ * bookingId is required — media_assets.booking_id is NOT NULL in the DB schema.
  */
-export const uploadMediaAsset = async (uri: string, ownerId: string, bookingId?: string | null, priceZar?: number | null, title?: string | null): Promise<Result<any>> => {
+export const uploadMediaAsset = async (uri: string, ownerId: string, bookingId: string, priceZar?: number | null, title?: string | null): Promise<Result<any>> => {
   try {
+    if (!bookingId) throw new Error('bookingId is required for media_assets upload.');
+
     const manipulated = await ImageManipulator.manipulateAsync(
       uri,
       [{ resize: { width: 1200 } }],
@@ -74,27 +98,29 @@ export const uploadMediaAsset = async (uri: string, ownerId: string, bookingId?:
     );
 
     const blob = await (await fetch(manipulated.uri)).blob();
-    const fileName = `${ownerId}-${Date.now()}.jpg`;
+    // Path: {ownerId}/{bookingId}/{timestamp}.jpg — matches backend spec
+    const fileName = `${ownerId}/${bookingId}/${Date.now()}.jpg`;
     
-    // Upload original
+    // Upload to the 'media' bucket (not 'media_assets' — that doesn't exist)
     const { error: uploadError } = await supabase.storage
-      .from('media_assets')
+      .from(BUCKETS.media)
       .upload(fileName, blob, { contentType: 'image/jpeg' });
 
     if (uploadError) throw uploadError;
 
-    // Generate preview
+    // Generate a blurred low-res preview for locked content display
     const previewRes = await uploadBlurredPreview(uri);
     const previewUrl = previewRes.success ? previewRes.data : '';
 
-    // Register asset in DB
+    // Register asset in DB — bucket column must match actual bucket name
     const { data, error: dbError } = await supabase
       .from('media_assets')
       .insert({
         owner_id: ownerId,
         booking_id: bookingId,
-        bucket: 'media_assets',
+        bucket: BUCKETS.media,
         object_path: fileName,
+        mime_type: 'image/jpeg',
         is_locked: (priceZar ?? 0) > 0,
         price_zar: priceZar,
         title,

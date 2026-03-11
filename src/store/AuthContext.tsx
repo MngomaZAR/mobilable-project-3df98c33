@@ -51,7 +51,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
         const profile = await fetchProfile(session.user.id);
-        const user = mapSupabaseUser(session.user, profile);
+        const user = mapSupabaseUser(session.user, profile?.role || 'client', profile);
         setCurrentUser(user);
         return user;
       }
@@ -73,7 +73,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.log('Auth State Change Event:', event);
       if (session?.user) {
         const profile = await fetchProfile(session.user.id);
-        setCurrentUser(mapSupabaseUser(session.user, profile));
+        setCurrentUser(mapSupabaseUser(session.user, profile?.role || 'client', profile));
       } else {
         setCurrentUser(null);
       }
@@ -90,7 +90,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
       const profile = await fetchProfile(data.user.id);
-      const user = mapSupabaseUser(data.user, profile);
+      const user = mapSupabaseUser(data.user, profile?.role || 'client', profile);
       setCurrentUser(user);
       return user;
     } catch (err: any) {
@@ -115,7 +115,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (data.user) {
          // The profile is created via a DB trigger, but we can't fetch it until email is verified 
          // unless auto-confirm is on. We return a partial user for now.
-         return mapSupabaseUser(data.user, { full_name: fullName, role });
+         return mapSupabaseUser(data.user, role, { full_name: fullName, role });
       }
       return null;
     } catch (err: any) {

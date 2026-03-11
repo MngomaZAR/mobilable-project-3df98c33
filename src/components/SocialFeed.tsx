@@ -40,6 +40,9 @@ const PAGE_SIZE = 10;
 const WEB_PROFILE_PAGE_SIZE = 24;
 const WEB_VISIBLE_FEED_ITEMS = 40;
 
+/** Set to true once a `stories` table and proper implementation is in place */
+const STORIES_ENABLED = false;
+
 export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost, onViewProfile }) => {
   const isWeb = Platform.OS === 'web';
   const { state: appState, toggleLike, fetchPosts, fetchProfiles } = useAppData();
@@ -72,7 +75,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
      return [
         {
           id: 'story-1',
-          user_id: appState.photographers[0].id,
+          author_id: appState.photographers[0].id,
           media_url: 'https://images.unsplash.com/photo-1542038784456-1ea8e935640e?auto=format&fit=crop&w=800&q=80',
           media_type: 'image',
           created_at: new Date().toISOString(),
@@ -84,7 +87,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
         },
         {
           id: 'story-2',
-          user_id: appState.photographers[1].id,
+          author_id: appState.photographers[1].id,
           media_url: 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=800&q=80',
           media_type: 'image',
           created_at: new Date().toISOString(),
@@ -155,8 +158,13 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
     loadMoreInFlightRef.current = true;
     setLoadingMore(true);
     try {
-      await fetchPosts({ reset: false });
-      if (appState.posts.length % PAGE_SIZE !== 0) setHasMore(false);
+      const result = await fetchPosts({ reset: false });
+      // fetchPosts returns { hasMore } — if not returned, fall back to modulo check
+      if (result && typeof result.hasMore === 'boolean') {
+        if (!result.hasMore) setHasMore(false);
+      } else if (appState.posts.length > 0 && appState.posts.length % PAGE_SIZE !== 0) {
+        setHasMore(false);
+      }
     } finally {
       loadMoreInFlightRef.current = false;
       setLoadingMore(false);
@@ -164,8 +172,35 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
   };
 
   const handlePostOptions = (post: Post) => {
-    const doReport = () => setReportedPostIds((prev) => new Set([...prev, post.id]));
-    const doBlock = () => setBlockedUserIds((prev) => new Set([...prev, post.author_id]));
+    const doReport = () => {
+      setReportedPostIds((prev) => new Set([...prev, post.id]));
+      // Persist report to backend
+      import('../config/supabaseClient').then(({ supabase }) =>
+        supabase.from('reports').insert({
+          target_type: 'post',
+          target_id: post.id,
+          reason: 'user_report',
+        }).then(({ error }) => {
+          if (error) console.warn(error);
+        })
+      );
+    };
+    const doBlock = () => {
+      setBlockedUserIds((prev) => new Set([...prev, post.author_id]));
+      // Persist block to user_blocks table
+      import('../config/supabaseClient').then(({ supabase }) =>
+        supabase.auth.getUser().then(({ data }) => {
+          if (data.user) {
+            supabase.from('user_blocks').insert({
+              blocker_id: data.user.id,
+              blocked_id: post.author_id,
+            }).then(({ error }) => {
+              if (error) console.warn(error);
+            });
+          }
+        })
+      );
+    };
     
     if (Platform.OS === 'web') {
       if (window.confirm('Report this content?')) doReport();
@@ -262,7 +297,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
       </ScrollView>
       {appState.error && <Text style={[styles.errorText, { color: colors.destructive }]}>{appState.error}</Text>}
       
-      {mockStories.length > 0 && (
+      {STORIES_ENABLED && mockStories.length > 0 && (
          <View style={{ marginTop: 16 }}>
            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 12 }}>
              {appState.currentUser && (
@@ -276,7 +311,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
              
              {Object.values(
                 mockStories.reduce((acc, story) => {
-                   if (!acc[story.user_id]) acc[story.user_id] = story;
+                   if (!acc[story.author_id]) acc[story.author_id] = story;
                    return acc;
                 }, {} as Record<string, Story>)
              ).map((story) => (
@@ -284,7 +319,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
                    key={`story-thumb-${story.id}`} 
                    style={[styles.storyAvatarWrap, styles.storyAvatarWrapActive]}
                    onPress={() => {
-                        const idx = mockStories.findIndex(s => s.user_id === story.user_id);
+                        const idx = mockStories.findIndex(s => s.author_id === story.author_id);
                         setStoryIndex(idx);
                         setStoriesVisible(true);
                    }}
@@ -302,7 +337,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
     <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
       <View style={styles.cardHeader}>
         <TouchableOpacity style={styles.authorRow} onPress={() => onViewProfile?.(item.author_id)}>
-          <Image source={{ uri: item.profile?.avatar_url ?? PLACEHOLDER_IMAGE }} style={styles.avatar} />
+          <Image source={{ uri: item.profile?.avatar_url || PLACEHOLDER_IMAGE }} style={styles.avatar} />
           <View style={styles.authorText}>
             <Text style={[styles.authorName, { color: colors.text }]}>{item.profile?.full_name ?? 'Photographer'}</Text>
             {item.location ? <Text style={[styles.authorMeta, { color: colors.textMuted }]}>{item.location}</Text> : null}
@@ -324,7 +359,11 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
           }
       }}>
         <View style={styles.imageWrapper}>
-          <Image source={{ uri: item.image_url }} style={styles.image} />
+          <Image
+            source={{ uri: item.image_url || PLACEHOLDER_IMAGE }}
+            style={styles.image}
+            onError={() => { /* handled via PLACEHOLDER_IMAGE fallback */ }}
+          />
           {!isWeb && <AnimatedHeart visible={likedAnimPostId === item.id} />}
         </View>
       </TouchableOpacity>
@@ -360,7 +399,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
       <View style={styles.cardBody}>
         {item.likes_count > 0 && <Text style={[styles.likesCount, { color: colors.text }]}>{item.likes_count} likes</Text>}
         <View style={styles.captionRow}>
-          <Text style={[styles.captionName, { color: colors.text }]}>{item.profile?.full_name ?? 'Photographer'}</Text>
+          <Text style={[styles.captionName, { color: colors.text }]}>{item.profile?.full_name || 'Photographer'}</Text>
           <HashtagText 
             text={` ${item.caption}`} 
             style={[styles.captionText, { color: colors.textSecondary }]}

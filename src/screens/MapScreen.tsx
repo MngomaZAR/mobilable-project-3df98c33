@@ -10,7 +10,8 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { useNavigation } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/types';
 import { Ionicons } from '@expo/vector-icons';
-
+import { RequestPopup } from '../components/RequestPopup';
+import { supabase } from '../config/supabaseClient';
 const SA_BOUNDS = {
   minLat: -35,
   maxLat: -22,
@@ -61,21 +62,57 @@ const MapScreen: React.FC = () => {
   const [manualLocation, setManualLocation] = useState({ label: '', latitude: '', longitude: '' });
   const [gpsEnabled, setGpsEnabled] = useState<boolean | null>(null);
   const [selectedMarker, setSelectedMarker] = useState<MapMarker | null>(null);
+  
+  // Uber request states
+  const [incomingRequest, setIncomingRequest] = useState<any | null>(null);
+  const [showPopup, setShowPopup] = useState(false);
+  const [isRequesting, setIsRequesting] = useState(false); // For Clients sending requests
+
   const lastRequestRef = useRef<number>(0);
   const navigation = useNavigation<StackNavigationProp<RootStackParamList, 'Root'>>();
+  const currentUser = state.currentUser;
 
-  const baseMarkers: MapMarker[] = useMemo(
-    () =>
-      state.photographers.map((photographer) => ({
-        id: photographer.id,
-        title: photographer.name,
-        description: photographer.location,
-        latitude: photographer.latitude,
-        longitude: photographer.longitude,
-        type: 'photographer',
-      })),
-    [state.photographers]
-  );
+  const baseMarkers: MapMarker[] = useMemo(() => {
+    let result: MapMarker[] = [];
+    const role = currentUser?.role || 'client';
+
+    if (role === 'photographer') {
+      // Photographers see Models (Users/Clients typically don't have public coords unless they opt in, but models do)
+      result = [
+        ...state.models.map(m => ({
+          id: m.id,
+          title: m.name,
+          description: 'Model looking to shoot',
+          latitude: m.latitude,
+          longitude: m.longitude,
+          type: 'model' as const,
+        }))
+      ];
+    } else if (role === 'model') {
+      // Models see Photographers
+      result = [
+        ...state.photographers.map(p => ({
+          id: p.id,
+          title: p.name,
+          description: p.location,
+          latitude: p.latitude,
+          longitude: p.longitude,
+          type: 'photographer' as const,
+        }))
+      ];
+    } else {
+      // Clients see Photographers and Models
+      result = [
+        ...state.photographers.map(p => ({
+          id: p.id, title: p.name, description: 'Photographer', latitude: p.latitude, longitude: p.longitude, type: 'photographer' as const
+        })),
+        ...state.models.map(m => ({
+          id: m.id, title: m.name, description: 'Model', latitude: m.latitude, longitude: m.longitude, type: 'model' as const
+        }))
+      ];
+    }
+    return result;
+  }, [state.photographers, state.models, currentUser]);
 
   const filteredBaseMarkers: MapMarker[] = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -160,9 +197,81 @@ const MapScreen: React.FC = () => {
     }
   }, [handleLocationFailure]);
 
+  // Real-time listener for incoming Uber-like requests
   useEffect(() => {
-    requestLocation();
-  }, [requestLocation]);
+    if (!currentUser?.id) return;
+    const channel = supabase.channel(`public:bookings:photographer_id=eq.${currentUser.id}`);
+    
+    channel.on(
+      'postgres_changes',
+      { event: 'INSERT', schema: 'public', table: 'bookings', filter: `photographer_id=eq.${currentUser.id}` },
+      (payload) => {
+        if (payload.new.status === 'pending' && payload.new.user_latitude && payload.new.user_longitude) {
+          // Calculate mock distance or real distance here
+          setIncomingRequest({ ...payload.new, distance: '1.2 km' });
+          setShowPopup(true);
+        }
+      }
+    ).subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [currentUser]);
+
+  const handleRequestBooking = async (marker: MapMarker) => {
+    if (!userCoordinates) {
+      Alert.alert('Location required', 'We need your live GPS location to request talent nearby.');
+      return;
+    }
+    setIsRequesting(true);
+    try {
+      // Create a pending booking straight from the map
+      const { error } = await supabase.from('bookings').insert({
+        client_id: currentUser?.id,
+        photographer_id: marker.type === 'photographer' ? marker.id : null,
+        model_id: marker.type === 'model' ? marker.id : null,
+        status: 'pending',
+        package_type: 'Live Map Request',
+        user_latitude: userCoordinates.lat,
+        user_longitude: userCoordinates.lng,
+        booking_date: new Date().toISOString(),
+        total_amount: 1500, // mock fast booking price
+        payout_amount: 1050,
+        commission_amount: 450
+      });
+
+      if (error) throw error;
+      Alert.alert('Request sent', `Waiting for ${marker.title} to accept...`);
+    } catch (err: any) {
+      Alert.alert('Error', err.message);
+    } finally {
+      setIsRequesting(false);
+      setSelectedMarker(null);
+    }
+  };
+
+  const handleAcceptIncoming = async () => {
+    if (!incomingRequest) return;
+    try {
+      const { error } = await supabase.from('bookings').update({ status: 'accepted' }).eq('id', incomingRequest.id);
+      if (error) throw error;
+      setShowPopup(false);
+      Alert.alert('Accepted!', 'You have confirmed the booking request.');
+      navigation.navigate('Root', { screen: 'Bookings' });
+    } catch (err: any) {
+      Alert.alert('Error', err.message);
+    }
+  };
+
+  const handleDeclineIncoming = async () => {
+    if (!incomingRequest) return;
+    try {
+      await supabase.from('bookings').update({ status: 'declined' }).eq('id', incomingRequest.id);
+      setShowPopup(false);
+    } catch (err: any) {
+      console.warn(err);
+      setShowPopup(false);
+    }
+  };
 
   const applyManualLocation = useCallback(() => {
     const latitude = parseFloat(manualLocation.latitude);
@@ -260,7 +369,7 @@ const MapScreen: React.FC = () => {
               markers={markers}
               onMapError={(message) => setMapError(message)}
               onMarkerPress={(m) => {
-                if (m.type === 'photographer') {
+                if (m.type === 'photographer' || m.type === 'model') {
                   setSelectedMarker(m);
                 }
               }}
@@ -284,17 +393,18 @@ const MapScreen: React.FC = () => {
                     </View>
                   </View>
                 </View>
-                <TouchableOpacity
-                  style={[styles.bookButton, { backgroundColor: colors.accent }]}
-                  onPress={() => {
-                    if (selectedMarker.id) {
-                      navigation.navigate('Profile', { userId: selectedMarker.id });
-                    }
-                  }}
-                >
-                  <Text style={[styles.bookButtonText, { color: isDark ? colors.bg : '#fff' }]}>View Profile & Book</Text>
-                </TouchableOpacity>
-              </View>
+                  {currentUser?.role === 'client' && (
+                    <TouchableOpacity
+                      style={[styles.bookButton, { backgroundColor: colors.accent, marginTop: 10 }]}
+                      onPress={() => handleRequestBooking(selectedMarker)}
+                      disabled={isRequesting}
+                    >
+                      <Text style={[styles.bookButtonText, { color: isDark ? colors.bg : '#fff' }]}>
+                        {isRequesting ? 'Requesting...' : 'Request Now (Uber Fast)'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
             )}
           </View>
 
@@ -343,6 +453,14 @@ const MapScreen: React.FC = () => {
               </TouchableOpacity>
             </View>
           ) : null}
+
+          {/* Incoming Request Uber-Popup */}
+          <RequestPopup
+            visible={showPopup}
+            requestData={incomingRequest}
+            onAccept={handleAcceptIncoming}
+            onDecline={handleDeclineIncoming}
+          />
         </View>
       </SafeAreaView>
     </View>

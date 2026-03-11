@@ -11,6 +11,7 @@ import {
   View,
   useWindowDimensions,
   Modal,
+  FlatList,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -95,6 +96,12 @@ const HomeScreen: React.FC = () => {
 
     if (sort === 'Highest Rated') {
       list = list.sort((a, b) => b.rating - a.rating);
+    } else if (sort === 'Most Recent') {
+      list = list.sort((a, b) => {
+        const da = new Date(a.created_at || 0).valueOf();
+        const db = new Date(b.created_at || 0).valueOf();
+        return db - da;
+      });
     }
 
     return list;
@@ -142,7 +149,7 @@ const HomeScreen: React.FC = () => {
       ]}
     >
       <View style={styles.imageWrap}>
-        <Image source={{ uri: item.avatar_url }} style={styles.avatar} />
+        <Image source={{ uri: item.avatar_url || 'https://via.placeholder.com/150' }} style={styles.avatar} />
         <View style={[styles.ratingBadge, { backgroundColor: isDark ? 'rgba(0,0,0,0.6)' : '#111827cc' }]}>
           <Ionicons name="star" size={14} color="#fbbf24" />
           <Text style={styles.ratingText}>{item.rating.toFixed(1)}</Text>
@@ -175,7 +182,7 @@ const HomeScreen: React.FC = () => {
           </TouchableOpacity>
           <TouchableOpacity 
             style={[styles.buttonGhost, { borderColor: colors.border }, discoveryMode === 'models' && styles.buttonVideo]} 
-            onPress={() => (discoveryMode === 'models' ? (navigation as any).navigate('PaidVideoCall') : openProfile(item))}
+            onPress={() => discoveryMode === 'models' ? parentNavigation?.navigate('PaidVideoCall', { creatorId: item.id }) : openProfile(item)}
           >
             {discoveryMode === 'models' && <Ionicons name="videocam" size={16} color="#fff" style={{ marginRight: 6 }} />}
             <Text style={[styles.buttonGhostText, { color: colors.text }, discoveryMode === 'models' && styles.buttonVideoText]}>
@@ -330,7 +337,7 @@ const HomeScreen: React.FC = () => {
             <Text style={[styles.filterLabel, { color: colors.textMuted }]}>Price Range</Text>
             <Text style={[styles.filterValue, { color: colors.text }]}>{priceRange === 'Any budget' ? 'R1,200+' : 'R1,800+'}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.filterBox, { backgroundColor: colors.bg, borderColor: colors.border }]} onPress={() => setSort(sort === 'Highest Rated' ? 'Nearest' : 'Highest Rated')}>
+          <TouchableOpacity style={[styles.filterBox, { backgroundColor: colors.bg, borderColor: colors.border }]} onPress={() => setSort(sort === 'Highest Rated' ? 'Most Recent' : 'Highest Rated')}>
             <Text style={[styles.filterLabel, { color: colors.textMuted }]}>Sort By</Text>
             <Text style={[styles.filterValue, { color: colors.text }]}>{sort}</Text>
           </TouchableOpacity>
@@ -369,8 +376,16 @@ const HomeScreen: React.FC = () => {
          </View>
       )}
 
-      <View style={styles.grid}>
-        {visibleTalent.map((item) => renderCard(item))}
+      <View style={[styles.grid, { paddingHorizontal: columns > 1 ? 0 : 0 }]}>
+        <FlatList
+          data={visibleTalent}
+          keyExtractor={(item, index) => item.id || `talent-${index}`}
+          numColumns={columns}
+          key={columns} // force re-render on column count change
+          renderItem={({ item }) => renderCard(item)}
+          scrollEnabled={false} // outer ScrollView handles scroll
+          columnWrapperStyle={columns > 1 ? { gap: 12 } : undefined}
+        />
       </View>
 
       {visibleTalent.length === 0 && (

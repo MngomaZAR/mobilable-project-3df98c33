@@ -23,11 +23,11 @@ if (!supabaseUrl || !serviceRoleKey || !anonKey) {
 const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
 
 const resolveUser = async (authHeader: string) => {
-  const supabaseUser = createClient(supabaseUrl, anonKey, {
-    global: { headers: { Authorization: authHeader } },
-  });
-  const { data: { user }, error: authError } = await supabaseUser.auth.getUser();
-  if (authError || !user) return null;
+  const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+  const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+  if (error || !user) {
+    throw new Error(`Auth failed: ${error?.message || 'No user returned'}`);
+  }
   return user;
 };
 
@@ -52,18 +52,14 @@ serve(async (req) => {
 
   try {
     const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      return jsonResponse(401, { error: 'Missing Authorization header' });
-    }
+    if (!authHeader) return jsonResponse(401, { error: 'Missing Authorization header' });
 
     const user = await resolveUser(authHeader);
-    if (!user) {
-      return jsonResponse(401, { error: 'Unauthorized' });
-    }
 
     const payload = await req.json().catch(() => null);
     const action = payload?.action;
     const conversationId = payload?.conversation_id;
+
     if (!conversationId || typeof conversationId !== 'string') {
       return jsonResponse(400, { error: 'conversation_id is required' });
     }
@@ -73,25 +69,22 @@ serve(async (req) => {
       return jsonResponse(403, { error: 'You are not a participant in this conversation.' });
     }
 
+    // ── LIST ──────────────────────────────────────────────────────────────
     if (action === 'list') {
-      // ⚠️ Only SELECT columns that actually exist in the messages table schema
       const { data: rows, error } = await supabaseAdmin
         .from('messages')
-        .select(`id, chat_id, conversation_id, sender_id, body, text, content, message_type, media_url, created_at`)
-        .or(`chat_id.eq.${conversationId},conversation_id.eq.${conversationId}`)
+        .select('id, chat_id, sender_id, body, message_type, media_url, created_at')
+        .eq('chat_id', conversationId)   // chat_id is the only FK now
         .order('created_at', { ascending: true });
 
-      if (error) {
-        return jsonResponse(500, { error: error.message });
-      }
+      if (error) return jsonResponse(500, { error: error.message });
 
       const messages = (rows ?? []).map((row: any) => ({
         id: row.id,
         chatId: row.chat_id,
-        conversationId: row.conversation_id,
+        conversationId: row.chat_id,     // alias for frontend compatibility
         senderId: row.sender_id,
-        // body is NOT NULL in schema, text and content are aliases
-        text: row.body || row.text || row.content || '',
+        text: row.body || '',
         timestamp: row.created_at,
         messageType: row.message_type ?? 'text',
         mediaUrl: row.media_url ?? null,
@@ -102,6 +95,7 @@ serve(async (req) => {
       return jsonResponse(200, { messages });
     }
 
+    // ── SEND ──────────────────────────────────────────────────────────────
     if (action === 'send') {
       const messageType = payload?.message_type === 'media' ? 'media' : 'text';
       const text = typeof payload?.text === 'string' ? payload.text.trim() : '';
@@ -114,26 +108,23 @@ serve(async (req) => {
         return jsonResponse(400, { error: 'media_url is required for media messages.' });
       }
 
-      // ⚠️ Insert uses BOTH chat_id (NOT NULL) and conversation_id (nullable alias)
       const { data: inserted, error: insertError } = await supabaseAdmin
         .from('messages')
         .insert({
-          chat_id: conversationId,           // NOT NULL — required
-          conversation_id: conversationId,   // nullable alias — set for convenience
+          chat_id: conversationId,     // only column needed — conversation_id is gone
           sender_id: user.id,
           body: text || (messageType === 'media' ? 'Sent a photo' : ''),
-          text: text,
           message_type: messageType,
           media_url: mediaUrl,
         })
-        .select(`id, chat_id, conversation_id, sender_id, body, message_type, media_url, created_at`)
+        .select('id, chat_id, sender_id, body, message_type, media_url, created_at')
         .single();
 
       if (insertError || !inserted) {
         return jsonResponse(500, { error: insertError?.message ?? 'Unable to send message.' });
       }
 
-      // Update conversation metadata
+      // Update conversation preview
       const preview = messageType === 'media' ? '📷 Photo' : text;
       await supabaseAdmin
         .from('conversations')
@@ -147,7 +138,7 @@ serve(async (req) => {
         message: {
           id: inserted.id,
           chatId: inserted.chat_id,
-          conversationId: inserted.conversation_id,
+          conversationId: inserted.chat_id,   // alias for frontend compatibility
           senderId: inserted.sender_id,
           text: inserted.body || '',
           timestamp: inserted.created_at,
@@ -160,6 +151,7 @@ serve(async (req) => {
     }
 
     return jsonResponse(400, { error: 'Invalid action. Use "list" or "send".' });
+
   } catch (error) {
     return jsonResponse(500, {
       error: error instanceof Error ? error.message : 'Internal Server Error',

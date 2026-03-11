@@ -38,7 +38,7 @@ const PostDetailScreen: React.FC = () => {
       try {
         const { data } = await supabase
           .from('posts')
-          .select('id, user_id, caption, image_url, created_at, location, likes_count, comment_count')
+          .select('id, author_id, caption, image_url, created_at, location, likes_count, comment_count')
           .eq('id', params.postId)
           .maybeSingle();
         if (!mounted || !data) return;
@@ -57,7 +57,7 @@ const PostDetailScreen: React.FC = () => {
 
         setHydratedPost({
           id: data.id,
-          user_id: data.user_id,
+          author_id: data.author_id,
           caption: data.caption ?? '',
           image_url: data.image_url ?? '',
           created_at: data.created_at ?? new Date().toISOString(),
@@ -128,7 +128,7 @@ const PostDetailScreen: React.FC = () => {
           comments.map((item) => (
             <View key={item.id} style={styles.comment}>
               <Text style={styles.commentAuthor}>{item.user_id}</Text>
-              <Text style={styles.commentText}>{item.text}</Text>
+              <Text style={styles.commentText}>{item.body}</Text>
             </View>
           ))
         )}

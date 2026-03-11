@@ -1,3 +1,4 @@
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.8';
 
 const corsHeaders = {
@@ -14,7 +15,7 @@ type NotificationEvent = {
   attempts: number;
 };
 
-Deno.serve(async (req) => {
+Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
@@ -68,7 +69,7 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      const messages = pushTokens.map((to) => ({
+      const messages = pushTokens.map((to: string) => ({
         to,
         sound: 'default',
         title: event.title,

@@ -8,7 +8,9 @@ export type AnalyticsEvent =
   | 'media_uploaded'
   | 'tip_sent'
   | 'subscription_started'
-  | 'profile_view';
+  | 'profile_view'
+  | 'booking_accepted'
+  | 'booking_declined';
 
 export const trackEvent = async (event: AnalyticsEvent, metadata: Record<string, any> = {}) => {
   try {

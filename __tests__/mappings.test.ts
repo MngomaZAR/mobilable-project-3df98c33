@@ -36,7 +36,7 @@ describe('mapping helpers', () => {
   test('mapPostRow maps DB row to Post', () => {
     const row: any = {
       id: 'post1',
-      user_id: 'u1',
+      author_id: 'u1',
       caption: 'Nice!',
       location: 'Cape Town',
       comment_count: 2,
@@ -47,8 +47,8 @@ describe('mapping helpers', () => {
     };
     const out = mapPostRow(row);
     expect(out.id).toBe('post1');
-    expect(out.title).toBe('Nice!');
-    expect(out.imageUrl).toBe('https://example.com/img.jpg');
+    expect(out.caption).toBe('Nice!');       // Post uses caption not title
+    expect(out.image_url).toBe('https://example.com/img.jpg'); // Post uses image_url not imageUrl
     expect(out.profile?.full_name).toBe('Alex');
   });
 });

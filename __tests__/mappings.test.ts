@@ -1,5 +1,6 @@
-import { mapPhotographerRow, mapSupabaseUser } from '../src/utils/mappings';
-import { mapPostRow } from '../src/utils/feedMappings';
+// FIX: mapPostRow lives in mappings.ts, not feedMappings (file doesn't exist)
+// FIX: Photographer uses avatar_url not avatar
+import { mapPhotographerRow, mapSupabaseUser, mapPostRow } from '../src/utils/mappings';
 
 describe('mapping helpers', () => {
   test('mapPhotographerRow maps DB row to Photographer', () => {
@@ -18,7 +19,7 @@ describe('mapping helpers', () => {
     const out = mapPhotographerRow(row as any);
     expect(out.id).toBe('p1');
     expect(out.name).toBe('Alex');
-    expect(out.avatar).toBe('https://example.com/a.png');
+    expect(out.avatar_url).toBe('https://example.com/a.png'); // FIX: was out.avatar
     expect(out.location).toContain('Cape Town');
     expect(out.latitude).toBeCloseTo(-33.9);
   });
@@ -32,7 +33,7 @@ describe('mapping helpers', () => {
     expect(mapped.verified).toBe(true);
   });
 
-  test('mapPostRow maps DB row to FeedPost', () => {
+  test('mapPostRow maps DB row to Post', () => {
     const row: any = {
       id: 'post1',
       user_id: 'u1',

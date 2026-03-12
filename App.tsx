@@ -2,7 +2,7 @@ import 'react-native-url-polyfill/auto';
 import 'react-native-gesture-handler';
 import React, { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as Notifications from 'expo-notifications';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
@@ -16,7 +16,7 @@ import { BookingProvider } from './src/store/BookingContext';
 import { SocialProvider } from './src/store/SocialContext';
 import { logo } from './src/assets/images';
 import { Ionicons } from '@expo/vector-icons';
-import { Animated, TouchableOpacity, Text, StyleSheet } from 'react-native';
+import { Animated, Text, StyleSheet } from 'react-native';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -32,7 +32,6 @@ const AppContent = () => {
   const { loading, error, currentUser } = useAppData();
   const insets = useSafeAreaInsets();
   
-  // Custom global error toast
   const [toastMessage, setToastMessage] = React.useState<string | null>(null);
   const slideAnim = React.useRef(new Animated.Value(-100)).current;
 
@@ -43,16 +42,13 @@ const AppContent = () => {
         toValue: insets.top + 10,
         useNativeDriver: true,
       }).start();
-
       const timer = setTimeout(() => {
         Animated.timing(slideAnim, {
           toValue: -100,
           duration: 300,
           useNativeDriver: true,
         }).start(() => setToastMessage(null));
-        // Note: we don't clear the context error immediately so it doesn't flicker
       }, 4000);
-
       return () => clearTimeout(timer);
     } else {
       Animated.timing(slideAnim, {
@@ -63,7 +59,7 @@ const AppContent = () => {
     }
   }, [error, insets.top]);
 
-  const { isDark, colors } = useTheme();
+  const { isDark } = useTheme();
 
   useEffect(() => {
     const requestPermissions = async () => {
@@ -84,7 +80,6 @@ const AppContent = () => {
     <>
       <MainNavigator logoSource={logo} />
       <StatusBar style={isDark ? 'light' : 'dark'} />
-      
       {toastMessage && (
         <Animated.View style={[styles.toastContainer, { transform: [{ translateY: slideAnim }] }]}>
           <Ionicons name="alert-circle" size={20} color="#fff" style={{ marginRight: 8 }} />
@@ -127,17 +122,18 @@ export default function App() {
       <SafeAreaProvider>
         <ThemeProvider>
           <AuthProvider>
-            <MessagingProvider>
-              <BookingProvider>
-                <SocialProvider>
-                  <ErrorBoundary>
-                    <AppDataProvider>
+            <BookingProvider>
+              <SocialProvider>
+                <ErrorBoundary>
+                  <AppDataProvider>
+                    {/* MessagingProvider is INSIDE AppDataProvider so it has auth context */}
+                    <MessagingProvider>
                       <AppContent />
-                    </AppDataProvider>
-                  </ErrorBoundary>
-                </SocialProvider>
-              </BookingProvider>
-            </MessagingProvider>
+                    </MessagingProvider>
+                  </AppDataProvider>
+                </ErrorBoundary>
+              </SocialProvider>
+            </BookingProvider>
           </AuthProvider>
         </ThemeProvider>
       </SafeAreaProvider>

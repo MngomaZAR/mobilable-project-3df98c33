@@ -7,7 +7,7 @@ import { BUCKETS } from '../config/environment';
 import { AppState, AppUser, Booking, BookingStatus, Comment, ConversationSummary, Message, Model, Post, PrivacySettings, Review, UserRole } from '../types';
 import { uid } from '../utils/id';
 import { formatAuthError, formatErrorMessage, logError } from '../utils/errors';
-import { mapPhotographerRow, mapSupabaseUser } from '../utils/mappings';
+import { mapPhotographerRow, mapPostRow, mapSupabaseUser } from '../utils/mappings';
 import { startConversationViaEdge } from '../services/chatService';
 import {
   listConversationMessages,
@@ -413,7 +413,6 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         (profilesData ?? []).forEach((p: any) => { profilesMap[p.id] = p; });
       }
 
-      const { mapPostRow } = await import('../utils/mappings');
       let mapped = (rawPosts ?? []).map((post: any) => {
         post.profiles = profilesMap[post.author_id] ? [profilesMap[post.author_id]] : [];
         return mapPostRow(post);
@@ -649,7 +648,6 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (rawPost) {
           const { data: profileData } = await supabase.from('profiles').select('id, full_name, city, avatar_url').eq('id', rawPost.author_id).maybeSingle();
           const postData = { ...rawPost, profiles: profileData ? [profileData] : [] };
-          const { mapPostRow } = await import('../utils/mappings');
           const hydrated = mapPostRow(postData);
           
           // Check if liked by current user

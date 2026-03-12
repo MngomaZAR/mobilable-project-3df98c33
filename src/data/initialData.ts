@@ -100,6 +100,7 @@ export const initialState: AppState = {
       liked: false,
       comment_count: 3,
       location: 'Bo-Kaap',
+      profile: { id: 'a1000001-0000-0000-0000-000000000001', full_name: 'Ava Thompson', avatar_url: 'https://images.unsplash.com/photo-1544723795-3fb6469f5b39?auto=format&fit=crop&w=300&q=80', city: 'Cape Town' },
     },
   ],
   comments: {},

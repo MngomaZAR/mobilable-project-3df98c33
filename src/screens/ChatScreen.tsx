@@ -203,7 +203,7 @@ const ChatScreen: React.FC = () => {
                         <Text style={styles.unlockHint}>Unlock after payment</Text>
                       </View>
                     )}
-                    {item.text ? <Text style={[styles.messageText, isMe ? styles.meText : styles.otherText, styles.mediaCaption]}>{item.text}</Text> : null}
+                    {item.body ? <Text style={[styles.messageText, isMe ? styles.meText : styles.otherText, styles.mediaCaption]}>{item.body}</Text> : null}
                   </TouchableOpacity>
                 </View>
               );
@@ -220,7 +220,7 @@ const ChatScreen: React.FC = () => {
                 >
                   {isMe && !isDark && <LinearGradient colors={['#3b82f6', '#2563eb', '#1d4ed8']} style={StyleSheet.absoluteFillObject} />}
                   <Text style={[styles.messageText, isMe ? [styles.meText, { color: isDark ? colors.bg : '#fff' }] : [styles.otherText, { color: colors.text }]]}>
-                    {item.text}
+                    {item.body}
                   </Text>
                   <Text style={[styles.timestamp, isMe ? [styles.meTimestamp, { color: 'rgba(255,255,255,0.7)' }] : [styles.otherTimestamp, { color: colors.textMuted }]]}>
                     {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

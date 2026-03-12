@@ -25,7 +25,9 @@
     "prepare": "husky"
   },
   "lint-staged": {
-    "src/**/*.{js,jsx,ts,tsx}": ["eslint --fix"]
+    "src/**/*.{js,jsx,ts,tsx}": [
+      "eslint --fix"
+    ]
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
@@ -78,7 +80,7 @@
     "@testing-library/react-native": "^13.3.3",
     "@types/jest": "^29.5.3",
     "@types/react": "~19.2.0",
-    
+    "@types/react-native": "^0.72.8",
     "@typescript-eslint/parser": "8.54.0",
     "babel-preset-expo": "^54.0.10",
     "eslint": "9.39.2",

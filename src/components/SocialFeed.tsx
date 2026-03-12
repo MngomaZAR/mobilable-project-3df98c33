@@ -214,14 +214,12 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
   };
 
   const renderHeader = () => (
-    <BlurView 
-      intensity={80} 
-      tint={isDark ? "dark" : "light"} 
+    <View
       style={[
-        styles.headerContainer, 
-        { 
-          paddingTop: Math.max(insets.top, 24), 
-          backgroundColor: isDark ? 'rgba(0,0,0,0.5)' : 'rgba(255, 255, 255, 0.65)',
+        styles.headerContainer,
+        {
+          paddingTop: Math.max(insets.top, 24),
+          backgroundColor: isDark ? 'rgba(0,0,0,0.92)' : 'rgba(255,255,255,0.97)',
           borderBottomColor: colors.border
         }
       ]}
@@ -330,7 +328,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
            </ScrollView>
          </View>
       )}
-    </BlurView>
+    </View>
   );
 
   const renderItem = ({ item }: { item: Post }) => (

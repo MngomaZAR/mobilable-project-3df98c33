@@ -4,11 +4,51 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import { Result, success, failure } from '../utils/result';
 import { uid } from '../utils/id';
 
+const PUBLIC_BUCKETS = new Set([BUCKETS.avatars]);
+const SIGNED_URL_TTL_SECONDS = 60 * 60 * 24 * 7; // 7 days
+const STORAGE_REF_SEPARATOR = '::';
+
+export const buildStorageRef = (bucket: string, path: string) => `${bucket}${STORAGE_REF_SEPARATOR}${path}`;
+
+export const parseStorageRef = (value: string) => {
+  const idx = value.indexOf(STORAGE_REF_SEPARATOR);
+  if (idx <= 0) return null;
+  return { bucket: value.slice(0, idx), path: value.slice(idx + STORAGE_REF_SEPARATOR.length) };
+};
+
+export const isStorageRef = (value: string) => value.includes(STORAGE_REF_SEPARATOR);
+
+const getReadableUrl = async (bucket: string, path: string): Promise<string> => {
+  if (PUBLIC_BUCKETS.has(bucket)) {
+    return supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl;
+  }
+  const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, SIGNED_URL_TTL_SECONDS);
+  if (error || !data?.signedUrl) {
+    throw new Error(error?.message || 'Unable to generate signed URL.');
+  }
+  return data.signedUrl;
+};
+
+export const resolveStorageRef = async (value: string, fallbackBucket?: string): Promise<string> => {
+  if (!value) return value;
+  if (/^https?:\/\//i.test(value)) return value;
+
+  const parsed = parseStorageRef(value);
+  if (parsed) return await getReadableUrl(parsed.bucket, parsed.path);
+
+  if (fallbackBucket) return await getReadableUrl(fallbackBucket, value);
+  return value;
+};
+
 /**
  * Uploads an image to Supabase Storage and returns the public URL.
  * Includes automatic compression and resizing.
  */
-export const uploadImage = async (uri: string, bucket: string = BUCKETS.posts): Promise<string> => {
+export const uploadImage = async (
+  uri: string,
+  bucket: string = BUCKETS.posts,
+  options?: { returnStorageRef?: boolean }
+): Promise<string> => {
   try {
     const manipulated = await ImageManipulator.manipulateAsync(
       uri,
@@ -32,8 +72,10 @@ export const uploadImage = async (uri: string, bucket: string = BUCKETS.posts): 
 
     if (uploadError) throw uploadError;
 
-    const { data: { publicUrl } } = supabase.storage.from(bucket).getPublicUrl(filePath);
-    return publicUrl;
+    if (options?.returnStorageRef) {
+      return buildStorageRef(bucket, filePath);
+    }
+    return await getReadableUrl(bucket, filePath);
   } catch (error: any) {
     console.error(`Upload error for bucket "${bucket}":`, error);
     if (error.message?.toLowerCase().includes('bucket not found')) {
@@ -60,10 +102,7 @@ export const uploadAvatar = async (uri: string, userId: string): Promise<string>
     .from(BUCKETS.avatars)
     .upload(`${userId}/avatar.jpg`, blob, { contentType: 'image/jpeg', upsert: true });
   if (error) throw new Error(error.message || 'Avatar upload failed');
-  const { data: { publicUrl } } = supabase.storage
-    .from(BUCKETS.avatars)
-    .getPublicUrl(`${userId}/avatar.jpg`);
-  return publicUrl;
+  return supabase.storage.from(BUCKETS.avatars).getPublicUrl(`${userId}/avatar.jpg`).data.publicUrl;
 };
 
 /**
@@ -76,8 +115,8 @@ export const uploadBlurredPreview = async (uri: string): Promise<Result<string>>
       [{ resize: { width: 100 } }],
       { compress: 0.2, format: ImageManipulator.SaveFormat.JPEG }
     );
-    const url = await uploadImage(manipulated.uri, BUCKETS.previews);
-    return success(url);
+    const ref = await uploadImage(manipulated.uri, BUCKETS.previews, { returnStorageRef: true });
+    return success(ref);
   } catch (err: any) {
     return failure(err);
   }

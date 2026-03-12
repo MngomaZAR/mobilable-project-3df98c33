@@ -1,5 +1,6 @@
 import { supabase } from '../config/supabaseClient';
 import { MediaAsset } from '../types';
+import { resolveStorageRef } from './uploadService';
 
 export const fetchCreatorMedia = async (creatorId: string): Promise<MediaAsset[]> => {
   try {
@@ -10,13 +11,14 @@ export const fetchCreatorMedia = async (creatorId: string): Promise<MediaAsset[]
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    
-    return (data || []).map(asset => ({
+
+    return await Promise.all(
+      (data || []).map(async asset => ({
         ...asset,
-        // Assuming public URLs for previews, and signed URLs for unlocked content
-        preview_url: asset.preview_url || supabase.storage.from(asset.bucket).getPublicUrl(asset.object_path).data.publicUrl,
-        full_url: asset.is_locked ? null : supabase.storage.from(asset.bucket).getPublicUrl(asset.object_path).data.publicUrl
-    }));
+        preview_url: asset.preview_url ? await resolveStorageRef(asset.preview_url) : await resolveStorageRef(asset.object_path, asset.bucket),
+        full_url: asset.is_locked ? null : await resolveStorageRef(asset.object_path, asset.bucket),
+      }))
+    );
   } catch (err: any) {
     if (err.message?.includes('relation "media_assets" does not exist')) {
         // Mock data for UI prototyping
@@ -45,8 +47,7 @@ export const unlockMediaAsset = async (assetId: string): Promise<string> => {
         // Get the asset details to generate signed URL
         const { data: asset } = await supabase.from('media_assets').select('*').eq('id', assetId).single();
         if (asset) {
-             const { data } = await supabase.storage.from(asset.bucket).createSignedUrl(asset.object_path, 3600); // 1 hour
-             return data?.signedUrl || '';
+             return await resolveStorageRef(asset.object_path, asset.bucket);
         }
 
         throw new Error("Asset not found");

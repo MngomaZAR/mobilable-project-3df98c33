@@ -73,7 +73,7 @@ serve(async (req) => {
     if (action === 'list') {
       const { data: rows, error } = await supabaseAdmin
         .from('messages')
-        .select('id, chat_id, sender_id, body, message_type, media_url, created_at')
+        .select('id, chat_id, sender_id, body, message_type, media_url, preview_url, locked, unlocked, unlock_booking_id, created_at')
         .eq('chat_id', conversationId)   // chat_id is the only FK now
         .order('created_at', { ascending: true });
 
@@ -88,8 +88,10 @@ serve(async (req) => {
         timestamp: row.created_at,
         messageType: row.message_type ?? 'text',
         mediaUrl: row.media_url ?? null,
-        locked: false,
-        unlocked: true,
+        previewUrl: row.preview_url ?? null,
+        locked: row.locked ?? false,
+        unlocked: row.unlocked ?? true,
+        unlockBookingId: row.unlock_booking_id ?? null,
       }));
 
       return jsonResponse(200, { messages });
@@ -100,6 +102,10 @@ serve(async (req) => {
       const messageType = payload?.message_type === 'media' ? 'media' : 'text';
       const text = typeof payload?.text === 'string' ? payload.text.trim() : '';
       const mediaUrl = typeof payload?.media_url === 'string' ? payload.media_url.trim() : null;
+      const previewUrl = typeof payload?.preview_url === 'string' ? payload.preview_url.trim() : null;
+      const locked = Boolean(payload?.locked);
+      const unlockBookingId = typeof payload?.unlock_booking_id === 'string' ? payload.unlock_booking_id.trim() : null;
+      const unlocked = locked ? false : true;
 
       if (messageType === 'text' && !text) {
         return jsonResponse(400, { error: 'Message text is required.' });
@@ -116,8 +122,12 @@ serve(async (req) => {
           body: text || (messageType === 'media' ? 'Sent a photo' : ''),
           message_type: messageType,
           media_url: mediaUrl,
+          preview_url: previewUrl,
+          locked,
+          unlocked,
+          unlock_booking_id: unlockBookingId,
         })
-        .select('id, chat_id, sender_id, body, message_type, media_url, created_at')
+        .select('id, chat_id, sender_id, body, message_type, media_url, preview_url, locked, unlocked, unlock_booking_id, created_at')
         .single();
 
       if (insertError || !inserted) {
@@ -125,7 +135,7 @@ serve(async (req) => {
       }
 
       // Update conversation preview
-      const preview = messageType === 'media' ? '📷 Photo' : text;
+      const preview = messageType === 'media' ? 'Photo' : text;
       await supabaseAdmin
         .from('conversations')
         .update({
@@ -144,8 +154,10 @@ serve(async (req) => {
           timestamp: inserted.created_at,
           messageType: inserted.message_type ?? 'text',
           mediaUrl: inserted.media_url ?? null,
-          locked: false,
-          unlocked: true,
+          previewUrl: inserted.preview_url ?? null,
+          locked: inserted.locked ?? false,
+          unlocked: inserted.unlocked ?? true,
+          unlockBookingId: inserted.unlock_booking_id ?? null,
         },
       });
     }

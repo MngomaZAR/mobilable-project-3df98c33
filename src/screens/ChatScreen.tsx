@@ -16,7 +16,8 @@ import { ChatSkeleton } from '../components/Skeleton';
 import { RootStackParamList } from '../navigation/types';
 import { Ionicons } from '@expo/vector-icons';
 import { PLACEHOLDER_IMAGE } from '../utils/constants';
-import { uploadBlurredPreview } from '../services/uploadService';
+import { resolveStorageRef, uploadBlurredPreview } from '../services/uploadService';
+import { BUCKETS } from '../config/environment';
 
 type Route = RouteProp<RootStackParamList, 'ChatThread'>;
 type Navigation = StackNavigationProp<RootStackParamList, 'ChatThread'>;
@@ -118,7 +119,7 @@ const ChatScreen: React.FC = () => {
         const previewRes = await uploadBlurredPreview(asset.uri);
         setPendingMedia({
           uri: asset.uri,
-          preview: previewRes.success ? previewRes.data : asset.uri,
+          preview: previewRes.success ? await resolveStorageRef(previewRes.data, BUCKETS.previews) : asset.uri,
         });
       } finally {
         setSending(false);

@@ -1,290 +1,177 @@
-Acceptance Criteria:
+# Supabase CLI
 
-User opens app → sees real location on map within 10 seconds
-Photographers appear only if within South Africa
-Distance calculations are accurate within 100m
-Map centers on user's actual position
+[![Coverage Status](https://coveralls.io/repos/github/supabase/cli/badge.svg?branch=main)](https://coveralls.io/github/supabase/cli?branch=main) [![Bitbucket Pipelines](https://img.shields.io/bitbucket/pipelines/supabase-cli/setup-cli/master?style=flat-square&label=Bitbucket%20Canary)](https://bitbucket.org/supabase-cli/setup-cli/pipelines) [![Gitlab Pipeline Status](https://img.shields.io/gitlab/pipeline-status/sweatybridge%2Fsetup-cli?label=Gitlab%20Canary)
+](https://gitlab.com/sweatybridge/setup-cli/-/pipelines)
 
+[Supabase](https://supabase.io) is an open source Firebase alternative. We're building the features of Firebase using enterprise-grade open source tools.
 
- Database Feed Function Error
-Problem: App falls back to local feed due to missing public.recommend_posts(limit_count, offset_count) function.
-Requirements:
+This repository contains all the functionality for Supabase CLI.
 
-Create or remove reference to recommend_posts() function
-Implement proper pagination using offset/limit queries
-No fallback to cached/local data - all feed data must be live
-Handle empty states when no posts exist
-Implement infinite scroll with proper loading states
+- [x] Running Supabase locally
+- [x] Managing database migrations
+- [x] Creating and deploying Supabase Functions
+- [x] Generating types directly from your database schema
+- [x] Making authenticated HTTP requests to [Management API](https://supabase.com/docs/reference/api/introduction)
 
+## Getting started
 
-🎯 Core Functional Requirements
-Authentication & Access Control
-Zero-tolerance policy for unauthorized access.
-Requirements:
+### Install the CLI
 
-Login/Signup screens are the only entry points
-Unauthenticated users cannot access any app screens
-No route hijacking or deep link bypasses
-Implement proper session management:
+Available via [NPM](https://www.npmjs.com) as dev dependency. To install:
 
-JWT tokens with expiration
-Refresh token flow
-Auto-logout after 30 days
+```bash
+npm i supabase --save-dev
+```
 
+When installing with yarn 4, you need to disable experimental fetch with the following nodejs config.
 
-Role-based access control:
+```
+NODE_OPTIONS=--no-experimental-fetch yarn add supabase
+```
 
-Clients → Browse photographers, create bookings, view feed
-Photographers → Manage bookings, post content, set availability
-Admin → User management, dispute resolution
+> **Note**
+For Bun versions below v1.0.17, you must add `supabase` as a [trusted dependency](https://bun.sh/guides/install/trusted) before running `bun add -D supabase`.
 
+<details>
+  <summary><b>macOS</b></summary>
 
-Separate navigation flows per role (similar to Uber rider vs driver)
-Photographer verification:
+  Available via [Homebrew](https://brew.sh). To install:
 
-Require portfolio upload before activation
-Manual approval process (pending verification screen)
-Badge/checkmark for verified photographers
+  ```sh
+  brew install supabase/tap/supabase
+  ```
 
+  To install the beta release channel:
+  
+  ```sh
+  brew install supabase/tap/supabase-beta
+  brew link --overwrite supabase-beta
+  ```
+  
+  To upgrade:
 
+  ```sh
+  brew upgrade supabase
+  ```
+</details>
 
-Acceptance Criteria:
+<details>
+  <summary><b>Windows</b></summary>
 
-Attempt to access /bookings without login → redirect to login
-Client account cannot access photographer-only features
-Session persists across app restarts (remember me)
+  Available via [Scoop](https://scoop.sh). To install:
 
+  ```powershell
+  scoop bucket add supabase https://github.com/supabase/scoop-bucket.git
+  scoop install supabase
+  ```
 
-Location & Maps (Uber-Level Standards)
-Requirements:
+  To upgrade:
 
-Real GPS tracking, not simulated data
-Location updates must be:
+  ```powershell
+  scoop update supabase
+  ```
+</details>
 
-Accurate within 50 meters
-Updated every 10-30 seconds when app is active
-Smooth (no jumping pins)
+<details>
+  <summary><b>Linux</b></summary>
 
+  Available via [Homebrew](https://brew.sh) and Linux packages.
 
-Map features:
+  #### via Homebrew
 
-User location (blue pulsing dot)
-Photographer pins (custom camera icon)
-Tap pin → show photographer preview card
-Clustering for multiple photographers in same area
-Smooth zoom/pan animations
+  To install:
 
+  ```sh
+  brew install supabase/tap/supabase
+  ```
 
-Distance intelligence:
+  To upgrade:
 
-Calculate straight-line distance (Haversine formula)
-Display "2.3 km away" on each photographer card
-Sort lists by proximity
-Filter by radius (within 5km, 10km, 25km, 50km)
+  ```sh
+  brew upgrade supabase
+  ```
 
+  #### via Linux packages
 
-Photographer heatmap (optional but recommended):
+  Linux packages are provided in [Releases](https://github.com/supabase/cli/releases). To install, download the `.apk`/`.deb`/`.rpm`/`.pkg.tar.zst` file depending on your package manager and run the respective commands.
 
-Show areas with high booking demand
-Help photographers position themselves strategically
+  ```sh
+  sudo apk add --allow-untrusted <...>.apk
+  ```
 
+  ```sh
+  sudo dpkg -i <...>.deb
+  ```
 
-South African context:
+  ```sh
+  sudo rpm -i <...>.rpm
+  ```
 
-All locations validated to be within SA borders
-Display province/city names (Cape Town, Johannesburg, Durban, etc.)
-Use South African landmarks as reference points
+  ```sh
+  sudo pacman -U <...>.pkg.tar.zst
+  ```
+</details>
 
+<details>
+  <summary><b>Other Platforms</b></summary>
 
+  You can also install the CLI via [go modules](https://go.dev/ref/mod#go-install) without the help of package managers.
 
-Acceptance Criteria:
+  ```sh
+  go install github.com/supabase/cli@latest
+  ```
 
-Open app → map loads within 3 seconds
-User location displays within 5 seconds
-Photographers within 50km radius are visible
-Tapping a photographer pin opens their profile
-Distance calculations match Google Maps within 5% accuracy
+  Add a symlink to the binary in `$PATH` for easier access:
 
+  ```sh
+  ln -s "$(go env GOPATH)/bin/cli" /usr/bin/supabase
+  ```
 
-Feed & Infinite Scroll
-Requirements:
+  This works on other non-standard Linux distros.
+</details>
 
-True infinite scroll with database-backed pagination
-Load 20 posts initially, then 10 posts per subsequent scroll
-Implement proper loading indicators:
+<details>
+  <summary><b>Community Maintained Packages</b></summary>
 
-Initial load: skeleton screens
-Infinite scroll: spinner at bottom
+  Available via [pkgx](https://pkgx.sh/). Package script [here](https://github.com/pkgxdev/pantry/blob/main/projects/supabase.com/cli/package.yml).
+  To install in your working directory:
 
+  ```bash
+  pkgx install supabase
+  ```
 
-No references to missing database functions
-Performance targets:
+  Available via [Nixpkgs](https://nixos.org/). Package script [here](https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/tools/supabase-cli/default.nix).
+</details>
 
-First load: < 2 seconds
-Subsequent loads: < 1 second
-Smooth 60fps scrolling (no jank)
+### Run the CLI
 
+```bash
+supabase bootstrap
+```
 
-Instagram-quality visuals:
+Or using npx:
 
-Square or 4:5 aspect ratio images
-High-resolution thumbnails
-Lazy loading of images outside viewport
-Progressive image loading (blur-up effect)
+```bash
+npx supabase bootstrap
+```
 
+The bootstrap command will guide you through the process of setting up a Supabase project using one of the [starter](https://github.com/supabase-community/supabase-samples/blob/main/samples.json) templates.
 
-Feed algorithm (simple):
+## Docs
 
-Sort by recency (newest first)
-OR weighted by engagement (likes + comments)
-Filter out blocked users
+Command & config reference can be found [here](https://supabase.com/docs/reference/cli/about).
 
+## Breaking changes
 
+We follow semantic versioning for changes that directly impact CLI commands, flags, and configurations.
 
-Acceptance Criteria:
+However, due to dependencies on other service images, we cannot guarantee that schema migrations, seed.sql, and generated types will always work for the same CLI major version. If you need such guarantees, we encourage you to pin a specific version of CLI in package.json.
 
-Scroll to bottom → new posts load automatically
-No "could not find function" errors
-Feed never shows duplicate posts
-Works with 1,000+ posts without performance degradation
+## Developing
 
+To run from source:
 
-Chat System (Instagram DM Quality)
-Requirements:
-
-Realtime messaging using Supabase Realtime or Firebase Firestore
-Message features:
-
-Text messages (max 1000 characters)
-Image sharing
-Read receipts (seen/delivered)
-Typing indicators
-Timestamps (formatted as "10:45 AM" or "2h ago")
-
-
-Conversation list:
-
-Show all chats sorted by most recent message
-Display last message preview
-Unread badge count
-User avatar and name
-Time of last message
-
-
-Individual chat thread:
-
-Bubble style messages (sender right, receiver left)
-Message grouping by time (Today, Yesterday, Jan 5)
-Smooth scrolling to bottom on new messages
-Auto-scroll to newest message on open
-
-
-Performance:
-
-Messages appear within 500ms of sending
-No message duplication
-Handle offline queue (send when reconnected)
-Sync across devices instantly
-
-
-Visual polish:
-
-Smooth animations
-Haptic feedback on send
-Message delivery animations
-Clean, modern design
-
-
-
-Acceptance Criteria:
-
-Send message → recipient sees it within 1 second
-Messages persist after app restart
-Offline messages queue and send when online
-Chat UI feels as polished as Instagram DMs
-
-
-Booking & Scheduling
-Requirements:
-
-Photographer availability:
-
-Set working hours (9 AM - 5 PM)
-Block specific dates (holidays, days off)
-Set hourly rate
-Minimum booking duration (1-2 hours)
-
-
-Client booking flow:
-
-Select photographer
-Choose date from calendar
-Select available time slot
-Enter location (with map picker)
-Confirm booking details
-Proceed to payment
-
-
-Conflict prevention:
-
-Real-time availability checking
-Lock time slot during booking process (5-minute hold)
-Show "Unavailable" for booked slots
-Prevent double-booking
-
-
-Booking states:
-
-Pending → Awaiting photographer acceptance
-Accepted → Confirmed, awaiting session
-In Progress → Session happening now
-Completed → Session finished
-Reviewed → Client left review
-Cancelled → Cancelled by either party
-
-
-Notifications:
-
-Push notification on booking request
-SMS confirmation on acceptance
-Reminder 24 hours before session
-Follow-up for review after completion
-
-
-
-Acceptance Criteria:
-
-Cannot book past dates
-Cannot double-book a time slot
-Booking confirmation received within 2 seconds
-Calendar shows real-time availability
-
-
-Payments (End-to-End Testing Required)
-Requirements:
-
-Integration: PayFast (South African payment gateway)
-Supported methods:
-
-Credit/Debit cards
-Instant EFT
-SnapScan
-
-
-Payment flow:
-
-Calculate total (hourly rate × duration)
-Display breakdown (subtotal, platform fee 10%, total)
-Redirect to PayFast hosted page (WebView)
-Handle payment callback
-Update booking status on success
-Send confirmation email/SMS
-
-## Repository Analysis Script
-
-Generate the code health report described in the project brief with the following commands:
-
-- `npm run report`
-- `node scripts/analyzeRepo.js`
-
-The script scans the critical source directories, runs ESLint (with `import/no-unused-modules`) to flag unused exports, detects duplicate function/constant names, reports `useEffect` hooks missing dependency arrays, and checks which screens/components configure Supabase real-time subscriptions. The output includes detailed listings and a JSON payload that you can archive or feed into other tooling.
+```sh
+# Go >= 1.22
+go run . help
+```

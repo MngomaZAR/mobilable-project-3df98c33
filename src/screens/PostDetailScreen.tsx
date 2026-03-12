@@ -6,6 +6,8 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { useAppData } from '../store/AppDataContext';
 import { hasSupabase, supabase } from '../config/supabaseClient';
 import { Post } from '../types';
+import { resolveStorageRef } from '../services/uploadService';
+import { BUCKETS } from '../config/environment';
 import { HashtagText } from '../components/HashtagText';
 
 type Route = RouteProp<RootStackParamList, 'PostDetail'>;
@@ -55,11 +57,12 @@ const PostDetailScreen: React.FC = () => {
           liked = !!likeData;
         }
 
+        const resolvedImageUrl = await resolveStorageRef(data.image_url ?? '', BUCKETS.posts);
         setHydratedPost({
           id: data.id,
           author_id: data.author_id,
           caption: data.caption ?? '',
-          image_url: data.image_url ?? '',
+          image_url: resolvedImageUrl,
           created_at: data.created_at ?? new Date().toISOString(),
           location: data.location ?? undefined,
           likes_count: Number(data.likes_count ?? 0),

@@ -2,6 +2,8 @@ import React, { createContext, useCallback, useContext, useState } from 'react';
 import { supabase, hasSupabase } from '../config/supabaseClient';
 import { Post, Comment, AppUser } from '../types';
 import { logError } from '../utils/errors';
+import { resolveStorageRef } from '../services/uploadService';
+import { BUCKETS } from '../config/environment';
 import { useAuth } from './AuthContext';
 
 type SocialContextValue = {
@@ -29,12 +31,16 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setPosts(data.map((p: any) => ({
+      const mapped = await Promise.all(
+        data.map(async (p: any) => ({
           ...p,
           author_id: p.author_id,
+          image_url: await resolveStorageRef(p.image_url ?? '', BUCKETS.posts),
           user_name: p.profiles?.full_name,
-          user_avatar: p.profiles?.avatar_url
-      })));
+          user_avatar: p.profiles?.avatar_url,
+        }))
+      );
+      setPosts(mapped);
     } catch (err) {
       logError('Social:fetchPosts', err);
     } finally {

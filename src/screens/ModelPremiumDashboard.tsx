@@ -35,7 +35,7 @@ const ModelPremiumDashboard: React.FC = () => {
       try {
         const { data } = await supabase
           .from('subscription_tiers')
-          .select('id, payout_rate, name, price');
+          .select('id, payout_rate, label, price_zar');
         if (data) {
           const basic = data.find((t: any) => t.id === 'basic');
           if (basic) setTierPayoutRate(Number(basic.payout_rate));

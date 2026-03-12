@@ -14,7 +14,7 @@ import {
   sendConversationLockedMediaMessage,
   sendConversationTextMessage,
 } from '../services/chatMessageService';
-import { uploadImage, uploadAvatar, uploadBlurredPreview } from '../services/uploadService';
+import { resolveStorageRef, uploadImage, uploadAvatar, uploadBlurredPreview } from '../services/uploadService';
 import { fetchCreatorEarnings } from '../services/monetisationService';
 import { registerForPushNotificationsAsync, savePushTokenAsync } from '../services/notificationService';
 import { assertSouthAfricanLocation, DEFAULT_CAPE_TOWN_COORDINATES, ensureSouthAfricanCoordinates } from '../utils/geo';
@@ -36,6 +36,11 @@ type CreatePostInput = {
   imageUri: string;
   location?: string;
   userId?: string;
+};
+
+type FetchPostsOptions = {
+  reset?: boolean;
+  attempt?: number;
 };
 
 type AppDataContextValue = {
@@ -60,8 +65,9 @@ type AppDataContextValue = {
   addPost: (payload: CreatePostInput) => Promise<Post>;
   toggleLike: (postId: string) => Promise<Post | undefined>;
   addComment: (postId: string, text: string, userId?: string) => Promise<Comment>;
-  fetchPosts: (options?: { reset: boolean }) => Promise<{ hasMore: boolean }>;
+  fetchPosts: (options?: FetchPostsOptions) => Promise<{ hasMore: boolean }>;
   fetchProfiles: () => Promise<void>;
+  fetchSubscriptions: (userId?: string | null) => Promise<void>;
   signUp: (email: string, password: string, role?: AppUser['role'], fullName?: string) => Promise<AppUser | null>;
   signIn: (email: string, password: string) => Promise<AppUser | null>;
   signOut: () => Promise<void>;
@@ -76,6 +82,7 @@ type AppDataContextValue = {
 
 const STORAGE_KEY = 'movable-app-state-v2';
 const MAX_PHOTOGRAPHERS = 120;
+const MAX_FETCH_POSTS_ATTEMPTS = 2;
 
 const dedupeById = <T extends { id: string }>(items: T[]): T[] => {
   const seen = new Set();
@@ -84,6 +91,11 @@ const dedupeById = <T extends { id: string }>(items: T[]): T[] => {
     seen.add(item.id);
     return true;
   });
+};
+
+const isRecoverableAbort = (err: unknown) => {
+  const message = (err as any)?.message ?? '';
+  return (err as any)?.name === 'AbortError' || /abort/i.test(String(message));
 };
 const BOOKING_SELECT = `
   id, 
@@ -129,11 +141,17 @@ const PROFILE_SELECT = `
   bio, 
   phone, 
   push_token, 
-  contact_details
+  contact_details,
+  username,
+  instagram,
+  website,
+  availability_status
 `;
 
 const PHOTOGRAPHER_SELECT = `
   id,
+  name,
+  avatar_url,
   rating,
   location,
   latitude,
@@ -141,7 +159,11 @@ const PHOTOGRAPHER_SELECT = `
   price_range,
   style,
   bio,
-  tags
+  tags,
+  is_available,
+  hourly_rate,
+  experience_years,
+  specialties
 `;
 
 const mapBookingRow = (row: any): Booking => ({
@@ -389,7 +411,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     []
   );
 
-  const fetchPosts = useCallback(async ({ reset = true }: { reset?: boolean } = { reset: true }): Promise<{ hasMore: boolean }> => {
+  const fetchPosts = useCallback(async ({ reset = true, attempt = 0 }: FetchPostsOptions = {}): Promise<{ hasMore: boolean }> => {
     if (!hasSupabase) return { hasMore: false };
     setError(null);
     try {
@@ -413,10 +435,13 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         (profilesData ?? []).forEach((p: any) => { profilesMap[p.id] = p; });
       }
 
-      let mapped = (rawPosts ?? []).map((post: any) => {
-        post.profiles = profilesMap[post.author_id] ? [profilesMap[post.author_id]] : [];
-        return mapPostRow(post);
-      });
+      let mapped = await Promise.all(
+        (rawPosts ?? []).map(async (post: any) => {
+          post.image_url = await resolveStorageRef(post.image_url ?? '', BUCKETS.posts);
+          post.profiles = profilesMap[post.author_id] ? [profilesMap[post.author_id]] : [];
+          return mapPostRow(post);
+        })
+      );
 
       // Resolve liked state if user is logged in
       const currentUserId = stateRef.current.currentUser?.id;
@@ -444,6 +469,10 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
       return { hasMore: rawPosts ? rawPosts.length >= 12 : false };
     } catch (err: any) {
+      if (isRecoverableAbort(err) && attempt + 1 < MAX_FETCH_POSTS_ATTEMPTS) {
+        console.warn(`fetch_posts retrying (attempt ${attempt + 1}) after abort`);
+        return fetchPosts({ reset, attempt: attempt + 1 });
+      }
       logError('fetch_posts', err);
       setError(formatErrorMessage(err, `Error loading feed: ${err?.message || 'Unknown error'}`));
       return { hasMore: false };
@@ -550,7 +579,8 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
               await Promise.all([
                 fetchBookings(data.user.id),
                 fetchConversations(data.user.id),
-                fetchEarnings(data.user.id)
+                fetchEarnings(data.user.id),
+                fetchSubscriptions(data.user.id)
               ]);
             } else {
               setState({ bookings: [], conversations: [] });
@@ -570,7 +600,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
 
     load();
-  }, [fetchBookings, fetchConversations, fetchPhotographers, fetchProfile, fetchModels]);
+  }, [fetchBookings, fetchConversations, fetchPhotographers, fetchProfile, fetchModels, fetchSubscriptions]);
 
   useEffect(() => {
     if (!hasSupabase) return;
@@ -610,6 +640,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           fetchBookings(session.user.id).catch(e => console.warn('Delayed booking fetch failed', e));
           fetchConversations(session.user.id).catch(e => console.warn('Delayed convo fetch failed', e));
           fetchEarnings(session.user.id).catch(e => console.warn('Delayed earnings fetch failed', e));
+          fetchSubscriptions(session.user.id).catch(e => console.warn('Delayed subscriptions fetch failed', e));
         } catch (eventErr) {
           console.error('Error handling auth session change:', eventErr);
         }
@@ -646,6 +677,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           .maybeSingle();
 
         if (rawPost) {
+          rawPost.image_url = await resolveStorageRef(rawPost.image_url ?? '', BUCKETS.posts);
           const { data: profileData } = await supabase.from('profiles').select('id, full_name, city, avatar_url').eq('id', rawPost.author_id).maybeSingle();
           const postData = { ...rawPost, profiles: profileData ? [profileData] : [] };
           const hydrated = mapPostRow(postData);
@@ -732,8 +764,8 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
             body: newRow.body ?? newRow.text ?? '',
             timestamp: newRow.created_at ?? new Date().toISOString(),
             message_type: newRow.message_type ?? 'text',
-            media_url: newRow.media_url ?? null,
-            preview_url: newRow.preview_url ?? null,
+            media_url: newRow.media_url ? await resolveStorageRef(newRow.media_url, BUCKETS.previews) : null,
+            preview_url: newRow.preview_url ? await resolveStorageRef(newRow.preview_url, BUCKETS.previews) : null,
             locked: newRow.locked ?? false,
             unlocked: newRow.unlocked ?? true,
             unlock_booking_id: newRow.unlock_booking_id ?? null,
@@ -759,7 +791,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       supabase.removeChannel(bookingChannel);
       supabase.removeChannel(messagesChannel);
     };
-  }, [fetchBookings, fetchConversations, fetchProfile]);
+  }, [fetchBookings, fetchConversations, fetchProfile, fetchSubscriptions]);
 
   useEffect(() => {
     const persist = async () => {
@@ -934,6 +966,23 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   }, []);
 
+  const fetchSubscriptions = useCallback(async (userId?: string | null) => {
+    if (!hasSupabase) return;
+    const targetUserId = userId ?? stateRef.current.currentUser?.id;
+    if (!targetUserId) { setState({ subscriptions: [] }); return; }
+    try {
+      const { data, error } = await supabase
+        .from('subscriptions')
+        .select('id, subscriber_id, creator_id, tier_id, status, current_period_start, current_period_end, created_at')
+        .or(`subscriber_id.eq.${targetUserId},creator_id.eq.${targetUserId}`)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      setState({ subscriptions: data ?? [] });
+    } catch (err) {
+      logError('fetch_subscriptions', err);
+    }
+  }, []);
+
   const sendMessage = useCallback(
     async (chatId: string, text: string, fromUser: boolean = true): Promise<Message> => {
       const senderId = stateRef.current.currentUser?.id;
@@ -1044,7 +1093,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           setSaving(true);
           try {
             // Chat media goes to 'chat-media' bucket per backend spec (private, signed URLs)
-            finalMediaUrl = await uploadImage(payload.mediaUrl, 'chat-media');
+            finalMediaUrl = await uploadImage(payload.mediaUrl, BUCKETS.previews, { returnStorageRef: true });
             const previewRes = await uploadBlurredPreview(payload.mediaUrl);
             finalPreviewUrl = previewRes.success ? previewRes.data : payload.mediaUrl;
           } finally {
@@ -1066,8 +1115,8 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           body: sent.body,
           timestamp: sent.timestamp ?? new Date().toISOString(),
           message_type: 'media',
-          media_url: sent.media_url,
-          preview_url: sent.preview_url,
+          media_url: sent.media_url ? await resolveStorageRef(sent.media_url, BUCKETS.previews) : sent.media_url,
+          preview_url: sent.preview_url ? await resolveStorageRef(sent.preview_url, BUCKETS.previews) : sent.preview_url,
           locked: sent.locked,
           unlocked: sent.unlocked,
           unlock_booking_id: sent.unlock_booking_id,
@@ -1105,19 +1154,21 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         return;
       }
       const data = await listConversationMessages(chatId);
-      const parsedMessages: Message[] = (data || []).map((row: any) => ({
-        id: row.id,
-        conversation_id: chatId,
-        from_user: row.sender_id === currentUserId,
-        body: row.body ?? row.text,
-        timestamp: row.created_at || new Date().toISOString(),
-        message_type: row.message_type ?? 'text',
-        media_url: row.media_url ?? null,
-        preview_url: row.preview_url ?? null,
-        locked: row.locked ?? false,
-        unlocked: row.unlocked ?? true,
-        unlock_booking_id: row.unlock_booking_id ?? null,
-      }));
+      const parsedMessages: Message[] = await Promise.all(
+        (data || []).map(async (row: any) => ({
+          id: row.id,
+          conversation_id: chatId,
+          from_user: row.sender_id === currentUserId,
+          body: row.body ?? row.text,
+          timestamp: row.created_at || new Date().toISOString(),
+          message_type: row.message_type ?? 'text',
+          media_url: row.media_url ? await resolveStorageRef(row.media_url, BUCKETS.previews) : null,
+          preview_url: row.preview_url ? await resolveStorageRef(row.preview_url, BUCKETS.previews) : null,
+          locked: row.locked ?? false,
+          unlocked: row.unlocked ?? true,
+          unlock_booking_id: row.unlock_booking_id ?? null,
+        }))
+      );
 
       const prevForChat = stateRef.current.messages[chatId] ?? [];
       const combined = dedupeById([...prevForChat, ...parsedMessages]);
@@ -1281,9 +1332,11 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
         if (hasSupabase) {
             try {
+                let finalImageRef = imageUri;
                 let finalImageUrl = imageUri;
                 if (imageUri.startsWith('file://') || imageUri.startsWith('content://')) {
-                  finalImageUrl = await uploadImage(imageUri, 'posts');
+                  finalImageRef = await uploadImage(imageUri, BUCKETS.posts, { returnStorageRef: true });
+                  finalImageUrl = await resolveStorageRef(finalImageRef, BUCKETS.posts);
                 }
 
                 const { data, error: insertError } = await supabase
@@ -1292,7 +1345,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
                     author_id: ownerId,
                     caption,
                     location,
-                    image_url: finalImageUrl,
+                    image_url: finalImageRef,
                 })
                 .select('id, author_id, caption, location, comment_count, created_at, image_url, likes_count')
                 .single();
@@ -1307,6 +1360,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
                     likes_count: data?.likes_count ?? 0,
                     comment_count: data?.comment_count ?? 0,
                     created_at: data?.created_at ?? new Date().toISOString(),
+                    image_url: finalImageUrl,
                 };
 
                 // Replace optimistic post with the real one
@@ -1689,6 +1743,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         fetchBookings(userId),
         fetchConversations(userId),
         fetchEarnings(userId || ''),
+        fetchSubscriptions(userId),
         fetchPosts({ reset: true })
       ]);
     } catch (err) {
@@ -1696,7 +1751,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     } finally {
       setLoading(false);
     }
-  }, [fetchBookings, fetchConversations, fetchEarnings, fetchModels, fetchPhotographers, fetchPosts, revalidateSession]);
+  }, [fetchBookings, fetchConversations, fetchEarnings, fetchSubscriptions, fetchModels, fetchPhotographers, fetchPosts, revalidateSession]);
 
   const resetState = useCallback(async () => {
     setSaving(true);
@@ -1922,8 +1977,9 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       updateProfilePicture,
       updateProfile,
       fetchEarnings,
+      fetchSubscriptions,
     }),
-    [state, createBooking, updateBookingStatus, sendMessage, sendLockedMediaMessage, fetchMessages, fetchMessagesForChat, fetchComments, updateBookingClientLocation, updatePhotographerLocation, startConversationWithUser, addPost, toggleLike, addComment, setState, signUp, signIn, signOut, updatePrivacy, requestDataDeletion, refresh, revalidateSession, resetState, updateProfilePicture, updateProfile, fetchEarnings]
+    [state, createBooking, updateBookingStatus, sendMessage, sendLockedMediaMessage, fetchMessages, fetchMessagesForChat, fetchComments, updateBookingClientLocation, updatePhotographerLocation, startConversationWithUser, addPost, toggleLike, addComment, setState, signUp, signIn, signOut, updatePrivacy, requestDataDeletion, refresh, revalidateSession, resetState, updateProfilePicture, updateProfile, fetchEarnings, fetchSubscriptions]
   );
 
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>;

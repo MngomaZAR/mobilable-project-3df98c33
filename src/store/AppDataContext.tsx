@@ -155,7 +155,7 @@ const mapBookingRow = (row: any): Booking => ({
   created_at: row.created_at ?? new Date().toISOString(),
   user_latitude: row.user_latitude ?? null,
   user_longitude: row.user_longitude ?? null,
-  total_amount: Number(row.price_total || 0),
+  total_amount: Number(row.total_amount || row.price_total || 0),
   commission_amount: Number(row.commission_amount || 0),
   payout_amount: Number(row.photographer_payout || 0),
   photographer: row.photographer ? {

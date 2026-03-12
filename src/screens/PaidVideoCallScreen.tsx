@@ -42,14 +42,16 @@ let VideoView: React.ComponentType<any> | null = null;
 let useTracks: (() => any[]) | null = null;
 let Track: any = null;
 
-try {
-  const lk = require('@livekit/react-native');
-  LiveKitRoom = lk.LiveKitRoom;
-  VideoView = lk.VideoView;
-  useTracks = lk.useTracks;
-  Track = lk.Track;
-} catch (_e) {
-  // @livekit/react-native not yet installed — shows placeholder with install instructions
+if (Platform.OS !== 'web') {
+  try {
+    const lk = require('@livekit/react-native');
+    LiveKitRoom = lk.LiveKitRoom;
+    VideoView = lk.VideoView;
+    useTracks = lk.useTracks;
+    Track = lk.Track;
+  } catch (_e) {
+    // @livekit/react-native not yet installed — shows placeholder with install instructions
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

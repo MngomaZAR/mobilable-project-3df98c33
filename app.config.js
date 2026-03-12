@@ -2,6 +2,7 @@ export default {
   expo: {
     name: "Papzi",
     slug: "papzi",
+    owner: "papz",
     scheme: "papzi",
     version: "1.0.0",
     orientation: "portrait",
@@ -43,6 +44,12 @@ export default {
     web: {
       favicon: "./assets/favicon.png"
     },
+    updates: {
+      url: "https://u.expo.dev/f0c1ef90-ac26-4e4c-a799-77b377e2f452"
+    },
+    runtimeVersion: {
+      policy: "appVersion"
+    },
     plugins: [
       [
         "expo-notifications",
@@ -73,4 +80,3 @@ export default {
     }
   }
 };
-

@@ -11,6 +11,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../store/AuthContext';
 import { useBooking } from '../store/BookingContext';
 import { useAppData } from '../store/AppDataContext';
+import { useMessaging } from '../store/MessagingContext';
 import { RootStackParamList } from '../navigation/types';
 import { supabase } from '../config/supabaseClient';
 import CreatePremiumBox from './CreatePremiumBox';
@@ -24,6 +25,7 @@ const ModelPremiumDashboard: React.FC = () => {
   const { currentUser } = useAuth();
   const { bookings, refreshBookings } = useBooking();
   const { state, refresh } = useAppData();
+  const { startConversationWithUser } = useMessaging();
   const [showPremiumBox, setShowPremiumBox] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [tierPayoutRate, setTierPayoutRate] = useState(0.70);
@@ -94,6 +96,19 @@ const ModelPremiumDashboard: React.FC = () => {
   };
 
   const pendingBookings = useMemo(() => bookings.filter(b => b.status === 'pending'), [bookings]);
+
+  const openChatWithClient = async (clientId?: string | null, clientName?: string) => {
+    if (!clientId) {
+      navigation.navigate('Root', { screen: 'Chat' });
+      return;
+    }
+    try {
+      const convo = await startConversationWithUser(clientId, clientName ?? 'Client');
+      navigation.navigate('ChatThread', { conversationId: convo.id, title: convo.title });
+    } catch {
+      navigation.navigate('Root', { screen: 'Chat' });
+    }
+  };
 
   return (
     <SafeAreaView style={s.safeArea}>
@@ -216,6 +231,12 @@ const ModelPremiumDashboard: React.FC = () => {
                     <Text style={s.joinBtnText}>Join</Text>
                   </TouchableOpacity>
                 )}
+                <TouchableOpacity
+                  style={s.chatBtn}
+                  onPress={() => openChatWithClient(booking.client_id, 'Client')}
+                >
+                  <Ionicons name="chatbubble-ellipses-outline" size={18} color="#fff" />
+                </TouchableOpacity>
               </TouchableOpacity>
             ))
           )}
@@ -332,6 +353,7 @@ const s = StyleSheet.create({
   statusText: { fontWeight: '800', fontSize: 12, textTransform: 'capitalize' },
   joinBtn: { backgroundColor: '#8b5cf6', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
   joinBtnText: { color: '#fff', fontWeight: '800', fontSize: 12 },
+  chatBtn: { backgroundColor: '#0ea5e9', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, marginLeft: 8 },
   empty: { color: '#64748b', textAlign: 'center', marginTop: 10, lineHeight: 22 },
   talentPill: { alignItems: 'center', marginRight: 14, width: 70 },
   talentAvatar: { width: 58, height: 58, borderRadius: 29, backgroundColor: '#334155', borderWidth: 2, borderColor: '#ec4899', marginBottom: 6 },

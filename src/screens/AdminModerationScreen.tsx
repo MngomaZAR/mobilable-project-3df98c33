@@ -14,6 +14,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../store/ThemeContext';
 import { supabase } from '../config/supabaseClient';
+import { useMessaging } from '../store/MessagingContext';
+import { useNavigation } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
+import { RootStackParamList } from '../navigation/types';
 
 interface Report {
   id: string;
@@ -29,6 +33,8 @@ interface Report {
 const AdminModerationScreen: React.FC = () => {
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation<StackNavigationProp<RootStackParamList, 'Root'>>();
+  const { startConversationWithUser } = useMessaging();
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -69,6 +75,16 @@ const AdminModerationScreen: React.FC = () => {
     }
   };
 
+  const openChatWithUser = async (userId?: string | null, label?: string) => {
+    if (!userId) return;
+    try {
+      const convo = await startConversationWithUser(userId, label ?? 'User');
+      navigation.navigate('ChatThread', { conversationId: convo.id, title: convo.title });
+    } catch {
+      navigation.navigate('Root', { screen: 'Chat' });
+    }
+  };
+
   const renderReportItem = ({ item }: { item: Report }) => (
     <View style={[styles.reportCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
       <View style={styles.reportHeader}>
@@ -86,6 +102,23 @@ const AdminModerationScreen: React.FC = () => {
         </Text>
         <Text style={[styles.reason, { color: colors.text }]}>{item.reason}</Text>
         <Text style={[styles.meta, { color: colors.textSecondary }]}>ID: {item.target_id}</Text>
+      </View>
+
+      <View style={styles.messageRow}>
+        <TouchableOpacity
+          style={[styles.messageBtn, { borderColor: colors.border }]}
+          onPress={() => openChatWithUser(item.reporter_id, 'Reporter')}
+        >
+          <Ionicons name="chatbubble-ellipses-outline" size={16} color={colors.text} />
+          <Text style={[styles.messageText, { color: colors.text }]}>Message reporter</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.messageBtn, { borderColor: colors.border }]}
+          onPress={() => openChatWithUser(item.target_id, 'Reported user')}
+        >
+          <Ionicons name="chatbubble-ellipses-outline" size={16} color={colors.text} />
+          <Text style={[styles.messageText, { color: colors.text }]}>Message target</Text>
+        </TouchableOpacity>
       </View>
 
       {item.status === 'pending' && (
@@ -213,6 +246,25 @@ const styles = StyleSheet.create({
   actions: {
     flexDirection: 'row',
     gap: 12,
+  },
+  messageRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 12,
+  },
+  messageBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    gap: 6,
+  },
+  messageText: {
+    fontWeight: '700',
+    fontSize: 12,
   },
   actionBtn: {
     flex: 1,

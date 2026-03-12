@@ -70,6 +70,11 @@ const AdminDashboardScreen: React.FC = () => {
             <Text style={[styles.actionText, { color: colors.text }]}>Browse all bookings</Text>
             <Ionicons name="chevron-forward" size={16} color={colors.textMuted} style={{ marginLeft: 'auto' }} />
           </TouchableOpacity>
+          <TouchableOpacity style={[styles.action, { backgroundColor: colors.bg, borderColor: colors.border }]} onPress={() => navigation.navigate('Root', { screen: 'Chat' })}>
+            <Ionicons name="chatbubble-ellipses-outline" size={18} color={colors.accent} />
+            <Text style={[styles.actionText, { color: colors.text }]}>Open conversations</Text>
+            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} style={{ marginLeft: 'auto' }} />
+          </TouchableOpacity>
           <TouchableOpacity style={[styles.action, { backgroundColor: colors.bg, borderColor: colors.border }]} onPress={() => navigation.navigate('Compliance')}>
             <Ionicons name="file-tray-full-outline" size={18} color={colors.text} />
             <Text style={[styles.actionText, { color: colors.text }]}>Compliance & Logs</Text>

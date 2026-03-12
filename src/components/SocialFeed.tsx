@@ -106,6 +106,14 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
     () => (isWeb ? appState.profiles.slice(0, WEB_PROFILE_PAGE_SIZE) : appState.profiles),
     [isWeb, appState.profiles]
   );
+  const uniqueProfiles = useMemo(() => {
+    const seen = new Set<string>();
+    return visibleProfiles.filter((p) => {
+      if (!p?.id || seen.has(p.id)) return false;
+      seen.add(p.id);
+      return true;
+    });
+  }, [visibleProfiles]);
 
   const handleToggleLike = async (postId: string) => {
     try {
@@ -143,10 +151,15 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
     return filtered;
   }, [appState.posts, selectedProfileId, blockedUserIds, reportedPostIds, followingOnly, appState.currentUser, appState.follows]);
 
-  const visiblePosts = useMemo(
-    () => (isWeb ? filteredPosts.slice(0, WEB_VISIBLE_FEED_ITEMS) : filteredPosts),
-    [filteredPosts, isWeb]
-  );
+  const visiblePosts = useMemo(() => {
+    const base = isWeb ? filteredPosts.slice(0, WEB_VISIBLE_FEED_ITEMS) : filteredPosts;
+    const seen = new Set<string>();
+    return base.filter((p) => {
+      if (!p?.id || seen.has(p.id)) return false;
+      seen.add(p.id);
+      return true;
+    });
+  }, [filteredPosts, isWeb]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -272,7 +285,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
               ]}>Following</Text>
             </TouchableOpacity>
         )}
-        {visibleProfiles.map((p) => (
+        {uniqueProfiles.map((p) => (
           <TouchableOpacity 
             key={p.id} 
             style={[

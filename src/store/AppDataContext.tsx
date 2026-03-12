@@ -1468,8 +1468,8 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         try {
             const { data, error } = await supabase
               .from('post_comments')
-              .insert([{ post_id: postId, author_id: resolvedUserId, body: text }])
-              .select('id, post_id, author_id, body, created_at')
+              .insert([{ post_id: postId, user_id: resolvedUserId, body: text }])
+              .select('id, post_id, user_id, body, created_at')
               .single();
 
             if (error) throw error;
@@ -1478,7 +1478,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
               const persistedComment: Comment = {
                 id: data.id,
                 post_id: data.post_id ?? postId,
-                user_id: data.author_id,
+                user_id: data.user_id,
                 body: data.body ?? text,
                 created_at: data.created_at ?? comment.created_at,
               };
@@ -1507,7 +1507,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     try {
       const { data, error } = await supabase
         .from('post_comments')
-        .select('id, post_id, author_id, body, created_at')
+        .select('id, post_id, user_id, body, created_at')
         .eq('post_id', postId)
         .order('created_at', { ascending: true })
         .limit(100);

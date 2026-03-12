@@ -5,6 +5,12 @@ import { AppDataProvider, useAppData } from '../../src/store/AppDataContext';
 import { supabase } from '../../src/config/supabaseClient';
 
 // Mock Supabase to avoid real backend calls in unit tests
+const mockChannel = {
+  on: jest.fn().mockReturnThis(),
+  subscribe: jest.fn().mockReturnThis(),
+  unsubscribe: jest.fn(),
+};
+
 jest.mock('../../src/config/supabaseClient', () => ({
   hasSupabase: true,
   supabase: {
@@ -12,12 +18,15 @@ jest.mock('../../src/config/supabaseClient', () => ({
       getUser: jest.fn().mockResolvedValue({ data: { user: null } }),
       onAuthStateChange: jest.fn().mockReturnValue({ data: { subscription: { unsubscribe: jest.fn() } } }),
     },
+    channel: jest.fn().mockReturnValue(mockChannel),
+    removeChannel: jest.fn(),
     from: jest.fn().mockReturnValue({
-      select: jest.fn().mockReturnValue({
-        limit: jest.fn().mockReturnValue({
-          order: jest.fn().mockResolvedValue({ data: [], error: null }),
-        }),
-      }),
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      in: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockReturnThis(),
+      order: jest.fn().mockResolvedValue({ data: [], error: null }),
+      maybeSingle: jest.fn().mockResolvedValue({ data: null, error: null }),
     }),
   },
 }));
@@ -53,7 +62,7 @@ describe('AppDataContext', () => {
     });
 
     expect(getByTestId('loading-state').props.children).toBe('false');
-    // Ensure the fetchPhotographers mocked call was triggered
-    expect(supabase.from).toHaveBeenCalledWith('photographers');
+    // fetchProfiles queries the profiles table (photographers are stored in profiles with role filter)
+    expect(supabase.from).toHaveBeenCalledWith('profiles');
   });
 });

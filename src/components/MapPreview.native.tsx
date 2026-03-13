@@ -5,8 +5,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { MapMarker, MapPreviewProps } from './mapTypes';
 import { DEFAULT_CAPE_TOWN_COORDINATES, ensureSouthAfricanCoordinates } from '../utils/geo';
 
-MapLibreGL.setTelemetryEnabled(false);
-
 const MAP_STYLE_URL = 'https://demotiles.maplibre.org/style.json';
 
 const getZoomLevel = (latDelta: number, lngDelta: number) => {

@@ -608,9 +608,10 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (error) throw error;
       const balance = Array.isArray(data) ? data[0]?.balance : data?.balance;
       if (typeof balance === 'number') {
-        setState((prev) => ({
-          creditsWallet: prev.creditsWallet ? { ...prev.creditsWallet, balance } : prev.creditsWallet,
-        }));
+        const currentWallet = stateRef.current.creditsWallet;
+        setState({
+          creditsWallet: currentWallet ? { ...currentWallet, balance } : currentWallet,
+        });
       }
       await fetchCredits(stateRef.current.currentUser?.id ?? null);
       return typeof balance === 'number' ? balance : 0;
@@ -627,9 +628,10 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (error) throw error;
       const balance = Array.isArray(data) ? data[0]?.balance : data?.balance;
       if (typeof balance === 'number') {
-        setState((prev) => ({
-          creditsWallet: prev.creditsWallet ? { ...prev.creditsWallet, balance } : prev.creditsWallet,
-        }));
+        const currentWallet = stateRef.current.creditsWallet;
+        setState({
+          creditsWallet: currentWallet ? { ...currentWallet, balance } : currentWallet,
+        });
       }
       await fetchCredits(stateRef.current.currentUser?.id ?? null);
       return typeof balance === 'number' ? balance : 0;

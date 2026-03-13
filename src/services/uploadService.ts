@@ -4,7 +4,7 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import { Result, success, failure } from '../utils/result';
 import { uid } from '../utils/id';
 
-const PUBLIC_BUCKETS = new Set([BUCKETS.avatars]);
+const PUBLIC_BUCKETS = new Set<string>([BUCKETS.avatars]);
 const SIGNED_URL_TTL_SECONDS = 60 * 60 * 24 * 7; // 7 days
 const STORAGE_REF_SEPARATOR = '::';
 
@@ -20,9 +20,9 @@ export const isStorageRef = (value: string) => value.includes(STORAGE_REF_SEPARA
 
 const getReadableUrl = async (bucket: string, path: string): Promise<string> => {
   if (PUBLIC_BUCKETS.has(bucket)) {
-    return supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl;
+    return supabase.storage.from(bucket as any).getPublicUrl(path).data.publicUrl;
   }
-  const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, SIGNED_URL_TTL_SECONDS);
+  const { data, error } = await supabase.storage.from(bucket as any).createSignedUrl(path, SIGNED_URL_TTL_SECONDS);
   if (error || !data?.signedUrl) {
     throw new Error(error?.message || 'Unable to generate signed URL.');
   }
@@ -67,7 +67,7 @@ export const uploadImage = async (
     const filePath = `uploads/${fileName}`;
 
     const { error: uploadError } = await supabase.storage
-      .from(bucket)
+      .from(bucket as any)
       .upload(filePath, blob, { contentType: 'image/jpeg', upsert: false });
 
     if (uploadError) throw uploadError;

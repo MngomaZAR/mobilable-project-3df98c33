@@ -3,8 +3,6 @@ import MapLibreGL from '@maplibre/maplibre-react-native';
 import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import { BookingStatus } from '../types';
 
-MapLibreGL.setTelemetryEnabled(false);
-
 const MAP_STYLE_URL = 'https://demotiles.maplibre.org/style.json';
 
 type Coordinate = {

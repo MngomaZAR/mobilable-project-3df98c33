@@ -124,7 +124,7 @@ const ConversationsListScreen: React.FC = () => {
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <FlatList
         data={conversations}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item, index) => `${item.id}-${index}`}
         renderItem={renderItem}
         refreshControl={
           <RefreshControl

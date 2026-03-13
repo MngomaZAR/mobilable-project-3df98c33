@@ -16,8 +16,6 @@ import { BOOKING_PACKAGES } from '../constants/pricing';
 import { haversineDistanceKm } from '../utils/geo';
 import { supabase } from '../config/supabaseClient';
 
-MapLibreGL.setTelemetryEnabled(false);
-
 const MAP_STYLE_URL = 'https://demotiles.maplibre.org/style.json';
 
 const SA_BOUNDS = {
@@ -102,7 +100,7 @@ const MapScreen: React.FC = () => {
   const [isRequesting, setIsRequesting] = useState(false);
 
   const lastRequestRef = useRef<number>(0);
-  const cameraRef = useRef<MapLibreGL.Camera>(null);
+  const cameraRef = useRef<any>(null);
   const pulse = useRef(new Animated.Value(0)).current;
   const [routeProgress, setRouteProgress] = useState(0);
 

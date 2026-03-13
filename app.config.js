@@ -54,22 +54,16 @@ export default {
       [
         "expo-image-picker",
         {
-          "photosPermission": "The app accesses your photos to let you share them with others."
+          photosPermission: "The app accesses your photos to let you share them with others."
         }
       ],
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Allow Papzi to use your location."
+          locationAlwaysAndWhenInUsePermission: "Allow Papzi to use your location."
         }
       ],
-      [
-        "react-native-maps",
-        {
-          "googleMapsApiKey": ""
-        }
-      ],
-      "@livekit/react-native"
+      "@maplibre/maplibre-react-native"
     ],
     extra: {
       eas: {
@@ -80,4 +74,3 @@ export default {
     }
   }
 };
-

@@ -100,7 +100,10 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         participant: participantMap[c.id],
       }));
 
-      setConversations(mapped);
+      const deduped = mapped.filter((conversation, index, list) =>
+        list.findIndex((item) => item.id === conversation.id) === index
+      );
+      setConversations(deduped);
     } catch (err) {
       logError('Messaging:fetchConversations', err);
     } finally {

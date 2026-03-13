@@ -1,7 +1,7 @@
 name: EAS Build iOS
 
 # Builds iOS app via GitHub Actions using your EXPO_TOKEN.
-# Uses PREVIEW profile - same auth path as web deploy.
+# Uses PRODUCTION profile for TestFlight/App Store.
 # Trigger: Manual or push to main.
 #
 # Required: EXPO_TOKEN in repo secrets
@@ -32,7 +32,7 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --no-fund --no-optional
 
-      - name: Build iOS (preview profile)
-        run: npx eas-cli build --platform ios --profile preview --non-interactive
+      - name: Build iOS (production profile)
+        run: npx eas-cli build --platform ios --profile production --non-interactive
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}

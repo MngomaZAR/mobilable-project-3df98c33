@@ -18,24 +18,7 @@ import { supabase } from '../config/supabaseClient';
 
 MapLibreGL.setTelemetryEnabled(false);
 
-const MAP_STYLE = {
-  version: 8,
-  sources: {
-    osm: {
-      type: 'raster',
-      tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
-      tileSize: 256,
-      attribution: '© OpenStreetMap contributors',
-    },
-  },
-  layers: [
-    {
-      id: 'osm',
-      type: 'raster',
-      source: 'osm',
-    },
-  ],
-};
+const MAP_STYLE_URL = 'https://demotiles.maplibre.org/style.json';
 
 const SA_BOUNDS = {
   minLat: -35,
@@ -490,7 +473,7 @@ const MapScreen: React.FC = () => {
     <View style={styles.container}>
       <MapLibreGL.MapView
         style={StyleSheet.absoluteFill}
-        mapStyle={MAP_STYLE}
+        mapStyle={MAP_STYLE_URL}
         logoEnabled={false}
         attributionEnabled={false}
         compassEnabled
@@ -913,3 +896,5 @@ const styles = StyleSheet.create({
 });
 
 export default MapScreen;
+
+

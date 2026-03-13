@@ -1,56 +1,69 @@
-import React, { useEffect, useMemo, useRef } from 'react';
-import MapView, { Marker, Region, UrlTile } from 'react-native-maps';
+import React, { useMemo } from 'react';
+import MapLibreGL from '@maplibre/maplibre-react-native';
 import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { MapMarker, MapPreviewProps } from './mapTypes';
 import { DEFAULT_CAPE_TOWN_COORDINATES, ensureSouthAfricanCoordinates } from '../utils/geo';
 
+MapLibreGL.setTelemetryEnabled(false);
+
+const MAP_STYLE_URL = 'https://demotiles.maplibre.org/style.json';
+
+const getZoomLevel = (latDelta: number, lngDelta: number) => {
+  const maxDelta = Math.max(latDelta, lngDelta);
+  if (maxDelta > 20) return 3;
+  if (maxDelta > 10) return 4;
+  if (maxDelta > 6) return 5;
+  if (maxDelta > 3) return 6;
+  if (maxDelta > 2) return 7;
+  if (maxDelta > 1) return 8;
+  if (maxDelta > 0.6) return 10;
+  if (maxDelta > 0.3) return 11;
+  return 12;
+};
+
 export const MapPreview: React.FC<MapPreviewProps> = ({ markers, onMapError, onMarkerPress }) => {
-  const mapRef = useRef<any | null>(null);
   const { width } = useWindowDimensions();
 
-  const region: Region = useMemo(() => {
-    const base = ensureSouthAfricanCoordinates({
-      latitude: markers[0]?.latitude ?? DEFAULT_CAPE_TOWN_COORDINATES.latitude,
-      longitude: markers[0]?.longitude ?? DEFAULT_CAPE_TOWN_COORDINATES.longitude,
+  const invalidMarker = markers.find(
+    (marker) => !Number.isFinite(marker.latitude) || !Number.isFinite(marker.longitude)
+  );
+  if (invalidMarker) {
+    onMapError?.('Unable to render one or more map pins.');
+  }
+
+  const { center, zoomLevel } = useMemo(() => {
+    const fallback = ensureSouthAfricanCoordinates({
+      latitude: DEFAULT_CAPE_TOWN_COORDINATES.latitude,
+      longitude: DEFAULT_CAPE_TOWN_COORDINATES.longitude,
     });
+    if (markers.length === 0) {
+      return { center: [fallback.longitude, fallback.latitude] as [number, number], zoomLevel: 9 };
+    }
+
+    const lats = markers.map((m) => m.latitude);
+    const lngs = markers.map((m) => m.longitude);
+    const minLat = Math.min(...lats);
+    const maxLat = Math.max(...lats);
+    const minLng = Math.min(...lngs);
+    const maxLng = Math.max(...lngs);
+
+    const safeCenter = ensureSouthAfricanCoordinates({
+      latitude: (minLat + maxLat) / 2,
+      longitude: (minLng + maxLng) / 2,
+    });
+    const latDelta = Math.max(0.01, maxLat - minLat);
+    const lngDelta = Math.max(0.01, maxLng - minLng);
 
     return {
-      latitude: base.latitude,
-      longitude: base.longitude,
-      latitudeDelta: markers.length > 1 ? 6 : 4,
-      longitudeDelta: markers.length > 1 ? 6 : 4,
+      center: [safeCenter.longitude, safeCenter.latitude] as [number, number],
+      zoomLevel: getZoomLevel(latDelta, lngDelta),
     };
   }, [markers]);
 
-  useEffect(() => {
-    if (!mapRef.current || markers.length === 0) return;
-    const invalidMarker = markers.find(
-      (marker) => !Number.isFinite(marker.latitude) || !Number.isFinite(marker.longitude)
-    );
-    if (invalidMarker) {
-      onMapError?.('Unable to render one or more map pins.');
-      return;
-    }
-
-    const coords = markers.map((marker: MapMarker) => ({
-      latitude: marker.latitude,
-      longitude: marker.longitude,
-    }));
-    // mapRef typing differs across platforms; keep it flexible here
-    try {
-      (mapRef.current as any).fitToCoordinates(coords, {
-        edgePadding: { top: 60, bottom: 60, left: 40, right: 40 },
-        animated: true,
-      });
-    } catch (_e) {
-      onMapError?.('Unable to center the map preview.');
-    }
-  }, [markers, onMapError]);
-
   const pinStyles = (marker: MapMarker) => ({
     ...styles.pin,
-    backgroundColor: marker.type === 'user' ? '#3b82f6' : '#000', // vibrant blue for user, sleek black for photographer
+    backgroundColor: marker.type === 'user' ? '#3b82f6' : '#000',
     borderColor: marker.type === 'user' ? '#eff6ff' : '#27272a',
     borderWidth: 2,
     padding: marker.type === 'user' ? 6 : 8,
@@ -60,35 +73,37 @@ export const MapPreview: React.FC<MapPreviewProps> = ({ markers, onMapError, onM
 
   return (
     <View style={[styles.container, { minHeight: Math.min(520, width < 480 ? 300 : 400) }]}>
-      <MapView
-        ref={mapRef}
-        style={StyleSheet.absoluteFill}
-        initialRegion={region}
-        moveOnMarkerPress={false}
-        showsUserLocation={markers.some((marker) => marker.type === 'user')}
-        showsCompass={false}
-      >
-        <UrlTile urlTemplate="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" maximumZ={19} />
+      <MapLibreGL.MapView style={StyleSheet.absoluteFill} mapStyle={MAP_STYLE_URL}>
+        <MapLibreGL.Camera
+          centerCoordinate={center}
+          zoomLevel={zoomLevel}
+          animationDuration={600}
+        />
         {markers.map((marker) => (
-          <Marker
+          <MapLibreGL.PointAnnotation
             key={`${marker.type}-${marker.id}`}
-            coordinate={{ latitude: marker.latitude, longitude: marker.longitude }}
-            tracksViewChanges={false}
-            onPress={() => onMarkerPress?.(marker)}
+            id={`${marker.type}-${marker.id}`}
+            coordinate={[marker.longitude, marker.latitude]}
+            onSelected={() => onMarkerPress?.(marker)}
           >
             <View style={pinStyles(marker)}>
-              <Ionicons name={marker.type === 'user' ? 'navigate' : 'camera'} size={marker.type === 'user' ? 14 : 18} color="#fff" style={marker.type === 'user' ? { transform: [{ rotate: '45deg' }] } : undefined} />
+              <Ionicons
+                name={marker.type === 'user' ? 'navigate' : 'camera'}
+                size={marker.type === 'user' ? 14 : 18}
+                color="#fff"
+                style={marker.type === 'user' ? { transform: [{ rotate: '45deg' }] } : undefined}
+              />
             </View>
-          </Marker>
+          </MapLibreGL.PointAnnotation>
         ))}
-      </MapView>
+      </MapLibreGL.MapView>
       <View style={styles.overlay}>
         <Text style={styles.overlayLabel}>Live coverage</Text>
         <Text style={styles.overlayValue}>
           {photographerCount} photographer{photographerCount === 1 ? '' : 's'}
-          {markers.some((marker) => marker.type === 'user') ? ' · you' : ''}
+          {markers.some((marker) => marker.type === 'user') ? ' - you' : ''}
         </Text>
-        <Text style={styles.overlayMeta}>OpenStreetMap tiles via react-native-maps</Text>
+        <Text style={styles.overlayMeta}>OpenStreetMap tiles via MapLibre</Text>
       </View>
     </View>
   );
@@ -139,3 +154,4 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
 });
+

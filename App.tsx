@@ -16,7 +16,7 @@ import { BookingProvider } from './src/store/BookingContext';
 import { SocialProvider } from './src/store/SocialContext';
 import { logo } from './src/assets/images';
 import { Ionicons } from '@expo/vector-icons';
-import { Animated, Text, StyleSheet } from 'react-native';
+import { Animated, Text, StyleSheet, View } from 'react-native';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -90,6 +90,51 @@ const AppContent = () => {
   );
 };
 
+const BootGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [fatalError, setFatalError] = React.useState<string | null>(null);
+  const [bootTimedOut, setBootTimedOut] = React.useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setBootTimedOut(true), 12000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    const errorUtils = (global as any)?.ErrorUtils;
+    if (!errorUtils?.setGlobalHandler) return;
+
+    const previousHandler = errorUtils.getGlobalHandler?.();
+    errorUtils.setGlobalHandler((err: any, isFatal?: boolean) => {
+      const message = err?.message || err?.toString?.() || 'Unknown error';
+      console.warn('BootGuard caught fatal error', message);
+      setFatalError(message);
+      if (previousHandler) {
+        previousHandler(err, isFatal);
+      }
+    });
+
+    return () => {
+      if (previousHandler) {
+        errorUtils.setGlobalHandler(previousHandler);
+      }
+    };
+  }, []);
+
+  if (fatalError || bootTimedOut) {
+    return (
+      <View style={bootStyles.container}>
+        <Text style={bootStyles.title}>Papzi is having trouble starting</Text>
+        <Text style={bootStyles.subtitle}>
+          Please close and reopen the app. If this continues, reinstall the TestFlight build.
+        </Text>
+        {fatalError ? <Text style={bootStyles.error}>{fatalError}</Text> : null}
+      </View>
+    );
+  }
+
+  return <>{children}</>;
+};
+
 const styles = StyleSheet.create({
   toastContainer: {
     position: 'absolute',
@@ -116,6 +161,34 @@ const styles = StyleSheet.create({
   },
 });
 
+const bootStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+    backgroundColor: '#0f172a',
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#f8fafc',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  subtitle: {
+    fontSize: 14,
+    color: '#cbd5f5',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  error: {
+    fontSize: 12,
+    color: '#fca5a5',
+    textAlign: 'center',
+  },
+});
+
 export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -124,14 +197,16 @@ export default function App() {
           <AuthProvider>
             <BookingProvider>
               <SocialProvider>
-                <ErrorBoundary>
-                  <AppDataProvider>
-                    {/* MessagingProvider is INSIDE AppDataProvider so it has auth context */}
-                    <MessagingProvider>
-                      <AppContent />
-                    </MessagingProvider>
-                  </AppDataProvider>
-                </ErrorBoundary>
+                <BootGuard>
+                  <ErrorBoundary>
+                    <AppDataProvider>
+                      {/* MessagingProvider is INSIDE AppDataProvider so it has auth context */}
+                      <MessagingProvider>
+                        <AppContent />
+                      </MessagingProvider>
+                    </AppDataProvider>
+                  </ErrorBoundary>
+                </BootGuard>
               </SocialProvider>
             </BookingProvider>
           </AuthProvider>

@@ -27,7 +27,6 @@ jobs:
   e2e:
     needs: test
     runs-on: ubuntu-latest
-    if: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL != '' && secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY != '' }}
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}

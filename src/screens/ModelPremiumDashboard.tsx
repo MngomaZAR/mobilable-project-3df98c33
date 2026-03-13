@@ -78,7 +78,7 @@ const ModelPremiumDashboard: React.FC = () => {
     const activeSubs = (state.subscriptions ?? []).filter((s: any) => s.status === 'active').length;
 
     return {
-      net: bookingEarnings + tipEarnings + (subEarnings * tierPayoutRate),
+      net: bookingEarnings + tipEarnings + subEarnings,
       activeSubscribers: activeSubs,
       tipsTotal: tipEarnings,
       bookingCount: bookings.filter(b => b.status === 'completed').length,

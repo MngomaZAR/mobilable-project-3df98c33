@@ -75,6 +75,11 @@ const PhotographerDashboardScreen: React.FC = () => {
     longitude: photographerProfile?.longitude ?? 28.0473,
   }), [photographerProfile?.latitude, photographerProfile?.longitude]);
 
+  const clientLocation = useMemo(() => ensureSouthAfricanCoordinates({
+    latitude: activeBooking?.user_latitude ?? DEFAULT_CAPE_TOWN_COORDINATES.latitude,
+    longitude: activeBooking?.user_longitude ?? DEFAULT_CAPE_TOWN_COORDINATES.longitude,
+  }), [activeBooking?.user_latitude, activeBooking?.user_longitude]);
+
   // GPS tracking for accepted bookings
   useEffect(() => {
     if (!currentUser || !isOnline || activeBooking?.status !== 'accepted') return;
@@ -162,7 +167,7 @@ const PhotographerDashboardScreen: React.FC = () => {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await refresh();
+    await Promise.all([refresh(), refreshBookings()]);
     setRefreshing(false);
   };
 
@@ -228,7 +233,7 @@ const PhotographerDashboardScreen: React.FC = () => {
                       ? new Date(booking.booking_date).toLocaleString('en-ZA', { dateStyle: 'medium', timeStyle: 'short' })
                       : 'Date TBD'}
                   </Text>
-                  <Text style={s.requestAmount}>R{(booking.total_amount ?? booking.total_amount ?? 0).toLocaleString('en-ZA')}</Text>
+                  <Text style={s.requestAmount}>R{(booking.total_amount ?? 0).toLocaleString('en-ZA')}</Text>
                 </View>
                 <View style={s.requestActions}>
                   <TouchableOpacity
@@ -299,7 +304,7 @@ const PhotographerDashboardScreen: React.FC = () => {
             )}
           </View>
           <MapTracker
-            client={DEFAULT_CAPE_TOWN_COORDINATES}
+            client={clientLocation}
             photographer={photographerLocation}
             status={activeBooking?.status ?? 'pending'}
           />

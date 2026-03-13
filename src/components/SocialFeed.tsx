@@ -185,18 +185,26 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
   };
 
   const handlePostOptions = (post: Post) => {
-    const doReport = () => {
+    const doReport = async () => {
       setReportedPostIds((prev) => new Set([...prev, post.id]));
       // Persist report to backend
-      import('../config/supabaseClient').then(({ supabase }) =>
-        supabase.from('reports').insert({
+      try {
+        const { supabase } = await import('../config/supabaseClient');
+        const { error } = await supabase.from('reports').insert({
           target_type: 'post',
           target_id: post.id,
           reason: 'user_report',
-        }).then(({ error }) => {
-          if (error) console.warn(error);
-        })
-      );
+        });
+        if (error) throw error;
+        Platform.OS === 'web'
+          ? window.alert('Report submitted. Thanks for keeping Papzi safe.')
+          : Alert.alert('Report submitted', 'Thanks for keeping Papzi safe.');
+      } catch (err) {
+        console.warn(err);
+        Platform.OS === 'web'
+          ? window.alert('Report failed. Please try again.')
+          : Alert.alert('Report failed', 'Please try again.');
+      }
     };
     const doBlock = () => {
       setBlockedUserIds((prev) => new Set([...prev, post.author_id]));
@@ -461,6 +469,11 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
           onEndReachedThreshold={0.6}
           ListFooterComponent={renderFooter}
           ListEmptyComponent={renderEmpty}
+          initialNumToRender={6}
+          maxToRenderPerBatch={10}
+          windowSize={7}
+          removeClippedSubviews={Platform.OS === 'android'}
+          updateCellsBatchingPeriod={50}
         />
       )}
       

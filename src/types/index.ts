@@ -148,7 +148,7 @@ export interface ConversationSummary {
   last_message_at: string | null;
   created_at?: string | null;
   participants?: string[];
-  participant?: { id: string; name: string; avatar_url: string };
+  participant?: { id: string; name: string; avatar_url: string; last_active_at?: string | null };
 }
 
 export interface Review {

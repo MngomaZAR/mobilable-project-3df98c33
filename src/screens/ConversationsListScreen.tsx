@@ -65,8 +65,12 @@ const ConversationsListScreen: React.FC = () => {
   const renderItem = ({ item }: { item: typeof conversations[0] }) => {
     const timestamp = item.last_message_at ?? item.created_at;
     const formatted = timestamp ? new Date(timestamp).toLocaleString() : '';
-    const displayTitle = item.title && item.title !== 'Conversation' ? item.title : 'Chat';
+    const displayTitle = item.participant?.name ?? (item.title && item.title !== 'Conversation' ? item.title : 'Chat');
     const avatarUrl = item.participant?.avatar_url ?? PLACEHOLDER_AVATAR;
+    const lastActive = item.participant?.last_active_at
+      ? new Date(item.participant.last_active_at)
+      : null;
+    const lastActiveLabel = lastActive ? `Last active ${lastActive.toLocaleDateString()}` : null;
 
     return (
       <TouchableOpacity
@@ -92,6 +96,9 @@ const ConversationsListScreen: React.FC = () => {
         <Text style={[styles.cardMessage, { color: colors.textSecondary }]} numberOfLines={2}>
           {item.last_message || 'Start the conversation'}
         </Text>
+        {lastActiveLabel && (
+          <Text style={[styles.cardMeta, { color: colors.textMuted }]}>{lastActiveLabel}</Text>
+        )}
       </TouchableOpacity>
     );
   };
@@ -158,6 +165,7 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: 16, fontWeight: '800', flex: 1 },
   cardTime: { marginLeft: 8, fontSize: 12 },
   cardMessage: {},
+  cardMeta: { marginTop: 6, fontSize: 11 },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   loadingText: { marginTop: 10, fontWeight: '600' },
   separator: { height: 12 },

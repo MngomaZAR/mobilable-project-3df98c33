@@ -109,6 +109,14 @@ const SettingsScreen: React.FC = () => {
     });
   };
 
+  const handleTestVideoCall = () => {
+    if (!currentUser?.id) {
+      Alert.alert('Not ready', 'Please sign in before starting a test call.');
+      return;
+    }
+    navigation.navigate('PaidVideoCall', { creatorId: currentUser.id });
+  };
+
   const handleUpdateAvatar = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
@@ -293,6 +301,22 @@ const SettingsScreen: React.FC = () => {
             </View>
             <Text style={s.versionText}>{environment.env} • {environment.region}</Text>
           </View>
+        </View>
+      </View>
+
+      {/* VIDEO CALL TEST */}
+      <View style={s.section}>
+        <Text style={s.sectionHeader}>VIDEO CALL</Text>
+        <View style={s.group}>
+          <TouchableOpacity style={s.groupItem} onPress={handleTestVideoCall}>
+            <View style={s.itemLeft}>
+              <View style={[s.iconContainer, { backgroundColor: '#3b82f6' }]}>
+                <Ionicons name="videocam" size={16} color="#fff" />
+              </View>
+              <Text style={s.itemText}>Start Test Call</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          </TouchableOpacity>
         </View>
       </View>
 

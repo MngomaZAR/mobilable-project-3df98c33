@@ -17,6 +17,7 @@ import { useAppData } from '../store/AppDataContext';
 import { RootStackParamList } from '../navigation/types';
 import { supabase } from '../config/supabaseClient';
 import { DEFAULT_CAPE_TOWN_COORDINATES, ensureSouthAfricanCoordinates } from '../utils/geo';
+import { NewMessageModal } from '../components/NewMessageModal';
 
 type Navigation = StackNavigationProp<RootStackParamList, 'Root'>;
 
@@ -30,6 +31,7 @@ const PhotographerDashboardScreen: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
   const [showEarningsDetail, setShowEarningsDetail] = useState(false);
+  const [showNewMessage, setShowNewMessage] = useState(false);
 
   const activeBooking = useMemo(
     () => bookings.find(b => b.status === 'accepted') ?? bookings.find(b => b.status === 'pending'),
@@ -178,6 +180,9 @@ const PhotographerDashboardScreen: React.FC = () => {
               {currentUser?.full_name?.split(' ')[0] ?? 'Photographer'}'s Dashboard
             </Text>
           </View>
+          <TouchableOpacity style={s.newMsgBtn} onPress={() => setShowNewMessage(true)}>
+            <Ionicons name="chatbubble-ellipses-outline" size={18} color="#fff" />
+          </TouchableOpacity>
           <View style={s.onlineRow}>
             <Text style={[s.onlineLabel, { color: isOnline ? '#10b981' : '#64748b' }]}>
               {isOnline ? 'LIVE' : 'OFFLINE'}
@@ -271,10 +276,11 @@ const PhotographerDashboardScreen: React.FC = () => {
                     <Text style={s.completeBtnText}>Mark Done</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    style={s.chatBtn}
+                    style={s.chatLabelBtn}
                     onPress={() => openChatWithClient(booking.client_id, 'Client')}
                   >
-                    <Ionicons name="chatbubble" size={18} color="#8b5cf6" />
+                    <Ionicons name="chatbubble-ellipses-outline" size={16} color="#8b5cf6" />
+                    <Text style={s.chatLabelText}>Message</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -383,6 +389,18 @@ const PhotographerDashboardScreen: React.FC = () => {
           </View>
         </View>
       </Modal>
+
+      <NewMessageModal
+        visible={showNewMessage}
+        onClose={() => setShowNewMessage(false)}
+        profiles={state.profiles ?? []}
+        currentUserId={currentUser?.id}
+        onSelectUser={async (user) => {
+          const convo = await startConversationWithUser(user.id, user.full_name ?? 'User');
+          setShowNewMessage(false);
+          navigation.navigate('ChatThread', { conversationId: convo.id, title: convo.title });
+        }}
+      />
     </SafeAreaView>
   );
 };
@@ -391,6 +409,7 @@ const s = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#0a0a14' },
   container: { padding: 16, paddingBottom: 120 },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  newMsgBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#0f172a', alignItems: 'center', justifyContent: 'center', marginRight: 10 },
   eyebrow: { color: '#8b5cf6', fontWeight: '800', fontSize: 11, textTransform: 'uppercase', letterSpacing: 1.5 },
   title: { color: '#fff', fontSize: 22, fontWeight: '900', marginTop: 2 },
   onlineRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
@@ -415,6 +434,8 @@ const s = StyleSheet.create({
   acceptBtnText: { color: '#fff', fontWeight: '800', fontSize: 13 },
   declineBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(239,68,68,0.1)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(239,68,68,0.3)' },
   chatBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(139,92,246,0.1)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(139,92,246,0.3)' },
+  chatLabelBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10, backgroundColor: 'rgba(139,92,246,0.1)', borderWidth: 1, borderColor: 'rgba(139,92,246,0.3)' },
+  chatLabelText: { color: '#8b5cf6', fontWeight: '800', fontSize: 12 },
   activeCard: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#0f172a' },
   activeActions: { flexDirection: 'row', gap: 8 },
   completeBtn: { backgroundColor: '#3b82f6', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 },

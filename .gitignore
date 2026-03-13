@@ -46,3 +46,7 @@ yarn-error.log*
 .pnpm-debug.log*
 package.json.bak
 errors.log
+
+# local tooling binaries
+/supabase.exe
+/supabase_windows_amd64.tar.gz

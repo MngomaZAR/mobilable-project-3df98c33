@@ -77,6 +77,8 @@ const HomeScreen: React.FC = () => {
 
   const columns = width > 900 ? 3 : width > 700 ? 2 : 1;
   const isWideHero = width > 820;
+  const role = state.currentUser?.role ?? 'client';
+  const showGetStarted = !loading && !!state.currentUser && state.bookings.length === 0;
 
   const filteredTalent = useMemo(() => {
     let list = discoveryMode === 'photographers' ? [...state.photographers] : [...state.models];
@@ -343,6 +345,53 @@ const HomeScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
       </View>
+
+      {showGetStarted && (
+        <View style={[styles.getStartedCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={styles.getStartedHeader}>
+            <Ionicons name="sparkles" size={18} color={colors.accent} />
+            <Text style={[styles.getStartedTitle, { color: colors.text }]}>Get started</Text>
+          </View>
+          <Text style={[styles.getStartedBody, { color: colors.textSecondary }]}>
+            {role === 'client'
+              ? 'Find a creator and book your first session in minutes.'
+              : 'Set up your profile and start accepting bookings.'}
+          </Text>
+          <View style={styles.getStartedActions}>
+            {role === 'client' ? (
+              <>
+                <TouchableOpacity
+                  style={[styles.buttonPrimary, { backgroundColor: colors.accent }]}
+                  onPress={() => navigation.navigate('Feed')}
+                >
+                  <Text style={[styles.buttonPrimaryText, { color: colors.card }]}>Browse creators</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.buttonGhost, { borderColor: colors.border }]}
+                  onPress={() => navigation.navigate('Settings')}
+                >
+                  <Text style={[styles.buttonGhostText, { color: colors.text }]}>Complete profile</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <TouchableOpacity
+                  style={[styles.buttonPrimary, { backgroundColor: colors.accent }]}
+                  onPress={() => parentNavigation?.navigate('CreatePost')}
+                >
+                  <Text style={[styles.buttonPrimaryText, { color: colors.card }]}>Post your work</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.buttonGhost, { borderColor: colors.border }]}
+                  onPress={() => navigation.navigate('Settings')}
+                >
+                  <Text style={[styles.buttonGhostText, { color: colors.text }]}>Update profile</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </View>
+      )}
 
       <View style={styles.sectionHeader}>
         <View>
@@ -797,6 +846,20 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 4 },
   },
+  getStartedCard: {
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+  },
+  getStartedHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
+  getStartedTitle: { fontWeight: '800', fontSize: 16 },
+  getStartedBody: { fontSize: 13, marginBottom: 12 },
+  getStartedActions: { flexDirection: 'row', gap: 10 },
   filtersRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',

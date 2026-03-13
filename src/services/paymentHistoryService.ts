@@ -10,6 +10,7 @@ export interface PaymentRow {
   status: 'pending' | 'completed' | 'failed' | 'cancelled';
   provider: string;
   provider_payment_id: string | null;
+  provider_status?: string | null;
   created_at: string;
   processed_at: string | null;
 }
@@ -21,7 +22,7 @@ export const fetchMyPayments = async (): Promise<PaymentRow[]> => {
 
   const { data, error } = await supabase
     .from('payments')
-    .select('id, booking_id, customer_id, amount, currency, description, status, provider, provider_payment_id, created_at, processed_at')
+    .select('id, booking_id, customer_id, amount, currency, description, status, provider, provider_payment_id, provider_status, created_at, processed_at')
     .eq('customer_id', user.id)
     .order('created_at', { ascending: false })
     .limit(50);

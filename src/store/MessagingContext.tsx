@@ -34,7 +34,7 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       // Step 1: get conversation IDs this user participates in
       const { data: participations, error: partError } = await supabase
         .from('conversation_participants')
-        .select('conversation_id')
+        .select('conversation_id, user_id, last_read_at, profiles:user_id(id, full_name, avatar_url, updated_at)')
         .eq('user_id', currentUser.id);
 
       if (partError) throw partError;
@@ -44,6 +44,32 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       }
 
       const ids = participations.map((p: any) => p.conversation_id);
+
+      // Build a participant map with richer context
+      const participantMap: Record<string, { id: string; name: string; avatar_url: string; last_active_at?: string | null }> = {};
+      const participantsByConvo: Record<string, string[]> = {};
+      try {
+        const { data: allParticipants } = await supabase
+          .from('conversation_participants')
+          .select('conversation_id, user_id, last_read_at, profiles:user_id(id, full_name, avatar_url, updated_at)')
+          .in('conversation_id', ids);
+
+        (allParticipants ?? []).forEach((row: any) => {
+          if (!participantsByConvo[row.conversation_id]) participantsByConvo[row.conversation_id] = [];
+          participantsByConvo[row.conversation_id].push(row.user_id);
+          if (row.user_id === currentUser.id) return;
+          const profile = row.profiles;
+          if (!profile) return;
+          participantMap[row.conversation_id] = {
+            id: profile.id,
+            name: profile.full_name ?? 'User',
+            avatar_url: profile.avatar_url ?? '',
+            last_active_at: profile.updated_at ?? row.last_read_at ?? null,
+          };
+        });
+      } catch {
+        // Non-fatal — fallback to title-only
+      }
 
       // Step 2: fetch conversation details
       const { data, error } = await supabase
@@ -56,11 +82,12 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
       const mapped: ConversationSummary[] = (data ?? []).map((c: any) => ({
         id: c.id,
-        title: c.title ?? 'Conversation',
+        title: c.title ?? participantMap[c.id]?.name ?? 'Conversation',
         last_message: c.last_message ?? '',
         last_message_at: c.last_message_at ?? c.created_at,
         created_at: c.created_at,
-        participants: ids, // simplified — all participant IDs
+        participants: participantsByConvo[c.id] ?? [],
+        participant: participantMap[c.id],
       }));
 
       setConversations(mapped);

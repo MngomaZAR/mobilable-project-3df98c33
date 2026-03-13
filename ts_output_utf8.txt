@@ -1,7 +1,0 @@
-﻿src/screens/BookingsScreen.tsx(12,7): error TS2741: Property 'cancelled' is missing in type '{ pending: string; accepted: string; completed: string; reviewed: string; }' but required in type 'Record<BookingStatus, string>'.
-supabase/functions/push-dispatcher/index.ts(1,30): error TS2307: Cannot find module 'https://esm.sh/@supabase/supabase-js@2.49.8' or its corresponding type declarations.
-supabase/functions/push-dispatcher/index.ts(17,1): error TS2304: Cannot find name 'Deno'.
-supabase/functions/push-dispatcher/index.ts(17,19): error TS7006: Parameter 'req' implicitly has an 'any' type.
-supabase/functions/push-dispatcher/index.ts(21,25): error TS2304: Cannot find name 'Deno'.
-supabase/functions/push-dispatcher/index.ts(22,28): error TS2304: Cannot find name 'Deno'.
-supabase/functions/push-dispatcher/index.ts(71,40): error TS7006: Parameter 'to' implicitly has an 'any' type.

@@ -15,6 +15,7 @@ import { useMessaging } from '../store/MessagingContext';
 import { RootStackParamList } from '../navigation/types';
 import { supabase } from '../config/supabaseClient';
 import CreatePremiumBox from './CreatePremiumBox';
+import { NewMessageModal } from '../components/NewMessageModal';
 import { sendTip } from '../services/monetisationService';
 
 const { width } = Dimensions.get('window');
@@ -23,7 +24,7 @@ type Navigation = StackNavigationProp<RootStackParamList, 'Root'>;
 const ModelPremiumDashboard: React.FC = () => {
   const navigation = useNavigation<Navigation>();
   const { currentUser } = useAuth();
-  const { bookings, refreshBookings } = useBooking();
+  const { bookings, refreshBookings, acceptBooking, declineBooking } = useBooking();
   const { state, refresh } = useAppData();
   const { startConversationWithUser } = useMessaging();
   const [showPremiumBox, setShowPremiumBox] = useState(false);
@@ -31,6 +32,8 @@ const ModelPremiumDashboard: React.FC = () => {
   const [tierPayoutRate, setTierPayoutRate] = useState(0.70);
   const [showSubscribers, setShowSubscribers] = useState(false);
   const [subscribers, setSubscribers] = useState<any[]>([]);
+  const [showNewMessage, setShowNewMessage] = useState(false);
+  const [acceptingId, setAcceptingId] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -110,6 +113,35 @@ const ModelPremiumDashboard: React.FC = () => {
     }
   };
 
+  const handleAcceptBooking = async (bookingId: string) => {
+    setAcceptingId(bookingId);
+    try {
+      await acceptBooking(bookingId);
+      Alert.alert('✅ Booking Accepted', 'The client has been notified. Navigate to their location.');
+    } catch (err: any) {
+      Alert.alert('Error', err?.message ?? 'Could not accept booking.');
+    } finally {
+      setAcceptingId(null);
+    }
+  };
+
+  const handleDeclineBooking = async (bookingId: string) => {
+    Alert.alert('Decline Booking', 'Are you sure? The client will be refunded.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Decline',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await declineBooking(bookingId);
+          } catch (err: any) {
+            Alert.alert('Error', err?.message ?? 'Could not decline booking.');
+          }
+        },
+      },
+    ]);
+  };
+
   return (
     <SafeAreaView style={s.safeArea}>
       <ScrollView
@@ -124,12 +156,17 @@ const ModelPremiumDashboard: React.FC = () => {
               Welcome, {currentUser?.full_name?.split(' ')[0] ?? 'Creator'} ✨
             </Text>
           </View>
-          <TouchableOpacity onPress={() => navigation.navigate('AccountConfig')}>
-            <Image
-              source={{ uri: currentUser?.avatar_url ?? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200' }}
-              style={s.avatar}
-            />
-          </TouchableOpacity>
+          <View style={s.headerActions}>
+            <TouchableOpacity style={s.iconBtn} onPress={() => setShowNewMessage(true)}>
+              <Ionicons name="chatbubble-ellipses-outline" size={20} color="#fff" />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => navigation.navigate('AccountConfig')}>
+              <Image
+                source={{ uri: currentUser?.avatar_url ?? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200' }}
+                style={s.avatar}
+              />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Hero earnings card */}
@@ -166,6 +203,36 @@ const ModelPremiumDashboard: React.FC = () => {
             </Text>
             <Ionicons name="chevron-forward" size={16} color="#f59e0b" />
           </TouchableOpacity>
+        )}
+
+        {pendingBookings.length > 0 && (
+          <View style={s.pendingWrap}>
+            {pendingBookings.slice(0, 3).map(booking => (
+              <View key={booking.id} style={s.pendingCard}>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.pendingTitle}>{booking.package_type ?? 'Booking Request'}</Text>
+                  <Text style={s.pendingMeta}>
+                    {booking.booking_date
+                      ? new Date(booking.booking_date).toLocaleDateString('en-ZA', { dateStyle: 'medium' })
+                      : 'Date TBD'}
+                  </Text>
+                  <Text style={s.pendingMeta}>R{(booking.total_amount ?? 0).toLocaleString('en-ZA')}</Text>
+                </View>
+                <View style={s.pendingActions}>
+                  <TouchableOpacity
+                    style={s.pendingAccept}
+                    onPress={() => handleAcceptBooking(booking.id)}
+                    disabled={acceptingId === booking.id}
+                  >
+                    <Text style={s.pendingAcceptText}>{acceptingId === booking.id ? '...' : 'Accept'}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={s.pendingDecline} onPress={() => handleDeclineBooking(booking.id)}>
+                    <Ionicons name="close" size={18} color="#ef4444" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))}
+          </View>
         )}
 
         {/* Quick actions */}
@@ -285,6 +352,18 @@ const ModelPremiumDashboard: React.FC = () => {
         onSuccess={() => setShowPremiumBox(false)}
       />
 
+      <NewMessageModal
+        visible={showNewMessage}
+        onClose={() => setShowNewMessage(false)}
+        profiles={state.profiles ?? []}
+        currentUserId={currentUser?.id}
+        onSelectUser={async (user) => {
+          const convo = await startConversationWithUser(user.id, user.full_name ?? 'User');
+          setShowNewMessage(false);
+          navigation.navigate('ChatThread', { conversationId: convo.id, title: convo.title });
+        }}
+      />
+
       {/* Subscribers modal */}
       <Modal visible={showSubscribers} transparent animationType="slide" onRequestClose={() => setShowSubscribers(false)}>
         <View style={s.modalBg}>
@@ -325,6 +404,8 @@ const s = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#0a0a14' },
   container: { padding: 20, paddingBottom: 100 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  iconBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' },
   greeting: { color: '#ec4899', fontWeight: '800', fontSize: 11, textTransform: 'uppercase', letterSpacing: 1.5 },
   title: { color: '#fff', fontSize: 22, fontWeight: '900', marginTop: 2 },
   avatar: { width: 48, height: 48, borderRadius: 24, borderWidth: 2, borderColor: '#ec4899' },
@@ -338,6 +419,14 @@ const s = StyleSheet.create({
   alertCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1e1a0a', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#f59e0b40', marginBottom: 16, gap: 10 },
   alertDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#f59e0b' },
   alertText: { flex: 1, color: '#f59e0b', fontWeight: '700' },
+  pendingWrap: { marginBottom: 18 },
+  pendingCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#0f172a', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#334155', marginBottom: 10, gap: 12 },
+  pendingTitle: { color: '#fff', fontWeight: '800', fontSize: 14 },
+  pendingMeta: { color: '#94a3b8', fontSize: 12, marginTop: 2 },
+  pendingActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  pendingAccept: { backgroundColor: '#10b981', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 },
+  pendingAcceptText: { color: '#fff', fontWeight: '800', fontSize: 12 },
+  pendingDecline: { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(239,68,68,0.12)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(239,68,68,0.3)' },
   actionsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 24 },
   actionBtn: { width: (width - 40 - 36) / 4, alignItems: 'center' },
   actionIcon: { width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },

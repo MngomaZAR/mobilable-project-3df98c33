@@ -7,12 +7,16 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppData } from '../store/AppDataContext';
 import { useTheme } from '../store/ThemeContext';
+import { useMessaging } from '../store/MessagingContext';
+import { NewMessageModal } from '../components/NewMessageModal';
 
 type Navigation = StackNavigationProp<RootStackParamList>;
 
 const AdminDashboardScreen: React.FC = () => {
   const navigation = useNavigation<Navigation>();
   const { state } = useAppData();
+  const { startConversationWithUser } = useMessaging();
+  const [showNewMessage, setShowNewMessage] = React.useState(false);
   const { colors, isDark } = useTheme();
 
   const pendingBookings = useMemo(
@@ -28,9 +32,17 @@ const AdminDashboardScreen: React.FC = () => {
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.bg }]}>
       <ScrollView contentContainerStyle={styles.container}>
         <View style={styles.hero}>
-          <Text style={[styles.eyebrow, { color: colors.accent }]}>Control Center</Text>
-          <Text style={[styles.title, { color: colors.text }]}>Admin Overview</Text>
-          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Platform health and operations dashboard.</Text>
+          <View style={styles.heroRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.eyebrow, { color: colors.accent }]}>Control Center</Text>
+              <Text style={[styles.title, { color: colors.text }]}>Admin Overview</Text>
+              <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Platform health and operations dashboard.</Text>
+            </View>
+            <TouchableOpacity style={[styles.heroBtn, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={() => setShowNewMessage(true)}>
+              <Ionicons name="chatbubble-ellipses-outline" size={20} color={colors.accent} />
+              <Text style={[styles.heroBtnText, { color: colors.text }]}>New Message</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         <View style={styles.statsRow}>
@@ -82,6 +94,18 @@ const AdminDashboardScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      <NewMessageModal
+        visible={showNewMessage}
+        onClose={() => setShowNewMessage(false)}
+        profiles={state.profiles ?? []}
+        currentUserId={state.currentUser?.id}
+        onSelectUser={async (user) => {
+          const convo = await startConversationWithUser(user.id, user.full_name ?? 'User');
+          setShowNewMessage(false);
+          navigation.navigate('ChatThread', { conversationId: convo.id, title: convo.title });
+        }}
+      />
     </SafeAreaView>
   );
 };
@@ -90,9 +114,12 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1 },
   container: { padding: 20, paddingBottom: 120 },
   hero: { marginBottom: 24 },
+  heroRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   eyebrow: { fontWeight: '900', marginBottom: 4, letterSpacing: 1, fontSize: 12, textTransform: 'uppercase' },
   title: { fontSize: 32, fontWeight: '900', letterSpacing: -1 },
   subtitle: { fontSize: 16, marginTop: 4 },
+  heroBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, borderWidth: 1 },
+  heroBtnText: { fontWeight: '700', fontSize: 13 },
   statsRow: { flexDirection: 'row', marginBottom: 20, gap: 10 },
   statCard: {
     flex: 1,

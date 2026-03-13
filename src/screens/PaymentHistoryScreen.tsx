@@ -3,12 +3,12 @@ import {
   ActivityIndicator,
   FlatList,
   RefreshControl,
-  SafeAreaView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../store/ThemeContext';
@@ -77,6 +77,9 @@ const PaymentHistoryScreen: React.FC = () => {
                   <Text style={[styles.date, { color: colors.textMuted }]}>
                     {new Date(item.created_at).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' })}
                   </Text>
+                  <Text style={[styles.provider, { color: colors.textMuted }]}>
+                    {item.provider?.toUpperCase() ?? 'PAYFAST'} {item.provider_status ? `· ${item.provider_status}` : ''}
+                  </Text>
                 </View>
                 <View style={styles.amountCol}>
                   <Text style={[styles.amount, { color: colors.text }]}>
@@ -118,6 +121,7 @@ const styles = StyleSheet.create({
   info: { flex: 1 },
   desc: { fontWeight: '700', fontSize: 14 },
   date: { fontSize: 12, marginTop: 2 },
+  provider: { fontSize: 11, marginTop: 2 },
   amountCol: { alignItems: 'flex-end', gap: 4 },
   amount: { fontWeight: '800', fontSize: 16 },
   statusBadge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },

@@ -12,6 +12,8 @@ import { RootStackParamList } from '../navigation/types';
 import { Ionicons } from '@expo/vector-icons';
 import { RequestPopup } from '../components/RequestPopup';
 import { supabase } from '../config/supabaseClient';
+import { BOOKING_PACKAGES } from '../constants/pricing';
+import { haversineDistanceKm } from '../utils/geo';
 const SA_BOUNDS = {
   minLat: -35,
   maxLat: -22,
@@ -200,22 +202,39 @@ const MapScreen: React.FC = () => {
   // Real-time listener for incoming Uber-like requests
   useEffect(() => {
     if (!currentUser?.id) return;
-    const channel = supabase.channel(`public:bookings:photographer_id=eq.${currentUser.id}`);
+    const isModel = currentUser?.role === 'model';
+    const filterColumn = isModel ? 'model_id' : 'photographer_id';
+    const channel = supabase.channel(`public:bookings:${filterColumn}=eq.${currentUser.id}`);
     
     channel.on(
       'postgres_changes',
-      { event: 'INSERT', schema: 'public', table: 'bookings', filter: `photographer_id=eq.${currentUser.id}` },
+      { event: 'INSERT', schema: 'public', table: 'bookings', filter: `${filterColumn}=eq.${currentUser.id}` },
       (payload) => {
         if (payload.new.status === 'pending' && payload.new.user_latitude && payload.new.user_longitude) {
-          // Calculate mock distance or real distance here
-          setIncomingRequest({ ...payload.new, distance: '1.2 km' });
+          const userLat = Number(payload.new.user_latitude);
+          const userLng = Number(payload.new.user_longitude);
+          let distanceLabel = '2.4 km';
+          if (currentUser?.id) {
+            const creator =
+              currentUser.role === 'model'
+                ? state.models.find((m) => m.id === currentUser.id)
+                : state.photographers.find((p) => p.id === currentUser.id);
+            if (creator?.latitude && creator?.longitude) {
+              const km = haversineDistanceKm(
+                { latitude: creator.latitude, longitude: creator.longitude },
+                { latitude: userLat, longitude: userLng }
+              );
+              distanceLabel = `${km.toFixed(1)} km`;
+            }
+          }
+          setIncomingRequest({ ...payload.new, distance: distanceLabel });
           setShowPopup(true);
         }
       }
     ).subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [currentUser]);
+  }, [currentUser, state.models, state.photographers]);
 
   const handleRequestBooking = async (marker: MapMarker) => {
     if (!userCoordinates) {
@@ -224,19 +243,23 @@ const MapScreen: React.FC = () => {
     }
     setIsRequesting(true);
     try {
+      const instantPackage = BOOKING_PACKAGES.find((pkg) => pkg.id === 'instant') ?? BOOKING_PACKAGES[0];
+      const baseAmount = instantPackage.basePrice;
+      const commissionAmount = Math.round(baseAmount * 0.3);
+      const payoutAmount = baseAmount - commissionAmount;
       // Create a pending booking straight from the map
       const { error } = await supabase.from('bookings').insert({
         client_id: currentUser?.id,
         photographer_id: marker.type === 'photographer' ? marker.id : null,
         model_id: marker.type === 'model' ? marker.id : null,
         status: 'pending',
-        package_type: 'Live Map Request',
+        package_type: instantPackage.label,
         user_latitude: userCoordinates.lat,
         user_longitude: userCoordinates.lng,
         booking_date: new Date().toISOString(),
-        total_amount: 1500, // mock fast booking price
-        payout_amount: 1050,
-        commission_amount: 450
+        total_amount: baseAmount,
+        payout_amount: payoutAmount,
+        commission_amount: commissionAmount
       });
 
       if (error) throw error;

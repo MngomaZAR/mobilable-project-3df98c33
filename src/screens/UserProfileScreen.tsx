@@ -31,6 +31,10 @@ const UserProfileScreen: React.FC = () => {
     () => state.photographers.find((p) => p.id === params.userId) || state.models.find((m) => m.id === params.userId) || params.photographer,
     [params.photographer, params.userId, state.photographers, state.models]
   );
+  const profileFallback = useMemo(
+    () => state.profiles.find((p) => p.id === params.userId),
+    [state.profiles, params.userId]
+  );
   
   const isFollowing = useMemo(
     () => state.follows?.some(f => f.following_id === talent?.id) ?? false,
@@ -43,23 +47,37 @@ const UserProfileScreen: React.FC = () => {
   );
 
   const handleMessage = async () => {
-    if (!talent) return;
+    const targetId = params.userId;
+    const targetName = talent?.name ?? profileFallback?.full_name ?? 'User';
     try {
-      const convo = await startConversationWithUser(talent.id, talent.name);
+      const convo = await startConversationWithUser(targetId, targetName);
       navigation.navigate('ChatThread', { conversationId: convo.id, title: convo.title });
     } catch (e) {
       // handled in context
     }
   };
 
+  const submitReport = async (targetId: string) => {
+    try {
+      await reportContent({ targetType: 'profile', targetId, reason: 'Inappropriate content' });
+      Platform.OS === 'web'
+        ? window.alert('Report submitted. Our team will review it shortly.')
+        : Alert.alert('Report submitted', 'Our team will review it shortly.');
+    } catch (e: any) {
+      const msg = e?.message ?? 'Report failed. Please try again.';
+      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Report failed', msg);
+    }
+  };
+
   const handleReport = () => {
-    if (!talent) return;
+    const targetId = talent?.id ?? params.userId;
+    if (!targetId) return;
     // We would ideally show an ActionSheet or Modal here, but for now we just use a confirm alert
     Platform.OS === 'web' 
-      ? window.confirm('Report this user to admin?') && reportContent({ targetType: 'profile', targetId: talent.id, reason: 'Inappropriate content' })
+      ? window.confirm('Report this user to admin?') && submitReport(targetId)
       : Alert.alert('Report User', 'Report this user to admin?', [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Report', style: 'destructive', onPress: () => reportContent({ targetType: 'profile', targetId: talent.id, reason: 'Inappropriate content' }) }
+          { text: 'Report', style: 'destructive', onPress: () => submitReport(targetId) }
         ]);
   };
 
@@ -118,16 +136,8 @@ const UserProfileScreen: React.FC = () => {
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
           <Ionicons name="chevron-back" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={[styles.title, { color: colors.text }]}>{talent?.name ?? 'Creator'}</Text>
-        <TouchableOpacity style={{ marginLeft: 'auto' }} onPress={() => {
-            if (!talent) return;
-            Platform.OS === 'web' 
-                ? window.confirm('Report this user to admin?') && reportContent({ targetType: 'profile', targetId: talent.id, reason: 'Inappropriate content' })
-                : Alert.alert('Report User', 'Report this user to admin?', [
-                    { text: 'Cancel', style: 'cancel' },
-                    { text: 'Report', style: 'destructive', onPress: () => reportContent({ targetType: 'profile', targetId: talent.id, reason: 'Inappropriate content' }) }
-                    ]);
-        }}>
+        <Text style={[styles.title, { color: colors.text }]}>{talent?.name ?? profileFallback?.full_name ?? 'Creator'}</Text>
+        <TouchableOpacity style={{ marginLeft: 'auto' }} onPress={handleReport}>
           <Ionicons name="ellipsis-vertical" size={24} color={colors.text} />
         </TouchableOpacity>
       </View>
@@ -173,6 +183,16 @@ const UserProfileScreen: React.FC = () => {
             <Ionicons name="chatbubble-outline" size={18} color={isDark ? colors.bg : colors.card} />
             <Text style={[styles.actionBtnText, { color: isDark ? colors.bg : colors.card }]}>Message</Text>
           </TouchableOpacity>
+
+          {state.currentUser?.role === 'admin' && (
+            <TouchableOpacity
+              style={[styles.actionBtn, { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border }]}
+              onPress={handleMessage}
+            >
+              <Ionicons name="call-outline" size={18} color={colors.text} />
+              <Text style={[styles.actionBtnText, { color: colors.text }]}>Contact user</Text>
+            </TouchableOpacity>
+          )}
 
           <TouchableOpacity 
             style={[styles.actionBtn, { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border }]} 

@@ -8,6 +8,7 @@ import { useAppData } from '../store/AppDataContext';
 import { useMessaging } from '../store/MessagingContext';
 import { BookingCalendar } from '../components/BookingCalendar';
 import { Ionicons } from '@expo/vector-icons';
+import { BOOKING_PACKAGES } from '../constants/pricing';
 
 type Route = RouteProp<RootStackParamList, 'BookingForm'>;
 type Navigation = StackNavigationProp<RootStackParamList, 'BookingForm'>;
@@ -19,7 +20,7 @@ const BookingFormScreen: React.FC = () => {
   const { startConversationWithUser } = useMessaging();
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [timeSlot, setTimeSlot] = useState('Golden hour (4-7)');
-  const [packageType, setPackageType] = useState('Half-day coverage');
+  const [selectedPackageId, setSelectedPackageId] = useState(BOOKING_PACKAGES[1]?.id ?? 'starter');
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -42,11 +43,17 @@ const BookingFormScreen: React.FC = () => {
     return `${selectedDate.toDateString()} Â· ${timeSlot}`;
   }, [selectedDate, timeSlot]);
 
+  const selectedPackage = useMemo(
+    () => BOOKING_PACKAGES.find((pkg) => pkg.id === selectedPackageId) ?? BOOKING_PACKAGES[0],
+    [selectedPackageId]
+  );
+
   /** Base rate in ZAR derived from price-tier (number of $ signs) */
   const estimatedBaseAmount = useMemo(() => {
     const level = ((talent?.price_range || '').match(/\$/g) || []).length || 2;
-    return level * 1200;
-  }, [talent.price_range]);
+    const multiplier = Math.max(0.75, level / 2); // level 2 = 1x baseline
+    return Math.round(selectedPackage.basePrice * multiplier);
+  }, [talent.price_range, selectedPackage.basePrice]);
 
   const estimatedRate = `From R${estimatedBaseAmount.toLocaleString('en-ZA')}`;
   const commissionAmount = Math.round(estimatedBaseAmount * 0.30);
@@ -67,7 +74,7 @@ const BookingFormScreen: React.FC = () => {
       const booking = await createBooking({
         talent_id: talent.id,
         booking_date: bookingDate,
-        package_type: `${packageType} Â· ${timeSlot}`,
+        package_type: `${selectedPackage.label} · ${timeSlot}`,
         notes,
         base_amount: estimatedBaseAmount,
         travel_amount: 0,
@@ -116,15 +123,34 @@ const BookingFormScreen: React.FC = () => {
         <Text style={styles.selectedDateText}>{formattedDate}</Text>
       </View>
       <BookingCalendar value={selectedDate} onChange={setSelectedDate} timeSlot={timeSlot} onTimeChange={setTimeSlot} />
-
       <View style={styles.detailsCard}>
         <Text style={styles.label}>Package</Text>
-        <TextInput
-          placeholder="Half-day coverage"
-          value={packageType}
-          onChangeText={setPackageType}
-          style={styles.input}
-        />
+        <Text style={styles.packageHint}>Choose a package for instant pricing clarity.</Text>
+        <View style={styles.packageGrid}>
+          {BOOKING_PACKAGES.map((pkg) => {
+            const isActive = pkg.id === selectedPackageId;
+            return (
+              <TouchableOpacity
+                key={pkg.id}
+                style={[styles.packageCard, isActive && styles.packageCardActive]}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  setSelectedPackageId(pkg.id);
+                }}
+              >
+                <Text style={[styles.packageTitle, isActive && styles.packageTitleActive]}>{pkg.label}</Text>
+                <Text style={[styles.packageDuration, isActive && styles.packageMetaActive]}>{pkg.duration}</Text>
+                <Text style={[styles.packagePrice, isActive && styles.packageTitleActive]}>
+                  From R{Math.round(pkg.basePrice).toLocaleString('en-ZA')}
+                </Text>
+                <Text style={[styles.packageMeta, isActive && styles.packageMetaActive]}>{pkg.description}</Text>
+                <Text style={[styles.packageMeta, isActive && styles.packageMetaActive]}>
+                  {pkg.highlights.join(' • ')}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
 
         <Text style={styles.label}>Notes</Text>
         <TextInput
@@ -243,13 +269,59 @@ const styles = StyleSheet.create({
     borderColor: '#e5e7eb',
     marginBottom: 10,
   },
-  detailsCard: {
+    detailsCard: {
     backgroundColor: '#fff',
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: '#e5e7eb',
     padding: 12,
     marginTop: 10,
+  },
+  packageHint: {
+    color: '#64748b',
+    fontSize: 12,
+    marginBottom: 10,
+  },
+  packageGrid: {
+    gap: 10,
+    marginBottom: 14,
+  },
+  packageCard: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  packageCardActive: {
+    borderColor: '#0f172a',
+    backgroundColor: '#fff7ed',
+  },
+  packageTitle: {
+    color: '#0f172a',
+    fontWeight: '800',
+    fontSize: 14,
+  },
+  packageTitleActive: {
+    color: '#0f172a',
+  },
+  packageDuration: {
+    color: '#64748b',
+    fontSize: 12,
+    marginTop: 4,
+  },
+  packagePrice: {
+    color: '#f97316',
+    fontWeight: '800',
+    marginTop: 6,
+  },
+  packageMeta: {
+    color: '#64748b',
+    fontSize: 11,
+    marginTop: 4,
+  },
+  packageMetaActive: {
+    color: '#475569',
   },
   selectedDateText: {
     color: '#0f172a',
@@ -322,4 +394,9 @@ const styles = StyleSheet.create({
 });
 
 export default BookingFormScreen;
+
+
+
+
+
 

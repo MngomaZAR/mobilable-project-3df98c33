@@ -7,7 +7,7 @@ import { MapTracker } from '../components/MapTracker';
 import { RootStackParamList } from '../navigation/types';
 import { Booking, Photographer } from '../types';
 import { useAppData } from '../store/AppDataContext';
-import { DEFAULT_CAPE_TOWN_COORDINATES, ensureSouthAfricanCoordinates } from '../utils/geo';
+import { DEFAULT_CAPE_TOWN_COORDINATES, ensureSouthAfricanCoordinates, haversineDistanceKm } from '../utils/geo';
 import { hasSupabase, supabase } from '../config/supabaseClient';
 
 type Route = RouteProp<RootStackParamList, 'BookingTracking'>;
@@ -181,6 +181,23 @@ const BookingTrackingScreen: React.FC = () => {
         <Text style={styles.cardTitle}>Status</Text>
         <Text style={styles.cardValue}>{booking.status.toUpperCase()}</Text>
         <Text style={styles.cardMeta}>Status updates automatically after secure booking and payment confirmation.</Text>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Live ETA</Text>
+        {(() => {
+          const distanceKm = haversineDistanceKm(livePhotographerLocation, liveClientLocation);
+          const avgSpeedKmh = 35; // urban travel average
+          const etaMinutes = Math.max(3, Math.round((distanceKm / avgSpeedKmh) * 60));
+          return (
+            <>
+              <Text style={styles.cardValue}>{etaMinutes} min</Text>
+              <Text style={styles.cardMeta}>
+                ~{distanceKm.toFixed(1)} km away · Updates as your creator moves.
+              </Text>
+            </>
+          );
+        })()}
       </View>
 
       <View style={styles.row}>

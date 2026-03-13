@@ -1,9 +1,10 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import MapLibreGL from '@maplibre/maplibre-react-native';
 import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import { BookingStatus } from '../types';
 
-const MAP_STYLE_URL = 'https://demotiles.maplibre.org/style.json';
+// Suppress the default API key warning (we use OpenStreetMap tiles, no key needed)
+MapLibreGL.setAccessToken(null);
 
 type Coordinate = {
   latitude: number;
@@ -16,76 +17,77 @@ type Props = {
   status: BookingStatus;
 };
 
-const getZoomLevel = (latDelta: number, lngDelta: number) => {
-  const maxDelta = Math.max(latDelta, lngDelta);
-  if (maxDelta > 20) return 3;
-  if (maxDelta > 10) return 4;
-  if (maxDelta > 6) return 5;
-  if (maxDelta > 3) return 6;
-  if (maxDelta > 2) return 7;
-  if (maxDelta > 1) return 8;
-  if (maxDelta > 0.6) return 10;
-  if (maxDelta > 0.3) return 11;
-  return 12;
-};
-
 export const MapTracker: React.FC<Props> = ({ client, photographer, status }) => {
   const { width } = useWindowDimensions();
+  const cameraRef = useRef<MapLibreGL.Camera>(null);
 
-  const { center, zoomLevel, lineGeoJson } = useMemo(() => {
-    const minLat = Math.min(client.latitude, photographer.latitude);
-    const maxLat = Math.max(client.latitude, photographer.latitude);
-    const minLng = Math.min(client.longitude, photographer.longitude);
-    const maxLng = Math.max(client.longitude, photographer.longitude);
+  const centerLat = (client.latitude + photographer.latitude) / 2;
+  const centerLng = (client.longitude + photographer.longitude) / 2;
 
-    const latDelta = Math.max(0.01, maxLat - minLat);
-    const lngDelta = Math.max(0.01, maxLng - minLng);
+  const lineFeature: GeoJSON.Feature<GeoJSON.LineString> = useMemo(() => ({
+    type: 'Feature',
+    properties: {},
+    geometry: {
+      type: 'LineString',
+      coordinates: [
+        [client.longitude, client.latitude],
+        [photographer.longitude, photographer.latitude],
+      ],
+    },
+  }), [client.latitude, client.longitude, photographer.latitude, photographer.longitude]);
 
-    return {
-      center: [(minLng + maxLng) / 2, (minLat + maxLat) / 2] as [number, number],
-      zoomLevel: getZoomLevel(latDelta, lngDelta),
-      lineGeoJson: {
-        type: 'FeatureCollection',
-        features: [
-          {
-            type: 'Feature',
-            geometry: {
-              type: 'LineString',
-              coordinates: [
-                [client.longitude, client.latitude],
-                [photographer.longitude, photographer.latitude],
-              ],
-            },
-            properties: { status },
-          },
+  useEffect(() => {
+    if (cameraRef.current) {
+      cameraRef.current.fitBounds(
+        [
+          Math.min(client.longitude, photographer.longitude) - 0.05,
+          Math.min(client.latitude, photographer.latitude) - 0.05,
         ],
-      },
-    };
-  }, [client.latitude, client.longitude, photographer.latitude, photographer.longitude, status]);
+        [
+          Math.max(client.longitude, photographer.longitude) + 0.05,
+          Math.max(client.latitude, photographer.latitude) + 0.05,
+        ],
+        80,
+        500
+      );
+    }
+  }, [client, photographer]);
 
   return (
     <View style={[styles.container, { height: Math.min(440, width < 480 ? 280 : 360) }]}>
-      <MapLibreGL.MapView style={StyleSheet.absoluteFill} mapStyle={MAP_STYLE_URL}>
-        <MapLibreGL.Camera centerCoordinate={center} zoomLevel={zoomLevel} animationDuration={600} />
-        <MapLibreGL.ShapeSource id="tracker-line" shape={lineGeoJson as any}>
+      <MapLibreGL.MapView
+        style={StyleSheet.absoluteFill}
+        styleURL="https://tiles.openfreemap.org/styles/liberty"
+        logoEnabled={false}
+        attributionEnabled={false}
+      >
+        <MapLibreGL.Camera
+          ref={cameraRef}
+          centerCoordinate={[centerLng, centerLat]}
+          zoomLevel={10}
+        />
+        {/* Line between client and photographer */}
+        <MapLibreGL.ShapeSource id="route-source" shape={lineFeature}>
           <MapLibreGL.LineLayer
-            id="tracker-line-layer"
-            style={{
-              lineColor: '#0f172a',
-              lineWidth: 4,
-              lineJoin: 'round',
-              lineCap: 'round',
-            }}
+            id="route-line"
+            style={{ lineColor: '#0f172a', lineWidth: 4, lineCap: 'round', lineJoin: 'round' }}
           />
         </MapLibreGL.ShapeSource>
+        {/* Photographer pin */}
         <MapLibreGL.PointAnnotation
-          id="tracker-photographer"
+          id="photographer-pin"
           coordinate={[photographer.longitude, photographer.latitude]}
+          title="Photographer"
         >
-          <View style={[styles.pin, styles.photographerPin]} />
+          <View style={[styles.pin, { backgroundColor: '#0f172a' }]} />
         </MapLibreGL.PointAnnotation>
-        <MapLibreGL.PointAnnotation id="tracker-client" coordinate={[client.longitude, client.latitude]}>
-          <View style={[styles.pin, styles.clientPin]} />
+        {/* Client pin */}
+        <MapLibreGL.PointAnnotation
+          id="client-pin"
+          coordinate={[client.longitude, client.latitude]}
+          title={`You · ${status}`}
+        >
+          <View style={[styles.pin, { backgroundColor: '#2563eb' }]} />
         </MapLibreGL.PointAnnotation>
       </MapLibreGL.MapView>
     </View>
@@ -108,11 +110,4 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#fff',
   },
-  photographerPin: {
-    backgroundColor: '#0f172a',
-  },
-  clientPin: {
-    backgroundColor: '#2563eb',
-  },
 });
-

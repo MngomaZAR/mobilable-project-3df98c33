@@ -31,8 +31,6 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { sendTip } from '../services/monetisationService';
 import { trackEvent } from '../services/analyticsService';
 import { supabase } from '../config/supabaseClient';
-import { useAppData } from '../store/AppDataContext';
-import Constants from 'expo-constants';
 
 const { width, height } = Dimensions.get('window');
 
@@ -44,15 +42,20 @@ let VideoView: React.ComponentType<any> | null = null;
 let useTracks: (() => any[]) | null = null;
 let Track: any = null;
 
+// @livekit/react-native uses native WebRTC — only load on native platforms
+// On web it crashes the entire JS runtime with Object.prototype errors
 if (Platform.OS !== 'web') {
   try {
-    const lk = require('@livekit/react-native');
-    LiveKitRoom = lk.LiveKitRoom;
-    VideoView = lk.VideoView;
-    useTracks = lk.useTracks;
-    Track = lk.Track;
+    // Guard: livekit's event-target-shim crashes on web (Object.create(undefined))
+    if (require('react-native').Platform.OS !== 'web') {
+      const lk = require('@livekit/react-native');
+      LiveKitRoom = lk.LiveKitRoom;
+      VideoView = lk.VideoView;
+      useTracks = lk.useTracks;
+      Track = lk.Track;
+    }
   } catch (_e) {
-    // @livekit/react-native not yet installed — shows placeholder with install instructions
+    // package not yet installed
   }
 }
 
@@ -97,18 +100,13 @@ const RoomParticipants: React.FC<{ creatorId: string }> = ({ creatorId }) => {
 const PaidVideoCallScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
-  const { adjustCredits, state } = useAppData();
 
   const creatorId: string | undefined = route.params?.creatorId;
-  const role: 'creator' | 'viewer' =
-    route.params?.role ??
-    (creatorId && state.currentUser?.id === creatorId ? 'creator' : 'viewer');
 
   const [seconds, setSeconds] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
   const [cameraOff, setCameraOff] = useState(false);
   const [isTipping, setIsTipping] = useState(false);
-  const [isGifting, setIsGifting] = useState(false);
   const [tipModalVisible, setTipModalVisible] = useState(false);
   const [tipAmount, setTipAmount] = useState('50');
   const [livekitToken, setLivekitToken] = useState<string | null>(null);
@@ -138,7 +136,7 @@ const PaidVideoCallScreen: React.FC = () => {
     setTokenError(null);
     try {
       const { data, error } = await supabase.functions.invoke('livekit-token', {
-        body: { creator_id: creatorId, role },
+        body: { creator_id: creatorId, role: 'viewer' },
       });
       if (error) throw error;
       if (!data?.token || !data?.url) throw new Error('Invalid token response from server.');
@@ -180,22 +178,6 @@ const PaidVideoCallScreen: React.FC = () => {
     }
   };
 
-  const handleGift = async () => {
-    if (!creatorId) return;
-    try {
-      setIsGifting(true);
-      await adjustCredits(-10, 'live_gift', 'live_call', creatorId);
-      Platform.OS === 'web'
-        ? alert('Gift sent!')
-        : Alert.alert('Success', 'Gift sent (10 credits).');
-    } catch (e: any) {
-      const msg = e?.message ?? 'Unable to send gift.';
-      Platform.OS === 'web' ? alert(msg) : Alert.alert('Error', msg);
-    } finally {
-      setIsGifting(false);
-    }
-  };
-
   const formatTime = (s: number) => {
     const mins = Math.floor(s / 60);
     const secs = s % 60;
@@ -204,7 +186,6 @@ const PaidVideoCallScreen: React.FC = () => {
 
   // ── LiveKit package not installed yet: show placeholder ───────────────────
   if (!LiveKitRoom) {
-    const needsDevBuild = Constants?.appOwnership === 'expo';
     return (
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle="light-content" />
@@ -212,10 +193,9 @@ const PaidVideoCallScreen: React.FC = () => {
           <Ionicons name="videocam-outline" size={64} color="rgba(255,255,255,0.5)" />
           <Text style={styles.notInstalledTitle}>Video Call — LiveKit Setup Required</Text>
           <Text style={styles.notInstalledBody}>
-            {needsDevBuild
-              ? "Video calls require a development build. Expo Go does not include LiveKit native modules."
-              : "Run the following in your project to enable video calls:\n\nnpx expo install @livekit/react-native livekit-client\n\nThen deploy the `livekit-token` Supabase Edge Function."
-            }
+            Run the following in your project to enable video calls:
+            {'\n\n'}npx expo install @livekit/react-native livekit-client
+            {'\n\n'}Then deploy the `livekit-token` Supabase Edge Function.
           </Text>
           <TouchableOpacity style={styles.endCallBtn} onPress={() => navigation.goBack()}>
             <Text style={{ color: '#fff', fontWeight: '700' }}>Go Back</Text>
@@ -304,16 +284,6 @@ const PaidVideoCallScreen: React.FC = () => {
             >
               <Ionicons name="heart" size={20} color="#fff" />
               <Text style={styles.tipBtnText}>Send Tip</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.tipBtn, { backgroundColor: '#0ea5e9' }]}
-              onPress={handleGift}
-              disabled={isGifting}
-            >
-              <Ionicons name="gift" size={20} color="#fff" />
-              <Text style={styles.tipBtnText}>
-                {isGifting ? 'Sending…' : `Gift 10 (${state.creditsWallet?.balance ?? 0})`}
-              </Text>
             </TouchableOpacity>
             <View style={{ flex: 1 }} />
           </View>

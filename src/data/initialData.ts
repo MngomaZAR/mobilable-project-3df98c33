@@ -110,7 +110,8 @@ export const initialState: AppState = {
   tips: [],
   earnings: [],
   mediaAssets: [],
+  creditsWallet: null,
+  creditsLedger: [],
   follows: [],
   notifications: [],
 };
-

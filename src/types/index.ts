@@ -232,6 +232,8 @@ export interface AppState {
   tips: Tip[];
   earnings: Earning[];
   mediaAssets: MediaAsset[];
+  creditsWallet: CreditsWallet | null;
+  creditsLedger: CreditsLedgerEntry[];
   follows: Follow[];
   notifications: NotificationEvent[];
   currentUser: AppUser | null;
@@ -267,4 +269,21 @@ export interface MediaAccessLog {
   asset_id: string;
   user_id: string;
   accessed_at: string;
+}
+
+export interface CreditsWallet {
+  user_id: string;
+  balance: number;
+  updated_at?: string;
+}
+
+export interface CreditsLedgerEntry {
+  id: string;
+  user_id: string;
+  amount: number;
+  direction: 'credit' | 'debit';
+  reason?: string | null;
+  ref_type?: string | null;
+  ref_id?: string | null;
+  created_at: string;
 }

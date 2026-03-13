@@ -39,6 +39,7 @@ import LegalScreen from '../screens/LegalScreen';
 import AdminModerationScreen from '../screens/AdminModerationScreen';
 import AvailabilityScreen from '../screens/AvailabilityScreen';
 import ModelReleaseScreen from '../screens/ModelReleaseScreen';
+import CreditsWalletScreen from '../screens/CreditsWalletScreen';
 import { RootStackParamList, TabParamList } from './types';
 import { useAppData } from '../store/AppDataContext';
 
@@ -136,6 +137,7 @@ export const MainNavigator: React.FC<MainNavigatorProps> = ({ logoSource }) => {
         Support: 'support',
         EarningsDashboard: 'earnings',
         CreatorSubscriptions: 'subscriptions',
+        CreditsWallet: 'wallet/credits',
         Reviews: 'reviews/:userId',
         MediaLibrary: 'media',
         AdminModeration: 'admin/moderation',
@@ -184,6 +186,7 @@ export const MainNavigator: React.FC<MainNavigatorProps> = ({ logoSource }) => {
             <Stack.Screen name="Support" component={SupportScreen} options={{ headerShown: false }} />
             <Stack.Screen name="EarningsDashboard" component={EarningsDashboardScreen} options={{ headerShown: false }} />
             <Stack.Screen name="CreatorSubscriptions" component={CreatorSubscriptionsScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="CreditsWallet" component={CreditsWalletScreen} options={{ headerShown: false }} />
             <Stack.Screen name="Reviews" component={ReviewsScreen} options={{ headerShown: false }} />
             <Stack.Screen name="MediaLibrary" component={MediaLibraryScreen} options={{ headerShown: false }} />
             <Stack.Screen name="Legal" component={LegalScreen} options={{ headerShown: false }} />

@@ -244,6 +244,15 @@ const SettingsScreen: React.FC = () => {
       <View style={s.section}>
         <Text style={s.sectionHeader}>SUPPORT & ABOUT</Text>
         <View style={s.group}>
+          <TouchableOpacity style={[s.groupItem, s.groupItemBorder]} onPress={() => navigation.navigate('CreditsWallet')}>
+            <View style={s.itemLeft}>
+              <View style={[s.iconContainer, { backgroundColor: '#0ea5e9' }]}>
+                <Ionicons name="wallet" size={16} color="#fff" />
+              </View>
+              <Text style={s.itemText}>Papzi Credits</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          </TouchableOpacity>
           <TouchableOpacity style={[s.groupItem, s.groupItemBorder]} onPress={() => navigation.navigate('PaymentHistory')}>
             <View style={s.itemLeft}>
               <View style={[s.iconContainer, { backgroundColor: '#10b981' }]}>

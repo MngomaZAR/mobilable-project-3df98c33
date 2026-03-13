@@ -31,6 +31,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { sendTip } from '../services/monetisationService';
 import { trackEvent } from '../services/analyticsService';
 import { supabase } from '../config/supabaseClient';
+import { useAppData } from '../store/AppDataContext';
 
 const { width, height } = Dimensions.get('window');
 
@@ -95,6 +96,7 @@ const RoomParticipants: React.FC<{ creatorId: string }> = ({ creatorId }) => {
 const PaidVideoCallScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
+  const { adjustCredits, state } = useAppData();
 
   const creatorId: string | undefined = route.params?.creatorId;
 
@@ -102,6 +104,7 @@ const PaidVideoCallScreen: React.FC = () => {
   const [isMuted, setIsMuted] = useState(false);
   const [cameraOff, setCameraOff] = useState(false);
   const [isTipping, setIsTipping] = useState(false);
+  const [isGifting, setIsGifting] = useState(false);
   const [tipModalVisible, setTipModalVisible] = useState(false);
   const [tipAmount, setTipAmount] = useState('50');
   const [livekitToken, setLivekitToken] = useState<string | null>(null);
@@ -170,6 +173,22 @@ const PaidVideoCallScreen: React.FC = () => {
       Platform.OS === 'web' ? alert(friendly) : Alert.alert('Error', friendly);
     } finally {
       setIsTipping(false);
+    }
+  };
+
+  const handleGift = async () => {
+    if (!creatorId) return;
+    try {
+      setIsGifting(true);
+      await adjustCredits(-10, 'live_gift', 'live_call', creatorId);
+      Platform.OS === 'web'
+        ? alert('Gift sent!')
+        : Alert.alert('Success', 'Gift sent (10 credits).');
+    } catch (e: any) {
+      const msg = e?.message ?? 'Unable to send gift.';
+      Platform.OS === 'web' ? alert(msg) : Alert.alert('Error', msg);
+    } finally {
+      setIsGifting(false);
     }
   };
 
@@ -279,6 +298,16 @@ const PaidVideoCallScreen: React.FC = () => {
             >
               <Ionicons name="heart" size={20} color="#fff" />
               <Text style={styles.tipBtnText}>Send Tip</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.tipBtn, { backgroundColor: '#0ea5e9' }]}
+              onPress={handleGift}
+              disabled={isGifting}
+            >
+              <Ionicons name="gift" size={20} color="#fff" />
+              <Text style={styles.tipBtnText}>
+                {isGifting ? 'Sending…' : `Gift 10 (${state.creditsWallet?.balance ?? 0})`}
+              </Text>
             </TouchableOpacity>
             <View style={{ flex: 1 }} />
           </View>

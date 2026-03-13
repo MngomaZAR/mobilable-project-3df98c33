@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { initialState } from '../data/initialData';
 import { supabase, hasSupabase } from '../config/supabaseClient';
 import { BUCKETS } from '../config/environment';
-import { AppState, AppUser, Booking, BookingStatus, Comment, ConversationSummary, Message, Model, Post, PrivacySettings, Review, UserRole } from '../types';
+import { AppState, AppUser, Booking, BookingStatus, Comment, ConversationSummary, Message, Model, Post, PrivacySettings, Review, UserRole, CreditsWallet, CreditsLedgerEntry } from '../types';
 import { uid } from '../utils/id';
 import { formatAuthError, formatErrorMessage, logError } from '../utils/errors';
 import { mapPhotographerRow, mapPostRow, mapSupabaseUser } from '../utils/mappings';
@@ -77,6 +77,9 @@ type AppDataContextValue = {
   updateProfilePicture: (uri: string) => Promise<void>;
   updateProfile: (changes: Partial<AppUser>) => Promise<void>;
   fetchEarnings: (userId: string) => Promise<void>;
+  fetchCredits: (userId?: string | null) => Promise<void>;
+  adjustCredits: (amount: number, reason?: string, refType?: string, refId?: string) => Promise<number>;
+  redeemCreditsCode: (code: string) => Promise<number>;
   setState: (payload: Partial<AppState>) => void;
 }
 
@@ -580,7 +583,8 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 fetchBookings(data.user.id),
                 fetchConversations(data.user.id),
                 fetchEarnings(data.user.id),
-                fetchSubscriptions(data.user.id)
+                fetchSubscriptions(data.user.id),
+                fetchCredits(data.user.id)
               ]);
             } else {
               setState({ bookings: [], conversations: [] });
@@ -600,7 +604,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
 
     load();
-  }, [fetchBookings, fetchConversations, fetchPhotographers, fetchProfile, fetchModels, fetchSubscriptions]);
+  }, [fetchBookings, fetchConversations, fetchCredits, fetchPhotographers, fetchProfile, fetchModels, fetchSubscriptions]);
 
   useEffect(() => {
     if (!hasSupabase) return;
@@ -641,6 +645,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           fetchConversations(session.user.id).catch(e => console.warn('Delayed convo fetch failed', e));
           fetchEarnings(session.user.id).catch(e => console.warn('Delayed earnings fetch failed', e));
           fetchSubscriptions(session.user.id).catch(e => console.warn('Delayed subscriptions fetch failed', e));
+          fetchCredits(session.user.id).catch(e => console.warn('Delayed credits fetch failed', e));
         } catch (eventErr) {
           console.error('Error handling auth session change:', eventErr);
         }
@@ -649,6 +654,8 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   tips: [],
   earnings: [],
   mediaAssets: [],
+  creditsWallet: null,
+  creditsLedger: [],
   notifications: [], messages: {} });
       }
     });
@@ -982,6 +989,81 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       logError('fetch_subscriptions', err);
     }
   }, []);
+
+  const fetchCredits = useCallback(async (userId?: string | null) => {
+    if (!hasSupabase) return;
+    const targetUserId = userId ?? stateRef.current.currentUser?.id;
+    if (!targetUserId) {
+      setState({ creditsWallet: null, creditsLedger: [] });
+      return;
+    }
+    try {
+      const [walletRes, ledgerRes] = await Promise.all([
+        supabase
+          .from('credits_wallets')
+          .select('user_id, balance, updated_at')
+          .eq('user_id', targetUserId)
+          .maybeSingle(),
+        supabase
+          .from('credits_ledger')
+          .select('id, user_id, amount, direction, reason, ref_type, ref_id, created_at')
+          .eq('user_id', targetUserId)
+          .order('created_at', { ascending: false })
+          .limit(50),
+      ]);
+      if (walletRes.error) throw walletRes.error;
+      if (ledgerRes.error) throw ledgerRes.error;
+      setState({
+        creditsWallet: (walletRes.data as CreditsWallet | null) ?? { user_id: targetUserId, balance: 0 },
+        creditsLedger: (ledgerRes.data as CreditsLedgerEntry[]) ?? [],
+      });
+    } catch (err) {
+      logError('fetch_credits', err);
+    }
+  }, []);
+
+  const adjustCredits = useCallback(async (amount: number, reason?: string, refType?: string, refId?: string) => {
+    if (!hasSupabase) return 0;
+    try {
+      const { data, error } = await supabase.rpc('credits_adjust', {
+        p_amount: amount,
+        p_reason: reason ?? null,
+        p_ref_type: refType ?? null,
+        p_ref_id: refId ?? null,
+      });
+      if (error) throw error;
+      const balance = Array.isArray(data) ? data[0]?.balance : data?.balance;
+      if (typeof balance === 'number') {
+        setState((prev) => ({
+          creditsWallet: prev.creditsWallet ? { ...prev.creditsWallet, balance } : prev.creditsWallet,
+        }));
+      }
+      await fetchCredits(stateRef.current.currentUser?.id ?? null);
+      return typeof balance === 'number' ? balance : 0;
+    } catch (err) {
+      logError('adjust_credits', err);
+      throw err;
+    }
+  }, [fetchCredits]);
+
+  const redeemCreditsCode = useCallback(async (code: string) => {
+    if (!hasSupabase) return 0;
+    try {
+      const { data, error } = await supabase.rpc('credits_redeem_code', { p_code: code });
+      if (error) throw error;
+      const balance = Array.isArray(data) ? data[0]?.balance : data?.balance;
+      if (typeof balance === 'number') {
+        setState((prev) => ({
+          creditsWallet: prev.creditsWallet ? { ...prev.creditsWallet, balance } : prev.creditsWallet,
+        }));
+      }
+      await fetchCredits(stateRef.current.currentUser?.id ?? null);
+      return typeof balance === 'number' ? balance : 0;
+    } catch (err) {
+      logError('redeem_credits_code', err);
+      throw err;
+    }
+  }, [fetchCredits]);
 
   const sendMessage = useCallback(
     async (chatId: string, text: string, fromUser: boolean = true): Promise<Message> => {
@@ -1744,6 +1826,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         fetchConversations(userId),
         fetchEarnings(userId || ''),
         fetchSubscriptions(userId),
+        fetchCredits(userId),
         fetchPosts({ reset: true })
       ]);
     } catch (err) {
@@ -1751,7 +1834,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     } finally {
       setLoading(false);
     }
-  }, [fetchBookings, fetchConversations, fetchEarnings, fetchSubscriptions, fetchModels, fetchPhotographers, fetchPosts, revalidateSession]);
+  }, [fetchBookings, fetchConversations, fetchCredits, fetchEarnings, fetchSubscriptions, fetchModels, fetchPhotographers, fetchPosts, revalidateSession]);
 
   const resetState = useCallback(async () => {
     setSaving(true);
@@ -1879,6 +1962,22 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (dbError) throw dbError;
 
       await supabase.auth.refreshSession();
+      // Immediate local update so UI reflects new avatar without restart
+      const currentUser = stateRef.current.currentUser;
+      if (currentUser) {
+        setState({
+          currentUser: { ...currentUser, avatar_url: finalUrl },
+          profiles: stateRef.current.profiles.map(p =>
+            p.id === userId ? { ...p, avatar_url: finalUrl } : p
+          ),
+          photographers: stateRef.current.photographers.map(p =>
+            p.id === userId ? { ...p, avatar_url: finalUrl } : p
+          ),
+          models: stateRef.current.models.map(m =>
+            m.id === userId ? { ...m, avatar_url: finalUrl } : m
+          ),
+        });
+      }
     } catch (err: any) {
       logError('updateProfilePicture', err);
       const msg = formatErrorMessage(err, 'Unable to update profile picture.');
@@ -1978,8 +2077,11 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       updateProfile,
       fetchEarnings,
       fetchSubscriptions,
+      fetchCredits,
+      adjustCredits,
+      redeemCreditsCode,
     }),
-    [state, createBooking, updateBookingStatus, sendMessage, sendLockedMediaMessage, fetchMessages, fetchMessagesForChat, fetchComments, updateBookingClientLocation, updatePhotographerLocation, startConversationWithUser, addPost, toggleLike, addComment, setState, signUp, signIn, signOut, updatePrivacy, requestDataDeletion, refresh, revalidateSession, resetState, updateProfilePicture, updateProfile, fetchEarnings, fetchSubscriptions]
+    [state, createBooking, updateBookingStatus, sendMessage, sendLockedMediaMessage, fetchMessages, fetchMessagesForChat, fetchComments, updateBookingClientLocation, updatePhotographerLocation, startConversationWithUser, addPost, toggleLike, addComment, setState, signUp, signIn, signOut, updatePrivacy, requestDataDeletion, refresh, revalidateSession, resetState, updateProfilePicture, updateProfile, fetchEarnings, fetchSubscriptions, fetchCredits, adjustCredits, redeemCreditsCode]
   );
 
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>;

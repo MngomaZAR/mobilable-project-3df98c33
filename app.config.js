@@ -73,12 +73,6 @@ export default {
           "locationAlwaysAndWhenInUsePermission": "Allow Papzi to use your location."
         }
       ],
-      [
-        "react-native-maps",
-        {
-          "googleMapsApiKey": ""
-        }
-      ],
       "@livekit/react-native"
     ],
     extra: {

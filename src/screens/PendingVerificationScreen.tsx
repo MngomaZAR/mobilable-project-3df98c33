@@ -14,7 +14,7 @@ const PendingVerificationScreen: React.FC = () => {
   const pulseAnim = React.useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    Animated.loop(
+    const pulseLoop = Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, {
           toValue: 1.2,
@@ -29,7 +29,9 @@ const PendingVerificationScreen: React.FC = () => {
           useNativeDriver: true,
         }),
       ])
-    ).start();
+    );
+    pulseLoop.start();
+    return () => pulseLoop.stop();
   }, [pulseAnim]);
 
   const refreshStatus = async () => {

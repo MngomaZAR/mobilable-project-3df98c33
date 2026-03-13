@@ -19,12 +19,14 @@ const SplashLoadingScreen: React.FC = () => {
     }).start();
 
     // Gentle pulse loop on the logo
-    Animated.loop(
+    const pulseLoop = Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, { toValue: 1.08, duration: 800, useNativeDriver: true }),
         Animated.timing(pulseAnim, { toValue: 1.0, duration: 800, useNativeDriver: true }),
       ])
-    ).start();
+    );
+    pulseLoop.start();
+    return () => pulseLoop.stop();
   }, [fadeAnim, pulseAnim]);
 
   return (

@@ -105,14 +105,16 @@ const MapScreen: React.FC = () => {
   const [routeProgress, setRouteProgress] = useState(0);
 
   useEffect(() => {
-    Animated.loop(
+    const loop = Animated.loop(
       Animated.timing(pulse, {
         toValue: 1,
         duration: 1800,
         easing: Easing.out(Easing.ease),
         useNativeDriver: true,
       })
-    ).start();
+    );
+    loop.start();
+    return () => loop.stop();
   }, [pulse]);
 
   const baseMarkers: MapMarker[] = useMemo(() => {
@@ -296,7 +298,7 @@ const MapScreen: React.FC = () => {
 
   useEffect(() => {
     if (!currentUser?.id) return;
-    const isModel = currentUser?.role === 'model';
+    const isModel = currentUser.role === 'model';
     const filterColumn = isModel ? 'model_id' : 'photographer_id';
     const channel = supabase.channel(`public:bookings:${filterColumn}=eq.${currentUser.id}`);
 
@@ -305,22 +307,7 @@ const MapScreen: React.FC = () => {
       { event: 'INSERT', schema: 'public', table: 'bookings', filter: `${filterColumn}=eq.${currentUser.id}` },
       (payload) => {
         if (payload.new.status === 'pending' && payload.new.user_latitude && payload.new.user_longitude) {
-          const userLat = Number(payload.new.user_latitude);
-          const userLng = Number(payload.new.user_longitude);
-          let distanceLabel = '2.4 km';
-          if (currentUser?.id) {
-            const creator =
-              currentUser.role === 'model'
-                ? state.models.find((m) => m.id === currentUser.id)
-                : state.photographers.find((p) => p.id === currentUser.id);
-            if (creator?.latitude && creator?.longitude) {
-              const km = haversineDistanceKm(
-                { latitude: creator.latitude, longitude: creator.longitude },
-                { latitude: userLat, longitude: userLng }
-              );
-              distanceLabel = `${km.toFixed(1)} km`;
-            }
-          }
+          const distanceLabel = 'Nearby';
           setIncomingRequest({ ...payload.new, distance: distanceLabel });
           setShowPopup(true);
         }
@@ -328,7 +315,7 @@ const MapScreen: React.FC = () => {
     ).subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [currentUser, state.models, state.photographers]);
+  }, [currentUser?.id, currentUser?.role]);
 
   const handleAcceptIncoming = async () => {
     if (!incomingRequest) return;

@@ -108,7 +108,7 @@ const BootGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       const message = err?.message || err?.toString?.() || 'Unknown error';
       console.warn('BootGuard caught fatal error', message);
       setFatalError(message);
-      if (previousHandler) {
+      if (__DEV__ && previousHandler) {
         previousHandler(err, isFatal);
       }
     });

@@ -1,1 +1,1 @@
-export { MapPreview } from './MapPreview.native';
+export { MapPreview } from './MapPreview.web';

@@ -42,21 +42,14 @@ let VideoView: React.ComponentType<any> | null = null;
 let useTracks: (() => any[]) | null = null;
 let Track: any = null;
 
-// @livekit/react-native uses native WebRTC — only load on native platforms
-// On web it crashes the entire JS runtime with Object.prototype errors
-if (Platform.OS !== 'web') {
-  try {
-    // Guard: livekit's event-target-shim crashes on web (Object.create(undefined))
-    if (require('react-native').Platform.OS !== 'web') {
-      const lk = require('@livekit/react-native');
-      LiveKitRoom = lk.LiveKitRoom;
-      VideoView = lk.VideoView;
-      useTracks = lk.useTracks;
-      Track = lk.Track;
-    }
-  } catch (_e) {
-    // package not yet installed
-  }
+try {
+  const lk = require('@livekit/react-native');
+  LiveKitRoom = lk.LiveKitRoom;
+  VideoView = lk.VideoView;
+  useTracks = lk.useTracks;
+  Track = lk.Track;
+} catch (_e) {
+  // @livekit/react-native not yet installed — shows placeholder with install instructions
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -111,6 +104,7 @@ const PaidVideoCallScreen: React.FC = () => {
   const [tipAmount, setTipAmount] = useState('50');
   const [livekitToken, setLivekitToken] = useState<string | null>(null);
   const [livekitUrl, setLivekitUrl] = useState<string | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [tokenLoading, setTokenLoading] = useState(true);
   const [tokenError, setTokenError] = useState<string | null>(null);
 
@@ -142,6 +136,7 @@ const PaidVideoCallScreen: React.FC = () => {
       if (!data?.token || !data?.url) throw new Error('Invalid token response from server.');
       setLivekitToken(data.token);
       setLivekitUrl(data.url);
+      if (data?.sessionId) setSessionId(data.sessionId);
     } catch (err: any) {
       setTokenError(err.message || 'Could not start video call.');
     } finally {
@@ -152,6 +147,20 @@ const PaidVideoCallScreen: React.FC = () => {
   useEffect(() => {
     fetchToken();
   }, [fetchToken]);
+
+  // ── End call — bills the session via edge function ────────────────────────
+  const endCall = useCallback(async () => {
+    if (sessionId) {
+      try {
+        await supabase.functions.invoke('livekit-token', {
+          body: { action: 'end', session_id: sessionId },
+        });
+      } catch (_e) {
+        // Non-blocking — session will be cleaned up server-side
+      }
+    }
+    navigation.goBack();
+  }, [sessionId, navigation]);
 
   // ── Tip handler ───────────────────────────────────────────────────────────
   const handleTip = async () => {
@@ -197,7 +206,7 @@ const PaidVideoCallScreen: React.FC = () => {
             {'\n\n'}npx expo install @livekit/react-native livekit-client
             {'\n\n'}Then deploy the `livekit-token` Supabase Edge Function.
           </Text>
-          <TouchableOpacity style={styles.endCallBtn} onPress={() => navigation.goBack()}>
+          <TouchableOpacity style={styles.endCallBtn} onPress={endCall}>
             <Text style={{ color: '#fff', fontWeight: '700' }}>Go Back</Text>
           </TouchableOpacity>
         </View>
@@ -217,7 +226,7 @@ const PaidVideoCallScreen: React.FC = () => {
           <TouchableOpacity style={[styles.endCallBtn, { marginTop: 20 }]} onPress={fetchToken}>
             <Text style={{ color: '#fff', fontWeight: '700' }}>Retry</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginTop: 12 }}>
+          <TouchableOpacity onPress={endCall} style={{ marginTop: 12 }}>
             <Text style={{ color: 'rgba(255,255,255,0.6)', fontWeight: '600' }}>Go Back</Text>
           </TouchableOpacity>
         </View>
@@ -249,7 +258,7 @@ const PaidVideoCallScreen: React.FC = () => {
         options={{ adaptiveStream: true, dynacast: true }}
         video={!cameraOff}
         audio={!isMuted}
-        onDisconnected={() => navigation.goBack()}
+        onDisconnected={endCall}
       >
         {/* Remote and local video tracks */}
         <RoomParticipants creatorId={creatorId!} />
@@ -263,7 +272,7 @@ const PaidVideoCallScreen: React.FC = () => {
 
         {/* Top HUD */}
         <SafeAreaView edges={['top']} style={styles.hudTop}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+          <TouchableOpacity style={styles.backBtn} onPress={endCall}>
             <Ionicons name="chevron-back" size={28} color="#fff" />
           </TouchableOpacity>
           <View style={styles.timerBadge}>
@@ -297,7 +306,7 @@ const PaidVideoCallScreen: React.FC = () => {
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.controlBtn, styles.endCallBtnCircle]}
-              onPress={() => navigation.goBack()}
+              onPress={endCall}
               accessibilityLabel="End video call"
             >
               <Ionicons name="call" size={28} color="#fff" style={{ transform: [{ rotate: '135deg' }] }} />

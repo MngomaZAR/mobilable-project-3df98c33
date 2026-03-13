@@ -1,1 +1,1 @@
-export { MapTracker } from './MapTracker.native';
+export { MapTracker } from './MapTracker.web';

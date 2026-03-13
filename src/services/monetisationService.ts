@@ -40,7 +40,7 @@ export const sendTip = async (
         receiver_id: receiverId,
         amount,
         message: message.trim() || null,
-        status: 'completed', // Mark completed — in production this would be 'pending' until PayFast confirms
+        status: 'pending', // PayFast ITN will mark as completed
       })
       .select()
       .single();
@@ -106,20 +106,8 @@ export const subscribeToCreator = async (
 ): Promise<Result<Subscription>> => {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return failure(new Error('Not authenticated'));
-  if (!creatorId) return failure(new Error('Creator not found.'));
 
   try {
-    // Guard: prevent subscribing to demo-only creators not in auth/profiles
-    const { data: creatorProfile, error: creatorErr } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('id', creatorId)
-      .maybeSingle();
-    if (creatorErr) throw creatorErr;
-    if (!creatorProfile) {
-      return failure(new Error('Subscriptions are only available for verified creators.'));
-    }
-
     // Check for existing active subscription
     const { data: existing } = await supabase
       .from('subscriptions')

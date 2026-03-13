@@ -1,1 +1,1 @@
-export { PaymentWebView } from './PaymentWebView.native';
+export { PaymentWebView } from './PaymentWebView.web';

@@ -44,7 +44,6 @@ export default {
       favicon: "./assets/favicon.png"
     },
     plugins: [
-      "@maplibre/maplibre-react-native",
       [
         "expo-notifications",
         {
@@ -55,15 +54,16 @@ export default {
       [
         "expo-image-picker",
         {
-          "photosPermission": "The app accesses your photos to let you share them with others."
+          photosPermission: "The app accesses your photos to let you share them with others."
         }
       ],
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Allow Papzi to use your location."
+          locationAlwaysAndWhenInUsePermission: "Allow Papzi to use your location."
         }
-      ]
+      ],
+      "@maplibre/maplibre-react-native"
     ],
     extra: {
       eas: {
@@ -74,4 +74,3 @@ export default {
     }
   }
 };
-

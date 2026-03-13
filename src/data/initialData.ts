@@ -1,7 +1,7 @@
 import { AppState } from '../types';
 
 export const initialState: AppState = {
-  loading: true,
+  loading: false,
   saving: false,
   authenticating: false,
   error: null,

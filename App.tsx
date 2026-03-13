@@ -194,22 +194,22 @@ export default function App() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <ThemeProvider>
-          <AuthProvider>
-            <BookingProvider>
-              <SocialProvider>
-                <BootGuard>
-                  <ErrorBoundary>
-                    <AppDataProvider>
+          <AppDataProvider>
+            <AuthProvider>
+              <BookingProvider>
+                <SocialProvider>
+                  <BootGuard>
+                    <ErrorBoundary>
                       {/* MessagingProvider is INSIDE AppDataProvider so it has auth context */}
                       <MessagingProvider>
                         <AppContent />
                       </MessagingProvider>
-                    </AppDataProvider>
-                  </ErrorBoundary>
-                </BootGuard>
-              </SocialProvider>
-            </BookingProvider>
-          </AuthProvider>
+                    </ErrorBoundary>
+                  </BootGuard>
+                </SocialProvider>
+              </BookingProvider>
+            </AuthProvider>
+          </AppDataProvider>
         </ThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

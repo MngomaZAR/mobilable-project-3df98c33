@@ -2,6 +2,7 @@ export default {
   expo: {
     name: "Papzi",
     slug: "papzi",
+    owner: "papz",
     scheme: "papzi",
     version: "1.0.0",
     orientation: "portrait",
@@ -18,6 +19,7 @@ export default {
       bundleIdentifier: "com.papzi.app",
       infoPlist: {
         NSCameraUsageDescription: "Papzi needs access to your camera to let you take and share photos directly in chat.",
+        NSMicrophoneUsageDescription: "Papzi needs access to your microphone for live video calls.",
         NSPhotoLibraryUsageDescription: "Papzi needs access to your photos to let you upload your portfolio and share media in chat.",
         NSLocationWhenInUseUsageDescription: "Papzi uses your location to show available talent near you and track bookings.",
         NSLocationAlwaysAndWhenInUseUsageDescription: "Papzi needs your location to track you during a live booking session.",
@@ -43,6 +45,13 @@ export default {
     web: {
       favicon: "./assets/favicon.png"
     },
+    updates: {
+      enabled: false,
+      url: "https://u.expo.dev/f0c1ef90-ac26-4e4c-a799-77b377e2f452"
+    },
+    runtimeVersion: {
+      policy: "appVersion"
+    },
     plugins: [
       [
         "expo-notifications",
@@ -51,6 +60,7 @@ export default {
           color: "#ffffff"
         }
       ],
+      "@maplibre/maplibre-react-native",
       [
         "expo-image-picker",
         {
@@ -80,4 +90,3 @@ export default {
     }
   }
 };
-

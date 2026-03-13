@@ -91,13 +91,18 @@ const AppContent = () => {
 };
 
 const BootGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { loading } = useAppData();
   const [fatalError, setFatalError] = React.useState<string | null>(null);
   const [bootTimedOut, setBootTimedOut] = React.useState(false);
 
   useEffect(() => {
-    const timer = setTimeout(() => setBootTimedOut(true), 12000);
+    if (!loading) {
+      setBootTimedOut(false);
+      return;
+    }
+    const timer = setTimeout(() => setBootTimedOut(true), 25000);
     return () => clearTimeout(timer);
-  }, []);
+  }, [loading]);
 
   useEffect(() => {
     const errorUtils = (global as any)?.ErrorUtils;
@@ -106,8 +111,10 @@ const BootGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const previousHandler = errorUtils.getGlobalHandler?.();
     errorUtils.setGlobalHandler((err: any, isFatal?: boolean) => {
       const message = err?.message || err?.toString?.() || 'Unknown error';
-      console.warn('BootGuard caught fatal error', message);
-      setFatalError(message);
+      if (isFatal) {
+        console.warn('BootGuard caught fatal error', message);
+        setFatalError(message);
+      }
       if (__DEV__ && previousHandler) {
         previousHandler(err, isFatal);
       }

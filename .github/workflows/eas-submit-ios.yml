@@ -1,0 +1,31 @@
+name: EAS Submit iOS
+
+# Auto-submit latest production iOS build to TestFlight.
+# Requires EXPO_TOKEN and App Store Connect setup in EAS.
+
+on:
+  workflow_run:
+    workflows: ["EAS Build iOS"]
+    types:
+      - completed
+
+jobs:
+  submit_ios:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Submit latest iOS build (production)
+        run: npx eas-cli submit --platform ios --profile production --latest --non-interactive
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}

@@ -1,6 +1,5 @@
 import { supabase } from '../config/supabaseClient';
 import { MediaAsset } from '../types';
-import { resolveStorageRef } from './uploadService';
 
 export const fetchCreatorMedia = async (creatorId: string): Promise<MediaAsset[]> => {
   try {
@@ -11,14 +10,13 @@ export const fetchCreatorMedia = async (creatorId: string): Promise<MediaAsset[]
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-
-    return await Promise.all(
-      (data || []).map(async asset => ({
+    
+    return (data || []).map(asset => ({
         ...asset,
-        preview_url: asset.preview_url ? await resolveStorageRef(asset.preview_url) : await resolveStorageRef(asset.object_path, asset.bucket),
-        full_url: asset.is_locked ? null : await resolveStorageRef(asset.object_path, asset.bucket),
-      }))
-    );
+        // Assuming public URLs for previews, and signed URLs for unlocked content
+        preview_url: asset.preview_url || supabase.storage.from(asset.bucket).getPublicUrl(asset.object_path).data.publicUrl,
+        full_url: asset.is_locked ? null : supabase.storage.from(asset.bucket).getPublicUrl(asset.object_path).data.publicUrl
+    }));
   } catch (err: any) {
     if (err.message?.includes('relation "media_assets" does not exist')) {
         // Mock data for UI prototyping
@@ -40,14 +38,15 @@ export const unlockMediaAsset = async (assetId: string): Promise<string> => {
         // Ideally, this calls an edge function that verifies payment and inserts into media_access_logs
         // For prototyping, we'll insert the log directly if table exists, or just return a mock URL
         await supabase.from('media_access_logs').insert({
-            asset_id: assetId,
+            media_asset_id: assetId,
             user_id: user.id
         });
 
         // Get the asset details to generate signed URL
         const { data: asset } = await supabase.from('media_assets').select('*').eq('id', assetId).single();
         if (asset) {
-             return await resolveStorageRef(asset.object_path, asset.bucket);
+             const { data } = await supabase.storage.from(asset.bucket).createSignedUrl(asset.object_path, 3600); // 1 hour
+             return data?.signedUrl || '';
         }
 
         throw new Error("Asset not found");

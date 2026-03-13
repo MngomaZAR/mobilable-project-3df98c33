@@ -1,19 +1,42 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, Animated, Easing, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Alert, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import * as Location from 'expo-location';
+import MapLibreGL from '@maplibre/maplibre-react-native';
+import { useNavigation } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
+import { Ionicons } from '@expo/vector-icons';
 import { MapPreview } from '../components/MapPreview';
 import { MapMarker } from '../components/mapTypes';
+import { RequestPopup } from '../components/RequestPopup';
 import { useAppData } from '../store/AppDataContext';
 import { useTheme } from '../store/ThemeContext';
-import { StackNavigationProp } from '@react-navigation/stack';
-import { useNavigation } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/types';
-import { Ionicons } from '@expo/vector-icons';
-import { RequestPopup } from '../components/RequestPopup';
-import { supabase } from '../config/supabaseClient';
 import { BOOKING_PACKAGES } from '../constants/pricing';
 import { haversineDistanceKm } from '../utils/geo';
+import { supabase } from '../config/supabaseClient';
+
+MapLibreGL.setTelemetryEnabled(false);
+
+const MAP_STYLE = {
+  version: 8,
+  sources: {
+    osm: {
+      type: 'raster',
+      tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+      tileSize: 256,
+      attribution: '© OpenStreetMap contributors',
+    },
+  },
+  layers: [
+    {
+      id: 'osm',
+      type: 'raster',
+      source: 'osm',
+    },
+  ],
+};
+
 const SA_BOUNDS = {
   minLat: -35,
   maxLat: -22,
@@ -48,62 +71,94 @@ const formatTimestamp = (timestamp: number) => {
   }
 };
 
+const buildRoute = (
+  start: { lat: number; lng: number },
+  end: { lat: number; lng: number },
+  steps: number,
+  offset: number
+) => {
+  const coords: Array<{ lat: number; lng: number }> = [];
+  const dx = end.lng - start.lng;
+  const dy = end.lat - start.lat;
+  for (let i = 0; i <= steps; i += 1) {
+    const t = i / steps;
+    coords.push({
+      lat: start.lat + dy * t + offset * Math.sin(t * Math.PI),
+      lng: start.lng + dx * t + offset * Math.cos(t * Math.PI),
+    });
+  }
+  return coords;
+};
+
+const sliceRoute = (coords: Array<{ lat: number; lng: number }>, progress: number) => {
+  if (coords.length < 2) return coords;
+  const target = Math.max(2, Math.floor(coords.length * progress));
+  return coords.slice(0, Math.min(coords.length, target));
+};
+
 const MapScreen: React.FC = () => {
   const { state } = useAppData();
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation<StackNavigationProp<RootStackParamList, 'Root'>>();
+  const currentUser = state.currentUser;
+
   const [userMarker, setUserMarker] = useState<MapMarker | null>(null);
   const [userCoordinates, setUserCoordinates] = useState<UserCoordinates | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
   const [locationWarning, setLocationWarning] = useState<string | null>(null);
   const [mapError, setMapError] = useState<string | null>(null);
   const [requesting, setRequesting] = useState(false);
-  const [usingManual, setUsingManual] = useState(false);
   const [showManualEntry, setShowManualEntry] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
   const [manualLocation, setManualLocation] = useState({ label: '', latitude: '', longitude: '' });
-  const [gpsEnabled, setGpsEnabled] = useState<boolean | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const [selectedMarker, setSelectedMarker] = useState<MapMarker | null>(null);
-  
-  // Uber request states
+
   const [incomingRequest, setIncomingRequest] = useState<any | null>(null);
   const [showPopup, setShowPopup] = useState(false);
-  const [isRequesting, setIsRequesting] = useState(false); // For Clients sending requests
+  const [isRequesting, setIsRequesting] = useState(false);
 
   const lastRequestRef = useRef<number>(0);
-  const navigation = useNavigation<StackNavigationProp<RootStackParamList, 'Root'>>();
-  const currentUser = state.currentUser;
+  const cameraRef = useRef<MapLibreGL.Camera>(null);
+  const pulse = useRef(new Animated.Value(0)).current;
+  const [routeProgress, setRouteProgress] = useState(0);
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.timing(pulse, {
+        toValue: 1,
+        duration: 1800,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: true,
+      })
+    ).start();
+  }, [pulse]);
 
   const baseMarkers: MapMarker[] = useMemo(() => {
     let result: MapMarker[] = [];
     const role = currentUser?.role || 'client';
 
     if (role === 'photographer') {
-      // Photographers see Models (Users/Clients typically don't have public coords unless they opt in, but models do)
-      result = [
-        ...state.models.map(m => ({
-          id: m.id,
-          title: m.name,
-          description: 'Model looking to shoot',
-          latitude: m.latitude,
-          longitude: m.longitude,
-          type: 'model' as const,
-        }))
-      ];
+      result = state.models.map((m) => ({
+        id: `model-${m.id}`,
+        sourceId: m.id,
+        title: m.name,
+        description: 'Model',
+        latitude: m.latitude,
+        longitude: m.longitude,
+        type: 'model',
+      }));
     } else if (role === 'model') {
-      // Models see Photographers
-      result = [
-        ...state.photographers.map(p => ({
-          id: p.id,
-          title: p.name,
-          description: p.location,
-          latitude: p.latitude,
-          longitude: p.longitude,
-          type: 'photographer' as const,
-        }))
-      ];
+      result = state.photographers.map((p) => ({
+        id: `photographer-${p.id}`,
+        sourceId: p.id,
+        title: p.name,
+        description: 'Photographer',
+        latitude: p.latitude,
+        longitude: p.longitude,
+        type: 'photographer',
+      }));
     } else {
-      // Clients see Photographers and Models
       const photographerMarkers = state.photographers.map((p) => ({
         id: `photographer-${p.id}`,
         sourceId: p.id,
@@ -111,7 +166,7 @@ const MapScreen: React.FC = () => {
         description: 'Photographer',
         latitude: p.latitude,
         longitude: p.longitude,
-        type: 'photographer' as const,
+        type: 'photographer',
       }));
       const modelMarkers = state.models.map((m) => ({
         id: `model-${m.id}`,
@@ -120,11 +175,11 @@ const MapScreen: React.FC = () => {
         description: 'Model',
         latitude: m.latitude,
         longitude: m.longitude,
-        type: 'model' as const,
+        type: 'model',
       }));
       result = [...photographerMarkers, ...modelMarkers];
     }
-    // Deduplicate in case upstream data repeats
+
     const seen = new Set<string>();
     return result.filter((marker) => {
       if (seen.has(marker.id)) return false;
@@ -133,23 +188,23 @@ const MapScreen: React.FC = () => {
     });
   }, [state.photographers, state.models, currentUser]);
 
-  const filteredBaseMarkers: MapMarker[] = useMemo(() => {
+  const filteredBaseMarkers = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     if (!q) return baseMarkers;
     return baseMarkers.filter((marker) => {
       const title = marker.title ?? '';
       const description = marker.description ?? '';
-      return (
-        title.toLowerCase().includes(q) ||
-        description.toLowerCase().includes(q)
-      );
+      return title.toLowerCase().includes(q) || description.toLowerCase().includes(q);
     });
   }, [baseMarkers, searchQuery]);
 
-  const markers: MapMarker[] = useMemo(
-    () => (userMarker ? [userMarker, ...filteredBaseMarkers] : filteredBaseMarkers),
-    [filteredBaseMarkers, userMarker]
-  );
+  const markers = useMemo(() => (userMarker ? [userMarker, ...filteredBaseMarkers] : filteredBaseMarkers), [filteredBaseMarkers, userMarker]);
+
+  const mapCenter = useMemo(() => {
+    if (userCoordinates) return [userCoordinates.lng, userCoordinates.lat];
+    if (markers[0]) return [markers[0].longitude, markers[0].latitude];
+    return [18.4241, -33.9249];
+  }, [markers, userCoordinates]);
 
   const handleLocationFailure = useCallback((message: string) => {
     setLocationError(message);
@@ -159,18 +214,16 @@ const MapScreen: React.FC = () => {
 
   const requestLocation = useCallback(async () => {
     const now = Date.now();
-    if (now - lastRequestRef.current < 750) return; // debounce rapid taps
+    if (now - lastRequestRef.current < 750) return;
     lastRequestRef.current = now;
 
     setRequesting(true);
     setLocationError(null);
     setLocationWarning(null);
-    setUsingManual(false);
     setShowManualEntry(false);
 
     try {
       const servicesEnabled = await Location.hasServicesEnabledAsync();
-      setGpsEnabled(servicesEnabled);
       if (!servicesEnabled) {
         handleLocationFailure('Location services are off. Enable GPS or enter your location manually.');
         return;
@@ -179,7 +232,7 @@ const MapScreen: React.FC = () => {
       const { status, canAskAgain } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         const message = canAskAgain
-          ? 'Location permission is required to show nearby photographers.'
+          ? 'Location permission is required to show nearby talent.'
           : 'Location permission denied. Please enable it in settings or enter your location manually.';
         handleLocationFailure(message);
         return;
@@ -209,20 +262,61 @@ const MapScreen: React.FC = () => {
         type: 'user',
       });
       setUserCoordinates({ lat: latitude, lng: longitude, timestamp: position.timestamp });
+      cameraRef.current?.setCamera({
+        centerCoordinate: [longitude, latitude],
+        zoomLevel: 12,
+        animationMode: 'flyTo',
+        animationDuration: 800,
+      });
     } catch (_err) {
       handleLocationFailure('Unable to fetch GPS. Check connectivity or enter your location manually.');
     } finally {
       setRequesting(false);
     }
-  }, [handleLocationFailure]);
+  }, [currentUser, handleLocationFailure]);
 
-  // Real-time listener for incoming Uber-like requests
+  const handleRequestBooking = async (marker: MapMarker) => {
+    if (!userCoordinates) {
+      Alert.alert('Location required', 'We need your live GPS location to request talent nearby.');
+      return;
+    }
+    setIsRequesting(true);
+    try {
+      const instantPackage = BOOKING_PACKAGES.find((pkg) => pkg.id === 'instant') ?? BOOKING_PACKAGES[0];
+      const baseAmount = instantPackage.basePrice;
+      const commissionAmount = Math.round(baseAmount * 0.3);
+      const payoutAmount = baseAmount - commissionAmount;
+      const providerId = marker.sourceId ?? marker.id;
+
+      const { error } = await supabase.from('bookings').insert({
+        client_id: currentUser?.id,
+        photographer_id: providerId,
+        status: 'pending',
+        package_type: `${instantPackage.label} (${marker.type})`,
+        user_latitude: userCoordinates.lat,
+        user_longitude: userCoordinates.lng,
+        booking_date: new Date().toISOString(),
+        price_total: baseAmount,
+        photographer_payout: payoutAmount,
+        commission_amount: commissionAmount,
+      });
+
+      if (error) throw error;
+      Alert.alert('Request sent', `Waiting for ${marker.title} to accept...`);
+    } catch (err: any) {
+      Alert.alert('Error', err.message);
+    } finally {
+      setIsRequesting(false);
+      setSelectedMarker(null);
+    }
+  };
+
   useEffect(() => {
     if (!currentUser?.id) return;
     const isModel = currentUser?.role === 'model';
     const filterColumn = isModel ? 'model_id' : 'photographer_id';
     const channel = supabase.channel(`public:bookings:${filterColumn}=eq.${currentUser.id}`);
-    
+
     channel.on(
       'postgres_changes',
       { event: 'INSERT', schema: 'public', table: 'bookings', filter: `${filterColumn}=eq.${currentUser.id}` },
@@ -253,42 +347,6 @@ const MapScreen: React.FC = () => {
     return () => { supabase.removeChannel(channel); };
   }, [currentUser, state.models, state.photographers]);
 
-  const handleRequestBooking = async (marker: MapMarker) => {
-    if (!userCoordinates) {
-      Alert.alert('Location required', 'We need your live GPS location to request talent nearby.');
-      return;
-    }
-    setIsRequesting(true);
-    try {
-      const instantPackage = BOOKING_PACKAGES.find((pkg) => pkg.id === 'instant') ?? BOOKING_PACKAGES[0];
-      const baseAmount = instantPackage.basePrice;
-      const commissionAmount = Math.round(baseAmount * 0.3);
-      const payoutAmount = baseAmount - commissionAmount;
-      // Create a pending booking straight from the map
-      const providerId = marker.sourceId ?? marker.id;
-      const { error } = await supabase.from('bookings').insert({
-        client_id: currentUser?.id,
-        photographer_id: providerId,
-        status: 'pending',
-        package_type: `${instantPackage.label} (${marker.type})`,
-        user_latitude: userCoordinates.lat,
-        user_longitude: userCoordinates.lng,
-        booking_date: new Date().toISOString(),
-        price_total: baseAmount,
-        photographer_payout: payoutAmount,
-        commission_amount: commissionAmount,
-      });
-
-      if (error) throw error;
-      Alert.alert('Request sent', `Waiting for ${marker.title} to accept...`);
-    } catch (err: any) {
-      Alert.alert('Error', err.message);
-    } finally {
-      setIsRequesting(false);
-      setSelectedMarker(null);
-    }
-  };
-
   const handleAcceptIncoming = async () => {
     if (!incomingRequest) return;
     try {
@@ -307,8 +365,7 @@ const MapScreen: React.FC = () => {
     try {
       await supabase.from('bookings').update({ status: 'declined' }).eq('id', incomingRequest.id);
       setShowPopup(false);
-    } catch (err: any) {
-      console.warn(err);
+    } catch (_err) {
       setShowPopup(false);
     }
   };
@@ -317,403 +374,539 @@ const MapScreen: React.FC = () => {
     const latitude = parseFloat(manualLocation.latitude);
     const longitude = parseFloat(manualLocation.longitude);
     if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-      Alert.alert('Invalid coordinates', 'Please enter numeric latitude and longitude values.');
+      Alert.alert('Invalid coordinates', 'Enter valid latitude and longitude.');
       return;
     }
     if (!isWithinSouthAfrica(latitude, longitude)) {
-      Alert.alert(
-        'Out of bounds',
-        'Coordinates must be inside South Africa (lat -35 to -22, lng 16 to 33).'
-      );
+      Alert.alert('Outside service area', 'Use a location inside South Africa.');
       return;
     }
-
-    setLocationError(null);
-    setMapError(null);
-    setUsingManual(true);
     setUserMarker({
-      id: 'manual-location',
-      title: manualLocation.label || 'Manual location',
-      description: 'Pinned manually',
+      id: `user-${currentUser?.id ?? 'manual'}`,
+      title: manualLocation.label || 'Manual pin',
+      description: 'Manual location',
       latitude,
       longitude,
       type: 'user',
     });
-    setUserCoordinates(null);
-  }, [manualLocation.label, manualLocation.latitude, manualLocation.longitude]);
+    setUserCoordinates({ lat: latitude, lng: longitude, timestamp: Date.now() });
+    setShowManualEntry(false);
+  }, [currentUser, manualLocation.label, manualLocation.latitude, manualLocation.longitude]);
 
-  const statusLabel = useMemo(() => {
-    if (mapError) return 'Map offline · using manual entry';
-    if (locationError) return 'Location needed';
-    if (usingManual) return 'Manual location active';
-    if (userMarker) return 'GPS locked';
-    if (gpsEnabled === false) return 'GPS disabled';
-    return 'Requesting location...';
-  }, [gpsEnabled, locationError, mapError, userMarker, usingManual]);
+  const primaryRoute = useMemo(() => {
+    if (!selectedMarker || !userCoordinates) return [];
+    return buildRoute(
+      { lat: userCoordinates.lat, lng: userCoordinates.lng },
+      { lat: selectedMarker.latitude, lng: selectedMarker.longitude },
+      48,
+      0
+    );
+  }, [selectedMarker, userCoordinates]);
+
+  const altRoute = useMemo(() => {
+    if (!selectedMarker || !userCoordinates) return [];
+    return buildRoute(
+      { lat: userCoordinates.lat, lng: userCoordinates.lng },
+      { lat: selectedMarker.latitude, lng: selectedMarker.longitude },
+      42,
+      0.003
+    );
+  }, [selectedMarker, userCoordinates]);
+
+  useEffect(() => {
+    if (primaryRoute.length < 2) {
+      setRouteProgress(0);
+      return;
+    }
+    let raf: number | null = null;
+    const start = Date.now();
+    const duration = 1200;
+
+    const tick = () => {
+      const elapsed = Date.now() - start;
+      const nextProgress = Math.min(1, elapsed / duration);
+      setRouteProgress(nextProgress);
+      if (nextProgress < 1) {
+        raf = requestAnimationFrame(tick);
+      }
+    };
+
+    raf = requestAnimationFrame(tick);
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [primaryRoute.length]);
+
+  const primarySlice = useMemo(() => sliceRoute(primaryRoute, routeProgress), [primaryRoute, routeProgress]);
+  const altSlice = useMemo(() => sliceRoute(altRoute, routeProgress), [altRoute, routeProgress]);
+
+  const primaryGeoJson = useMemo(() => ({
+    type: 'Feature',
+    geometry: {
+      type: 'LineString',
+      coordinates: primarySlice.map((point) => [point.lng, point.lat]),
+    },
+    properties: {},
+  }), [primarySlice]);
+
+  const altGeoJson = useMemo(() => ({
+    type: 'Feature',
+    geometry: {
+      type: 'LineString',
+      coordinates: altSlice.map((point) => [point.lng, point.lat]),
+    },
+    properties: {},
+  }), [altSlice]);
+
+  const selectedDistance = useMemo(() => {
+    if (!selectedMarker || !userCoordinates) return null;
+    const km = haversineDistanceKm(
+      { latitude: userCoordinates.lat, longitude: userCoordinates.lng },
+      { latitude: selectedMarker.latitude, longitude: selectedMarker.longitude }
+    );
+    return `${km.toFixed(1)} km`;
+  }, [selectedMarker, userCoordinates]);
+
+  const etaLabel = useMemo(() => {
+    if (!selectedDistance) return null;
+    const km = parseFloat(selectedDistance);
+    if (Number.isNaN(km)) return null;
+    const minutes = Math.max(6, Math.round(km * 3.4));
+    return `${minutes} min`;
+  }, [selectedDistance]);
+
+  if (Platform.OS === 'web') {
+    return (
+      <View style={[styles.webContainer, { backgroundColor: colors.bg }]}>
+        <MapPreview markers={markers} onMapError={(message) => setMapError(message)} />
+        {mapError ? <Text style={styles.overlayError}>{mapError}</Text> : null}
+      </View>
+    );
+  }
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.bg }]}>
-        <View style={styles.container}>
-          <View style={styles.headerRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.title, { color: colors.text }]}>Photographers nearby</Text>
-              <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-                Search photographers by city or name, then tap markers to explore nearby talent.
-              </Text>
-              <Text style={[styles.status, { color: colors.text }]}>{statusLabel}</Text>
-              <Text style={[styles.coordsLabel, { color: colors.textMuted }]}>
-                {userCoordinates
-                  ? `Lat ${userCoordinates.lat.toFixed(5)}, Lng ${userCoordinates.lng.toFixed(5)} · Updated ${formatTimestamp(
-                      userCoordinates.timestamp
-                    )}`
-                  : 'Awaiting live GPS coordinates'}
-              </Text>
-              {locationWarning ? <Text style={styles.warning}>{locationWarning}</Text> : null}
-              {locationError ? <Text style={styles.errorText}>{locationError}</Text> : null}
-              {mapError ? <Text style={styles.errorText}>{mapError}</Text> : null}
-            </View>
-            <View style={[styles.countPill, { backgroundColor: colors.accent }]}>
-              <Text style={[styles.countText, { color: isDark ? colors.bg : '#fff' }]}>{baseMarkers.length}</Text>
-              <Text style={[styles.countLabel, { color: isDark ? colors.bg + '80' : 'rgba(255,255,255,0.7)' }]}>active</Text>
-            </View>
-          </View>
+    <View style={styles.container}>
+      <MapLibreGL.MapView
+        style={StyleSheet.absoluteFill}
+        mapStyle={MAP_STYLE}
+        logoEnabled={false}
+        attributionEnabled={false}
+        compassEnabled
+      >
+        <MapLibreGL.Camera
+          ref={cameraRef}
+          centerCoordinate={mapCenter as [number, number]}
+          zoomLevel={11.5}
+          animationMode="flyTo"
+          animationDuration={600}
+        />
 
-          <View style={styles.actionRow}>
-            <TouchableOpacity style={[styles.primaryButton, { backgroundColor: colors.accent }]} onPress={requestLocation} disabled={requesting}>
-              <Text style={[styles.primaryButtonText, { color: isDark ? colors.bg : '#fff' }]}>{requesting ? 'Requesting...' : 'Retry GPS'}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.secondaryButton, { backgroundColor: colors.card, borderColor: colors.border }, usingManual && [styles.secondaryButtonActive, { borderColor: colors.accent, backgroundColor: colors.accent + '10' }]]}
-              onPress={() => setShowManualEntry((current) => !current)}
+        {altSlice.length > 1 && (
+          <MapLibreGL.ShapeSource id="route-alt" shape={altGeoJson as any}>
+            <MapLibreGL.LineLayer
+              id="route-alt-line"
+              style={{
+                lineColor: '#0f172a',
+                lineOpacity: 0.25,
+                lineWidth: 4,
+                lineDasharray: [1.5, 2],
+              }}
+            />
+          </MapLibreGL.ShapeSource>
+        )}
+
+        {primarySlice.length > 1 && (
+          <MapLibreGL.ShapeSource id="route-primary" shape={primaryGeoJson as any}>
+            <MapLibreGL.LineLayer
+              id="route-primary-line"
+              style={{
+                lineColor: '#3b82f6',
+                lineOpacity: 0.9,
+                lineWidth: 5,
+                lineCap: 'round',
+                lineJoin: 'round',
+              }}
+            />
+          </MapLibreGL.ShapeSource>
+        )}
+
+        {markers
+          .filter((marker) => marker.type !== 'user')
+          .map((marker) => (
+            <MapLibreGL.PointAnnotation
+              id={marker.id}
+              key={marker.id}
+              coordinate={[marker.longitude, marker.latitude]}
+              onSelected={() => setSelectedMarker(marker)}
             >
-              <Text style={[styles.secondaryButtonText, { color: colors.textSecondary }, usingManual && [styles.secondaryButtonTextActive, { color: colors.accent }]]}>
-                {showManualEntry ? 'Hide manual pin' : 'Manual pin'}
-              </Text>
-            </TouchableOpacity>
-          </View>
+              <View style={[styles.markerPin, marker.type === 'model' ? styles.modelPin : styles.photoPin]}>
+                <Ionicons name={marker.type === 'model' ? 'sparkles' : 'camera'} size={14} color="#fff" />
+              </View>
+            </MapLibreGL.PointAnnotation>
+          ))}
 
-          <View style={styles.searchRow}>
+        {userMarker && (
+          <MapLibreGL.PointAnnotation
+            id={userMarker.id}
+            key={userMarker.id}
+            coordinate={[userMarker.longitude, userMarker.latitude]}
+          >
+            <View style={styles.userPinWrapper}>
+              <Animated.View
+                style={[
+                  styles.userPulse,
+                  {
+                    opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.5, 0] }),
+                    transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1.4] }) }],
+                  },
+                ]}
+              />
+              <View style={styles.userPinCore} />
+            </View>
+          </MapLibreGL.PointAnnotation>
+        )}
+      </MapLibreGL.MapView>
+
+      <SafeAreaView style={[styles.safeOverlay, { paddingTop: insets.top + 8 }]}>
+        <View style={[styles.topBar, { backgroundColor: colors.card }]}>
+          <View style={styles.searchBox}>
+            <Ionicons name="search" size={16} color={colors.textMuted} />
             <TextInput
-              placeholder="Search photographers or city"
+              placeholder="Search photographers or models"
               placeholderTextColor={colors.textMuted}
               value={searchQuery}
               onChangeText={setSearchQuery}
-              style={[styles.searchInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
+              style={[styles.searchInput, { color: colors.text }]}
             />
-            <Text style={[styles.searchMeta, { color: colors.textSecondary }]}>{filteredBaseMarkers.length} shown</Text>
           </View>
+          <TouchableOpacity style={styles.iconButton} onPress={requestLocation} disabled={requesting}>
+            <Ionicons name="locate" size={18} color={colors.text} />
+          </TouchableOpacity>
+        </View>
 
-          <View style={styles.mapWrapper}>
-            <MapPreview
-              markers={markers}
-              onMapError={(message) => setMapError(message)}
-              onMarkerPress={(m) => {
-                if (m.type === 'photographer' || m.type === 'model') {
-                  setSelectedMarker(m);
-                }
-              }}
-            />
-            
-            {selectedMarker && (
-              <View style={[styles.bottomSheet, { backgroundColor: colors.card }]}>
-                <TouchableOpacity style={styles.closeSheet} onPress={() => setSelectedMarker(null)}>
-                  <Ionicons name="close" size={24} color={colors.textSecondary} />
-                </TouchableOpacity>
-                <View style={styles.sheetHeader}>
-                  <View style={[styles.sheetPhotoPlaceholder, { backgroundColor: colors.bg }]}>
-                    <Ionicons name="camera" size={24} color={colors.textMuted} />
-                  </View>
-                  <View style={styles.sheetInfo}>
-                    <Text style={[styles.sheetTitle, { color: colors.text }]}>{selectedMarker.title}</Text>
-                    <Text style={[styles.sheetSubtitle, { color: colors.textSecondary }]}>{selectedMarker.description}</Text>
-                    <View style={styles.ratingRow}>
-                      <Ionicons name="star" size={14} color="#fbbf24" />
-                      <Text style={[styles.ratingText, { color: colors.text }]}>4.9 (120+ trips)</Text>
-                    </View>
-                  </View>
-                </View>
-                  {currentUser?.role === 'client' && (
-                    <TouchableOpacity
-                      style={[styles.bookButton, { backgroundColor: colors.accent, marginTop: 10 }]}
-                      onPress={() => handleRequestBooking(selectedMarker)}
-                      disabled={isRequesting}
-                    >
-                      <Text style={[styles.bookButtonText, { color: isDark ? colors.bg : '#fff' }]}>
-                        {isRequesting ? 'Requesting...' : 'Request Booking'}
-                      </Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-            )}
-          </View>
-
-          {showManualEntry ? (
-            <View style={[styles.manualCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Text style={[styles.manualTitle, { color: colors.text }]}>Manual fallback</Text>
-              <Text style={[styles.manualSubtitle, { color: colors.textSecondary }]}>
-                Use only if GPS fails. South Africa bounds: lat -35 to -22, lng 16 to 33.
-              </Text>
-              <View style={styles.inputRow}>
-                <View style={styles.inputGroup}>
-                  <Text style={[styles.label, { color: colors.text }]}>Label</Text>
-                  <TextInput
-                    placeholder="Cape Town CBD"
-                    placeholderTextColor={colors.textMuted}
-                    value={manualLocation.label}
-                    onChangeText={(text) => setManualLocation((prev) => ({ ...prev, label: text }))}
-                    style={[styles.input, { backgroundColor: colors.bg, borderColor: colors.border, color: colors.text }]}
-                  />
-                </View>
-                <View style={styles.inputGroup}>
-                  <Text style={[styles.label, { color: colors.text }]}>Latitude</Text>
-                  <TextInput
-                    placeholder="-33.92"
-                    placeholderTextColor={colors.textMuted}
-                    value={manualLocation.latitude}
-                    onChangeText={(text) => setManualLocation((prev) => ({ ...prev, latitude: text }))}
-                    style={[styles.input, { backgroundColor: colors.bg, borderColor: colors.border, color: colors.text }]}
-                    keyboardType="numeric"
-                  />
-                </View>
-                <View style={styles.inputGroup}>
-                  <Text style={[styles.label, { color: colors.text }]}>Longitude</Text>
-                  <TextInput
-                    placeholder="18.42"
-                    placeholderTextColor={colors.textMuted}
-                    value={manualLocation.longitude}
-                    onChangeText={(text) => setManualLocation((prev) => ({ ...prev, longitude: text }))}
-                    style={[styles.input, { backgroundColor: colors.bg, borderColor: colors.border, color: colors.text }]}
-                    keyboardType="numeric"
-                  />
-                </View>
-              </View>
-              <TouchableOpacity style={[styles.applyButton, { backgroundColor: colors.accent }]} onPress={applyManualLocation}>
-                <Text style={[styles.applyButtonText, { color: isDark ? colors.bg : '#fff' }]}>Pin manual location</Text>
-              </TouchableOpacity>
-            </View>
-          ) : null}
-
-          {/* Incoming Request Uber-Popup */}
-          <RequestPopup
-            visible={showPopup}
-            requestData={incomingRequest}
-            onAccept={handleAcceptIncoming}
-            onDecline={handleDeclineIncoming}
-          />
+        <View style={styles.statusPill}>
+          <Text style={[styles.statusTitle, { color: colors.text }]}>Live Map</Text>
+          <Text style={[styles.statusSubtitle, { color: colors.textSecondary }]}>
+            {userCoordinates
+              ? `Lat ${userCoordinates.lat.toFixed(4)}, Lng ${userCoordinates.lng.toFixed(4)} - Updated ${formatTimestamp(
+                  userCoordinates.timestamp
+                )}`
+              : 'Tap locate to fetch your position'}
+          </Text>
+          {locationWarning ? <Text style={styles.warning}>{locationWarning}</Text> : null}
+          {locationError ? <Text style={styles.errorText}>{locationError}</Text> : null}
         </View>
       </SafeAreaView>
+
+      <View style={[styles.bottomSheet, { backgroundColor: colors.card, paddingBottom: Math.max(insets.bottom, 16) }]}>
+        {selectedMarker ? (
+          <>
+            <View style={styles.sheetHeader}>
+              <View style={styles.sheetAvatar}>
+                <Ionicons name={selectedMarker.type === 'model' ? 'sparkles' : 'camera'} size={20} color={colors.textMuted} />
+              </View>
+              <View style={styles.sheetInfo}>
+                <Text style={[styles.sheetTitle, { color: colors.text }]}>{selectedMarker.title}</Text>
+                <Text style={[styles.sheetSubtitle, { color: colors.textSecondary }]}>{selectedMarker.description}</Text>
+              </View>
+              <TouchableOpacity onPress={() => setSelectedMarker(null)}>
+                <Ionicons name="close" size={20} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.sheetMetrics}>
+              <View style={styles.metricItem}>
+                <Text style={[styles.metricLabel, { color: colors.textMuted }]}>Distance</Text>
+                <Text style={[styles.metricValue, { color: colors.text }]}>{selectedDistance ?? '—'}</Text>
+              </View>
+              <View style={styles.metricItem}>
+                <Text style={[styles.metricLabel, { color: colors.textMuted }]}>ETA</Text>
+                <Text style={[styles.metricValue, { color: colors.text }]}>{etaLabel ?? '—'}</Text>
+              </View>
+              <View style={styles.metricItem}>
+                <Text style={[styles.metricLabel, { color: colors.textMuted }]}>Status</Text>
+                <Text style={[styles.metricValue, { color: colors.text }]}>Available</Text>
+              </View>
+            </View>
+
+            {currentUser?.role === 'client' && (
+              <TouchableOpacity
+                style={[styles.primaryButton, { backgroundColor: colors.accent }]}
+                onPress={() => handleRequestBooking(selectedMarker)}
+                disabled={isRequesting}
+              >
+                <Text style={[styles.primaryButtonText, { color: isDark ? colors.bg : '#fff' }]}>
+                  {isRequesting ? 'Requesting...' : 'Request Booking'}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </>
+        ) : (
+          <>
+            <Text style={[styles.sheetTitle, { color: colors.text }]}>Tap a pin to view details</Text>
+            <Text style={[styles.sheetSubtitle, { color: colors.textSecondary }]}>
+              {filteredBaseMarkers.length} talents available in your area.
+            </Text>
+          </>
+        )}
+
+        <View style={styles.manualRow}>
+          <TouchableOpacity onPress={() => setShowManualEntry((current) => !current)}>
+            <Text style={[styles.manualToggle, { color: colors.accent }]}>
+              {showManualEntry ? 'Hide manual pin' : 'Enter location manually'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {showManualEntry ? (
+          <View style={[styles.manualCard, { borderColor: colors.border }]}>
+            <View style={styles.manualInputs}>
+              <TextInput
+                placeholder="Label"
+                placeholderTextColor={colors.textMuted}
+                value={manualLocation.label}
+                onChangeText={(text) => setManualLocation((prev) => ({ ...prev, label: text }))}
+                style={[styles.manualInput, { color: colors.text, borderColor: colors.border }]}
+              />
+              <TextInput
+                placeholder="Latitude"
+                placeholderTextColor={colors.textMuted}
+                value={manualLocation.latitude}
+                onChangeText={(text) => setManualLocation((prev) => ({ ...prev, latitude: text }))}
+                keyboardType="numeric"
+                style={[styles.manualInput, { color: colors.text, borderColor: colors.border }]}
+              />
+              <TextInput
+                placeholder="Longitude"
+                placeholderTextColor={colors.textMuted}
+                value={manualLocation.longitude}
+                onChangeText={(text) => setManualLocation((prev) => ({ ...prev, longitude: text }))}
+                keyboardType="numeric"
+                style={[styles.manualInput, { color: colors.text, borderColor: colors.border }]}
+              />
+            </View>
+            <TouchableOpacity style={[styles.secondaryButton, { borderColor: colors.border }]} onPress={applyManualLocation}>
+              <Text style={[styles.secondaryButtonText, { color: colors.text }]}>Pin location</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+      </View>
+
+      <RequestPopup visible={showPopup} requestData={incomingRequest} onAccept={handleAcceptIncoming} onDecline={handleDeclineIncoming} />
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-  },
   container: {
     flex: 1,
-    padding: 16,
+    backgroundColor: '#0f172a',
   },
-  title: {
-    fontSize: 22,
-    fontWeight: '800',
+  safeOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
   },
-  subtitle: {
-    marginTop: 4,
-    marginBottom: 12,
-  },
-  status: {
-    fontWeight: '700',
-  },
-  coordsLabel: {
-    marginTop: 4,
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-    fontSize: 12,
-  },
-  warning: {
-    color: '#b45309',
-    fontWeight: '700',
-    marginTop: 4,
-  },
-  errorText: {
-    color: '#dc2626',
-    fontWeight: '700',
-    marginTop: 4,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-    gap: 12,
-  },
-  countPill: {
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    alignItems: 'center',
-  },
-  countText: {
-    fontWeight: '800',
-    fontSize: 16,
-  },
-  countLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  actionRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 12,
-  },
-  primaryButton: {
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  primaryButtonText: {
-    fontWeight: '700',
-  },
-  secondaryButton: {
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  secondaryButtonActive: {
-  },
-  secondaryButtonText: {
-    fontWeight: '700',
-  },
-  secondaryButtonTextActive: {
-  },
-  mapWrapper: {
-    flex: 1,
-    width: '100%',
-    height: '100%',
+  topBar: {
+    marginHorizontal: 16,
+    padding: 10,
     borderRadius: 16,
-    overflow: 'hidden',
-  },
-  searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
     gap: 10,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 6,
+  },
+  searchBox: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 10,
   },
   searchInput: {
     flex: 1,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 4,
   },
-  searchMeta: {
-    fontWeight: '700',
-  },
-  manualCard: {
-    marginTop: 12,
-    borderRadius: 14,
-    padding: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  manualTitle: {
-    fontWeight: '800',
-  },
-  manualSubtitle: {
-    marginTop: 4,
-    marginBottom: 10,
-  },
-  inputRow: {
-    flexDirection: 'row',
-    gap: 8,
-    flexWrap: 'wrap',
-  },
-  inputGroup: {
-    flex: 1,
-    minWidth: 110,
-  },
-  label: {
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  input: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 10,
-    padding: 10,
-  },
-  applyButton: {
-    marginTop: 10,
-    paddingVertical: 12,
-    borderRadius: 12,
+  iconButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  applyButtonText: {
-    fontWeight: '800',
+  statusPill: {
+    marginTop: 10,
+    marginHorizontal: 16,
+    padding: 12,
+    borderRadius: 16,
+    backgroundColor: 'rgba(15, 23, 42, 0.8)',
+  },
+  statusTitle: {
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  statusSubtitle: {
+    fontSize: 12,
+    marginTop: 4,
+  },
+  warning: {
+    color: '#f59e0b',
+    fontSize: 12,
+    marginTop: 4,
+  },
+  errorText: {
+    color: '#ef4444',
+    fontSize: 12,
+    marginTop: 4,
   },
   bottomSheet: {
     position: 'absolute',
-    bottom: 16,
     left: 16,
     right: 16,
+    bottom: 16,
+    padding: 16,
     borderRadius: 20,
-    padding: 20,
     shadowColor: '#000',
-    shadowOpacity: 0.15,
+    shadowOpacity: 0.2,
     shadowRadius: 16,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 10,
-    zIndex: 10,
-  },
-  closeSheet: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    zIndex: 11,
-    padding: 4,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 8,
   },
   sheetHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
+    gap: 12,
   },
-  sheetPhotoPlaceholder: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+  sheetAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#1f2937',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 16,
   },
   sheetInfo: {
     flex: 1,
   },
   sheetTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '800',
   },
   sheetSubtitle: {
-    fontSize: 14,
+    fontSize: 12,
     marginTop: 2,
   },
-  ratingRow: {
+  sheetMetrics: {
+    marginTop: 16,
     flexDirection: 'row',
-    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  metricItem: {
+    alignItems: 'flex-start',
+  },
+  metricLabel: {
+    fontSize: 11,
+    textTransform: 'uppercase',
+  },
+  metricValue: {
+    fontSize: 14,
+    fontWeight: '700',
     marginTop: 4,
   },
-  ratingText: {
-    fontSize: 13,
-    fontWeight: '600',
-    marginLeft: 4,
-  },
-  bookButton: {
+  primaryButton: {
+    marginTop: 16,
+    paddingVertical: 14,
     borderRadius: 14,
     alignItems: 'center',
-    paddingVertical: 14,
   },
-  bookButtonText: {
-    fontSize: 16,
+  primaryButtonText: {
     fontWeight: '700',
+    fontSize: 16,
+  },
+  manualRow: {
+    marginTop: 12,
+    alignItems: 'flex-end',
+  },
+  manualToggle: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  manualCard: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  manualInputs: {
+    gap: 8,
+  },
+  manualInput: {
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  secondaryButton: {
+    marginTop: 10,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+  },
+  secondaryButtonText: {
+    fontWeight: '600',
+  },
+  markerPin: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
+  },
+  modelPin: {
+    backgroundColor: '#ec4899',
+  },
+  photoPin: {
+    backgroundColor: '#111827',
+  },
+  userPinWrapper: {
+    width: 34,
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  userPinCore: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#3b82f6',
+    borderWidth: 3,
+    borderColor: '#dbeafe',
+  },
+  userPulse: {
+    position: 'absolute',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#3b82f6',
+  },
+  webContainer: {
+    flex: 1,
+    padding: 16,
+  },
+  overlayError: {
+    color: '#ef4444',
+    marginTop: 8,
   },
 });
 

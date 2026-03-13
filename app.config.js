@@ -58,6 +58,7 @@ export default {
           color: "#ffffff"
         }
       ],
+      "@maplibre/maplibre-react-native",
       [
         "expo-image-picker",
         {

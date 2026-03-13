@@ -559,8 +559,109 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       logError('fetch_conversations', err);
     }
   }, []);
-
   
+  const fetchCredits = useCallback(async (userId?: string | null) => {
+    if (!hasSupabase) return;
+    const targetUserId = userId ?? stateRef.current.currentUser?.id;
+    if (!targetUserId) {
+      setState({ creditsWallet: null, creditsLedger: [] });
+      return;
+    }
+    try {
+      const [walletRes, ledgerRes] = await Promise.all([
+        supabase
+          .from('credits_wallets')
+          .select('user_id, balance, updated_at')
+          .eq('user_id', targetUserId)
+          .maybeSingle(),
+        supabase
+          .from('credits_ledger')
+          .select('id, user_id, amount, direction, reason, ref_type, ref_id, created_at')
+          .eq('user_id', targetUserId)
+          .order('created_at', { ascending: false })
+          .limit(50),
+      ]);
+      if (walletRes.error) throw walletRes.error;
+      if (ledgerRes.error) throw ledgerRes.error;
+      setState({
+        creditsWallet: (walletRes.data as CreditsWallet | null) ?? { user_id: targetUserId, balance: 0 },
+        creditsLedger: (ledgerRes.data as CreditsLedgerEntry[]) ?? [],
+      });
+    } catch (err) {
+      logError('fetch_credits', err);
+    }
+  }, []);
+
+  const adjustCredits = useCallback(async (amount: number, reason?: string, refType?: string, refId?: string) => {
+    if (!hasSupabase) return 0;
+    try {
+      const { data, error } = await supabase.rpc('credits_adjust', {
+        p_amount: amount,
+        p_reason: reason ?? null,
+        p_ref_type: refType ?? null,
+        p_ref_id: refId ?? null,
+      });
+      if (error) throw error;
+      const balance = Array.isArray(data) ? data[0]?.balance : data?.balance;
+      if (typeof balance === 'number') {
+        setState((prev) => ({
+          creditsWallet: prev.creditsWallet ? { ...prev.creditsWallet, balance } : prev.creditsWallet,
+        }));
+      }
+      await fetchCredits(stateRef.current.currentUser?.id ?? null);
+      return typeof balance === 'number' ? balance : 0;
+    } catch (err) {
+      logError('adjust_credits', err);
+      throw err;
+    }
+  }, [fetchCredits]);
+
+  const redeemCreditsCode = useCallback(async (code: string) => {
+    if (!hasSupabase) return 0;
+    try {
+      const { data, error } = await supabase.rpc('credits_redeem_code', { p_code: code });
+      if (error) throw error;
+      const balance = Array.isArray(data) ? data[0]?.balance : data?.balance;
+      if (typeof balance === 'number') {
+        setState((prev) => ({
+          creditsWallet: prev.creditsWallet ? { ...prev.creditsWallet, balance } : prev.creditsWallet,
+        }));
+      }
+      await fetchCredits(stateRef.current.currentUser?.id ?? null);
+      return typeof balance === 'number' ? balance : 0;
+    } catch (err) {
+      logError('redeem_credits_code', err);
+      throw err;
+    }
+  }, [fetchCredits]);
+
+  const fetchEarnings = useCallback(async (userId: string) => {
+    if (!hasSupabase) return;
+    try {
+      const data = await fetchCreatorEarnings(userId);
+      setState({ earnings: data });
+    } catch (err) {
+      logError('fetch_earnings', err);
+    }
+  }, []);
+
+  const fetchSubscriptions = useCallback(async (userId?: string | null) => {
+    if (!hasSupabase) return;
+    const targetUserId = userId ?? stateRef.current.currentUser?.id;
+    if (!targetUserId) { setState({ subscriptions: [] }); return; }
+    try {
+      const { data, error } = await supabase
+        .from('subscriptions')
+        .select('id, subscriber_id, creator_id, tier_id, status, current_period_start, current_period_end, created_at')
+        .or(`subscriber_id.eq.${targetUserId},creator_id.eq.${targetUserId}`)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      setState({ subscriptions: data ?? [] });
+    } catch (err) {
+      logError('fetch_subscriptions', err);
+    }
+  }, []);
+
   const persistDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -962,108 +1063,6 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     return updatedBooking;
   }, []);
-
-  const fetchEarnings = useCallback(async (userId: string) => {
-    if (!hasSupabase) return;
-    try {
-      const data = await fetchCreatorEarnings(userId);
-      setState({ earnings: data });
-    } catch (err) {
-      logError('fetch_earnings', err);
-    }
-  }, []);
-
-  const fetchSubscriptions = useCallback(async (userId?: string | null) => {
-    if (!hasSupabase) return;
-    const targetUserId = userId ?? stateRef.current.currentUser?.id;
-    if (!targetUserId) { setState({ subscriptions: [] }); return; }
-    try {
-      const { data, error } = await supabase
-        .from('subscriptions')
-        .select('id, subscriber_id, creator_id, tier_id, status, current_period_start, current_period_end, created_at')
-        .or(`subscriber_id.eq.${targetUserId},creator_id.eq.${targetUserId}`)
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      setState({ subscriptions: data ?? [] });
-    } catch (err) {
-      logError('fetch_subscriptions', err);
-    }
-  }, []);
-
-  const fetchCredits = useCallback(async (userId?: string | null) => {
-    if (!hasSupabase) return;
-    const targetUserId = userId ?? stateRef.current.currentUser?.id;
-    if (!targetUserId) {
-      setState({ creditsWallet: null, creditsLedger: [] });
-      return;
-    }
-    try {
-      const [walletRes, ledgerRes] = await Promise.all([
-        supabase
-          .from('credits_wallets')
-          .select('user_id, balance, updated_at')
-          .eq('user_id', targetUserId)
-          .maybeSingle(),
-        supabase
-          .from('credits_ledger')
-          .select('id, user_id, amount, direction, reason, ref_type, ref_id, created_at')
-          .eq('user_id', targetUserId)
-          .order('created_at', { ascending: false })
-          .limit(50),
-      ]);
-      if (walletRes.error) throw walletRes.error;
-      if (ledgerRes.error) throw ledgerRes.error;
-      setState({
-        creditsWallet: (walletRes.data as CreditsWallet | null) ?? { user_id: targetUserId, balance: 0 },
-        creditsLedger: (ledgerRes.data as CreditsLedgerEntry[]) ?? [],
-      });
-    } catch (err) {
-      logError('fetch_credits', err);
-    }
-  }, []);
-
-  const adjustCredits = useCallback(async (amount: number, reason?: string, refType?: string, refId?: string) => {
-    if (!hasSupabase) return 0;
-    try {
-      const { data, error } = await supabase.rpc('credits_adjust', {
-        p_amount: amount,
-        p_reason: reason ?? null,
-        p_ref_type: refType ?? null,
-        p_ref_id: refId ?? null,
-      });
-      if (error) throw error;
-      const balance = Array.isArray(data) ? data[0]?.balance : data?.balance;
-      if (typeof balance === 'number') {
-        setState((prev) => ({
-          creditsWallet: prev.creditsWallet ? { ...prev.creditsWallet, balance } : prev.creditsWallet,
-        }));
-      }
-      await fetchCredits(stateRef.current.currentUser?.id ?? null);
-      return typeof balance === 'number' ? balance : 0;
-    } catch (err) {
-      logError('adjust_credits', err);
-      throw err;
-    }
-  }, [fetchCredits]);
-
-  const redeemCreditsCode = useCallback(async (code: string) => {
-    if (!hasSupabase) return 0;
-    try {
-      const { data, error } = await supabase.rpc('credits_redeem_code', { p_code: code });
-      if (error) throw error;
-      const balance = Array.isArray(data) ? data[0]?.balance : data?.balance;
-      if (typeof balance === 'number') {
-        setState((prev) => ({
-          creditsWallet: prev.creditsWallet ? { ...prev.creditsWallet, balance } : prev.creditsWallet,
-        }));
-      }
-      await fetchCredits(stateRef.current.currentUser?.id ?? null);
-      return typeof balance === 'number' ? balance : 0;
-    } catch (err) {
-      logError('redeem_credits_code', err);
-      throw err;
-    }
-  }, [fetchCredits]);
 
   const sendMessage = useCallback(
     async (chatId: string, text: string, fromUser: boolean = true): Promise<Message> => {

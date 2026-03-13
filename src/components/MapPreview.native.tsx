@@ -71,7 +71,7 @@ export const MapPreview: React.FC<MapPreviewProps> = ({ markers, onMapError, onM
         <UrlTile urlTemplate="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" maximumZ={19} />
         {markers.map((marker) => (
           <Marker
-            key={marker.id}
+            key={`${marker.type}-${marker.id}`}
             coordinate={{ latitude: marker.latitude, longitude: marker.longitude }}
             tracksViewChanges={false}
             onPress={() => onMarkerPress?.(marker)}

@@ -104,16 +104,33 @@ const MapScreen: React.FC = () => {
       ];
     } else {
       // Clients see Photographers and Models
-      result = [
-        ...state.photographers.map(p => ({
-          id: p.id, title: p.name, description: 'Photographer', latitude: p.latitude, longitude: p.longitude, type: 'photographer' as const
-        })),
-        ...state.models.map(m => ({
-          id: m.id, title: m.name, description: 'Model', latitude: m.latitude, longitude: m.longitude, type: 'model' as const
-        }))
-      ];
+      const photographerMarkers = state.photographers.map((p) => ({
+        id: `photographer-${p.id}`,
+        sourceId: p.id,
+        title: p.name,
+        description: 'Photographer',
+        latitude: p.latitude,
+        longitude: p.longitude,
+        type: 'photographer' as const,
+      }));
+      const modelMarkers = state.models.map((m) => ({
+        id: `model-${m.id}`,
+        sourceId: m.id,
+        title: m.name,
+        description: 'Model',
+        latitude: m.latitude,
+        longitude: m.longitude,
+        type: 'model' as const,
+      }));
+      result = [...photographerMarkers, ...modelMarkers];
     }
-    return result;
+    // Deduplicate in case upstream data repeats
+    const seen = new Set<string>();
+    return result.filter((marker) => {
+      if (seen.has(marker.id)) return false;
+      seen.add(marker.id);
+      return true;
+    });
   }, [state.photographers, state.models, currentUser]);
 
   const filteredBaseMarkers: MapMarker[] = useMemo(() => {
@@ -184,7 +201,7 @@ const MapScreen: React.FC = () => {
       }
 
       setUserMarker({
-        id: 'user-location',
+        id: `user-${currentUser?.id ?? 'location'}`,
         title: 'You',
         description: formatAccuracy(accuracy),
         latitude,
@@ -248,18 +265,18 @@ const MapScreen: React.FC = () => {
       const commissionAmount = Math.round(baseAmount * 0.3);
       const payoutAmount = baseAmount - commissionAmount;
       // Create a pending booking straight from the map
+      const providerId = marker.sourceId ?? marker.id;
       const { error } = await supabase.from('bookings').insert({
         client_id: currentUser?.id,
-        photographer_id: marker.type === 'photographer' ? marker.id : null,
-        model_id: marker.type === 'model' ? marker.id : null,
+        photographer_id: providerId,
         status: 'pending',
-        package_type: instantPackage.label,
+        package_type: `${instantPackage.label} (${marker.type})`,
         user_latitude: userCoordinates.lat,
         user_longitude: userCoordinates.lng,
         booking_date: new Date().toISOString(),
-        total_amount: baseAmount,
-        payout_amount: payoutAmount,
-        commission_amount: commissionAmount
+        price_total: baseAmount,
+        photographer_payout: payoutAmount,
+        commission_amount: commissionAmount,
       });
 
       if (error) throw error;
@@ -423,7 +440,7 @@ const MapScreen: React.FC = () => {
                       disabled={isRequesting}
                     >
                       <Text style={[styles.bookButtonText, { color: isDark ? colors.bg : '#fff' }]}>
-                        {isRequesting ? 'Requesting...' : 'Request Now (Uber Fast)'}
+                        {isRequesting ? 'Requesting...' : 'Request Booking'}
                       </Text>
                     </TouchableOpacity>
                   )}

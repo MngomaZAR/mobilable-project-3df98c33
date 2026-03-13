@@ -1,5 +1,6 @@
 export type MapMarker = {
   id: string;
+  sourceId?: string;
   latitude: number;
   longitude: number;
   type: 'user' | 'photographer' | string;

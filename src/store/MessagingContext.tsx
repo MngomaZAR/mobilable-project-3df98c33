@@ -34,7 +34,7 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       // Step 1: get conversation IDs this user participates in
       const { data: participations, error: partError } = await supabase
         .from('conversation_participants')
-        .select('conversation_id, user_id, last_read_at, profiles:user_id(id, full_name, avatar_url, updated_at)')
+        .select('conversation_id, user_id, last_read_at')
         .eq('user_id', currentUser.id);
 
       if (partError) throw partError;
@@ -51,14 +51,24 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       try {
         const { data: allParticipants } = await supabase
           .from('conversation_participants')
-          .select('conversation_id, user_id, last_read_at, profiles:user_id(id, full_name, avatar_url, updated_at)')
+          .select('conversation_id, user_id, last_read_at')
           .in('conversation_id', ids);
+
+        const profileIds = [...new Set((allParticipants ?? []).map((row: any) => row.user_id).filter(Boolean))];
+        let profilesMap: Record<string, any> = {};
+        if (profileIds.length > 0) {
+          const { data: profilesData } = await supabase
+            .from('profiles')
+            .select('id, full_name, avatar_url, updated_at')
+            .in('id', profileIds);
+          (profilesData ?? []).forEach((p: any) => { profilesMap[p.id] = p; });
+        }
 
         (allParticipants ?? []).forEach((row: any) => {
           if (!participantsByConvo[row.conversation_id]) participantsByConvo[row.conversation_id] = [];
           participantsByConvo[row.conversation_id].push(row.user_id);
           if (row.user_id === currentUser.id) return;
-          const profile = row.profiles;
+          const profile = profilesMap[row.user_id];
           if (!profile) return;
           participantMap[row.conversation_id] = {
             id: profile.id,

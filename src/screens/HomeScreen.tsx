@@ -416,8 +416,8 @@ const HomeScreen: React.FC = () => {
                 <Text style={[styles.recommendedTitle, { color: colors.text }]}>Recommended for you</Text>
             </View>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recommendedScroll}>
-                {recommended.map(item => (
-                    <View key={`rec-${item.id}`} style={{ width: width * 0.7, maxWidth: 320 }}>
+                {recommended.map((item, index) => (
+                    <View key={`rec-${item.id}-${index}`} style={{ width: width * 0.7, maxWidth: 320 }}>
                         {renderCard(item)}
                     </View>
                 ))}
@@ -428,7 +428,7 @@ const HomeScreen: React.FC = () => {
       <View style={[styles.grid, { paddingHorizontal: columns > 1 ? 0 : 0 }]}>
         <FlatList
           data={visibleTalent}
-          keyExtractor={(item, index) => item.id || `talent-${index}`}
+          keyExtractor={(item, index) => (item.id ? `${item.id}-${index}` : `talent-${index}`)}
           numColumns={columns}
           key={columns} // force re-render on column count change
           renderItem={({ item }) => renderCard(item)}

@@ -30,7 +30,7 @@ export const MapPreview: React.FC<MapPreviewProps> = ({ markers, onMapError }) =
         </View>
         <View style={styles.list}>
           {userMarker ? (
-            <View key={userMarker.id} style={[styles.markerRow, styles.markerRowHighlight]}>
+            <View key={`user-${userMarker.id}`} style={[styles.markerRow, styles.markerRowHighlight]}>
               <View>
                 <Text style={[styles.markerTitle, styles.markerTitleHighlight]}>{userMarker.title}</Text>
                 <Text style={styles.markerMeta}>{userMarker.description}</Text>
@@ -41,7 +41,7 @@ export const MapPreview: React.FC<MapPreviewProps> = ({ markers, onMapError }) =
             </View>
           ) : null}
           {photographerMarkers.map((marker) => (
-            <View key={marker.id} style={styles.markerRow}>
+            <View key={`${marker.type}-${marker.id}`} style={styles.markerRow}>
               <View>
                 <Text style={styles.markerTitle}>{marker.title}</Text>
                 <Text style={styles.markerMeta}>{marker.description}</Text>

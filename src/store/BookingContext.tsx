@@ -8,6 +8,7 @@ import { uid } from '../utils/id';
 
 type CreateBookingInput = {
   talent_id: string; // Unified talent ID (Model or Photographer)
+  talent_type?: 'photographer' | 'model';
   booking_date: string;
   package_type: string;
   notes?: string;
@@ -39,14 +40,15 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     try {
       const { data, error } = await supabase
         .from('bookings')
-        .select(`*, photographer:profiles!photographer_id(id, full_name, avatar_url), client:profiles!client_id(id, full_name, avatar_url)`)
-        .or(`client_id.eq.${currentUser.id},photographer_id.eq.${currentUser.id}`)
+        .select(`*, model_id, photographer:profiles!photographer_id(id, full_name, avatar_url), client:profiles!client_id(id, full_name, avatar_url)`)
+        .or(`client_id.eq.${currentUser.id},photographer_id.eq.${currentUser.id},model_id.eq.${currentUser.id}`)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
       setBookings(data.map((row: any) => ({
         id: row.id,
         photographer_id: row.photographer_id,
+        model_id: row.model_id ?? null,
         client_id: row.client_id,
         booking_date: row.booking_date,
         package_type: row.package_type,
@@ -76,11 +78,13 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     trackEvent('booking_initiated', { talent_id: payload.talent_id, amount: total });
 
     try {
+      const isModel = payload.talent_type === 'model';
       const { data, error } = await supabase
         .from('bookings')
         .insert({
           client_id: currentUser.id,
-          photographer_id: payload.talent_id, // Talent ID
+          photographer_id: payload.talent_id, // Talent ID (kept for compatibility)
+          model_id: isModel ? payload.talent_id : null,
           booking_date: payload.booking_date.split('|')[0]?.trim(),
           package_type: payload.package_type,
           notes: payload.notes,
@@ -96,6 +100,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const newBooking: Booking = {
         id: data.id,
         photographer_id: data.photographer_id,
+        model_id: data.model_id ?? null,
         client_id: data.client_id,
         booking_date: data.booking_date,
         package_type: data.package_type,

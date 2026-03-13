@@ -287,10 +287,12 @@ const MapScreen: React.FC = () => {
       const commissionAmount = Math.round(baseAmount * 0.3);
       const payoutAmount = baseAmount - commissionAmount;
       const providerId = marker.sourceId ?? marker.id;
+      const isModel = marker.type === 'model';
 
       const { error } = await supabase.from('bookings').insert({
         client_id: currentUser?.id,
-        photographer_id: providerId,
+        photographer_id: isModel ? null : providerId,
+        model_id: isModel ? providerId : null,
         status: 'pending',
         package_type: `${instantPackage.label} (${marker.type})`,
         user_latitude: userCoordinates.lat,

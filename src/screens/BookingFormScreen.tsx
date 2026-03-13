@@ -29,6 +29,10 @@ const BookingFormScreen: React.FC = () => {
           state.models.find((item) => item.id === params.photographerId),
     [params.photographerId, state.photographers, state.models]
   );
+  const isModelTalent = useMemo(
+    () => state.models.some((item) => item.id === params.photographerId),
+    [params.photographerId, state.models]
+  );
 
   if (!talent) {
     return (
@@ -73,6 +77,7 @@ const BookingFormScreen: React.FC = () => {
       const bookingDate = normalizedDate.toISOString().split('T')[0]; // e.g. '2026-03-15'
       const booking = await createBooking({
         talent_id: talent.id,
+        talent_type: isModelTalent ? 'model' : 'photographer',
         booking_date: bookingDate,
         package_type: `${selectedPackage.label} · ${timeSlot}`,
         notes,

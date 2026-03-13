@@ -114,7 +114,7 @@ const SettingsScreen: React.FC = () => {
       Alert.alert('Not ready', 'Please sign in before starting a test call.');
       return;
     }
-    navigation.navigate('PaidVideoCall', { creatorId: currentUser.id });
+    navigation.navigate('PaidVideoCall', { creatorId: currentUser.id, role: 'creator' });
   };
 
   const handleUpdateAvatar = async () => {

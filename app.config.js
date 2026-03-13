@@ -19,6 +19,7 @@ export default {
       bundleIdentifier: "com.papzi.app",
       infoPlist: {
         NSCameraUsageDescription: "Papzi needs access to your camera to let you take and share photos directly in chat.",
+        NSMicrophoneUsageDescription: "Papzi needs access to your microphone for live video calls.",
         NSPhotoLibraryUsageDescription: "Papzi needs access to your photos to let you upload your portfolio and share media in chat.",
         NSLocationWhenInUseUsageDescription: "Papzi uses your location to show available talent near you and track bookings.",
         NSLocationAlwaysAndWhenInUseUsageDescription: "Papzi needs your location to track you during a live booking session.",

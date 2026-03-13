@@ -184,7 +184,9 @@ const HomeScreen: React.FC = () => {
           </TouchableOpacity>
           <TouchableOpacity 
             style={[styles.buttonGhost, { borderColor: colors.border }, discoveryMode === 'models' && styles.buttonVideo]} 
-            onPress={() => discoveryMode === 'models' ? parentNavigation?.navigate('PaidVideoCall', { creatorId: item.id }) : openProfile(item)}
+            onPress={() => discoveryMode === 'models'
+              ? parentNavigation?.navigate('PaidVideoCall', { creatorId: item.id, role: 'viewer' })
+              : openProfile(item)}
           >
             {discoveryMode === 'models' && <Ionicons name="videocam" size={16} color="#fff" style={{ marginRight: 6 }} />}
             <Text style={[styles.buttonGhostText, { color: colors.text }, discoveryMode === 'models' && styles.buttonVideoText]}>

@@ -32,6 +32,7 @@ const ModelPremiumDashboard: React.FC = () => {
   const [tierPayoutRate, setTierPayoutRate] = useState(0.70);
   const [showSubscribers, setShowSubscribers] = useState(false);
   const [subscribers, setSubscribers] = useState<any[]>([]);
+  const [tierMap, setTierMap] = useState<Record<string, { name: string; price?: number }>>({});
   const [showNewMessage, setShowNewMessage] = useState(false);
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
 
@@ -40,11 +41,12 @@ const ModelPremiumDashboard: React.FC = () => {
       try {
         const { data } = await supabase
           .from('subscription_tiers')
-          .select('id, payout_rate, label, price_zar');
-        if (data) {
-          const basic = data.find((t: any) => t.id === 'basic');
-          if (basic) setTierPayoutRate(Number(basic.payout_rate));
-        }
+          .select('id, name, price');
+        const map: Record<string, { name: string; price?: number }> = {};
+        (data ?? []).forEach((tier: any) => {
+          map[tier.id] = { name: tier.name ?? 'Tier', price: tier.price };
+        });
+        setTierMap(map);
       } catch { /* silent */ }
     };
     load();
@@ -95,7 +97,7 @@ const ModelPremiumDashboard: React.FC = () => {
       return;
     }
     // Navigate to paid video call as creator
-    navigation.navigate('PaidVideoCall', { creatorId: currentUser.id });
+    navigation.navigate('PaidVideoCall', { creatorId: currentUser.id, role: 'creator' });
   };
 
   const pendingBookings = useMemo(() => bookings.filter(b => b.status === 'pending'), [bookings]);
@@ -293,7 +295,7 @@ const ModelPremiumDashboard: React.FC = () => {
                 {booking.status === 'accepted' && (
                   <TouchableOpacity
                     style={s.joinBtn}
-                    onPress={() => currentUser?.id && navigation.navigate('PaidVideoCall', { creatorId: currentUser.id })}
+                    onPress={() => currentUser?.id && navigation.navigate('PaidVideoCall', { creatorId: currentUser.id, role: 'creator' })}
                   >
                     <Text style={s.joinBtnText}>Join</Text>
                   </TouchableOpacity>
@@ -385,8 +387,8 @@ const ModelPremiumDashboard: React.FC = () => {
                   />
                   <View style={{ flex: 1 }}>
                     <Text style={s.subName}>{(sub.profiles as any)?.full_name ?? 'Subscriber'}</Text>
-                    <Text style={s.subTier}>{sub.tier_id} tier</Text>
-                  </View>
+                  <Text style={s.subTier}>{tierMap[sub.tier_id]?.name ?? 'Tier'} tier</Text>
+                </View>
                   <Text style={s.subExpiry}>
                     Renews {sub.current_period_end ? new Date(sub.current_period_end).toLocaleDateString('en-ZA') : 'soon'}
                   </Text>

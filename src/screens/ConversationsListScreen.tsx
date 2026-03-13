@@ -89,7 +89,13 @@ const ConversationsListScreen: React.FC = () => {
               source={{ uri: avatarUrl }}
               style={[styles.convAvatar, { backgroundColor: colors.bg }]}
             />
-            <Text style={[styles.cardTitle, { color: colors.text }]}>{displayTitle}</Text>
+            <Text
+              style={[styles.cardTitle, { color: colors.text }]}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
+              {displayTitle}
+            </Text>
           </View>
           <Text style={[styles.cardTime, { color: colors.textMuted }]}>{formatted}</Text>
         </View>
@@ -145,7 +151,7 @@ const styles = StyleSheet.create({
   header: { marginBottom: 12, gap: 6 },
   title: { fontSize: 22, fontWeight: '800' },
   subtitle: {},
-  avatarRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  avatarRow: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 },
   convAvatar: { width: 40, height: 40, borderRadius: 10 },
   primaryButton: {
     alignSelf: 'flex-start',
@@ -162,8 +168,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 6,
   },
-  cardTitle: { fontSize: 16, fontWeight: '800', flex: 1 },
-  cardTime: { marginLeft: 8, fontSize: 12 },
+  cardTitle: { fontSize: 16, fontWeight: '800', flexShrink: 1, minWidth: 0 },
+  cardTime: { marginLeft: 8, fontSize: 12, flexShrink: 0 },
   cardMessage: {},
   cardMeta: { marginTop: 6, fontSize: 11 },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },

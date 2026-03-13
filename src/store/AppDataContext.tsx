@@ -22,6 +22,8 @@ import { assertSouthAfricanLocation, DEFAULT_CAPE_TOWN_COORDINATES, ensureSouthA
 type CreateBookingInput = {
   photographer_id?: string;
   talent_id?: string;
+  model_id?: string;
+  talent_type?: 'photographer' | 'model';
   booking_date: string;
   package_type: string;
   notes?: string;
@@ -103,6 +105,7 @@ const isRecoverableAbort = (err: unknown) => {
 const BOOKING_SELECT = `
   id, 
   photographer_id, 
+  model_id,
   client_id, 
   booking_date, 
   package_type, 
@@ -172,6 +175,7 @@ const PHOTOGRAPHER_SELECT = `
 const mapBookingRow = (row: any): Booking => ({
   id: row.id,
   photographer_id: row.photographer_id,
+  model_id: row.model_id ?? null,
   client_id: row.client_id,
   booking_date: row.booking_date ?? '',
   package_type: row.package_type ?? 'Photography booking',
@@ -376,7 +380,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const { data: rawBookings, error } = await supabase
           .from('bookings')
           .select(BOOKING_SELECT)
-          .or(`client_id.eq.${targetUserId},photographer_id.eq.${targetUserId}`)
+          .or(`client_id.eq.${targetUserId},photographer_id.eq.${targetUserId},model_id.eq.${targetUserId}`)
           .order('created_at', { ascending: false })
           .limit(80);
 
@@ -384,7 +388,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
         // Manual Join to Avoid Supabase FK Errors
         const profileIds = [...new Set(
-          (rawBookings ?? []).flatMap((b: any) => [b.client_id, b.photographer_id]).filter(Boolean)
+          (rawBookings ?? []).flatMap((b: any) => [b.client_id, b.photographer_id, b.model_id]).filter(Boolean)
         )];
         let profilesMap: Record<string, any> = {};
         if (profileIds.length > 0) {
@@ -948,6 +952,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const booking: Booking = {
         id: uid('booking'),
         photographer_id: payload.talent_id || payload.photographer_id || '',
+        model_id: payload.talent_type === 'model' ? (payload.talent_id || payload.model_id || null) : null,
         client_id: currentUser.id,
         booking_date: payload.booking_date,
         package_type: payload.package_type,
@@ -963,12 +968,15 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
       if (hasSupabase) {
         const bookingDate = payload.booking_date.split('|')[0]?.trim().slice(0, 10);
+        const providerId = payload.talent_id || payload.photographer_id || payload.model_id;
+        const isModel = payload.talent_type === 'model';
         const { data, error } = await supabase
           .from('bookings')
           .insert([
             {
               client_id: currentUser.id,
-              photographer_id: payload.talent_id || payload.photographer_id,
+              photographer_id: providerId,
+              model_id: isModel ? providerId : null,
               booking_date: bookingDate || null,
               package_type: booking.package_type,
               notes: booking.notes,
@@ -990,6 +998,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       persistedBooking = {
         id: data?.id ?? booking.id,
         photographer_id: data?.photographer_id ?? booking.photographer_id,
+        model_id: data?.model_id ?? booking.model_id ?? null,
         client_id: currentUser.id,
         booking_date: data?.booking_date ? new Date(data.booking_date).toISOString() : booking.booking_date,
         package_type: data?.package_type ?? booking.package_type,
@@ -1949,14 +1958,15 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setSaving(true);
     try {
       const finalUrl = await uploadAvatar(uri, userId);
+      const versionedUrl = `${finalUrl}?v=${Date.now()}`;
       const { error: authError } = await supabase.auth.updateUser({
-        data: { avatar_url: finalUrl }
+        data: { avatar_url: versionedUrl }
       });
       if (authError) throw authError;
 
       const { error: dbError } = await supabase
         .from('profiles')
-        .update({ avatar_url: finalUrl })
+        .update({ avatar_url: versionedUrl })
         .eq('id', userId);
       if (dbError) throw dbError;
 
@@ -1965,15 +1975,15 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const currentUser = stateRef.current.currentUser;
       if (currentUser) {
         setState({
-          currentUser: { ...currentUser, avatar_url: finalUrl },
+          currentUser: { ...currentUser, avatar_url: versionedUrl },
           profiles: stateRef.current.profiles.map(p =>
-            p.id === userId ? { ...p, avatar_url: finalUrl } : p
+            p.id === userId ? { ...p, avatar_url: versionedUrl } : p
           ),
           photographers: stateRef.current.photographers.map(p =>
-            p.id === userId ? { ...p, avatar_url: finalUrl } : p
+            p.id === userId ? { ...p, avatar_url: versionedUrl } : p
           ),
           models: stateRef.current.models.map(m =>
-            m.id === userId ? { ...m, avatar_url: finalUrl } : m
+            m.id === userId ? { ...m, avatar_url: versionedUrl } : m
           ),
         });
       }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import * as ImagePicker from 'expo-image-picker';
 import {
   Alert,
@@ -22,6 +22,10 @@ import { ActionModal } from '../components/ActionModal';
 import { LEGAL_CONTENT } from '../constants/LegalContent';
 import { requestAccountDeletion } from '../services/accountService';
 import { PLACEHOLDER_AVATAR } from '../utils/constants';
+import { supabase } from '../config/supabaseClient';
+import * as Notifications from 'expo-notifications';
+import * as Device from 'expo-device';
+import Constants from 'expo-constants';
 
 type Navigation = StackNavigationProp<RootStackParamList, 'Root'>;
 
@@ -35,7 +39,56 @@ const SettingsScreen: React.FC = () => {
   const { resetState, saving, currentUser, signOut, updateProfilePicture } = useAppData();
   const { colors, isDark, themeMode, setThemeMode } = useTheme();
   const navigation = useNavigation<Navigation>();
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+
+  useEffect(() => {
+    const checkStatus = async () => {
+      if (!currentUser?.id) return;
+      try {
+        const { data, error } = await supabase
+          .from('push_tokens')
+          .select('enabled')
+          .eq('user_id', currentUser.id)
+          .order('last_seen_at', { ascending: false })
+          .limit(1);
+        if (!error && data && data.length > 0) {
+          setNotificationsEnabled(data[0].enabled);
+        }
+      } catch (err) { /* silent fallback to false */ }
+    };
+    checkStatus();
+  }, [currentUser?.id]);
+
+  const handleToggleNotifications = async (value: boolean) => {
+    setNotificationsEnabled(value);
+    if (!currentUser?.id) return;
+    try {
+      if (!value) {
+        // Disable: mark any existing token as disabled
+        await supabase
+          .from('push_tokens')
+          .update({ enabled: false })
+          .eq('user_id', currentUser.id);
+      } else {
+        // Re-enable: request permission and save fresh token
+        if (!Device.isDevice) return;
+        const { status } = await Notifications.getPermissionsAsync();
+        if (status !== 'granted') {
+          const { status: newStatus } = await Notifications.requestPermissionsAsync();
+          if (newStatus !== 'granted') { setNotificationsEnabled(false); return; }
+        }
+        const projectId = Constants?.expoConfig?.extra?.eas?.projectId ?? Constants?.easConfig?.projectId;
+        const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
+        const platform = (Platform.OS === 'ios' ? 'ios' : Platform.OS === 'android' ? 'android' : 'web') as 'ios' | 'android' | 'web';
+        await supabase.from('push_tokens').upsert(
+          { user_id: currentUser.id, expo_push_token: tokenData.data, platform, enabled: true, last_seen_at: new Date().toISOString() },
+          { onConflict: 'user_id,expo_push_token' }
+        );
+      }
+    } catch (e) {
+      console.warn('Notification toggle failed:', e);
+    }
+  };
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [modalState, setModalState] = useState<{
     visible: boolean;
@@ -150,6 +203,7 @@ const SettingsScreen: React.FC = () => {
       <View style={s.profileSection}>
         <TouchableOpacity style={s.avatarContainer} onPress={handleUpdateAvatar} disabled={isUploadingAvatar}>
           <Image
+            key={currentUser?.avatar_url || 'avatar'}
             source={{ uri: currentUser?.avatar_url || (currentUser as any)?.user_metadata?.avatar_url || PLACEHOLDER_AVATAR }}
             style={[s.profileAvatar, isUploadingAvatar && s.avatarUploading]}
           />
@@ -223,7 +277,7 @@ const SettingsScreen: React.FC = () => {
             </View>
             <Switch
               value={notificationsEnabled}
-              onValueChange={setNotificationsEnabled}
+              onValueChange={handleToggleNotifications}
               trackColor={{ false: colors.border, true: colors.successGreen }}
               thumbColor="#fff"
             />

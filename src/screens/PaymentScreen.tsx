@@ -38,7 +38,7 @@ const PaymentScreen: React.FC = () => {
   const supabaseBaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? null;
   const returnUrl = supabaseBaseUrl ? `${supabaseBaseUrl}/payfast/return` : null;
   const cancelUrl = supabaseBaseUrl ? `${supabaseBaseUrl}/payfast/cancel` : null;
-  const notifyUrl = supabaseBaseUrl ? `${supabaseBaseUrl}/functions/v1/payfast-handler/notify` : null;
+  const notifyUrl = supabaseBaseUrl ? `${supabaseBaseUrl}/functions/v1/payfast-itn` : null;
 
   useEffect(() => {
     if (booking?.booking_date) {

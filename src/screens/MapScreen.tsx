@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, Animated, Easing, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
-import MapLibreGL from '@maplibre/maplibre-react-native';
+import { MapLibreGL } from '../components/MapLibreWrapper';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,6 +15,8 @@ import { RootStackParamList } from '../navigation/types';
 import { BOOKING_PACKAGES } from '../constants/pricing';
 import { haversineDistanceKm } from '../utils/geo';
 import { supabase } from '../config/supabaseClient';
+import { routingService } from '../services/routingService';
+import * as Haptics from 'expo-haptics';
 
 const MAP_STYLE_URL = 'https://demotiles.maplibre.org/style.json';
 
@@ -95,8 +97,28 @@ const MapScreen: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedMarker, setSelectedMarker] = useState<MapMarker | null>(null);
 
-  const [incomingRequest, setIncomingRequest] = useState<any | null>(null);
-  const [showPopup, setShowPopup] = useState(false);
+  // Active Tracking State
+  const activeBooking = useMemo(() => {
+    return state.bookings.find(b => (b.status === 'accepted' || b.status === 'in_progress') && (b.client_id === currentUser?.id || b.photographer_id === currentUser?.id || b.model_id === currentUser?.id));
+  }, [state.bookings, currentUser]);
+
+  const activeTalent = useMemo(() => {
+    if (!activeBooking) return null;
+    const talentId = activeBooking.photographer_id || activeBooking.model_id;
+    return state.photographers.find(p => p.id === talentId) || state.models.find(m => m.id === talentId);
+  }, [activeBooking, state.photographers, state.models]);
+
+  useEffect(() => {
+    if (activeBooking) {
+      // Auto-select the active talent on the map
+      const talentId = activeBooking.photographer_id || activeBooking.model_id;
+      const marker = baseMarkers.find(m => m.sourceId === talentId);
+      if (marker) {
+        setSelectedMarker(marker);
+      }
+    }
+  }, [!!activeBooking]);
+
   const [isRequesting, setIsRequesting] = useState(false);
 
   const lastRequestRef = useRef<number>(0);
@@ -130,6 +152,7 @@ const MapScreen: React.FC = () => {
         latitude: m.latitude,
         longitude: m.longitude,
         type: 'model',
+        avatarUrl: m.avatar_url,
       }));
     } else if (role === 'model') {
       result = state.photographers.map((p) => ({
@@ -140,6 +163,7 @@ const MapScreen: React.FC = () => {
         latitude: p.latitude,
         longitude: p.longitude,
         type: 'photographer',
+        avatarUrl: p.avatar_url,
       }));
     } else {
       const photographerMarkers = state.photographers.map((p) => ({
@@ -150,6 +174,7 @@ const MapScreen: React.FC = () => {
         latitude: p.latitude,
         longitude: p.longitude,
         type: 'photographer',
+        avatarUrl: p.avatar_url,
       }));
       const modelMarkers = state.models.map((m) => ({
         id: `model-${m.id}`,
@@ -159,6 +184,7 @@ const MapScreen: React.FC = () => {
         latitude: m.latitude,
         longitude: m.longitude,
         type: 'model',
+        avatarUrl: m.avatar_url,
       }));
       result = [...photographerMarkers, ...modelMarkers];
     }
@@ -296,48 +322,8 @@ const MapScreen: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    if (!currentUser?.id) return;
-    const isModel = currentUser.role === 'model';
-    const filterColumn = isModel ? 'model_id' : 'photographer_id';
-    const channel = supabase.channel(`public:bookings:${filterColumn}=eq.${currentUser.id}`);
-
-    channel.on(
-      'postgres_changes',
-      { event: 'INSERT', schema: 'public', table: 'bookings', filter: `${filterColumn}=eq.${currentUser.id}` },
-      (payload) => {
-        if (payload.new.status === 'pending' && payload.new.user_latitude && payload.new.user_longitude) {
-          const distanceLabel = 'Nearby';
-          setIncomingRequest({ ...payload.new, distance: distanceLabel });
-          setShowPopup(true);
-        }
-      }
-    ).subscribe();
-
-    return () => { supabase.removeChannel(channel); };
-  }, [currentUser?.id, currentUser?.role]);
-
-  const handleAcceptIncoming = async () => {
-    if (!incomingRequest) return;
-    try {
-      const { error } = await supabase.from('bookings').update({ status: 'accepted' }).eq('id', incomingRequest.id);
-      if (error) throw error;
-      setShowPopup(false);
-      Alert.alert('Accepted!', 'You have confirmed the booking request.');
-      navigation.navigate('Root', { screen: 'Bookings' });
-    } catch (err: any) {
-      Alert.alert('Error', err.message);
-    }
-  };
-
   const handleDeclineIncoming = async () => {
-    if (!incomingRequest) return;
-    try {
-      await supabase.from('bookings').update({ status: 'declined' }).eq('id', incomingRequest.id);
-      setShowPopup(false);
-    } catch (_err) {
-      setShowPopup(false);
-    }
+    // Moved to GlobalRequestManager
   };
 
   const applyManualLocation = useCallback(() => {
@@ -363,25 +349,32 @@ const MapScreen: React.FC = () => {
     setShowManualEntry(false);
   }, [currentUser, manualLocation.label, manualLocation.latitude, manualLocation.longitude]);
 
-  const primaryRoute = useMemo(() => {
-    if (!selectedMarker || !userCoordinates) return [];
-    return buildRoute(
-      { lat: userCoordinates.lat, lng: userCoordinates.lng },
-      { lat: selectedMarker.latitude, lng: selectedMarker.longitude },
-      48,
-      0
-    );
+  const fetchRoutes = useCallback(async () => {
+    if (!selectedMarker || !userCoordinates) return;
+    
+    try {
+      const start = { latitude: userCoordinates.lat, longitude: userCoordinates.lng };
+      const end = { latitude: selectedMarker.latitude, longitude: selectedMarker.longitude };
+      
+      const route = await routingService.getRoute(start, end);
+      setPrimaryRoute(route.coordinates.map(([lng, lat]) => ({ lat, lng })));
+      
+      // For the "alt" route, we just use a slightly offset version or similar
+      setAltRoute(route.coordinates.map(([lng, lat], i) => ({ 
+        lat: lat + (i % 2 === 0 ? 0.0001 : -0.0001), 
+        lng: lng + (i % 2 === 0 ? 0.0001 : -0.0001) 
+      })));
+    } catch (err) {
+      console.warn('Map: Failed to fetch routes', err);
+    }
   }, [selectedMarker, userCoordinates]);
 
-  const altRoute = useMemo(() => {
-    if (!selectedMarker || !userCoordinates) return [];
-    return buildRoute(
-      { lat: userCoordinates.lat, lng: userCoordinates.lng },
-      { lat: selectedMarker.latitude, lng: selectedMarker.longitude },
-      42,
-      0.003
-    );
-  }, [selectedMarker, userCoordinates]);
+  const [primaryRoute, setPrimaryRoute] = useState<Array<{ lat: number; lng: number }>>([]);
+  const [altRoute, setAltRoute] = useState<Array<{ lat: number; lng: number }>>([]);
+
+  useEffect(() => {
+    fetchRoutes();
+  }, [fetchRoutes]);
 
   useEffect(() => {
     if (primaryRoute.length < 2) {
@@ -569,7 +562,46 @@ const MapScreen: React.FC = () => {
       </SafeAreaView>
 
       <View style={[styles.bottomSheet, { backgroundColor: colors.card, paddingBottom: Math.max(insets.bottom, 16) }]}>
-        {selectedMarker ? (
+        {activeBooking ? (
+          <>
+            <View style={styles.sheetHeader}>
+              <View style={[styles.sheetAvatar, { backgroundColor: colors.accent + '20' }]}>
+                <Ionicons name="car" size={24} color={colors.accent} />
+              </View>
+              <View style={styles.sheetInfo}>
+                <Text style={[styles.sheetTitle, { color: colors.text }]}>
+                  {activeBooking.status === 'accepted' ? 'Photographer Heading to You' : 'Shoot in Progress'}
+                </Text>
+                <Text style={[styles.sheetSubtitle, { color: colors.textSecondary }]}>
+                  {activeTalent?.name || 'Talent'} • Arriving in {etaLabel || '15 mins'}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => navigation.navigate('BookingTracking', { bookingId: activeBooking.id })}>
+                 <View style={styles.trackButton}>
+                    <Ionicons name="navigate" size={20} color={colors.accent} />
+                 </View>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.sheetMetrics}>
+               <View style={styles.metricItem}>
+                <Text style={[styles.metricLabel, { color: colors.textMuted }]}>Distance</Text>
+                <Text style={[styles.metricValue, { color: colors.text }]}>{selectedDistance ?? '2.4 km'}</Text>
+              </View>
+              <View style={styles.metricItem}>
+                <Text style={[styles.metricLabel, { color: colors.textMuted }]}>Security</Text>
+                <Ionicons name="shield-checkmark" size={16} color="#16a34a" />
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.primaryButton, { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border }]}
+              onPress={() => navigation.navigate('ChatThread', { conversationId: `chat-${activeBooking.id}`, title: activeTalent?.name })}
+            >
+              <Text style={[styles.primaryButtonText, { color: colors.text }]}>Message Photographer</Text>
+            </TouchableOpacity>
+          </>
+        ) : selectedMarker ? (
           <>
             <View style={styles.sheetHeader}>
               <View style={styles.sheetAvatar}>
@@ -661,8 +693,6 @@ const MapScreen: React.FC = () => {
           </View>
         ) : null}
       </View>
-
-      <RequestPopup visible={showPopup} requestData={incomingRequest} onAccept={handleAcceptIncoming} onDecline={handleDeclineIncoming} />
     </View>
   );
 };
@@ -877,6 +907,20 @@ const styles = StyleSheet.create({
   overlayError: {
     color: '#ef4444',
     marginTop: 8,
+  },
+  trackButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
   },
 });
 

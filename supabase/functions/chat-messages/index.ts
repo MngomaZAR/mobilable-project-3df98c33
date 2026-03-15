@@ -73,7 +73,7 @@ serve(async (req) => {
     if (action === 'list') {
       const { data: rows, error } = await supabaseAdmin
         .from('messages')
-        .select('id, chat_id, sender_id, body, message_type, media_url, preview_url, locked, unlocked, unlock_booking_id, created_at')
+        .select('id, chat_id, sender_id, body, message_type, media_url, preview_url, locked, unlocked, unlock_booking_id, unlock_price, created_at')
         .eq('chat_id', conversationId)   // chat_id is the only FK now
         .order('created_at', { ascending: true });
 
@@ -92,6 +92,7 @@ serve(async (req) => {
         locked: row.locked ?? false,
         unlocked: row.unlocked ?? true,
         unlockBookingId: row.unlock_booking_id ?? null,
+        unlockPrice: row.unlock_price ? Number(row.unlock_price) : null,
       }));
 
       return jsonResponse(200, { messages });
@@ -105,6 +106,7 @@ serve(async (req) => {
       const previewUrl = typeof payload?.preview_url === 'string' ? payload.preview_url.trim() : null;
       const locked = Boolean(payload?.locked);
       const unlockBookingId = typeof payload?.unlock_booking_id === 'string' ? payload.unlock_booking_id.trim() : null;
+      const unlockPrice = typeof payload?.unlock_price === 'number' ? payload.unlock_price : null;
       const unlocked = locked ? false : true;
 
       if (messageType === 'text' && !text) {
@@ -126,8 +128,9 @@ serve(async (req) => {
           locked,
           unlocked,
           unlock_booking_id: unlockBookingId,
+          unlock_price: unlockPrice,
         })
-        .select('id, chat_id, sender_id, body, message_type, media_url, preview_url, locked, unlocked, unlock_booking_id, created_at')
+        .select('id, chat_id, sender_id, body, message_type, media_url, preview_url, locked, unlocked, unlock_booking_id, unlock_price, created_at')
         .single();
 
       if (insertError || !inserted) {
@@ -158,11 +161,64 @@ serve(async (req) => {
           locked: inserted.locked ?? false,
           unlocked: inserted.unlocked ?? true,
           unlockBookingId: inserted.unlock_booking_id ?? null,
+          unlockPrice: inserted.unlock_price ? Number(inserted.unlock_price) : null,
         },
       });
     }
 
-    return jsonResponse(400, { error: 'Invalid action. Use "list" or "send".' });
+    // ── UNLOCK ────────────────────────────────────────────────────────────
+    if (action === 'unlock') {
+      const messageId = payload?.message_id;
+      if (!messageId) return jsonResponse(400, { error: 'message_id is required' });
+
+      // 1. Get message
+      const { data: msg, error: msgError } = await supabaseAdmin
+        .from('messages')
+        .select('id, chat_id, sender_id, locked, unlocked, unlock_price')
+        .eq('id', messageId)
+        .single();
+        
+      if (msgError || !msg) return jsonResponse(404, { error: 'Message not found' });
+      if (msg.chat_id !== conversationId) return jsonResponse(403, { error: 'Message not in this conversation' });
+      if (msg.unlocked) return jsonResponse(400, { error: 'Message is already unlocked' });
+      if (!msg.unlock_price || msg.unlock_price <= 0) return jsonResponse(400, { error: 'Message cannot be unlocked dynamically (no price set)' });
+      if (msg.sender_id === user.id) return jsonResponse(400, { error: 'You cannot unlock your own message' });
+
+      // 2. Perform credit deduction
+      // We must authenticate as the user to call the credits_adjust RPC since it uses auth.uid()
+      const supabaseUser = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authHeader } } });
+      const { error: deductErr } = await supabaseUser.rpc('credits_adjust', {
+        p_amount: -msg.unlock_price,
+        p_reason: 'Unlocked media message',
+        p_ref_type: 'message_unlock',
+        p_ref_id: msg.id
+      });
+      
+      if (deductErr) return jsonResponse(402, { error: 'Insufficient credits or payment failed' });
+
+      // 3. Mark message unlocked
+      const { error: updateErr } = await supabaseAdmin
+        .from('messages')
+        .update({ unlocked: true })
+        .eq('id', msg.id);
+
+      if (updateErr) {
+         return jsonResponse(500, { error: 'Failed to unlock message' });
+      }
+
+      // 4. Give earnings to creator
+      await supabaseAdmin.from('earnings').insert({
+        user_id: msg.sender_id,
+        amount: msg.unlock_price,
+        source_type: 'tip',
+        source_id: msg.id,
+        gross_amount: msg.unlock_price
+      });
+
+      return jsonResponse(200, { success: true });
+    }
+
+    return jsonResponse(400, { error: 'Invalid action. Use "list", "send", or "unlock".' });
 
   } catch (error) {
     return jsonResponse(500, {

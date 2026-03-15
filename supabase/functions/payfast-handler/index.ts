@@ -38,7 +38,7 @@ const payfastBaseUrlRaw =
 const payfastBaseUrl = payfastBaseUrlRaw.replace(/\/eng\/process\/?$/i, "");
 const merchantId = Deno.env.get("PAYFAST_MERCHANT_ID")?.trim() || "27309011";
 const merchantKey = Deno.env.get("PAYFAST_MERCHANT_KEY")?.trim() || "v5zma443niq7w";
-const passphrase = Deno.env.get("PAYFAST_PASSPHRASE")?.trim() || "";
+const passphrase = Deno.env.get("PAYFAST_PASSPHRASE")?.trim() || "Paparazzi12345";
 const allowedIps = (Deno.env.get("PAYFAST_ITN_ALLOWED_IPS") || "")
   .split(",")
   .map((value) => value.trim())
@@ -178,7 +178,7 @@ const handleCreateCheckoutLink = async (req: Request) => {
     cancel_url: payload?.cancel_url?.trim() || "",
     notify_url:
       payload?.notify_url?.trim() ||
-      `${supabaseUrl}/functions/v1/payfast-handler/notify`,
+      `${supabaseUrl}/functions/v1/payfast-itn`,
     m_payment_id: payment.id,
     amount: amount.toFixed(2),
     item_name: itemName,
@@ -222,9 +222,12 @@ const handleItn = async (req: Request) => {
   }
 
   const receivedSignature = payload.signature || "";
+  // For ITN, PayFast sends all variables excluding the signature.
+  // We must re-create the signature using all received fields in the correct order.
   const expectedSignature = createSignature(payload, passphrase);
-  if (!receivedSignature || expectedSignature !== receivedSignature) {
-    console.warn("payfast-handler: invalid signature");
+  
+  if (!receivedSignature || expectedSignature.toLowerCase() !== receivedSignature.toLowerCase()) {
+    console.warn("payfast-handler: invalid signature", { receivedSignature, expectedSignature });
     return textOk("OK");
   }
 

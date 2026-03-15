@@ -7,6 +7,8 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as Notifications from 'expo-notifications';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { LoadingOverlay } from './src/components/LoadingOverlay';
+import { ActionModal } from './src/components/ActionModal';
+import { environment } from './src/config/environment';
 import { MainNavigator } from './src/navigation/MainNavigator';
 import { AppDataProvider, useAppData } from './src/store/AppDataContext';
 import { ThemeProvider, useTheme } from './src/store/ThemeContext';

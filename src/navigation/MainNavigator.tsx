@@ -26,9 +26,12 @@ import AdminDashboardScreen from '../screens/AdminDashboardScreen';
 import ModelPremiumDashboard from '../screens/ModelPremiumDashboard';
 import PaidVideoCallScreen from '../screens/PaidVideoCallScreen';
 import AccountConfigScreen from '../screens/AccountConfigScreen';
+import { GlobalRequestManager } from '../components/GlobalRequestManager';
 import NotificationsScreen from '../screens/NotificationsScreen';
 import PaymentHistoryScreen from '../screens/PaymentHistoryScreen';
 import SplashLoadingScreen from '../screens/SplashLoadingScreen';
+import RoleSelectionScreen from '../screens/RoleSelectionScreen';
+import AgeVerificationScreen from '../screens/AgeVerificationScreen';
 
 import SupportScreen from '../screens/SupportScreen';
 import EarningsDashboardScreen from '../screens/EarningsDashboardScreen';
@@ -84,6 +87,7 @@ const TabsNavigator = () => {
         headerShown: false,
       })}
     >
+      <Tab.Screen name="Map" component={MapScreen} />
       <Tab.Screen
         name="Home"
         component={homeComponent}
@@ -92,7 +96,6 @@ const TabsNavigator = () => {
       <Tab.Screen name="Bookings" component={BookingsScreen} />
       <Tab.Screen name="Feed" component={FeedScreen} />
       <Tab.Screen name="Chat" component={ConversationsListScreen} />
-      <Tab.Screen name="Map" component={MapScreen} />
       <Tab.Screen name="Settings" component={SettingsScreen} />
     </Tab.Navigator>
   );
@@ -155,6 +158,8 @@ export const MainNavigator: React.FC<MainNavigatorProps> = ({ logoSource }) => {
         colors: { ...DefaultTheme.colors, background: '#f7f7fb' },
       }}
     >
+      <GlobalRequestManager />
+      <GlobalRequestManager />
       <Stack.Navigator
         screenOptions={{
           headerTitle: () =>
@@ -169,7 +174,13 @@ export const MainNavigator: React.FC<MainNavigatorProps> = ({ logoSource }) => {
         ) : (
           // Authenticated Stack
           <>
-            <Stack.Screen name="Root" component={TabsNavigator} options={{ headerShown: false }} />
+            {(currentUser as any)?.kyc_status !== 'age_verified' ? (
+              <Stack.Screen name="AgeVerification" component={AgeVerificationScreen} options={{ headerShown: false }} />
+            ) : !currentUser.role || (currentUser.role as string) === 'guest' ? (
+              <Stack.Screen name="RoleSelection" component={RoleSelectionScreen} options={{ headerShown: false }} />
+            ) : (
+              <Stack.Screen name="Root" component={TabsNavigator} options={{ headerShown: false }} />
+            )}
             <Stack.Screen name="Profile" component={UserProfileScreen} options={{ title: 'Photographer Profile' }} />
             <Stack.Screen name="BookingForm" component={BookingFormScreen} options={{ title: 'Booking Request' }} />
             <Stack.Screen name="BookingDetail" component={BookingDetailScreen} options={{ title: 'Booking Detail' }} />

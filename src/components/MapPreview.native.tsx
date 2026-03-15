@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import MapLibreGL from '@maplibre/maplibre-react-native';
-import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { StyleSheet, Text, View, useWindowDimensions, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { MapMarker, MapPreviewProps } from './mapTypes';
 import { DEFAULT_CAPE_TOWN_COORDINATES, ensureSouthAfricanCoordinates } from '../utils/geo';
@@ -9,7 +9,7 @@ import { DEFAULT_CAPE_TOWN_COORDINATES, ensureSouthAfricanCoordinates } from '..
 MapLibreGL.setAccessToken(null);
 
 export const MapPreview: React.FC<MapPreviewProps> = ({ markers, onMapError, onMarkerPress }) => {
-  const cameraRef = useRef<MapLibreGL.Camera>(null);
+  const cameraRef = useRef<any>(null);
   const { width } = useWindowDimensions();
 
   const base = ensureSouthAfricanCoordinates({
@@ -50,6 +50,7 @@ export const MapPreview: React.FC<MapPreviewProps> = ({ markers, onMapError, onM
     <View style={[styles.container, { minHeight: Math.min(520, width < 480 ? 300 : 400) }]}>
       <MapLibreGL.MapView
         style={StyleSheet.absoluteFill}
+        // @ts-ignore: Known typings gap in maplibre-react-native 10+
         styleURL="https://tiles.openfreemap.org/styles/liberty"
         logoEnabled={false}
         attributionEnabled={false}
@@ -72,18 +73,23 @@ export const MapPreview: React.FC<MapPreviewProps> = ({ markers, onMapError, onM
               style={[
                 styles.pin,
                 {
-                  backgroundColor: marker.type === 'user' ? '#3b82f6' : '#000',
+                  backgroundColor: marker.type === 'user' ? '#3b82f6' : marker.type === 'model' ? '#ec4899' : '#000',
                   borderColor: marker.type === 'user' ? '#eff6ff' : '#27272a',
-                  padding: marker.type === 'user' ? 6 : 8,
+                  padding: marker.type === 'model' && marker.avatarUrl ? 0 : marker.type === 'user' ? 6 : 8,
+                  overflow: 'hidden',
                 },
               ]}
             >
-              <Ionicons
-                name={marker.type === 'user' ? 'navigate' : 'camera'}
-                size={marker.type === 'user' ? 14 : 18}
-                color="#fff"
-                style={marker.type === 'user' ? { transform: [{ rotate: '45deg' }] } : undefined}
-              />
+              {marker.type === 'model' && marker.avatarUrl ? (
+                <Image source={{ uri: marker.avatarUrl }} style={{ width: 36, height: 36, resizeMode: 'cover' }} />
+              ) : (
+                <Ionicons
+                  name={marker.type === 'user' ? 'navigate' : marker.type === 'model' ? 'person' : 'camera'}
+                  size={marker.type === 'user' ? 14 : 18}
+                  color="#fff"
+                  style={marker.type === 'user' ? { transform: [{ rotate: '45deg' }] } : undefined}
+                />
+              )}
             </View>
           </MapLibreGL.PointAnnotation>
         ))}

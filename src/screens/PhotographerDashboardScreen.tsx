@@ -65,15 +65,21 @@ const PhotographerDashboardScreen: React.FC = () => {
       }), { total: 0, net: 0, commission: 0, count: 0 });
   }, [bookings, state.earnings]);
 
-  const photographerProfile = useMemo(
-    () => state.photographers.find(p => p.id === currentUser?.id) ?? state.photographers[0],
-    [currentUser?.id, state.photographers]
-  );
+  const talentProfile = useMemo(() => {
+    if (currentUser?.role === 'model') {
+      return state.models.find((m) => m.id === currentUser?.id);
+    }
+    return state.photographers.find((p) => p.id === currentUser?.id);
+  }, [currentUser, state.photographers, state.models]);
 
-  const photographerLocation = useMemo(() => ensureSouthAfricanCoordinates({
-    latitude: photographerProfile?.latitude ?? -26.2041,
-    longitude: photographerProfile?.longitude ?? 28.0473,
-  }), [photographerProfile?.latitude, photographerProfile?.longitude]);
+  const talentLocation = useMemo(
+    () =>
+      ensureSouthAfricanCoordinates({
+        latitude: talentProfile?.latitude ?? -26.2041,
+        longitude: talentProfile?.longitude ?? 28.0473,
+      }),
+    [talentProfile?.latitude, talentProfile?.longitude]
+  );
 
   const clientLocation = useMemo(() => ensureSouthAfricanCoordinates({
     latitude: activeBooking?.user_latitude ?? DEFAULT_CAPE_TOWN_COORDINATES.latitude,
@@ -142,6 +148,16 @@ const PhotographerDashboardScreen: React.FC = () => {
               .update({ status: 'completed', updated_at: new Date().toISOString() })
               .eq('id', bookingId);
             if (error) throw error;
+
+            // Release escrow to providers
+            const { error: escrowError } = await supabase.functions.invoke('escrow-release', {
+              body: { booking_id: bookingId }
+            });
+            if (escrowError) {
+              console.error('Escrow release failed:', escrowError);
+              // Non-blocking — escrow can be retried manually from admin dashboard
+            }
+
             await refreshBookings();
             Alert.alert('✅ Session Complete', 'Your earnings have been recorded.');
           } catch (err: any) {
@@ -180,9 +196,9 @@ const PhotographerDashboardScreen: React.FC = () => {
         {/* Header */}
         <View style={s.headerRow}>
           <View style={{ flex: 1 }}>
-            <Text style={s.eyebrow}>Photographer Mode</Text>
+            <Text style={s.eyebrow}>{currentUser?.role === 'model' ? 'Model Mode' : 'Photographer Mode'}</Text>
             <Text style={s.title} numberOfLines={1}>
-              {currentUser?.full_name?.split(' ')[0] ?? 'Photographer'}'s Dashboard
+              {currentUser?.full_name?.split(' ')[0] ?? (currentUser?.role === 'model' ? 'Model' : 'Photographer')}'s Dashboard
             </Text>
           </View>
           <TouchableOpacity style={s.newMsgBtn} onPress={() => setShowNewMessage(true)}>
@@ -305,7 +321,7 @@ const PhotographerDashboardScreen: React.FC = () => {
           </View>
           <MapTracker
             client={clientLocation}
-            photographer={photographerLocation}
+            photographer={talentLocation}
             status={activeBooking?.status ?? 'pending'}
           />
           <TouchableOpacity style={s.navBtn} onPress={() => navigation.navigate('Root', { screen: 'Map' })}>

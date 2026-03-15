@@ -1,6 +1,6 @@
-export type BookingStatus = 'pending' | 'accepted' | 'completed' | 'reviewed' | 'cancelled' | 'declined';
+export type BookingStatus = 'pending' | 'accepted' | 'in_progress' | 'completed' | 'reviewed' | 'cancelled' | 'declined';
 
-export type UserRole = 'client' | 'photographer' | 'model' | 'admin';
+export type UserRole = 'client' | 'photographer' | 'model' | 'admin' | null;
 
 export interface AppUser {
   id: string;
@@ -92,6 +92,7 @@ export interface Booking {
   duration_hours?: number | null;
   pricing_mode?: string | null;
   package_type: string;
+  package_id?: string;
   notes?: string;
   status: BookingStatus;
   created_at: string;
@@ -117,6 +118,7 @@ export interface Message {
   locked?: boolean;
   unlocked?: boolean;
   unlock_booking_id?: string | null;
+  unlock_price?: number | null;
 }
 
 export interface Post {

@@ -21,6 +21,8 @@ export type RootStackParamList = {
   CreatePost: undefined;
   UserProfile: { userId: string; photographer?: Photographer };
   Auth: undefined;
+  AgeVerification: undefined;
+  RoleSelection: undefined;
   Compliance: undefined;
   ChatThread: { conversationId: string; title?: string; avatarUrl?: string };
   AccountConfig: undefined;

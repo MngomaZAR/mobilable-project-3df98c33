@@ -14,7 +14,8 @@ type MessagingContextValue = {
   fetchConversations: () => Promise<void>;
   fetchMessages: (chatId: string) => Promise<void>;
   sendMessage: (chatId: string, text: string) => Promise<Message>;
-  sendLockedMediaMessage: (chatId: string, payload: { mediaUrl: string; previewUrl?: string; text?: string; unlockBookingId: string }) => Promise<Message>;
+  sendLockedMediaMessage: (chatId: string, payload: { mediaUrl: string; previewUrl?: string; text?: string; unlockBookingId?: string; unlockPrice?: number; }) => Promise<Message>;
+  unlockPremiumMessage: (chatId: string, messageId: string) => Promise<boolean>;
   startConversationWithUser: (participantId: string, title?: string) => Promise<{ id: string; title: string }>;
   subscribeToMessages: (chatId: string) => () => void;
 };
@@ -137,6 +138,7 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           locked: m.locked ?? false,
           unlocked: m.unlocked ?? true,
           unlock_booking_id: m.unlock_booking_id ?? null,
+          unlock_price: m.unlock_price ?? m.unlockPrice ?? null,
         })),
       }));
     } catch (err) {
@@ -170,6 +172,7 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           locked: raw.locked ?? false,
           unlocked: raw.unlocked ?? true,
           unlock_booking_id: raw.unlock_booking_id ?? null,
+          unlock_price: raw.unlock_price ?? raw.unlockPrice ?? null,
         };
 
         setMessages(prev => {
@@ -245,45 +248,49 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   };
 
   const sendLockedMediaMessage = async (chatId: string, payload: {
-    mediaUrl: string; previewUrl?: string; text?: string; unlockBookingId: string;
+    mediaUrl: string; previewUrl?: string; text?: string; unlockBookingId?: string; unlockPrice?: number;
   }): Promise<Message> => {
     if (!currentUser || !hasSupabase) throw new Error('Auth required');
 
-    const { data, error } = await supabase
-      .from('messages')
-      .insert({
-        chat_id: chatId,
-        sender_id: currentUser.id,
-        body: payload.text ?? 'Shared a locked photo',
-        message_type: 'media',
-        media_url: payload.mediaUrl,
-        preview_url: payload.previewUrl ?? null,
-        locked: true,
-        unlocked: false,
-        unlock_booking_id: payload.unlockBookingId,
-      })
-      .select('id, chat_id, sender_id, body, message_type, media_url, preview_url, locked, unlocked, unlock_booking_id, created_at')
-      .single();
-
-    if (error) throw error;
+    const rawMessage = await sendConversationLockedMediaMessage({
+      conversationId: chatId,
+      ...payload
+    });
 
     const confirmed: Message = {
-      id: data.id,
-      conversation_id: data.chat_id,
-      from_user: true,
-      body: data.body ?? '',
-      timestamp: data.created_at,
+      id: rawMessage.id,
+      conversation_id: rawMessage.conversation_id,
+      from_user: rawMessage.sender_id === currentUser.id,
+      body: rawMessage.body,
+      timestamp: rawMessage.timestamp,
       message_type: 'media',
-      media_url: data.media_url,
-      preview_url: data.preview_url,
-      locked: data.locked,
-      unlocked: data.unlocked,
-      unlock_booking_id: data.unlock_booking_id,
+      media_url: rawMessage.media_url,
+      preview_url: rawMessage.preview_url,
+      locked: rawMessage.locked,
+      unlocked: rawMessage.unlocked,
+      unlock_booking_id: rawMessage.unlock_booking_id,
+      unlock_price: rawMessage.unlock_price,
     };
 
     setMessages(prev => ({ ...prev, [chatId]: [...(prev[chatId] ?? []), confirmed] }));
     trackEvent('message_sent', { conversation_id: chatId, type: 'media_locked' });
     return confirmed;
+  };
+
+  const unlockPremiumMessage = async (chatId: string, messageId: string): Promise<boolean> => {
+    if (!currentUser || !hasSupabase) throw new Error('Auth required');
+    const { unlockMessage } = require('../services/chatMessageService');
+    const success = await unlockMessage({ conversationId: chatId, messageId });
+    if (success) {
+      setMessages(prev => {
+        const list = prev[chatId] ?? [];
+        return {
+          ...prev,
+          [chatId]: list.map(m => m.id === messageId ? { ...m, unlocked: true } : m),
+        };
+      });
+    }
+    return success;
   };
 
   const startConversationWithUser = async (participantId: string, title?: string) => {
@@ -310,7 +317,7 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     <MessagingContext.Provider value={{
       conversations, messages, loading,
       fetchConversations, fetchMessages,
-      sendMessage, sendLockedMediaMessage,
+      sendMessage, sendLockedMediaMessage, unlockPremiumMessage,
       startConversationWithUser, subscribeToMessages,
     }}>
       {children}

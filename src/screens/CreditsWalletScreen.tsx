@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, FlatList, Linking, Modal, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../store/ThemeContext';
 import { useAppData } from '../store/AppDataContext';
+import { supabase } from '../config/supabaseClient';
 
 const CreditsWalletScreen: React.FC = () => {
   const { colors, isDark } = useTheme();
@@ -26,8 +27,44 @@ const CreditsWalletScreen: React.FC = () => {
 
   const balance = state.creditsWallet?.balance ?? 0;
 
-  const handleComingSoon = (title: string) => {
-    Alert.alert(title, 'Credits purchases and rewards are rolling out soon.');
+  const [buyModalVisible, setBuyModalVisible] = useState(false);
+  const [earnModalVisible, setEarnModalVisible] = useState(false);
+  const [buyingAmount, setBuyingAmount] = useState<number | null>(null);
+
+  const CREDIT_PACKS = [
+    { credits: 50, price: 50, label: 'Starter' },
+    { credits: 110, price: 100, label: 'Basic', tag: 'Popular' },
+    { credits: 250, price: 200, label: 'Pro', tag: 'Best Value' },
+  ];
+
+  const handleBuyCredits = async (priceZAR: number, credits: number) => {
+    setBuyingAmount(priceZAR);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { Alert.alert('Sign in required'); return; }
+      const { data, error } = await supabase.functions.invoke('payfast-handler', {
+        body: {
+          type: 'credits',
+          amount: priceZAR,
+          credits,
+          user_id: user.id,
+          item_name: `Papzi Credits – ${credits} credits`,
+          return_url: 'papzi://credits/success',
+          cancel_url: 'papzi://credits/cancel',
+          notify_url: 'https://mizdvqhvspkjayffaqqd.supabase.co/functions/v1/payfast-itn',
+        },
+      });
+      if (error || !data?.paymentUrl) {
+        Alert.alert('Payment Error', error?.message || 'Unable to start payment.');
+        return;
+      }
+      setBuyModalVisible(false);
+      await Linking.openURL(data.paymentUrl);
+    } catch (e: any) {
+      Alert.alert('Error', e?.message || 'Something went wrong.');
+    } finally {
+      setBuyingAmount(null);
+    }
   };
 
   const handleRedeem = async () => {
@@ -58,14 +95,14 @@ const CreditsWalletScreen: React.FC = () => {
         <View style={styles.actions}>
           <TouchableOpacity
             style={[styles.actionBtn, { backgroundColor: colors.accent }]}
-            onPress={() => handleComingSoon('Buy Credits')}
+            onPress={() => setBuyModalVisible(true)}
           >
             <Ionicons name="cash-outline" size={18} color={isDark ? colors.bg : '#fff'} />
             <Text style={[styles.actionText, { color: isDark ? colors.bg : '#fff' }]}>Buy</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.actionBtn, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}
-            onPress={() => handleComingSoon('Earn Credits')}
+            onPress={() => setEarnModalVisible(true)}
           >
             <Ionicons name="gift-outline" size={18} color={colors.text} />
             <Text style={[styles.actionText, { color: colors.text }]}>Earn</Text>
@@ -132,6 +169,60 @@ const CreditsWalletScreen: React.FC = () => {
           </View>
         )}
       />
+
+      {/* Buy Credits Modal */}
+      <Modal visible={buyModalVisible} transparent animationType="slide" onRequestClose={() => setBuyModalVisible(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setBuyModalVisible(false)} />
+        <View style={[styles.modalSheet, { backgroundColor: colors.card }]}>
+          <Text style={[styles.modalTitle, { color: colors.text }]}>Buy Credits</Text>
+          <Text style={[styles.modalSub, { color: colors.textMuted }]}>Credits are used for tips, PPV unlocks, and live gifts.</Text>
+          {CREDIT_PACKS.map(pack => (
+            <TouchableOpacity
+              key={pack.price}
+              style={[styles.packRow, { borderColor: colors.border }]}
+              onPress={() => handleBuyCredits(pack.price, pack.credits)}
+              disabled={buyingAmount === pack.price}
+            >
+              <View>
+                <Text style={[styles.packLabel, { color: colors.text }]}>{pack.label}</Text>
+                <Text style={[styles.packCredits, { color: colors.accent }]}>{pack.credits} Credits</Text>
+              </View>
+              <View style={styles.packRight}>
+                {pack.tag && <Text style={[styles.packTag, { backgroundColor: colors.accent + '22', color: colors.accent }]}>{pack.tag}</Text>}
+                <Text style={[styles.packPrice, { color: colors.text }]}>R{pack.price}</Text>
+              </View>
+            </TouchableOpacity>
+          ))}
+          <TouchableOpacity style={[styles.closeBtn, { backgroundColor: colors.border }]} onPress={() => setBuyModalVisible(false)}>
+            <Text style={{ color: colors.text, fontWeight: '700' }}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
+
+      {/* Earn Credits Modal */}
+      <Modal visible={earnModalVisible} transparent animationType="slide" onRequestClose={() => setEarnModalVisible(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setEarnModalVisible(false)} />
+        <View style={[styles.modalSheet, { backgroundColor: colors.card }]}>
+          <Text style={[styles.modalTitle, { color: colors.text }]}>Earn Credits</Text>
+          {[
+            { icon: 'person-add', label: 'Refer a friend', desc: 'Earn 20 credits per successful referral' },
+            { icon: 'camera', label: 'Complete your first booking', desc: 'Earn 50 credits after your first booking' },
+            { icon: 'star', label: 'Leave a review', desc: 'Earn 5 credits after a verified review' },
+            { icon: 'share-social', label: 'Share on social media', desc: 'Earn 10 credits for sharing' },
+          ].map(item => (
+            <View key={item.label} style={[styles.earnRow, { borderColor: colors.border }]}>
+              <Ionicons name={item.icon as any} size={22} color={colors.accent} style={{ marginRight: 12 }} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.packLabel, { color: colors.text }]}>{item.label}</Text>
+                <Text style={{ color: colors.textMuted, fontSize: 12 }}>{item.desc}</Text>
+              </View>
+            </View>
+          ))}
+          <TouchableOpacity style={[styles.closeBtn, { backgroundColor: colors.border }]} onPress={() => setEarnModalVisible(false)}>
+            <Text style={{ color: colors.text, fontWeight: '700' }}>Close</Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -158,6 +249,19 @@ const styles = StyleSheet.create({
   rowAmount: { fontWeight: '800' },
   empty: { alignItems: 'center', padding: 24, gap: 10 },
   emptyText: { textAlign: 'center' },
+  // Modal styles
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
+  modalSheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40, gap: 12 },
+  modalTitle: { fontSize: 20, fontWeight: '800', marginBottom: 4 },
+  modalSub: { fontSize: 13, marginBottom: 8 },
+  packRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
+  packLabel: { fontWeight: '700', fontSize: 15 },
+  packCredits: { fontWeight: '800', fontSize: 16, marginTop: 2 },
+  packRight: { alignItems: 'flex-end', gap: 4 },
+  packTag: { fontSize: 10, fontWeight: '800', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
+  packPrice: { fontSize: 18, fontWeight: '900' },
+  earnRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
+  closeBtn: { marginTop: 16, padding: 14, borderRadius: 12, alignItems: 'center' },
 });
 
 export default CreditsWalletScreen;

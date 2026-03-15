@@ -9,6 +9,7 @@ type AuthContextValue = {
   error: string | null;
   signIn: (email: string, password: string) => Promise<AppUser | null>;
   signUp: (email: string, password: string, role?: UserRole, fullName?: string) => Promise<AppUser | null>;
+  signInWithOAuth: (provider: 'google' | 'apple') => Promise<void>;
   signOut: () => Promise<void>;
   updateProfile: (changes: Partial<AppUser>) => Promise<void>;
   updateProfilePicture: (uri: string) => Promise<void>;
@@ -25,6 +26,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     authenticating,
     error,
     signIn,
+    signInWithOAuth,
     signUp,
     signOut,
     updateProfile,
@@ -41,6 +43,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       error,
       signIn,
       signUp,
+      signInWithOAuth,
       signOut,
       updateProfile,
       updateProfilePicture,
@@ -54,6 +57,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       error,
       signIn,
       signUp,
+      signInWithOAuth,
       signOut,
       updateProfile,
       updateProfilePicture,

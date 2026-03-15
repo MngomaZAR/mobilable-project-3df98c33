@@ -32,8 +32,8 @@ const AccountConfigScreen: React.FC = () => {
   const [bio, setBio] = useState(currentUser?.bio || '');
   const [phone, setPhone] = useState(currentUser?.phone || '');
   const [city, setCity] = useState(currentUser?.city || '');
-  const [instagram, setInstagram] = useState(currentUser?.contact_details?.instagram || '');
-  const [website, setWebsite] = useState(currentUser?.contact_details?.website || '');
+  const [instagram, setInstagram] = useState(currentUser?.instagram || currentUser?.contact_details?.instagram || '');
+  const [website, setWebsite] = useState(currentUser?.website || currentUser?.contact_details?.website || '');
   
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
 
@@ -46,6 +46,8 @@ const AccountConfigScreen: React.FC = () => {
         bio: bio,
         phone: phone,
         city: city,
+        instagram: instagram,
+        website: website,
         contact_details: {
           instagram: instagram,
           website: website,
@@ -110,6 +112,7 @@ const AccountConfigScreen: React.FC = () => {
         <View style={s.avatarSection}>
           <TouchableOpacity style={s.avatarWrapper} onPress={handleUpdateAvatar} disabled={isUploadingAvatar}>
             <Image
+              key={currentUser?.avatar_url || 'avatar'}
               source={{ uri: currentUser?.avatar_url || PLACEHOLDER_AVATAR }}
               style={[s.avatar, isUploadingAvatar && { opacity: 0.5 }]}
             />

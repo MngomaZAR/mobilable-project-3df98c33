@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,6 +9,7 @@ import { useAppData } from '../store/AppDataContext';
 import { useTheme } from '../store/ThemeContext';
 import { useMessaging } from '../store/MessagingContext';
 import { NewMessageModal } from '../components/NewMessageModal';
+import { supabase } from '../config/supabaseClient';
 
 type Navigation = StackNavigationProp<RootStackParamList>;
 
@@ -17,7 +18,23 @@ const AdminDashboardScreen: React.FC = () => {
   const { state } = useAppData();
   const { startConversationWithUser } = useMessaging();
   const [showNewMessage, setShowNewMessage] = React.useState(false);
+  const [liveRevenue, setLiveRevenue] = useState<number | null>(null);
   const { colors, isDark } = useTheme();
+
+  useEffect(() => {
+    const fetchRevenue = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('earnings')
+          .select('amount');
+        if (!error && data) {
+          const total = data.reduce((sum: number, row: any) => sum + Number(row.amount || 0), 0);
+          setLiveRevenue(total);
+        }
+      } catch { /* silent — shows R0 */ }
+    };
+    fetchRevenue();
+  }, []);
 
   const pendingBookings = useMemo(
     () => state.bookings.filter((booking) => booking.status === 'pending').length,
@@ -58,9 +75,12 @@ const AdminDashboardScreen: React.FC = () => {
           </View>
           <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border, marginRight: 0 }]}>
             <Text style={[styles.statLabel, { color: colors.textMuted }]}>Revenue</Text>
-            <Text style={[styles.statValue, { color: colors.text }]}>R12k</Text>
-            <Text style={[styles.statMeta, { color: '#10b981' }]}>+12.5%</Text>
+            <Text style={[styles.statValue, { color: colors.text }]}>
+              {liveRevenue === null ? '...' : `R${liveRevenue.toLocaleString('en-ZA')}`}
+            </Text>
+            <Text style={[styles.statMeta, { color: '#10b981' }]}>Completed jobs</Text>
           </View>
+
         </View>
 
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>

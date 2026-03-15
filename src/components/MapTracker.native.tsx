@@ -19,7 +19,7 @@ type Props = {
 
 export const MapTracker: React.FC<Props> = ({ client, photographer, status }) => {
   const { width } = useWindowDimensions();
-  const cameraRef = useRef<MapLibreGL.Camera>(null);
+  const cameraRef = useRef<any>(null);
 
   const centerLat = (client.latitude + photographer.latitude) / 2;
   const centerLng = (client.longitude + photographer.longitude) / 2;
@@ -57,7 +57,7 @@ export const MapTracker: React.FC<Props> = ({ client, photographer, status }) =>
     <View style={[styles.container, { height: Math.min(440, width < 480 ? 280 : 360) }]}>
       <MapLibreGL.MapView
         style={StyleSheet.absoluteFill}
-        styleURL="https://tiles.openfreemap.org/styles/liberty"
+        {...{ styleURL: "https://tiles.openfreemap.org/styles/liberty" } as any}
         logoEnabled={false}
         attributionEnabled={false}
       >

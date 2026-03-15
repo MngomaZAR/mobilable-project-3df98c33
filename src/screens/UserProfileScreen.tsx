@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { FlatList, Image, StyleSheet, Text, View, TouchableOpacity, Platform, Alert, Modal, TextInput } from 'react-native';
+import { FlatList, Image, StyleSheet, Text, View, TouchableOpacity, Platform, Alert, Modal, TextInput, ActionSheetIOS } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -57,28 +57,51 @@ const UserProfileScreen: React.FC = () => {
     }
   };
 
-  const submitReport = async (targetId: string) => {
-    try {
-      await reportContent({ targetType: 'profile', targetId, reason: 'Inappropriate content' });
-      Platform.OS === 'web'
-        ? window.alert('Report submitted. Our team will review it shortly.')
-        : Alert.alert('Report submitted', 'Our team will review it shortly.');
-    } catch (e: any) {
-      const msg = e?.message ?? 'Report failed. Please try again.';
-      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Report failed', msg);
-    }
-  };
-
-  const handleReport = () => {
+  const handleReport = async () => {
     const targetId = talent?.id ?? params.userId;
     if (!targetId) return;
-    // We would ideally show an ActionSheet or Modal here, but for now we just use a confirm alert
-    Platform.OS === 'web' 
-      ? window.confirm('Report this user to admin?') && submitReport(targetId)
-      : Alert.alert('Report User', 'Report this user to admin?', [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Report', style: 'destructive', onPress: () => submitReport(targetId) }
-        ]);
+    const reasons = ['Inappropriate content', 'Spam', 'Fake profile', 'Harassment', 'Other'];
+    
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        { options: ['Cancel', ...reasons], cancelButtonIndex: 0, title: 'Report this user' },
+        async (index) => {
+          if (index === 0) return;
+          try {
+            await reportContent({ targetType: 'profile', targetId, reason: reasons[index - 1] });
+            Alert.alert('Reported', 'Thank you. Our team will review this.');
+          } catch (e) {
+            Alert.alert('Error', 'Failed to submit report.');
+          }
+        }
+      );
+    } else if (Platform.OS === 'web') {
+      const reason = window.prompt(`Why are you reporting this user?\nOptions: ${reasons.join(', ')}`);
+      if (reason && reasons.some(r => r.toLowerCase() === reason.toLowerCase())) {
+        await reportContent({ targetType: 'profile', targetId, reason });
+        window.alert('Reported. Thank you. Our team will review this.');
+      } else if (reason) {
+        await reportContent({ targetType: 'profile', targetId, reason: 'Other' });
+        window.alert('Reported. Thank you. Our team will review this.');
+      }
+    } else {
+      Alert.alert('Report User', 'Why are you reporting this?',
+        [
+          ...reasons.map(reason => ({
+            text: reason,
+            onPress: async () => {
+              try {
+                await reportContent({ targetType: 'profile', targetId, reason });
+                Alert.alert('Reported', 'Thank you. Our team will review this.');
+              } catch (e) {
+                Alert.alert('Error', 'Failed to submit report.');
+              }
+            }
+          })),
+          { text: 'Cancel', style: 'cancel' as const }
+        ]
+      );
+    }
   };
 
   const handleTip = async () => {
@@ -267,7 +290,7 @@ const UserProfileScreen: React.FC = () => {
         numColumns={3}
         contentContainerStyle={styles.listContent}
         renderItem={({ item }) => (
-          <TouchableOpacity style={styles.imageContainer}>
+          <TouchableOpacity style={styles.imageContainer} onPress={() => navigation.navigate('PostDetail', { postId: item.id })}>
             <Image source={{ uri: item.image_url }} style={styles.image} />
           </TouchableOpacity>
         )}

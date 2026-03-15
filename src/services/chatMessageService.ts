@@ -20,6 +20,7 @@ export type MessageRow = {
   locked: boolean;
   unlocked: boolean;
   unlock_booking_id: string | null;
+  unlock_price: number | null;
   timestamp: string;
 };
 
@@ -51,6 +52,7 @@ export const listConversationMessages = async (
     locked: msg.locked ?? false,
     unlocked: msg.unlocked ?? true,
     unlock_booking_id: msg.unlockBookingId ?? msg.unlock_booking_id ?? null,
+    unlock_price: msg.unlockPrice ?? msg.unlock_price ?? null,
     timestamp: msg.timestamp ?? msg.created_at ?? new Date().toISOString(),
   }));
 };
@@ -90,6 +92,7 @@ export const sendConversationTextMessage = async ({
     locked: msg.locked ?? false,
     unlocked: msg.unlocked ?? true,
     unlock_booking_id: msg.unlock_booking_id ?? msg.unlockBookingId ?? null,
+    unlock_price: msg.unlock_price ?? msg.unlockPrice ?? null,
     timestamp: msg.created_at ?? msg.timestamp ?? new Date().toISOString(),
   };
 };
@@ -101,12 +104,14 @@ export const sendConversationLockedMediaMessage = async ({
   previewUrl,
   text,
   unlockBookingId,
+  unlockPrice,
 }: {
   conversationId: string;
   mediaUrl: string;
-  previewUrl: string;
+  previewUrl?: string;
   text?: string;
-  unlockBookingId: string;
+  unlockBookingId?: string;
+  unlockPrice?: number;
 }): Promise<MessageRow> => {
   const { data, error } = await supabase.functions.invoke('chat-messages', {
     body: {
@@ -118,6 +123,7 @@ export const sendConversationLockedMediaMessage = async ({
       preview_url: previewUrl,
       locked: true,
       unlock_booking_id: unlockBookingId,
+      unlock_price: unlockPrice,
     },
   });
 
@@ -137,7 +143,29 @@ export const sendConversationLockedMediaMessage = async ({
     preview_url: msg.preview_url ?? msg.previewUrl ?? previewUrl,
     locked: msg.locked ?? true,
     unlocked: msg.unlocked ?? false,
-    unlock_booking_id: msg.unlock_booking_id ?? msg.unlockBookingId ?? unlockBookingId,
+    unlock_booking_id: msg.unlock_booking_id ?? msg.unlockBookingId ?? unlockBookingId ?? null,
+    unlock_price: msg.unlock_price ?? msg.unlockPrice ?? unlockPrice ?? null,
     timestamp: msg.created_at ?? msg.timestamp ?? new Date().toISOString(),
   };
+};
+
+// ── Unlock a message ───────────────────────────────────────────
+export const unlockMessage = async ({
+  conversationId,
+  messageId,
+}: {
+  conversationId: string;
+  messageId: string;
+}): Promise<boolean> => {
+  const { data, error } = await supabase.functions.invoke('chat-messages', {
+    body: {
+      action: 'unlock',
+      conversation_id: conversationId,
+      message_id: messageId,
+    },
+  });
+
+  if (error) throw new Error(error.message || 'Failed to unlock message.');
+  
+  return data?.success === true;
 };

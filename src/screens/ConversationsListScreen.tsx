@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useEffect } from 'react';
+import React, { useCallback, useMemo, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -11,11 +11,14 @@ import {
 } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../store/ThemeContext';
 import { useMessaging } from '../store/MessagingContext';
+import { useAppData } from '../store/AppDataContext';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { PLACEHOLDER_AVATAR } from '../utils/constants';
+import { NewMessageModal } from '../components/NewMessageModal';
 
 type Navigation = StackNavigationProp<RootStackParamList, 'Root'>;
 
@@ -23,7 +26,9 @@ const ConversationsListScreen: React.FC = () => {
   const navigation = useNavigation<Navigation>();
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
-  const { conversations, loading, fetchConversations } = useMessaging();
+  const { conversations, loading, fetchConversations, startConversationWithUser } = useMessaging();
+  const { state, currentUser } = useAppData();
+  const [showNewMessage, setShowNewMessage] = useState(false);
 
   // Load on focus so new conversations appear when returning from chat
   useFocusEffect(
@@ -36,10 +41,6 @@ const ConversationsListScreen: React.FC = () => {
     fetchConversations();
   }, [fetchConversations]);
 
-  const handleNewChat = useCallback(() => {
-    navigation.navigate('Root', { screen: 'Feed' });
-  }, [navigation]);
-
   const listHeader = useMemo(
     () => (
       <View style={[styles.header, { paddingTop: Math.max(insets.top, 16) }]}>
@@ -51,15 +52,16 @@ const ConversationsListScreen: React.FC = () => {
         </View>
         <TouchableOpacity
           style={[styles.primaryButton, { backgroundColor: colors.accent }]}
-          onPress={handleNewChat}
+          onPress={() => setShowNewMessage(true)}
         >
+          <Ionicons name="create-outline" size={18} color={isDark ? colors.bg : '#fff'} />
           <Text style={[styles.primaryButtonText, { color: isDark ? colors.bg : '#fff' }]}>
-            Find photographer
+            New Chat
           </Text>
         </TouchableOpacity>
       </View>
     ),
-    [handleNewChat, colors, isDark, insets.top]
+    [colors, isDark, insets.top]
   );
 
   const renderItem = ({ item }: { item: typeof conversations[0] }) => {
@@ -137,10 +139,26 @@ const ConversationsListScreen: React.FC = () => {
         ListHeaderComponent={listHeader}
         ListEmptyComponent={
           <Text style={[styles.empty, { color: colors.textMuted }]}>
-            Start a chat to see conversations here.
+            No conversations yet. Tap "New Chat" to message a photographer or model.
           </Text>
         }
         ItemSeparatorComponent={() => <View style={styles.separator} />}
+      />
+
+      <NewMessageModal
+        visible={showNewMessage}
+        onClose={() => setShowNewMessage(false)}
+        profiles={state.profiles ?? []}
+        currentUserId={currentUser?.id}
+        onSelectUser={async (user) => {
+          try {
+            const convo = await startConversationWithUser(user.id, user.full_name ?? 'User');
+            setShowNewMessage(false);
+            navigation.navigate('ChatThread', { conversationId: convo.id, title: convo.title ?? 'Chat' });
+          } catch {
+            setShowNewMessage(false);
+          }
+        }}
       />
     </View>
   );
@@ -156,11 +174,14 @@ const styles = StyleSheet.create({
   primaryButton: {
     alignSelf: 'flex-start',
     borderRadius: 12,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingVertical: 10,
-    marginTop: 6,
+    marginTop: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
-  primaryButtonText: { fontWeight: '700' },
+  primaryButtonText: { fontWeight: '700', fontSize: 14 },
   card: { borderRadius: 14, padding: 14, borderWidth: StyleSheet.hairlineWidth },
   cardHeader: {
     flexDirection: 'row',

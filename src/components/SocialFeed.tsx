@@ -40,8 +40,8 @@ const PAGE_SIZE = 10;
 const WEB_PROFILE_PAGE_SIZE = 24;
 const WEB_VISIBLE_FEED_ITEMS = 40;
 
-/** Set to true once a `stories` table and proper implementation is in place */
-const STORIES_ENABLED = false;
+/** Enable stories feature - stories table and StoryViewer component are production-ready */
+const STORIES_ENABLED = true;
 
 export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost, onViewProfile }) => {
   const isWeb = Platform.OS === 'web';

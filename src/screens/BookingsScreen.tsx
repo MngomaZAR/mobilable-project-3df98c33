@@ -14,6 +14,7 @@ type Navigation = StackNavigationProp<RootStackParamList, 'BookingDetail'>;
 const statusColors: Record<Booking['status'], string> = {
   pending: '#f59e0b',
   accepted: '#3b82f6',
+  in_progress: '#3b82f6',
   completed: '#10b981',
   reviewed: '#8b5cf6',
   cancelled: '#94a3b8',

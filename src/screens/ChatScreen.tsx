@@ -27,7 +27,7 @@ const ChatScreen: React.FC = () => {
   const route = useRoute<Route>();
   const navigation = useNavigation<Navigation>();
   const { currentUser } = useAuth();
-  const { messages: allMessages, sendMessage, sendLockedMediaMessage, fetchMessages, subscribeToMessages } = useMessaging();
+  const { messages: allMessages, sendMessage, sendLockedMediaMessage, fetchMessages, subscribeToMessages, unlockPremiumMessage } = useMessaging();
   const { bookings } = useBooking();
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
@@ -37,6 +37,7 @@ const ChatScreen: React.FC = () => {
   const [lightboxUri, setLightboxUri] = useState<string | null>(null);
   const [pendingMedia, setPendingMedia] = useState<{ uri: string; preview: string } | null>(null);
   const [isLockedPending, setIsLockedPending] = useState(true);
+  const [unlockPriceInput, setUnlockPriceInput] = useState('50');
 
   const listRef = useRef<FlatList>(null);
 
@@ -130,8 +131,10 @@ const ChatScreen: React.FC = () => {
 
   const confirmSendMedia = async () => {
     if (!pendingMedia) return;
-    if (isLockedPending && !latestUnlockBooking) {
-      Alert.alert('Booking needed', 'To send a locked photo, you must have an active booking.');
+
+    const priceNum = Number(unlockPriceInput);
+    if (isLockedPending && (isNaN(priceNum) || priceNum <= 0)) {
+      Alert.alert('Invalid Price', 'Please enter a valid price to lock this photo.');
       return;
     }
 
@@ -141,7 +144,7 @@ const ChatScreen: React.FC = () => {
         mediaUrl: pendingMedia.uri,
         previewUrl: pendingMedia.preview,
         text: text.trim() || (isLockedPending ? 'Locked Photo' : 'Shared Photo'),
-        unlockBookingId: isLockedPending ? (latestUnlockBooking?.id as any) : undefined,
+        unlockPrice: isLockedPending ? priceNum : undefined,
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setPendingMedia(null);
@@ -190,18 +193,37 @@ const ChatScreen: React.FC = () => {
                 <View style={[styles.messageRow, isMe ? styles.meRow : styles.otherRow]}>
                   <TouchableOpacity
                     style={styles.mediaBubble}
-                    disabled={!item.unlocked}
-                    onPress={() => item.unlocked && setLightboxUri(item.media_url || null)}
+                    activeOpacity={0.8}
+                    onPress={() => {
+                      if (item.unlocked) {
+                        setLightboxUri(item.media_url || null);
+                      } else if (!isMe) {
+                        if (item.unlock_price) {
+                          Alert.alert('Unlock Message', `Would you like to unlock this message for R${item.unlock_price}?`, [
+                            { text: 'Cancel', style: 'cancel' },
+                            { text: 'Unlock', onPress: async () => {
+                                try {
+                                  await unlockPremiumMessage(chatId, item.id);
+                                } catch (err: any) {
+                                  Alert.alert('Unlock failed', err.message);
+                                }
+                            }},
+                          ]);
+                        } else {
+                          Alert.alert('Locked', 'This message needs to be unlocked by an active booking.');
+                        }
+                      }
+                    }}
                   >
                     <Image
                       source={{ uri: item.unlocked ? item.media_url ?? item.preview_url ?? PLACEHOLDER_IMAGE : item.preview_url ?? PLACEHOLDER_IMAGE }}
                       style={styles.mediaImage}
                     />
                     {item.locked && !item.unlocked && (
-                      <View style={styles.lockedOverlay}>
+                      <View style={[styles.lockedOverlay, { padding: 10 }]}>
                         <Ionicons name="lock-closed" size={32} color="#fff" />
-                        <Text style={styles.unlockPrice}>LOCKED</Text>
-                        <Text style={styles.unlockHint}>Unlock after payment</Text>
+                        <Text style={styles.unlockPrice}>{item.unlock_price ? `R${item.unlock_price}` : 'LOCKED'}</Text>
+                        <Text style={styles.unlockHint}>{item.unlock_price ? 'Tap here to unlock' : 'Unlock after payment'}</Text>
                       </View>
                     )}
                     {item.body ? <Text style={[styles.messageText, isMe ? styles.meText : styles.otherText, styles.mediaCaption]}>{item.body}</Text> : null}
@@ -257,6 +279,19 @@ const ChatScreen: React.FC = () => {
                   {isLockedPending ? "Locked (Pay to see)" : "Standard Send"}
                 </Text>
               </TouchableOpacity>
+              {isLockedPending && (
+                <View style={[styles.inputContainer, { marginTop: 12, backgroundColor: colors.bg, borderColor: colors.border }]}>
+                  <Text style={{ color: colors.textSecondary, marginLeft: 12, marginRight: 4 }}>Price (ZAR): R</Text>
+                  <TextInput
+                    style={[styles.input, { color: colors.text, maxHeight: 40, paddingVertical: 8 }]}
+                    keyboardType="numeric"
+                    placeholder="e.g. 50"
+                    placeholderTextColor={colors.textMuted}
+                    value={unlockPriceInput}
+                    onChangeText={setUnlockPriceInput}
+                  />
+                </View>
+              )}
             </View>
             <View style={styles.previewActions}>
               <TouchableOpacity style={[styles.cancelBtn, { backgroundColor: colors.bg }]} onPress={() => setPendingMedia(null)}>

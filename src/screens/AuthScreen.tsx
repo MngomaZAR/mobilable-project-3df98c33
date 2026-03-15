@@ -73,7 +73,7 @@ const ROLE_OPTIONS: RoleOption[] = [
 ];
 
 const AuthScreen: React.FC = () => {
-  const { signIn, signUp, resetState, authenticating, error } = useAppData();
+  const { signIn, signUp, signInWithOAuth, resetState, authenticating, error } = useAppData();
   const [mode, setMode] = useState<Mode>('signin');
   const [localSubmitting, setLocalSubmitting] = useState(false);
 
@@ -144,15 +144,42 @@ const AuthScreen: React.FC = () => {
     }
   };
 
-  // Exchange the ?code= param from the OAuth redirect URL for a Supabase session.
-  // Shared between iOS (captured by openAuthSessionAsync) and Android (Linking deep link).
   const exchangeOAuthCode = async (url: string) => {
     try {
-      const parsedUrl = new URL(url);
-      const code = parsedUrl.searchParams.get('code');
-      if (!code) return;
-      const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-      if (exchangeError) setLocalMessage(exchangeError.message);
+      let params = new URLSearchParams();
+      let hashParams = new URLSearchParams();
+      
+      try {
+        const parsedUrl = new URL(url);
+        params = new URLSearchParams(parsedUrl.search);
+        hashParams = new URLSearchParams(parsedUrl.hash.replace('#', ''));
+      } catch (e) {
+         const queryString = url.split('?')[1]?.split('#')[0] || '';
+         const hashString = url.split('#')[1] || '';
+         params = new URLSearchParams(queryString);
+         hashParams = new URLSearchParams(hashString);
+      }
+
+      const errorDesc = params.get('error_description') || hashParams.get('error_description');
+      if (errorDesc) {
+        setLocalMessage(errorDesc.replace(/\+/g, ' '));
+        return;
+      }
+
+      const code = params.get('code') || hashParams.get('code');
+      const accessToken = hashParams.get('access_token') || params.get('access_token');
+      const refreshToken = hashParams.get('refresh_token') || params.get('refresh_token');
+
+      if (accessToken && refreshToken) {
+        const { error: sessionErr } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+        if (sessionErr) setLocalMessage(sessionErr.message);
+      } else if (code) {
+        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+        if (exchangeError) setLocalMessage(exchangeError.message);
+      }
     } catch (err: any) {
       setLocalMessage(err.message || 'Authentication failed');
     }
@@ -174,28 +201,8 @@ const AuthScreen: React.FC = () => {
 
   const handleOAuth = async (provider: 'google' | 'apple') => {
     setLocalMessage(null);
-    if (!hasSupabase) { setLocalMessage('Supabase not configured.'); return; }
     try {
-      const redirectUri = makeRedirectUri({ scheme: 'papzi', path: 'auth' });
-
-      const { data, error: oauthErr } = await supabase.auth.signInWithOAuth({
-        provider,
-        options: {
-          redirectTo: redirectUri,
-          skipBrowserRedirect: true,
-          queryParams: provider === 'apple' ? { response_type: 'code' } : undefined,
-        },
-      });
-      if (oauthErr) throw oauthErr;
-
-      if (data?.url) {
-        const res = await WebBrowser.openAuthSessionAsync(data.url, redirectUri);
-        if (res.type === 'success' && 'url' in res) {
-          // iOS: WebBrowser intercepted the redirect — exchange code directly
-          await exchangeOAuthCode(res.url);
-        }
-        // Android: res.type === 'dismiss' — session comes via Linking listener above
-      }
+      await signInWithOAuth(provider);
     } catch (err: any) {
       setLocalMessage(err.message || 'Authentication failed');
     }
@@ -335,7 +342,7 @@ const AuthScreen: React.FC = () => {
               onPress={submit}
             >
               <Text style={styles.submitTxt}>
-                {authenticating ? 'Please wait...' : mode === 'signin' ? 'Sign In' : `Create ${selectedRole.charAt(0).toUpperCase() + selectedRole.slice(1)} Account`}
+                {authenticating ? 'Please wait...' : mode === 'signin' ? 'Sign In' : `Create ${selectedRole ? selectedRole.charAt(0).toUpperCase() + selectedRole.slice(1) : ''} Account`}
               </Text>
             </TouchableOpacity>
 

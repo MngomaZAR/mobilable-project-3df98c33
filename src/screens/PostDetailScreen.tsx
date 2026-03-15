@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, ActionSheetIOS, Platform, Alert } from 'react-native';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/types';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -9,6 +9,8 @@ import { Post } from '../types';
 import { resolveStorageRef } from '../services/uploadService';
 import { BUCKETS } from '../config/environment';
 import { HashtagText } from '../components/HashtagText';
+import { reportContent } from '../services/reportService';
+import { Ionicons } from '@expo/vector-icons';
 
 type Route = RouteProp<RootStackParamList, 'PostDetail'>;
 
@@ -102,6 +104,52 @@ const PostDetailScreen: React.FC = () => {
     setComment('');
   };
 
+  const handleReport = async () => {
+    const targetId = post.id;
+    const reasons = ['Inappropriate content', 'Spam', 'Harassment', 'Other'];
+    
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        { options: ['Cancel', ...reasons], cancelButtonIndex: 0, title: 'Report this post' },
+        async (index) => {
+          if (index === 0) return;
+          try {
+            await reportContent({ targetType: 'post', targetId, reason: reasons[index - 1] });
+            Alert.alert('Reported', 'Thank you. Our team will review this.');
+          } catch (e) {
+            Alert.alert('Error', 'Failed to submit report.');
+          }
+        }
+      );
+    } else if (Platform.OS === 'web') {
+      const reason = window.prompt(`Why are you reporting this post?\nOptions: ${reasons.join(', ')}`);
+      if (reason && reasons.some(r => r.toLowerCase() === reason.toLowerCase())) {
+        await reportContent({ targetType: 'post', targetId, reason });
+        window.alert('Reported. Thank you. Our team will review this.');
+      } else if (reason) {
+        await reportContent({ targetType: 'post', targetId, reason: 'Other' });
+        window.alert('Reported. Thank you. Our team will review this.');
+      }
+    } else {
+      Alert.alert('Report Post', 'Why are you reporting this?',
+        [
+          ...reasons.map((reason) => ({
+            text: reason,
+            onPress: async () => {
+              try {
+                await reportContent({ targetType: 'post', targetId, reason });
+                Alert.alert('Reported', 'Thank you. Our team will review this.');
+              } catch (e) {
+                Alert.alert('Error', 'Failed to submit report.');
+              }
+            }
+          })),
+          { text: 'Cancel', style: 'cancel' as const }
+        ]
+      );
+    }
+  };
+
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <Image source={{ uri: post.image_url }} style={styles.image} />
@@ -117,9 +165,14 @@ const PostDetailScreen: React.FC = () => {
                // navigation.navigate('Search', { query: tag });
             }}
           />
-          <TouchableOpacity onPress={() => toggleLike(post.id)}>
-            <Text style={styles.like}>{post.liked ? '♥️' : '♡'} {post.likes_count}</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <TouchableOpacity onPress={() => toggleLike(post.id)}>
+              <Text style={styles.like}>{post.liked ? '♥️' : '♡'} {post.likes_count}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleReport}>
+              <Ionicons name="flag-outline" size={20} color="#6b7280" />
+            </TouchableOpacity>
+          </View>
         </View>
         {post.location ? <Text style={styles.meta}>{post.location}</Text> : null}
         <Text style={styles.meta}>{new Date(post.created_at).toLocaleString()}</Text>

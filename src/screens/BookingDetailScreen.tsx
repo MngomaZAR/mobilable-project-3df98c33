@@ -30,6 +30,17 @@ const BookingDetailScreen: React.FC = () => {
     [booking?.photographer_id, state.photographers]
   );
 
+  const model = useMemo(
+    () => state.models.find((m) => m.id === booking?.model_id),
+    [booking?.model_id, state.models]
+  );
+  
+  const talentName = useMemo(() => {
+    if (model) return model.name;
+    if (photographer) return photographer.name;
+    return 'your talent';
+  }, [model, photographer]);
+
   if (!booking) {
     return (
       <View style={[styles.centered, { backgroundColor: colors.bg }]}>
@@ -39,19 +50,23 @@ const BookingDetailScreen: React.FC = () => {
   }
 
   const currentIndex = steps.indexOf(booking.status);
+
+  // Chat with the most relevant person: model > photographer > general chat
   const openChatThread = async () => {
-    if (!photographer) {
+    const chatTarget = model || photographer;
+    if (!chatTarget) {
       navigation.navigate('Root', { screen: 'Chat' });
       return;
     }
 
     try {
-      const convo = await startConversationWithUser(photographer.id, photographer.name);
+      const convo = await startConversationWithUser(chatTarget.id, chatTarget.name);
       navigation.navigate('ChatThread', { conversationId: convo.id, title: convo.title });
     } catch (_err) {
       navigation.navigate('Root', { screen: 'Chat' });
     }
   };
+
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
@@ -63,7 +78,7 @@ const BookingDetailScreen: React.FC = () => {
           <Text style={[styles.title, { color: colors.text }]}>{booking.package_type}</Text>
         </View>
         
-        <Text style={[styles.meta, { color: colors.textSecondary }]}>With {photographer?.name ?? 'your photographer'}</Text>
+        <Text style={[styles.meta, { color: colors.textSecondary }]}>With {talentName}</Text>
         <Text style={[styles.meta, { color: colors.textSecondary }]}>Date: {booking.booking_date}</Text>
         
         {booking.notes ? (

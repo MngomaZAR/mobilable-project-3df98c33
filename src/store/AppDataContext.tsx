@@ -3,7 +3,10 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { initialState } from '../data/initialData';
 import { supabase, hasSupabase } from '../config/supabaseClient';
+import { createBookingRequest, updateBookingStatusInDb } from '../services/bookingService';
 import { BUCKETS } from '../config/environment';
+import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
 import { AppState, AppUser, Booking, BookingStatus, Comment, ConversationSummary, Message, Model, Post, PrivacySettings, Review, UserRole, CreditsWallet, CreditsLedgerEntry } from '../types';
 import { uid } from '../utils/id';
 import { formatAuthError, formatErrorMessage, logError } from '../utils/errors';
@@ -57,7 +60,7 @@ type AppDataContextValue = {
   createBooking: (payload: CreateBookingInput) => Promise<Booking>;
   updateBookingStatus: (bookingId: string, targetStatus?: BookingStatus) => Promise<Booking | undefined>;
   sendMessage: (chatId: string, text: string, fromUser?: boolean) => Promise<Message>;
-  sendLockedMediaMessage: (chatId: string, payload: { mediaUrl: string; previewUrl?: string; text?: string; unlockBookingId: string }) => Promise<Message>;
+  sendLockedMediaMessage: (chatId: string, payload: { mediaUrl: string; previewUrl?: string; text?: string; unlockBookingId?: string; unlockPrice?: number; }) => Promise<Message>;
   fetchMessages: (chatId: string) => Promise<void>;
   fetchMessagesForChat: (chatId: string) => Promise<void>;
   fetchComments: (postId: string) => Promise<void>;
@@ -72,6 +75,7 @@ type AppDataContextValue = {
   fetchSubscriptions: (userId?: string | null) => Promise<void>;
   signUp: (email: string, password: string, role?: AppUser['role'], fullName?: string) => Promise<AppUser | null>;
   signIn: (email: string, password: string) => Promise<AppUser | null>;
+  signInWithOAuth: (provider: 'google' | 'apple') => Promise<void>;
   signOut: () => Promise<void>;
   updatePrivacy: (changes: Partial<PrivacySettings>) => Promise<void>;
   requestDataDeletion: () => Promise<void>;
@@ -723,23 +727,12 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           
           // Handle OAuth sign-ups where profile doesn't exist yet
           if (!profile) {
-            console.log('No profile found, creating default for:', session.user.id);
-            const authMeta = session.user.user_metadata || {};
-            const fullName = authMeta.full_name || authMeta.name || null;
-            const avatarUrl = authMeta.avatar_url || authMeta.picture || null;
-            
-            const { error: upsertErr } = await supabase.from('profiles').upsert({
-              id: session.user.id,
-              role: 'client',
-              verified: false,
-              full_name: fullName,
-              avatar_url: avatarUrl,
-            });
-            if (upsertErr) console.error('Auto-profile creation failed:', upsertErr);
-            profile = { role: 'client', verified: false };
+            console.log('No profile found, profile creation will be handled by RoleSelectionScreen for:', session.user.id);
+            // We set role to null to trigger RoleSelectionScreen in MainNavigator
+            profile = { role: null, verified: false };
           }
 
-          const currentRole = stateRef.current.currentUser?.role ?? profile?.role ?? 'client';
+          const currentRole = profile?.role ?? null;
           setState({ currentUser: mapSupabaseUser(session.user, currentRole as any, profile)});
 
           // Register for push notifications (Async, don't block auth flow)
@@ -969,50 +962,42 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       let persistedBooking = booking;
 
       if (hasSupabase) {
-        const bookingDate = payload.booking_date.split('|')[0]?.trim().slice(0, 10);
-        const providerId = payload.talent_id || payload.photographer_id || payload.model_id;
-        const isModel = payload.talent_type === 'model';
-        const { data, error } = await supabase
-          .from('bookings')
-          .insert([
-            {
-              client_id: currentUser.id,
-              photographer_id: providerId,
-              model_id: isModel ? providerId : null,
-              booking_date: bookingDate || null,
-              package_type: booking.package_type,
-              notes: booking.notes,
-              status: booking.status,
-              price_total: booking.total_amount,
-              commission_amount: booking.commission_amount,
-              photographer_payout: booking.payout_amount,
-            },
-          ])
-          .select(BOOKING_SELECT)
-          .single();
+        try {
+          const providerId = payload.talent_id || payload.photographer_id || payload.model_id;
+          const isModel = payload.talent_type === 'model';
+          
+          const data = await createBookingRequest({
+            talentId: providerId || '',
+            clientId: currentUser.id,
+            talentType: isModel ? 'model' : 'photographer',
+            packageId: payload.package_type,
+            totalAmount: total,
+            latitude: (payload as any).latitude || 0,
+            longitude: (payload as any).longitude || 0,
+            startTime: payload.booking_date.split('|')[0] || new Date().toISOString(),
+            endTime: payload.booking_date.split('|')[1] || new Date().toISOString(),
+          });
 
-        if (error) {
+          persistedBooking = {
+            id: data.id,
+            photographer_id: data.photographer_id,
+            model_id: data.model_id,
+            client_id: data.client_id,
+            package_id: data.package_id,
+            status: data.status,
+            start_time: data.start_time,
+            end_time: data.end_time,
+            user_latitude: data.latitude,
+            user_longitude: data.longitude,
+            total_amount: data.total_amount,
+            commission_amount: data.commission_amount,
+            payout_amount: data.payout_amount,
+          } as unknown as Booking;
+        } catch (error: any) {
           logError('createBooking', error);
           setError(formatErrorMessage(error, 'Unable to create booking.'));
           throw error;
         }
-
-      persistedBooking = {
-        id: data?.id ?? booking.id,
-        photographer_id: data?.photographer_id ?? booking.photographer_id,
-        model_id: data?.model_id ?? booking.model_id ?? null,
-        client_id: currentUser.id,
-        booking_date: data?.booking_date ? new Date(data.booking_date).toISOString() : booking.booking_date,
-        package_type: data?.package_type ?? booking.package_type,
-        notes: data?.notes ?? booking.notes,
-        status: (data?.status as BookingStatus) ?? booking.status,
-        created_at: data?.created_at ?? booking.created_at,
-        user_latitude: null,
-        user_longitude: null,
-        total_amount: data?.price_total ?? booking.total_amount,
-        commission_amount: data?.commission_amount ?? booking.commission_amount,
-        payout_amount: data?.photographer_payout ?? booking.payout_amount,
-      };
       }
 
       setState({ bookings: [persistedBooking, ...stateRef.current.bookings] });
@@ -1143,7 +1128,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const sendLockedMediaMessage = useCallback(
     async (
       chatId: string,
-      payload: { mediaUrl: string; previewUrl?: string; text?: string; unlockBookingId: string }
+      payload: { mediaUrl: string; previewUrl?: string; text?: string; unlockBookingId?: string; unlockPrice?: number; }
     ) => {
       const senderId = stateRef.current.currentUser?.id;
       if (!senderId) {
@@ -1167,6 +1152,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         locked: true,
         unlocked: false,
         unlock_booking_id: payload.unlockBookingId,
+        unlock_price: payload.unlockPrice,
       };
 
       const prevLockedMsgs = stateRef.current.messages[chatId] ?? [];
@@ -1193,25 +1179,28 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           }
         }
 
-        const sent = await sendConversationLockedMediaMessage({
+        const res = await sendConversationLockedMediaMessage({
           conversationId: chatId,
           mediaUrl: finalMediaUrl,
           previewUrl: finalPreviewUrl || finalMediaUrl,
           text: payload.text,
           unlockBookingId: payload.unlockBookingId,
+          unlockPrice: payload.unlockPrice,
         });
+
         const confirmed: Message = {
-          id: sent.id,
-          conversation_id: sent.conversation_id || chatId,
-          from_user: sent.sender_id === senderId,
-          body: sent.body,
-          timestamp: sent.timestamp ?? new Date().toISOString(),
+          id: res.id,
+          conversation_id: res.conversation_id || chatId,
+          from_user: res.sender_id === senderId,
+          body: res.body,
+          timestamp: res.timestamp ?? new Date().toISOString(),
           message_type: 'media',
-          media_url: sent.media_url ? await resolveStorageRef(sent.media_url, BUCKETS.previews) : sent.media_url,
-          preview_url: sent.preview_url ? await resolveStorageRef(sent.preview_url, BUCKETS.previews) : sent.preview_url,
-          locked: sent.locked,
-          unlocked: sent.unlocked,
-          unlock_booking_id: sent.unlock_booking_id,
+          media_url: res.media_url ? await resolveStorageRef(res.media_url, BUCKETS.previews) : res.media_url,
+          preview_url: res.preview_url ? await resolveStorageRef(res.preview_url, BUCKETS.previews) : res.preview_url,
+          locked: res.locked,
+          unlocked: res.unlocked,
+          unlock_booking_id: res.unlock_booking_id,
+          unlock_price: res.unlock_price,
         };
         const latestLockedMsgs = stateRef.current.messages[chatId] ?? [];
         setState({
@@ -1645,27 +1634,35 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const updatePhotographerLocation = useCallback(async (latitude: number, longitude: number) => {
     if (!hasSupabase) return;
-    const userId = stateRef.current.currentUser?.id;
+    const user = stateRef.current.currentUser;
+    const userId = user?.id;
     if (!userId) return;
 
-    // Reliability Assertion: Deterministic boundary check
     try {
       assertSouthAfricanLocation(latitude, longitude);
     } catch (err: any) {
-      logError('geo_assertion_photog', err);
-      // Log and ignore invalid data
+      logError('geo_assertion', err);
       return;
     }
 
+    const table = user.role === 'model' ? 'models' : 'photographers';
+    
     await supabase
-      .from('photographers')
+      .from(table)
       .update({ latitude, longitude })
       .eq('id', userId);
 
-    const updated = stateRef.current.photographers.map((photographer) =>
-      photographer.id === userId ? { ...photographer, latitude, longitude } : photographer
-    );
-    setState({ photographers: updated });
+    if (user.role === 'model') {
+      const updated = stateRef.current.models.map((m) =>
+        m.id === userId ? { ...m, latitude, longitude } : m
+      );
+      setState({ models: updated });
+    } else {
+      const updated = stateRef.current.photographers.map((p) =>
+        p.id === userId ? { ...p, latitude, longitude } : p
+      );
+      setState({ photographers: updated });
+    }
   }, []);
 
   const signUp = useCallback(
@@ -1822,6 +1819,32 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       return null;
     }
   }, [fetchProfile]);
+
+  const signInWithOAuth = useCallback(async (provider: 'google' | 'apple') => {
+    setState({ authenticating: true, error: null });
+    try {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo: Linking.createURL('/'),
+        },
+      });
+
+      if (error) throw error;
+      if (data?.url) {
+        const result = await WebBrowser.openAuthSessionAsync(data.url, Linking.createURL('/'));
+        if (result.type === 'success' && result.url) {
+           await revalidateSession();
+        }
+      }
+    } catch (err: any) {
+      logError(`oauth_${provider}`, err);
+      setError(formatErrorMessage(err, `Unable to sign in with ${provider}.`));
+      throw err;
+    } finally {
+      setState({ authenticating: false });
+    }
+  }, [revalidateSession]);
 
   const refresh = useCallback(async () => {
     setError(null);
@@ -2001,7 +2024,8 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const updateProfile = useCallback(async (changes: Partial<AppUser>) => {
     const userId = stateRef.current.currentUser?.id;
-    const role = stateRef.current.currentUser?.role;
+    const currentRole = stateRef.current.currentUser?.role;
+    const newRole = changes.role ?? currentRole;
     if (!userId || !hasSupabase) {
       const msg = 'You need to be logged in and online to update your profile.';
       setError(msg);
@@ -2010,8 +2034,8 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     setSaving(true);
     try {
-      // 1. Write to profiles table
-      const profileChanges: any = {};
+      // 1. Build profile upsert payload — upsert creates or updates the row
+      const profileChanges: any = { id: userId };
       if (changes.full_name !== undefined) profileChanges.full_name = changes.full_name;
       if (changes.bio !== undefined) profileChanges.bio = changes.bio;
       if (changes.phone !== undefined) profileChanges.phone = changes.phone;
@@ -2020,28 +2044,54 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (changes.website !== undefined) profileChanges.website = changes.website;
       if (changes.instagram !== undefined) profileChanges.instagram = changes.instagram;
       if (changes.avatar_url !== undefined) profileChanges.avatar_url = changes.avatar_url;
-      if (changes.contact_details !== undefined)
-        profileChanges.contact_details = changes.contact_details;
+      if (changes.contact_details !== undefined) profileChanges.contact_details = changes.contact_details;
       if (changes.push_token !== undefined) profileChanges.push_token = changes.push_token;
+      // Role is included so RoleSelectionScreen can set it for new OAuth users
+      if (changes.role !== undefined) profileChanges.role = changes.role;
 
-      if (Object.keys(profileChanges).length > 0) {
+      if (Object.keys(profileChanges).length > 1) { // more than just the id
         const { error } = await supabase
           .from('profiles')
-          .update(profileChanges)
-          .eq('id', userId);
+          .upsert(profileChanges, { onConflict: 'id' });
         if (error) throw error;
       }
 
-      // 2. Sync bio to role-specific table so Home/Discover screens see the update
+      // 2. When a role is first selected, auto-create the role-specific table row
+      if (changes.role && changes.role !== currentRole) {
+        if (changes.role === 'photographer') {
+          await supabase.from('photographers').upsert({
+            id: userId,
+            rating: 5.0,
+            location: '',
+            price_range: '$$',
+            style: 'Portrait',
+            bio: '',
+            tags: [],
+          }, { onConflict: 'id' });
+        } else if (changes.role === 'model') {
+          await supabase.from('models').upsert({
+            id: userId,
+            rating: 5.0,
+            location: '',
+            price_range: '$$',
+            style: 'Commercial',
+            bio: '',
+            tags: [],
+            portfolio_urls: [],
+          }, { onConflict: 'id' });
+        }
+      }
+
+      // 3. Sync bio to role-specific table if bio changed
       if (changes.bio !== undefined) {
-        if (role === 'photographer') {
+        if (newRole === 'photographer') {
           await supabase.from('photographers').update({ bio: changes.bio }).eq('id', userId);
-        } else if (role === 'model') {
+        } else if (newRole === 'model') {
           await supabase.from('models').update({ bio: changes.bio }).eq('id', userId);
         }
       }
 
-      // 3. Immediate local state feedback — no need to wait for Realtime
+      // 4. Immediate local state feedback — no need to wait for Realtime
       setState({ currentUser: { ...stateRef.current.currentUser!, ...changes } });
     } catch (err: any) {
       logError('updateProfile', err);
@@ -2052,6 +2102,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setSaving(false);
     }
   }, []);
+
 
   const value = useMemo<AppDataContextValue>(() => ({
       state,
@@ -2076,6 +2127,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setState,
       signUp,
       signIn,
+      signInWithOAuth,
       signOut,
       fetchPosts,
       fetchProfiles,

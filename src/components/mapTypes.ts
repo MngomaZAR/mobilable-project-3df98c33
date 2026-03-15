@@ -3,9 +3,10 @@ export type MapMarker = {
   sourceId?: string;
   latitude: number;
   longitude: number;
-  type: 'user' | 'photographer' | string;
+  type: 'user' | 'photographer' | 'model' | string;
   title?: string;
   description?: string;
+  avatarUrl?: string;
 };
 
 export type MapPreviewProps = {

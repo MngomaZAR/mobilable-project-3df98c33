@@ -45,6 +45,8 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 package.json.bak
+migration_list.txt
+supabase_push_out.txt
 errors.log
 
 # local tooling binaries

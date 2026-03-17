@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -9,7 +9,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useTheme } from '../store/ThemeContext';
 import { useAppData } from '../store/AppDataContext';
@@ -27,14 +27,34 @@ export const EarningsDashboardScreen: React.FC = () => {
   const [earnings, setEarnings] = useState<Earning[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (currentUser) {
-      fetchCreatorEarnings(currentUser.id)
-        .then(setEarnings)
-        .catch(console.warn)
-        .finally(() => setLoading(false));
+  const loadEarnings = React.useCallback(async () => {
+    if (!currentUser?.id) return;
+    setLoading(true);
+    try {
+      const rows = await fetchCreatorEarnings(currentUser.id);
+      setEarnings(rows);
+    } catch (e) {
+      console.warn(e);
+    } finally {
+      setLoading(false);
     }
-  }, [currentUser]);
+  }, [currentUser?.id]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      let active = true;
+      const run = async () => {
+        if (!active) return;
+        await loadEarnings();
+      };
+      run();
+      const timer = setInterval(run, 20000);
+      return () => {
+        active = false;
+        clearInterval(timer);
+      };
+    }, [loadEarnings]),
+  );
 
   const totalEarnings = earnings.reduce((sum, e) => sum + e.amount, 0);
 

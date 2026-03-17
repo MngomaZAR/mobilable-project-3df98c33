@@ -914,6 +914,30 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       })
       .subscribe();
 
+    const earningsChannel = supabase
+      .channel('global:earnings-sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'earnings' }, async (payload) => {
+        const currentUserId = stateRef.current.currentUser?.id;
+        if (!currentUserId) return;
+        const earning = (payload.new || payload.old) as any;
+        if (earning?.user_id === currentUserId) {
+          fetchEarnings(currentUserId);
+        }
+      })
+      .subscribe();
+
+    const subscriptionsChannel = supabase
+      .channel('global:subscriptions-sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'subscriptions' }, async (payload) => {
+        const currentUserId = stateRef.current.currentUser?.id;
+        if (!currentUserId) return;
+        const subscription = (payload.new || payload.old) as any;
+        if (subscription?.creator_id === currentUserId || subscription?.subscriber_id === currentUserId) {
+          fetchSubscriptions(currentUserId);
+        }
+      })
+      .subscribe();
+
     // Messages Realtime — live chat updates
     const messagesChannel = supabase
       .channel('global:messages-sync')
@@ -965,9 +989,12 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       supabase.removeChannel(postsChannel);
       supabase.removeChannel(profileChannel);
       supabase.removeChannel(bookingChannel);
+      supabase.removeChannel(notificationChannel);
+      supabase.removeChannel(earningsChannel);
+      supabase.removeChannel(subscriptionsChannel);
       supabase.removeChannel(messagesChannel);
     };
-  }, [fetchBookings, fetchConversations, fetchProfile, fetchSubscriptions]);
+  }, [fetchBookings, fetchConversations, fetchEarnings, fetchNotifications, fetchProfile, fetchSubscriptions]);
 
   useEffect(() => {
     const persist = async () => {

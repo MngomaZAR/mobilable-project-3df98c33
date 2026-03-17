@@ -1,8 +1,8 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppData } from '../store/AppDataContext';
@@ -25,50 +25,60 @@ const AdminDashboardScreen: React.FC = () => {
     moderationOpen: 0,
     payoutExceptions: 0,
   });
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
 
-  useEffect(() => {
-    const fetchRevenue = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('earnings')
-          .select('amount');
-        if (!error && data) {
-          const total = data.reduce((sum: number, row: any) => sum + Number(row.amount || 0), 0);
-          setLiveRevenue(total);
-        }
-      } catch { /* silent — shows R0 */ }
-    };
-    fetchRevenue();
-  }, []);
-
-  useEffect(() => {
-    const fetchOpsMetrics = async () => {
-      try {
-        const [dispatchRes, etaRes, modRes, payoutRes] = await Promise.all([
-          supabase.from('dispatch_requests').select('id', { count: 'exact', head: true }).in('status', ['queued', 'offered']),
-          supabase.from('eta_snapshots').select('eta_confidence').order('created_at', { ascending: false }).limit(100),
-          supabase.from('moderation_cases').select('id', { count: 'exact', head: true }).in('status', ['open', 'in_review', 'escalated']),
-          supabase.from('payments').select('id', { count: 'exact', head: true }).in('status', ['failed', 'cancelled']),
-        ]);
-
-        const avgEtaConfidence = etaRes.data && etaRes.data.length > 0
-          ? etaRes.data.reduce((acc: number, row: any) => acc + Number(row.eta_confidence || 0), 0) / etaRes.data.length
-          : 0;
-
-        setOpsMetrics({
-          dispatchOpen: dispatchRes.count ?? 0,
-          avgEtaConfidence,
-          moderationOpen: modRes.count ?? 0,
-          payoutExceptions: payoutRes.count ?? 0,
-        });
-      } catch {
-        // keep defaults
+  const fetchRevenue = React.useCallback(async () => {
+    try {
+      const { data, error } = await supabase.from('earnings').select('amount');
+      if (!error && data) {
+        const total = data.reduce((sum: number, row: any) => sum + Number(row.amount || 0), 0);
+        setLiveRevenue(total);
       }
-    };
-    fetchOpsMetrics();
+    } catch {
+      // silent fallback
+    }
   }, []);
+
+  const fetchOpsMetrics = React.useCallback(async () => {
+    try {
+      const [dispatchRes, etaRes, modRes, payoutRes] = await Promise.all([
+        supabase.from('dispatch_requests').select('id', { count: 'exact', head: true }).in('status', ['queued', 'offered']),
+        supabase.from('eta_snapshots').select('eta_confidence').order('created_at', { ascending: false }).limit(100),
+        supabase.from('moderation_cases').select('id', { count: 'exact', head: true }).in('status', ['open', 'in_review', 'escalated']),
+        supabase.from('payments').select('id', { count: 'exact', head: true }).in('status', ['failed', 'cancelled']),
+      ]);
+
+      const avgEtaConfidence = etaRes.data && etaRes.data.length > 0
+        ? etaRes.data.reduce((acc: number, row: any) => acc + Number(row.eta_confidence || 0), 0) / etaRes.data.length
+        : 0;
+
+      setOpsMetrics({
+        dispatchOpen: dispatchRes.count ?? 0,
+        avgEtaConfidence,
+        moderationOpen: modRes.count ?? 0,
+        payoutExceptions: payoutRes.count ?? 0,
+      });
+    } catch {
+      // keep defaults
+    }
+  }, []);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      let active = true;
+      const run = async () => {
+        if (!active) return;
+        await Promise.all([fetchRevenue(), fetchOpsMetrics()]);
+      };
+      run();
+      const timer = setInterval(run, 20000);
+      return () => {
+        active = false;
+        clearInterval(timer);
+      };
+    }, [fetchOpsMetrics, fetchRevenue]),
+  );
 
   const pendingBookings = useMemo(
     () => state.bookings.filter((booking) => booking.status === 'pending').length,

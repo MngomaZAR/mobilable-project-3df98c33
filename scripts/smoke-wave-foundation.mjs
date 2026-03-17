@@ -9,8 +9,6 @@ const TEST_ACCESS_TOKEN = process.env.SUPABASE_TEST_ACCESS_TOKEN || '';
 const TEST_EMAIL = process.env.SUPABASE_TEST_EMAIL || '';
 const TEST_PASSWORD = process.env.SUPABASE_TEST_PASSWORD || '';
 
-const email = `papzi-smoke-${Date.now()}@example.com`;
-const password = `Papzi!${Math.floor(Math.random() * 100000)}Ab`;
 
 const publicClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
@@ -60,19 +58,11 @@ const run = async () => {
         activeToken = sessionToken;
       }
     } else {
-      const signUp = await publicClient.auth.signUp({ email, password });
-      if (signUp.error) throw signUp.error;
-
-      let session = signUp.data.session;
-      if (!session) {
-        const signIn = await publicClient.auth.signInWithPassword({ email, password });
-        if (signIn.error) throw signIn.error;
-        session = signIn.data.session;
-      }
-
-      if (!session?.access_token) throw new Error('No access token from signup/signin (set SUPABASE_TEST_ACCESS_TOKEN if email-confirmation is enabled).');
-      push('Auth signup/signin', true, email);
-      authReady = true;
+      push(
+        'Auth setup',
+        false,
+        'Set SUPABASE_TEST_ACCESS_TOKEN or SUPABASE_TEST_EMAIL + SUPABASE_TEST_PASSWORD. Script no longer auto-signs up disposable emails.',
+      );
     }
 
     if (!authReady) {

@@ -17,9 +17,18 @@ const CreatorAnalyticsScreen: React.FC = () => {
   const { state } = useAppData();
   const { bookings } = useBooking();
   const [period, setPeriod] = useState<'7d' | '30d' | 'all'>('30d');
+  const rangeDays = period === '7d' ? 7 : period === '30d' ? 30 : 90;
+  const cutoffMs = Date.now() - (rangeDays * 24 * 60 * 60 * 1000);
 
   const earnings = useMemo(() => {
-    const earningRows = state.earnings ?? [];
+    const earningRows = (state.earnings ?? []).filter((e: any) => {
+      const ts = new Date(e.created_at ?? 0).getTime();
+      return Number.isFinite(ts) && ts >= cutoffMs;
+    });
+    const scopedBookings = bookings.filter((b) => {
+      const ts = new Date(b.created_at ?? 0).getTime();
+      return Number.isFinite(ts) && ts >= cutoffMs && (b.status === 'accepted' || b.status === 'completed');
+    });
     
     const tipTotal = earningRows
       .filter((e: any) => e.source_type === 'tip')
@@ -29,14 +38,12 @@ const CreatorAnalyticsScreen: React.FC = () => {
       .filter((e: any) => e.source_type === 'subscription')
       .reduce((s: number, e: any) => s + Number(e.amount || 0), 0);
       
-    const bookingTotal = bookings
-      .filter(b => b.status === 'completed' || b.status === 'accepted')
-      .reduce((s, b) => s + (b.payout_amount || 0), 0);
+    const bookingTotal = scopedBookings.reduce((s, b) => s + (b.payout_amount || 0), 0);
 
     const net = bookingTotal + tipTotal + subTotal;
 
     return { net, tipTotal, subTotal, bookingTotal };
-  }, [bookings, state.earnings]);
+  }, [bookings, cutoffMs, state.earnings]);
 
   const pieData = [
     { name: 'Bookings', amount: earnings.bookingTotal, color: '#ec4899', legendFontColor: '#94a3b8', legendFontSize: 12 },
@@ -44,17 +51,65 @@ const CreatorAnalyticsScreen: React.FC = () => {
     { name: 'Subs', amount: earnings.subTotal, color: '#0ea5e9', legendFontColor: '#94a3b8', legendFontSize: 12 },
   ].filter(d => d.amount > 0);
 
-  // Mock line chart data
-  const lineData = {
-    labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-    datasets: [
-      {
-        data: [200, 450, 280, 800, 990, 430, 1100],
-        color: (opacity = 1) => `rgba(236, 72, 153, ${opacity})`, // ec4899
-        strokeWidth: 3
-      }
-    ],
-  };
+  const lineData = useMemo(() => {
+    const daily = new Map<string, number>();
+    for (let i = rangeDays - 1; i >= 0; i -= 1) {
+      const d = new Date();
+      d.setHours(0, 0, 0, 0);
+      d.setDate(d.getDate() - i);
+      daily.set(d.toISOString().slice(0, 10), 0);
+    }
+
+    (state.earnings ?? []).forEach((e: any) => {
+      const ts = new Date(e.created_at ?? 0);
+      if (!Number.isFinite(ts.getTime()) || ts.getTime() < cutoffMs) return;
+      const key = ts.toISOString().slice(0, 10);
+      if (!daily.has(key)) return;
+      daily.set(key, (daily.get(key) ?? 0) + Number(e.amount || 0));
+    });
+
+    bookings.forEach((b) => {
+      const ts = new Date(b.created_at ?? 0);
+      if (!Number.isFinite(ts.getTime()) || ts.getTime() < cutoffMs) return;
+      if (b.status !== 'accepted' && b.status !== 'completed') return;
+      const key = ts.toISOString().slice(0, 10);
+      if (!daily.has(key)) return;
+      daily.set(key, (daily.get(key) ?? 0) + Number(b.payout_amount || 0));
+    });
+
+    const entries = [...daily.entries()];
+    return {
+      labels: entries.map(([date]) => {
+        const d = new Date(date);
+        return rangeDays <= 7
+          ? d.toLocaleDateString('en-ZA', { weekday: 'short' })
+          : d.toLocaleDateString('en-ZA', { day: '2-digit', month: '2-digit' });
+      }),
+      datasets: [
+        {
+          data: entries.map(([, value]) => Number(value.toFixed(2))),
+          color: (opacity = 1) => `rgba(236, 72, 153, ${opacity})`,
+          strokeWidth: 3,
+        },
+      ],
+    };
+  }, [bookings, cutoffMs, rangeDays, state.earnings]);
+
+  const funnel = useMemo(() => {
+    const scoped = bookings.filter((b) => {
+      const ts = new Date(b.created_at ?? 0).getTime();
+      return Number.isFinite(ts) && ts >= cutoffMs;
+    });
+    const requested = scoped.length;
+    const engaged = scoped.filter((b) => ['accepted', 'completed'].includes(b.status)).length;
+    const converted = scoped.filter((b) => b.status === 'completed').length;
+    return { requested, engaged, converted };
+  }, [bookings, cutoffMs]);
+
+  const activeSubscribers = useMemo(
+    () => (state.subscriptions ?? []).filter((s: any) => s.status === 'active').length,
+    [state.subscriptions],
+  );
 
   return (
     <SafeAreaView style={s.safeArea}>
@@ -93,9 +148,9 @@ const CreatorAnalyticsScreen: React.FC = () => {
            </View>
            <View style={s.statCard}>
              <Ionicons name="eye" size={20} color="#8b5cf6" />
-             <Text style={s.statLabel}>Profile Views</Text>
-             <Text style={s.statValue}>4,521</Text>
-             <Text style={s.statTrendNeg}>-2.4% vs last period</Text>
+             <Text style={s.statLabel}>Active Subscribers</Text>
+             <Text style={s.statValue}>{activeSubscribers}</Text>
+             <Text style={s.statTrendPos}>Live subscription count</Text>
            </View>
         </View>
 
@@ -145,16 +200,16 @@ const CreatorAnalyticsScreen: React.FC = () => {
         <View style={s.funnelCard}>
           <Text style={s.chartTitle}>Conversion Funnel</Text>
           <View style={s.funnelRow}>
-             <Text style={s.funnelLabel}>Profile Visitors</Text>
-             <Text style={s.funnelVal}>4,521</Text>
+             <Text style={s.funnelLabel}>Requests Created</Text>
+             <Text style={s.funnelVal}>{funnel.requested}</Text>
           </View>
           <View style={s.funnelRow}>
-             <Text style={s.funnelLabel}>Interacted (Liked/Messaged)</Text>
-             <Text style={s.funnelVal}>842 <Text style={s.funnelPct}>(18%)</Text></Text>
+             <Text style={s.funnelLabel}>Accepted / In Progress</Text>
+             <Text style={s.funnelVal}>{funnel.engaged} <Text style={s.funnelPct}>({funnel.requested > 0 ? Math.round((funnel.engaged / funnel.requested) * 100) : 0}%)</Text></Text>
           </View>
           <View style={[s.funnelRow, { borderBottomWidth: 0 }]}>
-             <Text style={s.funnelLabel}>Converted to Paying</Text>
-             <Text style={[s.funnelVal, { color: '#10b981' }]}>115 <Text style={s.funnelPct}>(2.5%)</Text></Text>
+             <Text style={s.funnelLabel}>Completed</Text>
+             <Text style={[s.funnelVal, { color: '#10b981' }]}>{funnel.converted} <Text style={s.funnelPct}>({funnel.requested > 0 ? Math.round((funnel.converted / funnel.requested) * 100) : 0}%)</Text></Text>
           </View>
         </View>
 

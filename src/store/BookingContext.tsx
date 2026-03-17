@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { supabase, hasSupabase } from '../config/supabaseClient';
 import { Booking, BookingStatus, AppUser } from '../types';
 import { logError, formatErrorMessage } from '../utils/errors';
@@ -176,6 +176,40 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const refreshBookings = fetchBookings;
+
+  useEffect(() => {
+    if (!hasSupabase || !currentUser?.id) {
+      setBookings([]);
+      return;
+    }
+
+    let active = true;
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const refreshNow = () => {
+      if (!active) return;
+      fetchBookings().catch((err) => logError('Booking:liveRefresh', err));
+    };
+
+    refreshNow();
+
+    const channel = supabase
+      .channel(`bookings-live-${currentUser.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, async (payload) => {
+        const row = (payload.new || payload.old) as any;
+        if (!row) return;
+        if (row.client_id !== currentUser.id && row.photographer_id !== currentUser.id && row.model_id !== currentUser.id) return;
+        if (refreshTimer) clearTimeout(refreshTimer);
+        refreshTimer = setTimeout(refreshNow, 200);
+      })
+      .subscribe();
+
+    return () => {
+      active = false;
+      if (refreshTimer) clearTimeout(refreshTimer);
+      supabase.removeChannel(channel);
+    };
+  }, [currentUser?.id, fetchBookings]);
 
   return (
     <BookingContext.Provider value={{

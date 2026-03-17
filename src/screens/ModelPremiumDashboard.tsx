@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../store/AuthContext';
@@ -103,6 +103,22 @@ const ModelPremiumDashboard: React.FC = () => {
   };
 
   const pendingBookings = useMemo(() => bookings.filter(b => b.status === 'pending'), [bookings]);
+
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      const run = async () => {
+        if (!active) return;
+        await Promise.all([refresh(), refreshBookings()]);
+      };
+      run();
+      const timer = setInterval(run, 20000);
+      return () => {
+        active = false;
+        clearInterval(timer);
+      };
+    }, [refresh, refreshBookings]),
+  );
 
   const openChatWithClient = async (clientId?: string | null, clientName?: string) => {
     if (!clientId) {

@@ -22,6 +22,7 @@ export type RootStackParamList = {
   UserProfile: { userId: string; photographer?: Photographer };
   Auth: undefined;
   AgeVerification: undefined;
+  PendingVerification: undefined;
   RoleSelection: undefined;
   Compliance: undefined;
   ChatThread: { conversationId: string; title?: string; avatarUrl?: string };

@@ -5,6 +5,7 @@ import { PLACEHOLDER_IMAGE } from './constants';
 type ProfileRow = { 
   role?: AppUser['role']; 
   verified?: boolean;
+  kyc_status?: AppUser['kyc_status'];
   full_name?: string | null;
   avatar_url?: string | null;
   bio?: string | null;
@@ -56,6 +57,7 @@ export const mapSupabaseUser = (user: any, fallbackRole: AppUser['role'] = 'clie
   email: user.email ?? 'unknown-user',
   role: (profile?.role as AppUser['role']) ?? fallbackRole,
   verified: profile?.verified ?? false,
+  kyc_status: profile?.kyc_status ?? (user.user_metadata?.kyc_status as AppUser['kyc_status']) ?? null,
   full_name: profile?.full_name ?? user.user_metadata?.full_name ?? user.user_metadata?.name ?? null,
   avatar_url: profile?.avatar_url ?? user.user_metadata?.avatar_url ?? user.user_metadata?.picture ?? null,
   bio: profile?.bio ?? null,

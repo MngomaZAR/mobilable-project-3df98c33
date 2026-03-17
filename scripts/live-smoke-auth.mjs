@@ -205,25 +205,60 @@ const run = async () => {
     push('Dispatch state', !state.error, describeError(state.error));
 
     const offerList = dispatchCreate.data?.offers ?? state.data?.offers ?? [];
-    const offerForProvider = offerList.find((offer) => offer.provider_id === providerUserId);
-    const offerId = offerForProvider?.id ?? null;
-    if (dispatchId && offerId) {
+    let offerId = offerList.find((offer) => offer.provider_id === providerUserId)?.id ?? null;
+    let dispatchIdForRespond = dispatchId;
+
+    // Fallback: create deterministic provider-bound request/offer when fanout excludes seeded provider.
+    if (dispatchId && !offerId) {
+      const fallbackDispatch = await admin
+        .from('dispatch_requests')
+        .insert({
+          client_id: clientUserId,
+          service_type: 'modeling',
+          fanout_count: 1,
+          intensity_level: 1,
+          sla_timeout_seconds: 90,
+          status: 'offered',
+        })
+        .select('id')
+        .single();
+
+      if (!fallbackDispatch.error) {
+        const fallbackOffer = await admin
+          .from('dispatch_offers')
+          .insert({
+            dispatch_request_id: fallbackDispatch.data.id,
+            provider_id: providerUserId,
+            offer_rank: 1,
+            status: 'offered',
+          })
+          .select('id')
+          .single();
+
+        if (!fallbackOffer.error) {
+          dispatchIdForRespond = fallbackDispatch.data.id;
+          offerId = fallbackOffer.data.id;
+        }
+      }
+    }
+
+    if (dispatchIdForRespond && offerId) {
       const dec1 = await provider.functions.invoke('dispatch-respond', {
-        body: { dispatch_request_id: dispatchId, offer_id: offerId, response: 'decline', idempotency_key: `idem-${dispatchId}` },
+        body: { dispatch_request_id: dispatchIdForRespond, offer_id: offerId, response: 'decline', idempotency_key: `idem-${dispatchIdForRespond}` },
       });
       const dec2 = await provider.functions.invoke('dispatch-respond', {
-        body: { dispatch_request_id: dispatchId, offer_id: offerId, response: 'decline', idempotency_key: `idem-${dispatchId}` },
+        body: { dispatch_request_id: dispatchIdForRespond, offer_id: offerId, response: 'decline', idempotency_key: `idem-${dispatchIdForRespond}` },
       });
       let details = `${describeError(dec1.error)} / ${describeError(dec2.error)}`;
       if (dec1.error || dec2.error) {
         const probe1 = await callFunctionDirect(
           'dispatch-respond',
-          { dispatch_request_id: dispatchId, offer_id: offerId, response: 'decline', idempotency_key: `idem-${dispatchId}` },
+          { dispatch_request_id: dispatchIdForRespond, offer_id: offerId, response: 'decline', idempotency_key: `idem-${dispatchIdForRespond}` },
           providerSignIn.data.session.access_token,
         );
         const probe2 = await callFunctionDirect(
           'dispatch-respond',
-          { dispatch_request_id: dispatchId, offer_id: offerId, response: 'decline', idempotency_key: `idem-${dispatchId}` },
+          { dispatch_request_id: dispatchIdForRespond, offer_id: offerId, response: 'decline', idempotency_key: `idem-${dispatchIdForRespond}` },
           providerSignIn.data.session.access_token,
         );
         details += ` / direct=${probe1.status}:${probe1.body} || ${probe2.status}:${probe2.body}`;

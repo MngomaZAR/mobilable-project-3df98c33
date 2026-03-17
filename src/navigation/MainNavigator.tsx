@@ -32,9 +32,12 @@ import PaymentHistoryScreen from '../screens/PaymentHistoryScreen';
 import SplashLoadingScreen from '../screens/SplashLoadingScreen';
 import RoleSelectionScreen from '../screens/RoleSelectionScreen';
 import AgeVerificationScreen from '../screens/AgeVerificationScreen';
+import PendingVerificationScreen from '../screens/PendingVerificationScreen';
+import AccessDeniedScreen from '../screens/AccessDeniedScreen';
 
 import SupportScreen from '../screens/SupportScreen';
 import EarningsDashboardScreen from '../screens/EarningsDashboardScreen';
+import CreatorAnalyticsScreen from '../screens/CreatorAnalyticsScreen';
 import CreatorSubscriptionsScreen from '../screens/CreatorSubscriptionsScreen';
 import ReviewsScreen from '../screens/ReviewsScreen';
 import MediaLibraryScreen from '../screens/MediaLibraryScreen';
@@ -51,6 +54,20 @@ const Stack = createStackNavigator<RootStackParamList>();
 
 type MainNavigatorProps = {
   logoSource?: ImageSourcePropType;
+};
+
+const VerificationRejectedScreen: React.FC = () => {
+  const navigation = useNavigation<any>();
+
+  return (
+    <AccessDeniedScreen
+      title="Verification Declined"
+      message="Your verification submission was declined. Please contact support to review and resubmit."
+      actionLabel="Contact Support"
+      onAction={() => navigation.navigate('Support')}
+      iconName="shield-outline"
+    />
+  );
 };
 
 const tabBarIcon = (routeName: keyof TabParamList, focused: boolean, color: string, size: number) => {
@@ -148,6 +165,7 @@ export const MainNavigator: React.FC<MainNavigatorProps> = ({ logoSource }) => {
         PaymentHistory: 'payments/history',
         Support: 'support',
         EarningsDashboard: 'earnings',
+        CreatorAnalytics: 'analytics',
         CreatorSubscriptions: 'subscriptions',
         CreditsWallet: 'wallet/credits',
         Reviews: 'reviews/:userId',
@@ -182,13 +200,26 @@ export const MainNavigator: React.FC<MainNavigatorProps> = ({ logoSource }) => {
         ) : (
           // Authenticated Stack
           <>
-            {(currentUser as any)?.kyc_status !== 'approved' ? (
-              <Stack.Screen name="AgeVerification" component={AgeVerificationScreen} options={{ headerShown: false }} />
-            ) : !currentUser.role || (currentUser.role as string) === 'guest' ? (
-              <Stack.Screen name="RoleSelection" component={RoleSelectionScreen} options={{ headerShown: false }} />
-            ) : (
-              <Stack.Screen name="Root" component={TabsNavigator} options={{ headerShown: false }} />
-            )}
+            {(() => {
+              const role = currentUser.role;
+              const requiresKyc = role === 'photographer' || role === 'model';
+              const kycStatus = currentUser.kyc_status ?? (currentUser.verified ? 'approved' : 'pending');
+
+              if (requiresKyc && kycStatus === 'rejected') {
+                return <Stack.Screen name="PendingVerification" component={VerificationRejectedScreen} options={{ headerShown: false }} />;
+              }
+
+              if (requiresKyc && kycStatus !== 'approved') {
+                return <Stack.Screen name="PendingVerification" component={PendingVerificationScreen} options={{ headerShown: false }} />;
+              }
+
+              if (!currentUser.role || (currentUser.role as string) === 'guest') {
+                return <Stack.Screen name="RoleSelection" component={RoleSelectionScreen} options={{ headerShown: false }} />;
+              }
+
+              return <Stack.Screen name="Root" component={TabsNavigator} options={{ headerShown: false }} />;
+            })()}
+            <Stack.Screen name="AgeVerification" component={AgeVerificationScreen} options={{ headerShown: false }} />
             <Stack.Screen name="Profile" component={UserProfileScreen} options={{ title: 'Photographer Profile' }} />
             <Stack.Screen name="BookingForm" component={BookingFormScreen} options={{ title: 'Booking Request' }} />
             <Stack.Screen name="BookingDetail" component={BookingDetailScreen} options={{ title: 'Booking Detail' }} />
@@ -204,6 +235,7 @@ export const MainNavigator: React.FC<MainNavigatorProps> = ({ logoSource }) => {
             <Stack.Screen name="PaymentHistory" component={PaymentHistoryScreen} options={{ headerShown: false }} />
             <Stack.Screen name="Support" component={SupportScreen} options={{ headerShown: false }} />
             <Stack.Screen name="EarningsDashboard" component={EarningsDashboardScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="CreatorAnalytics" component={CreatorAnalyticsScreen} options={{ headerShown: false }} />
             <Stack.Screen name="CreatorSubscriptions" component={CreatorSubscriptionsScreen} options={{ headerShown: false }} />
             <Stack.Screen name="CreditsWallet" component={CreditsWalletScreen} options={{ headerShown: false }} />
             <Stack.Screen name="Reviews" component={ReviewsScreen} options={{ headerShown: false }} />

@@ -142,7 +142,11 @@ const BOOKING_SELECT = `
 
 const AppDataContext = createContext<AppDataContextValue | undefined>(undefined);
 
-type ProfileRow = { role?: AppUser['role']; verified?: boolean } | null;
+type ProfileRow = {
+  role?: AppUser['role'];
+  verified?: boolean;
+  kyc_status?: AppUser['kyc_status'];
+} | null;
 type BookingRow = {
   id: string;
   photographer_id: string;
@@ -171,6 +175,7 @@ const PROFILE_SELECT = `
   city, 
   role, 
   verified, 
+  kyc_status,
   bio, 
   phone, 
   push_token, 

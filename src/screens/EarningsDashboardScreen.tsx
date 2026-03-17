@@ -10,14 +10,18 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
 import { useTheme } from '../store/ThemeContext';
 import { useAppData } from '../store/AppDataContext';
 import { fetchCreatorEarnings } from '../services/monetisationService';
 import { Earning } from '../types';
+import { RootStackParamList } from '../navigation/types';
+
+type Navigation = StackNavigationProp<RootStackParamList, 'EarningsDashboard'>;
 
 export const EarningsDashboardScreen: React.FC = () => {
   const { colors } = useTheme();
-  const navigation = useNavigation();
+  const navigation = useNavigation<Navigation>();
   const { currentUser } = useAppData();
   
   const [earnings, setEarnings] = useState<Earning[]>([]);
@@ -51,6 +55,10 @@ export const EarningsDashboardScreen: React.FC = () => {
           <Ionicons name="chevron-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={[styles.title, { color: colors.text }]}>Earnings</Text>
+        <TouchableOpacity onPress={() => navigation.navigate('CreatorAnalytics')} style={styles.analyticsBtn}>
+          <Ionicons name="stats-chart" size={18} color={colors.text} />
+          <Text style={[styles.analyticsBtnText, { color: colors.text }]}>Analytics</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.summaryCard}>
@@ -97,6 +105,8 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, gap: 12 },
   backBtn: { padding: 4 },
   title: { fontSize: 20, fontWeight: '800' },
+  analyticsBtn: { marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, borderColor: '#334155' },
+  analyticsBtnText: { fontSize: 12, fontWeight: '700' },
   summaryCard: { backgroundColor: '#1e293b', padding: 24, margin: 16, borderRadius: 20, alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10 },
   summaryLabel: { color: '#94a3b8', fontSize: 14, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 },
   summaryValue: { color: '#fff', fontSize: 40, fontWeight: '900', marginTop: 8 },

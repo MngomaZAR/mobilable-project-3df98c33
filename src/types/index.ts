@@ -8,6 +8,7 @@ export interface AppUser {
   email: string;
   role: UserRole;
   verified?: boolean;
+  kyc_status?: 'pending' | 'approved' | 'rejected' | null;
   full_name?: string | null;
   avatar_url?: string | null;
   bio?: string | null;

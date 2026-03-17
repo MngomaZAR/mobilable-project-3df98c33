@@ -95,6 +95,8 @@ const PaidVideoCallScreen: React.FC = () => {
   const route = useRoute<any>();
 
   const creatorId: string | undefined = route.params?.creatorId;
+  const requestedRole: 'creator' | 'viewer' = route.params?.role === 'creator' ? 'creator' : 'viewer';
+  const [resolvedCreatorId, setResolvedCreatorId] = useState<string | undefined>(creatorId);
 
   const [seconds, setSeconds] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
@@ -108,14 +110,27 @@ const PaidVideoCallScreen: React.FC = () => {
   const [tokenLoading, setTokenLoading] = useState(true);
   const [tokenError, setTokenError] = useState<string | null>(null);
 
+  useEffect(() => {
+    setResolvedCreatorId(creatorId);
+  }, [creatorId]);
+
+  // For creator mode, fallback to the signed-in user id when creatorId is missing.
+  useEffect(() => {
+    if (resolvedCreatorId || requestedRole !== 'creator') return;
+    (async () => {
+      const { data } = await supabase.auth.getUser();
+      if (data?.user?.id) setResolvedCreatorId(data.user.id);
+    })();
+  }, [requestedRole, resolvedCreatorId]);
+
   // ── Guard: creatorId is required ──────────────────────────────────────────
   useEffect(() => {
-    if (!creatorId) {
+    if (requestedRole === 'viewer' && !resolvedCreatorId) {
       Alert.alert('Error', 'No creator specified for this call.', [
         { text: 'Go back', onPress: () => navigation.goBack() },
       ]);
     }
-  }, [creatorId, navigation]);
+  }, [requestedRole, resolvedCreatorId, navigation]);
 
   // ── Call timer ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -125,12 +140,12 @@ const PaidVideoCallScreen: React.FC = () => {
 
   // ── Fetch LiveKit token from Supabase Edge Function ───────────────────────
   const fetchToken = useCallback(async () => {
-    if (!creatorId) return;
+    if (!resolvedCreatorId) return;
     setTokenLoading(true);
     setTokenError(null);
     try {
       const { data, error } = await supabase.functions.invoke('livekit-token', {
-        body: { creator_id: creatorId, role: 'viewer' },
+        body: { creator_id: resolvedCreatorId, role: requestedRole },
       });
       if (error) throw error;
       if (!data?.token || !data?.url) throw new Error('Invalid token response from server.');
@@ -142,7 +157,7 @@ const PaidVideoCallScreen: React.FC = () => {
     } finally {
       setTokenLoading(false);
     }
-  }, [creatorId]);
+  }, [requestedRole, resolvedCreatorId]);
 
   useEffect(() => {
     fetchToken();
@@ -164,14 +179,14 @@ const PaidVideoCallScreen: React.FC = () => {
 
   // ── Tip handler ───────────────────────────────────────────────────────────
   const handleTip = async () => {
-    if (!creatorId || !tipAmount || isNaN(Number(tipAmount))) return;
+    if (!resolvedCreatorId || !tipAmount || isNaN(Number(tipAmount))) return;
     setIsTipping(true);
     try {
       const amountNum = Number(tipAmount);
-      const result = await sendTip(creatorId, amountNum, 'Great video call!');
+      const result = await sendTip(resolvedCreatorId, amountNum, 'Great video call!');
       if (result.success) {
         setTipModalVisible(false);
-        trackEvent('tip_sent', { creator_id: creatorId, amount: amountNum, source: 'video_call' });
+        trackEvent('tip_sent', { creator_id: resolvedCreatorId, amount: amountNum, source: 'video_call' });
         Platform.OS === 'web'
           ? alert('Tip sent!')
           : Alert.alert('Success', `R${amountNum} tip sent!`);
@@ -235,13 +250,25 @@ const PaidVideoCallScreen: React.FC = () => {
   }
 
   // ── Loading token ─────────────────────────────────────────────────────────
+  if (!resolvedCreatorId) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="light-content" />
+        <View style={styles.notInstalledBanner}>
+          <Ionicons name="sync-outline" size={56} color="rgba(255,255,255,0.5)" />
+          <Text style={styles.notInstalledTitle}>Preparing call session...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   if (tokenLoading || !livekitToken || !livekitUrl) {
     return (
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle="light-content" />
         <View style={styles.notInstalledBanner}>
           <Ionicons name="sync-outline" size={56} color="rgba(255,255,255,0.5)" />
-          <Text style={styles.notInstalledTitle}>Connecting to call…</Text>
+          <Text style={styles.notInstalledTitle}>Connecting to call...</Text>
         </View>
       </SafeAreaView>
     );
@@ -261,7 +288,7 @@ const PaidVideoCallScreen: React.FC = () => {
         onDisconnected={endCall}
       >
         {/* Remote and local video tracks */}
-        <RoomParticipants creatorId={creatorId!} />
+        <RoomParticipants creatorId={resolvedCreatorId!} />
 
         {/* Gradient overlay with HUD */}
         <LinearGradient

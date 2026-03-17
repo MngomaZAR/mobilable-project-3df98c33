@@ -16,7 +16,7 @@ import { ChatSkeleton } from '../components/Skeleton';
 import { RootStackParamList } from '../navigation/types';
 import { Ionicons } from '@expo/vector-icons';
 import { PLACEHOLDER_IMAGE } from '../utils/constants';
-import { resolveStorageRef, uploadBlurredPreview } from '../services/uploadService';
+import { uploadBlurredPreview, uploadImage } from '../services/uploadService';
 import { BUCKETS } from '../config/environment';
 
 type Route = RouteProp<RootStackParamList, 'ChatThread'>;
@@ -39,6 +39,7 @@ const ChatScreen: React.FC = () => {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [messagesLoading, setMessagesLoading] = useState(false);
+  const [messagesLoadError, setMessagesLoadError] = useState<string | null>(null);
   const [lightboxUri, setLightboxUri] = useState<string | null>(null);
   const [pendingMedia, setPendingMedia] = useState<{ uri: string; preview: string } | null>(null);
   const [isLockedPending, setIsLockedPending] = useState(true);
@@ -67,8 +68,14 @@ const ChatScreen: React.FC = () => {
     let mounted = true;
     const load = async () => {
       setMessagesLoading(true);
+      setMessagesLoadError(null);
       try {
-        await fetchMessages?.(chatId);
+        await Promise.race([
+          fetchMessages?.(chatId),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Messages are taking too long to load. Pull to retry.')), 12000)),
+        ]);
+      } catch (err: any) {
+        setMessagesLoadError(err?.message || 'Could not load messages.');
       } finally {
         if (mounted) setMessagesLoading(false);
       }
@@ -137,7 +144,7 @@ const ChatScreen: React.FC = () => {
         const previewRes = await uploadBlurredPreview(asset.uri);
         setPendingMedia({
           uri: asset.uri,
-          preview: previewRes.success ? await resolveStorageRef(previewRes.data, BUCKETS.previews) : asset.uri,
+          preview: previewRes.success ? previewRes.data : asset.uri,
         });
       } finally {
         setSending(false);
@@ -157,8 +164,10 @@ const ChatScreen: React.FC = () => {
 
     setSending(true);
     try {
+      // Upload original media first so receivers don't get local file:// URIs.
+      const uploadedMediaRef = await uploadImage(pendingMedia.uri, BUCKETS.previews, { returnStorageRef: true });
       await sendLockedMediaMessage(chatId, {
-        mediaUrl: pendingMedia.uri,
+        mediaUrl: uploadedMediaRef,
         previewUrl: pendingMedia.preview,
         text: text.trim() || (isLockedPending ? 'Locked Photo' : 'Shared Photo'),
         unlockPrice: isLockedPending ? priceNum : undefined,
@@ -184,6 +193,12 @@ const ChatScreen: React.FC = () => {
       >
       {messagesLoading && messages.length === 0 ? (
         <ChatSkeleton />
+      ) : !messagesLoading && messagesLoadError ? (
+        <View style={styles.errorContainer}>
+          <Ionicons name="cloud-offline-outline" size={48} color={colors.textSecondary} />
+          <Text style={[styles.errorTitle, { color: colors.text }]}>Connection issue</Text>
+          <Text style={[styles.errorText, { color: colors.textSecondary }]}>{messagesLoadError}</Text>
+        </View>
       ) : !messagesLoading && messages.length === 0 ? (
         <View style={styles.errorContainer}>
           <Ionicons name="chatbubble-outline" size={48} color={colors.textSecondary} />

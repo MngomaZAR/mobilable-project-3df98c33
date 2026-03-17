@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useRef } from 'react';
-import MapLibreGL from '@maplibre/maplibre-react-native';
-import { StyleSheet, View, useWindowDimensions } from 'react-native';
+import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { BookingStatus } from '../types';
+import { MapLibreGL, isMapLibreNativeAvailable } from './MapLibreWrapper';
 
 // Suppress the default API key warning (we use OpenStreetMap tiles, no key needed)
-MapLibreGL.setAccessToken(null);
+if (isMapLibreNativeAvailable) {
+  MapLibreGL.setAccessToken(null);
+}
 
 type Coordinate = {
   latitude: number;
@@ -24,7 +26,7 @@ export const MapTracker: React.FC<Props> = ({ client, photographer, status }) =>
   const centerLat = (client.latitude + photographer.latitude) / 2;
   const centerLng = (client.longitude + photographer.longitude) / 2;
 
-  const lineFeature: GeoJSON.Feature<GeoJSON.LineString> = useMemo(() => ({
+  const lineFeature = useMemo(() => ({
     type: 'Feature',
     properties: {},
     geometry: {
@@ -37,6 +39,7 @@ export const MapTracker: React.FC<Props> = ({ client, photographer, status }) =>
   }), [client.latitude, client.longitude, photographer.latitude, photographer.longitude]);
 
   useEffect(() => {
+    if (!isMapLibreNativeAvailable) return;
     if (cameraRef.current) {
       cameraRef.current.fitBounds(
         [
@@ -52,6 +55,16 @@ export const MapTracker: React.FC<Props> = ({ client, photographer, status }) =>
       );
     }
   }, [client, photographer]);
+
+  if (!isMapLibreNativeAvailable) {
+    return (
+      <View style={[styles.container, { height: Math.min(440, width < 480 ? 280 : 360), alignItems: 'center', justifyContent: 'center' }]}>
+        <Text style={{ color: '#475569', fontWeight: '600' }}>
+          Live tracking map requires a development build.
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { height: Math.min(440, width < 480 ? 280 : 360) }]}>

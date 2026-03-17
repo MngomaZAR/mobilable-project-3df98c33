@@ -36,6 +36,42 @@ serve(async (req) => {
     if (authError || !user) return jsonResponse(401, { error: 'Unauthorized' });
 
     const payload = await req.json().catch(() => ({}));
+    const action = payload?.action ?? 'token';
+
+    if (action === 'end') {
+      const sessionId = payload?.session_id;
+      if (!sessionId) return jsonResponse(400, { error: 'session_id is required for action=end' });
+
+      const { data: session, error: sessionErr } = await admin
+        .from('video_call_sessions')
+        .select('id, creator_id, viewer_id, started_at, status')
+        .eq('id', sessionId)
+        .maybeSingle();
+      if (sessionErr) throw sessionErr;
+      if (!session) return jsonResponse(404, { error: 'Session not found' });
+      if (session.creator_id !== user.id && session.viewer_id !== user.id) {
+        return jsonResponse(403, { error: 'Forbidden' });
+      }
+
+      const startedAt = session.started_at ? new Date(session.started_at).getTime() : Date.now();
+      const durationSeconds = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+      const ratePerMinute = 15;
+      const totalAmount = Number(((durationSeconds / 60) * ratePerMinute).toFixed(2));
+
+      const { error: updateErr } = await admin
+        .from('video_call_sessions')
+        .update({
+          ended_at: new Date().toISOString(),
+          duration_seconds: durationSeconds,
+          total_amount: totalAmount,
+          status: 'ended',
+        })
+        .eq('id', sessionId);
+      if (updateErr) throw updateErr;
+
+      return jsonResponse(200, { success: true, sessionId, durationSeconds, totalAmount });
+    }
+
     const creatorId = payload?.creator_id;
     const role = payload?.role ?? 'viewer'; // 'creator' or 'viewer'
 
@@ -84,17 +120,20 @@ serve(async (req) => {
     const livekitToken = `${signingInput}.${sigB64}`;
 
     // Record the session start
+    let sessionId: string | null = null;
     if (role === 'viewer') {
-      await admin.from('video_call_sessions').insert({
+      const { data: inserted, error: insErr } = await admin.from('video_call_sessions').insert({
         creator_id: creatorId,
         viewer_id: user.id,
         room_name: roomName,
         rate_per_minute: 15,
         status: 'active',
-      }).select().single();
+      }).select('id').single();
+      if (insErr) throw insErr;
+      sessionId = inserted?.id ?? null;
     }
 
-    return jsonResponse(200, { token: livekitToken, url: livekitUrl, roomName });
+    return jsonResponse(200, { token: livekitToken, url: livekitUrl, roomName, sessionId });
   } catch (err: any) {
     console.error('livekit-token error:', err);
     return jsonResponse(500, { error: err.message || 'Internal Server Error' });

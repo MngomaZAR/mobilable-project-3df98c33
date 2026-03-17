@@ -43,6 +43,30 @@ type PolicyViolation = {
   created_at: string;
 };
 
+type VerificationCandidate = {
+  id: string;
+  full_name: string | null;
+  role: 'photographer' | 'model' | string;
+  email?: string | null;
+  created_at?: string | null;
+  kyc_status: 'pending' | 'approved' | 'rejected' | null;
+};
+
+type PayoutReviewMethod = {
+  id: string;
+  user_id: string;
+  user_name: string | null;
+  user_role: string | null;
+  bank_name: string;
+  account_holder: string;
+  account_masked: string;
+  account_type: string;
+  branch_code: string | null;
+  is_default: boolean;
+  verified: boolean;
+  created_at: string;
+};
+
 const AdminModerationScreen: React.FC = () => {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
@@ -52,13 +76,15 @@ const AdminModerationScreen: React.FC = () => {
   const [cases, setCases] = useState<ModerationCase[]>([]);
   const [violations, setViolations] = useState<PolicyViolation[]>([]);
   const [loading, setLoading] = useState(true);
+  const [verifications, setVerifications] = useState<VerificationCandidate[]>([]);
+  const [payoutMethods, setPayoutMethods] = useState<PayoutReviewMethod[]>([]);
   const [tab, setTab] = useState<'queue' | 'violations'>('queue');
   const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'in_review' | 'escalated'>('all');
 
   const fetchModerationData = async () => {
     setLoading(true);
     try {
-      const [{ data: caseRows, error: caseErr }, { data: violationRows, error: violationErr }] = await Promise.all([
+      const [{ data: caseRows, error: caseErr }, { data: violationRows, error: violationErr }, { data: pendingData, error: pendingErr }] = await Promise.all([
         supabase
           .from('moderation_cases')
           .select('id,reporter_id,target_user_id,target_type,target_id,reason,severity,status,sla_due_at,created_at')
@@ -69,13 +95,17 @@ const AdminModerationScreen: React.FC = () => {
           .select('id,user_id,entity_type,entity_id,policy_code,severity,status,created_at')
           .order('created_at', { ascending: false })
           .limit(200),
+        supabase.functions.invoke('admin-review', { body: { action: 'list_pending' } }),
       ]);
 
       if (caseErr) throw caseErr;
       if (violationErr) throw violationErr;
+      if (pendingErr) throw pendingErr;
 
       setCases((caseRows ?? []) as ModerationCase[]);
       setViolations((violationRows ?? []) as PolicyViolation[]);
+      setVerifications((pendingData?.verifications ?? []) as VerificationCandidate[]);
+      setPayoutMethods((pendingData?.payout_methods ?? []) as PayoutReviewMethod[]);
     } catch (err: any) {
       console.warn('Moderation fetch error:', err.message);
       Alert.alert('Error', err.message || 'Unable to load moderation queue.');
@@ -100,6 +130,32 @@ const AdminModerationScreen: React.FC = () => {
 
   const openCount = cases.filter((c) => ['open', 'in_review', 'escalated'].includes(c.status)).length;
   const slaBreached = cases.filter((c) => c.sla_due_at && new Date(c.sla_due_at).getTime() < Date.now() && ['open', 'in_review', 'escalated'].includes(c.status)).length;
+
+  const updateVerification = async (userId: string, decision: 'approved' | 'rejected') => {
+    try {
+      const { error } = await supabase.functions.invoke('admin-review', {
+        body: { action: 'decide_verification', user_id: userId, decision },
+      });
+      if (error) throw error;
+      setVerifications((prev) => prev.filter((v) => v.id !== userId));
+      Alert.alert('Verification updated', `Profile ${decision}.`);
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to update verification status.');
+    }
+  };
+
+  const updatePayoutDecision = async (payoutMethodId: string, decision: 'verified' | 'rejected') => {
+    try {
+      const { error } = await supabase.functions.invoke('admin-review', {
+        body: { action: 'decide_payout', payout_method_id: payoutMethodId, decision },
+      });
+      if (error) throw error;
+      setPayoutMethods((prev) => prev.filter((m) => m.id !== payoutMethodId));
+      Alert.alert('Payout review updated', `Method ${decision}.`);
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to update payout method.');
+    }
+  };
 
   const updateCaseStatus = async (id: string, nextStatus: ModerationCase['status']) => {
     try {
@@ -229,7 +285,55 @@ const AdminModerationScreen: React.FC = () => {
           <Text style={[styles.kpiLabel, { color: colors.textMuted }]}>SLA Breached</Text>
           <Text style={[styles.kpiValue, { color: '#ef4444' }]}>{slaBreached}</Text>
         </View>
+        <View style={[styles.kpiCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[styles.kpiLabel, { color: colors.textMuted }]}>KYC Pending</Text>
+          <Text style={[styles.kpiValue, { color: colors.text }]}>{verifications.length}</Text>
+        </View>
+        <View style={[styles.kpiCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[styles.kpiLabel, { color: colors.textMuted }]}>Payout Pending</Text>
+          <Text style={[styles.kpiValue, { color: colors.text }]}>{payoutMethods.length}</Text>
+        </View>
       </View>
+
+      {verifications.length > 0 && (
+        <View style={styles.verificationWrap}>
+          <Text style={[styles.blockTitle, { color: colors.text }]}>Pending Creator Verification</Text>
+          {verifications.slice(0, 8).map((v) => (
+            <View key={v.id} style={[styles.verificationRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.verificationName, { color: colors.text }]}>{v.full_name || 'Unnamed creator'}</Text>
+                <Text style={[styles.verificationMeta, { color: colors.textMuted }]}>{String(v.role).toUpperCase()} · {v.id.slice(0, 8)}</Text>
+              </View>
+              <TouchableOpacity style={[styles.smallAction, { backgroundColor: '#16a34a' }]} onPress={() => updateVerification(v.id, 'approved')}>
+                <Text style={styles.smallActionText}>Approve</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.smallAction, { backgroundColor: '#dc2626' }]} onPress={() => updateVerification(v.id, 'rejected')}>
+                <Text style={styles.smallActionText}>Reject</Text>
+              </TouchableOpacity>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {payoutMethods.length > 0 && (
+        <View style={styles.verificationWrap}>
+          <Text style={[styles.blockTitle, { color: colors.text }]}>Pending Payout Verification</Text>
+          {payoutMethods.slice(0, 8).map((m) => (
+            <View key={m.id} style={[styles.verificationRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.verificationName, { color: colors.text }]}>{m.user_name || 'Unknown creator'} · {m.bank_name}</Text>
+                <Text style={[styles.verificationMeta, { color: colors.textMuted }]}>{m.account_holder} · {m.account_masked} · {m.account_type}</Text>
+              </View>
+              <TouchableOpacity style={[styles.smallAction, { backgroundColor: '#16a34a' }]} onPress={() => updatePayoutDecision(m.id, 'verified')}>
+                <Text style={styles.smallActionText}>Verify</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.smallAction, { backgroundColor: '#dc2626' }]} onPress={() => updatePayoutDecision(m.id, 'rejected')}>
+                <Text style={styles.smallActionText}>Reject</Text>
+              </TouchableOpacity>
+            </View>
+          ))}
+        </View>
+      )}
 
       <View style={styles.howWrap}>
         <HowItWorksCard
@@ -288,6 +392,13 @@ const styles = StyleSheet.create({
   kpiLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase' },
   kpiValue: { fontSize: 22, fontWeight: '900', marginTop: 4 },
   tabRow: { flexDirection: 'row', paddingHorizontal: 16, gap: 18 },
+  verificationWrap: { paddingHorizontal: 16, marginBottom: 10, gap: 8 },
+  blockTitle: { fontSize: 14, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 0.4 },
+  verificationRow: { borderWidth: 1, borderRadius: 12, padding: 10, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  verificationName: { fontSize: 14, fontWeight: '800' },
+  verificationMeta: { fontSize: 11, marginTop: 2 },
+  smallAction: { borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8 },
+  smallActionText: { color: '#fff', fontWeight: '800', fontSize: 12 },
   tab: { paddingVertical: 10, borderBottomWidth: 2, borderBottomColor: 'transparent' },
   tabText: { fontWeight: '800', fontSize: 12 },
   filterRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, marginVertical: 10, flexWrap: 'wrap' },

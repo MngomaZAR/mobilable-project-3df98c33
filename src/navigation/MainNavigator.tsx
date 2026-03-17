@@ -46,6 +46,7 @@ import AdminModerationScreen from '../screens/AdminModerationScreen';
 import AvailabilityScreen from '../screens/AvailabilityScreen';
 import ModelReleaseScreen from '../screens/ModelReleaseScreen';
 import CreditsWalletScreen from '../screens/CreditsWalletScreen';
+import PayoutMethodsScreen from '../screens/PayoutMethodsScreen';
 import { RootStackParamList, TabParamList } from './types';
 import { useAppData } from '../store/AppDataContext';
 
@@ -173,6 +174,7 @@ export const MainNavigator: React.FC<MainNavigatorProps> = ({ logoSource }) => {
         AdminModeration: 'admin/moderation',
         Availability: 'availability',
         ModelRelease: 'legal/release',
+        PayoutMethods: 'payout/methods',
       },
     },
   };
@@ -245,6 +247,7 @@ export const MainNavigator: React.FC<MainNavigatorProps> = ({ logoSource }) => {
             <Stack.Screen name="Availability" component={AvailabilityScreen} options={{ title: 'Manage Availability' }} />
             <Stack.Screen name="AccountConfig" component={AccountConfigScreen} options={{ title: 'Account Settings' }} />
             <Stack.Screen name="ModelRelease" component={ModelReleaseScreen} options={{ title: 'Legal Documents' }} />
+            <Stack.Screen name="PayoutMethods" component={PayoutMethodsScreen} options={{ title: 'Payout Methods' }} />
           </>
         )}
       </Stack.Navigator>

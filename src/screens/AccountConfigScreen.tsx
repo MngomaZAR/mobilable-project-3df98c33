@@ -15,6 +15,7 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppData } from '../store/AppDataContext';
 import { useTheme } from '../store/ThemeContext';
 import { AppUser } from '../types';
@@ -25,6 +26,7 @@ import { PLACEHOLDER_AVATAR } from '../utils/constants';
 const AccountConfigScreen: React.FC = () => {
   const { currentUser, updateProfile, updateProfilePicture, saving } = useAppData();
   const { colors, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
   const navigation = useNavigation();
 
   // State for form fields
@@ -39,18 +41,29 @@ const AccountConfigScreen: React.FC = () => {
 
   const s = makeStyles(colors, isDark);
 
+  useEffect(() => {
+    setFullName(currentUser?.full_name || '');
+    setBio(currentUser?.bio || '');
+    setPhone(currentUser?.phone || '');
+    setCity(currentUser?.city || '');
+    setInstagram(currentUser?.instagram || currentUser?.contact_details?.instagram || '');
+    setWebsite(currentUser?.website || currentUser?.contact_details?.website || '');
+  }, [currentUser?.id, currentUser?.full_name, currentUser?.bio, currentUser?.phone, currentUser?.city, currentUser?.instagram, currentUser?.website, currentUser?.contact_details]);
+
   const handleSave = async () => {
     try {
+      const normalizedInstagram = instagram.replace(/^@+/, '').trim();
+      const normalizedWebsite = website.trim();
       const changes: Partial<AppUser> = {
-        full_name: fullName,
-        bio: bio,
-        phone: phone,
-        city: city,
-        instagram: instagram,
-        website: website,
+        full_name: fullName.trim(),
+        bio: bio.trim(),
+        phone: phone.trim(),
+        city: city.trim(),
+        instagram: normalizedInstagram,
+        website: normalizedWebsite,
         contact_details: {
-          instagram: instagram,
-          website: website,
+          instagram: normalizedInstagram,
+          website: normalizedWebsite,
         },
       };
 
@@ -93,7 +106,8 @@ const AccountConfigScreen: React.FC = () => {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={{ flex: 1 }}
     >
-      <View style={s.header}>
+      <SafeAreaView edges={['left', 'right']} style={{ flex: 1, backgroundColor: colors.bg }}>
+      <View style={[s.header, { paddingTop: Math.max(16, insets.top + 4) }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={s.backButton}>
           <Ionicons name="chevron-back" size={24} color={colors.text} />
         </TouchableOpacity>
@@ -107,7 +121,7 @@ const AccountConfigScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={s.container} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={[s.container, { paddingBottom: Math.max(40, insets.bottom + 20) }]} keyboardShouldPersistTaps="handled">
         {/* Avatar Section */}
         <View style={s.avatarSection}>
           <TouchableOpacity style={s.avatarWrapper} onPress={handleUpdateAvatar} disabled={isUploadingAvatar}>
@@ -222,6 +236,7 @@ const AccountConfigScreen: React.FC = () => {
 
         <View style={{ height: 40 }} />
       </ScrollView>
+      </SafeAreaView>
     </KeyboardAvoidingView>
   );
 };
@@ -237,7 +252,7 @@ const makeStyles = (colors: any, isDark: boolean) =>
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingHorizontal: 16,
-      paddingTop: Platform.OS === 'ios' ? 50 : 20,
+      paddingTop: 20,
       paddingBottom: 15,
       backgroundColor: colors.bg,
       borderBottomWidth: StyleSheet.hairlineWidth,

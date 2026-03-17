@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -26,6 +26,7 @@ const AdminDashboardScreen: React.FC = () => {
     payoutExceptions: 0,
   });
   const { colors, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     const fetchRevenue = async () => {
@@ -79,8 +80,8 @@ const AdminDashboardScreen: React.FC = () => {
   );
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.bg }]}>
-      <ScrollView contentContainerStyle={styles.container}>
+    <SafeAreaView edges={['left', 'right']} style={[styles.safeArea, { backgroundColor: colors.bg }]}>
+      <ScrollView contentContainerStyle={[styles.container, { paddingTop: Math.max(12, insets.top + 4), paddingBottom: Math.max(120, insets.bottom + 96) }]}>
         <View style={styles.hero}>
           <View style={styles.heroRow}>
             <View style={{ flex: 1 }}>
@@ -132,6 +133,29 @@ const AdminDashboardScreen: React.FC = () => {
             <Text style={[styles.statMeta, { color: '#10b981' }]}>Completed jobs</Text>
           </View>
 
+        </View>
+
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[styles.cardTitle, { color: colors.text }]}>Today Priorities</Text>
+          <View style={styles.priorityRow}>
+            <View style={[styles.priorityPill, { backgroundColor: colors.bg, borderColor: colors.border }]}>
+              <Text style={[styles.priorityValue, { color: colors.text }]}>{pendingBookings}</Text>
+              <Text style={[styles.priorityLabel, { color: colors.textMuted }]}>Pending</Text>
+            </View>
+            <View style={[styles.priorityPill, { backgroundColor: colors.bg, borderColor: colors.border }]}>
+              <Text style={[styles.priorityValue, { color: colors.text }]}>{opsMetrics.moderationOpen}</Text>
+              <Text style={[styles.priorityLabel, { color: colors.textMuted }]}>Moderation</Text>
+            </View>
+            <View style={[styles.priorityPill, { backgroundColor: colors.bg, borderColor: colors.border }]}>
+              <Text style={[styles.priorityValue, { color: colors.text }]}>{opsMetrics.payoutExceptions}</Text>
+              <Text style={[styles.priorityLabel, { color: colors.textMuted }]}>Payout Issues</Text>
+            </View>
+          </View>
+          <TouchableOpacity style={[styles.action, { backgroundColor: colors.bg, borderColor: colors.border }]} onPress={() => navigation.navigate('AdminModeration')}>
+            <Ionicons name="flash-outline" size={18} color={colors.accent} />
+            <Text style={[styles.actionText, { color: colors.text }]}>Resolve priority queue</Text>
+            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} style={{ marginLeft: 'auto' }} />
+          </TouchableOpacity>
         </View>
 
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -225,6 +249,10 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   actionText: { fontWeight: '700', fontSize: 15 },
+  priorityRow: { flexDirection: 'row', gap: 10, marginBottom: 10 },
+  priorityPill: { flex: 1, borderWidth: 1, borderRadius: 12, paddingVertical: 10, paddingHorizontal: 8, alignItems: 'center' },
+  priorityValue: { fontSize: 18, fontWeight: '900' },
+  priorityLabel: { marginTop: 2, fontSize: 11, fontWeight: '700', textTransform: 'uppercase' },
 });
 
 export default AdminDashboardScreen;

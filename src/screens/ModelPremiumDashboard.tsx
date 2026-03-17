@@ -3,7 +3,7 @@ import {
   Alert, RefreshControl, ScrollView, StyleSheet, Text,
   TouchableOpacity, View, Image, Dimensions, Modal, TextInput,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -28,6 +28,7 @@ const ModelPremiumDashboard: React.FC = () => {
   const { bookings, refreshBookings, acceptBooking, declineBooking } = useBooking();
   const { state, refresh } = useAppData();
   const { startConversationWithUser } = useMessaging();
+  const insets = useSafeAreaInsets();
   const [showPremiumBox, setShowPremiumBox] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [tierPayoutRate, setTierPayoutRate] = useState(0.70);
@@ -146,9 +147,9 @@ const ModelPremiumDashboard: React.FC = () => {
   };
 
   return (
-    <SafeAreaView style={s.safeArea}>
+    <SafeAreaView edges={['left', 'right']} style={s.safeArea}>
       <ScrollView
-        contentContainerStyle={s.container}
+        contentContainerStyle={[s.container, { paddingTop: Math.max(8, insets.top + 2), paddingBottom: Math.max(100, insets.bottom + 88) }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#ec4899" />}
       >
         {/* Header */}
@@ -196,6 +197,24 @@ const ModelPremiumDashboard: React.FC = () => {
             <Ionicons name="arrow-forward-circle" size={36} color="rgba(255,255,255,0.5)" />
           </LinearGradient>
         </TouchableOpacity>
+
+        <View style={s.priorityCard}>
+          <Text style={s.sectionTitle}>Today Priorities</Text>
+          <View style={s.priorityRow}>
+            <View style={s.priorityPill}>
+              <Text style={s.priorityValue}>{pendingBookings.length}</Text>
+              <Text style={s.priorityLabel}>Pending</Text>
+            </View>
+            <View style={s.priorityPill}>
+              <Text style={s.priorityValue}>{earnings.activeSubscribers}</Text>
+              <Text style={s.priorityLabel}>Subscribers</Text>
+            </View>
+            <View style={s.priorityPill}>
+              <Text style={s.priorityValue}>R{earnings.tipsTotal.toLocaleString('en-ZA')}</Text>
+              <Text style={s.priorityLabel}>Tips</Text>
+            </View>
+          </View>
+        </View>
 
         {/* Pending booking alerts */}
         {pendingBookings.length > 0 && (
@@ -439,7 +458,7 @@ const ModelPremiumDashboard: React.FC = () => {
         {/* Payout Settings */}
         <TouchableOpacity 
           style={s.payoutBtn} 
-          onPress={() => Alert.alert('Payout Setup', 'Bank account verification coming soon.')}
+          onPress={() => navigation.navigate('PayoutMethods')}
         >
           <Ionicons name="card-outline" size={20} color="#fff" />
           <Text style={s.payoutBtnText}>Manage Payout Methods</Text>
@@ -532,6 +551,11 @@ const s = StyleSheet.create({
   actionIcon: { width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
   actionLabel: { color: '#94a3b8', fontSize: 11, fontWeight: '700', textAlign: 'center' },
   section: { marginBottom: 24 },
+  priorityCard: { backgroundColor: '#1e293b', borderRadius: 16, borderWidth: 1, borderColor: '#334155', padding: 14, marginBottom: 14 },
+  priorityRow: { flexDirection: 'row', gap: 8, marginTop: 8 },
+  priorityPill: { flex: 1, backgroundColor: '#0f172a', borderRadius: 12, borderWidth: 1, borderColor: '#334155', paddingVertical: 10, paddingHorizontal: 6, alignItems: 'center' },
+  priorityValue: { color: '#fff', fontWeight: '900', fontSize: 15 },
+  priorityLabel: { color: '#94a3b8', marginTop: 2, fontSize: 10, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.4 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
   sectionTitle: { color: '#fff', fontSize: 17, fontWeight: '800' },
   viewAll: { color: '#ec4899', fontWeight: '700' },

@@ -1,12 +1,14 @@
 import React, { useEffect, useRef } from 'react';
-import MapLibreGL from '@maplibre/maplibre-react-native';
 import { StyleSheet, Text, View, useWindowDimensions, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { MapMarker, MapPreviewProps } from './mapTypes';
 import { DEFAULT_CAPE_TOWN_COORDINATES, ensureSouthAfricanCoordinates } from '../utils/geo';
+import { MapLibreGL, isMapLibreNativeAvailable } from './MapLibreWrapper';
 
 // Suppress the default API key warning (we use OpenStreetMap tiles, no key needed)
-MapLibreGL.setAccessToken(null);
+if (isMapLibreNativeAvailable) {
+  MapLibreGL.setAccessToken(null);
+}
 
 export const MapPreview: React.FC<MapPreviewProps> = ({ markers, onMapError, onMarkerPress }) => {
   const cameraRef = useRef<any>(null);
@@ -45,6 +47,17 @@ export const MapPreview: React.FC<MapPreviewProps> = ({ markers, onMapError, onM
   }, [markers, onMapError]);
 
   const photographerCount = markers.filter((m) => m.type !== 'user').length;
+
+  if (!isMapLibreNativeAvailable) {
+    return (
+      <View style={[styles.container, { minHeight: Math.min(520, width < 480 ? 300 : 400), alignItems: 'center', justifyContent: 'center' }]}>
+        <Ionicons name="map-outline" size={28} color="#64748b" />
+        <Text style={[styles.overlayMeta, { color: '#475569', marginTop: 8 }]}>
+          Map preview needs a development build (not Expo Go).
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { minHeight: Math.min(520, width < 480 ? 300 : 400) }]}>

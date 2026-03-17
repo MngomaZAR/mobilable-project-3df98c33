@@ -3,7 +3,7 @@ import {
   Alert, RefreshControl, ScrollView, StyleSheet, Text,
   TouchableOpacity, View, Image, Switch, Modal, TextInput,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -25,9 +25,10 @@ type Navigation = StackNavigationProp<RootStackParamList, 'Root'>;
 const PhotographerDashboardScreen: React.FC = () => {
   const navigation = useNavigation<Navigation>();
   const { currentUser } = useAuth();
-  const { bookings, acceptBooking, declineBooking, refreshBookings } = useBooking();
+  const { bookings, acceptBooking, declineBooking, refreshBookings, updateBookingStatus } = useBooking();
   const { startConversationWithUser } = useMessaging();
   const { state, refresh, updatePhotographerLocation } = useAppData();
+  const insets = useSafeAreaInsets();
   const [isOnline, setIsOnline] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
@@ -144,11 +145,7 @@ const PhotographerDashboardScreen: React.FC = () => {
       {
         text: 'Complete', onPress: async () => {
           try {
-            const { error } = await supabase
-              .from('bookings')
-              .update({ status: 'completed', updated_at: new Date().toISOString() })
-              .eq('id', bookingId);
-            if (error) throw error;
+            await updateBookingStatus(bookingId, 'completed');
 
             // Release escrow to providers
             const { error: escrowError } = await supabase.functions.invoke('escrow-release', {
@@ -189,9 +186,9 @@ const PhotographerDashboardScreen: React.FC = () => {
   };
 
   return (
-    <SafeAreaView style={s.safeArea}>
+    <SafeAreaView edges={['left', 'right']} style={s.safeArea}>
       <ScrollView
-        contentContainerStyle={s.container}
+        contentContainerStyle={[s.container, { paddingTop: Math.max(8, insets.top + 2), paddingBottom: Math.max(120, insets.bottom + 96) }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#8b5cf6" />}
       >
         {/* Header */}
@@ -231,6 +228,24 @@ const PhotographerDashboardScreen: React.FC = () => {
               {pendingBookings.length}
             </Text>
             <Text style={s.statMeta}>{acceptedBookings.length} active · {completedBookings.length} done</Text>
+          </View>
+        </View>
+
+        <View style={s.priorityCard}>
+          <Text style={s.cardTitle}>Today Priorities</Text>
+          <View style={s.priorityRow}>
+            <View style={s.priorityPill}>
+              <Text style={s.priorityValue}>{pendingBookings.length}</Text>
+              <Text style={s.priorityLabel}>Pending</Text>
+            </View>
+            <View style={s.priorityPill}>
+              <Text style={s.priorityValue}>{acceptedBookings.length}</Text>
+              <Text style={s.priorityLabel}>Active</Text>
+            </View>
+            <View style={s.priorityPill}>
+              <Text style={[s.priorityValue, { color: isOnline ? '#10b981' : '#64748b' }]}>{isOnline ? 'ON' : 'OFF'}</Text>
+              <Text style={s.priorityLabel}>Availability</Text>
+            </View>
           </View>
         </View>
 
@@ -355,6 +370,7 @@ const PhotographerDashboardScreen: React.FC = () => {
               { icon: 'chatbubbles', label: 'Messages', color: '#10b981', action: () => navigation.navigate('Root', { screen: 'Chat' }) },
               { icon: 'document-text', label: 'Model Release', color: '#f59e0b', action: () => activeBooking ? navigation.navigate('ModelRelease', { bookingId: activeBooking.id }) : Alert.alert('No active booking', 'Accept a booking first.') },
               { icon: 'card', label: 'Payments', color: '#ec4899', action: () => navigation.navigate('PaymentHistory') },
+              { icon: 'wallet', label: 'Payouts', color: '#14b8a6', action: () => navigation.navigate('PayoutMethods') },
               { icon: 'stats-chart', label: 'Earnings', color: '#06b6d4', action: () => navigation.navigate('EarningsDashboard') },
             ].map(tool => (
               <TouchableOpacity key={tool.label} style={s.toolBtn} onPress={tool.action}>
@@ -455,6 +471,11 @@ const s = StyleSheet.create({
   statLabel: { color: '#64748b', fontWeight: '700', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 },
   statValue: { fontSize: 26, fontWeight: '900', color: '#fff', marginTop: 4 },
   statMeta: { color: '#475569', marginTop: 4, fontSize: 12 },
+  priorityCard: { backgroundColor: '#1e293b', borderRadius: 18, padding: 14, borderWidth: 1, borderColor: '#334155', marginBottom: 14 },
+  priorityRow: { flexDirection: 'row', gap: 8, marginTop: 8 },
+  priorityPill: { flex: 1, backgroundColor: '#0f172a', borderRadius: 12, borderWidth: 1, borderColor: '#334155', paddingVertical: 10, alignItems: 'center' },
+  priorityValue: { color: '#fff', fontSize: 17, fontWeight: '900' },
+  priorityLabel: { color: '#94a3b8', fontSize: 10, fontWeight: '800', marginTop: 2, textTransform: 'uppercase', letterSpacing: 0.5 },
   howCard: { marginBottom: 14, backgroundColor: '#111827', borderColor: '#334155' },
   howTitle: { color: '#cbd5e1' },
   howItem: { color: '#94a3b8' },
@@ -483,7 +504,7 @@ const s = StyleSheet.create({
   navBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12, padding: 10, backgroundColor: 'rgba(139,92,246,0.1)', borderRadius: 10, alignSelf: 'flex-start' },
   navBtnText: { color: '#8b5cf6', fontWeight: '700' },
   toolGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 4 },
-  toolBtn: { width: '30%', alignItems: 'center' },
+  toolBtn: { width: '30%', alignItems: 'center', minHeight: 74, justifyContent: 'center' },
   toolIcon: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
   toolLabel: { color: '#94a3b8', fontSize: 12, fontWeight: '600', textAlign: 'center' },
   modelPill: { alignItems: 'center', marginRight: 14, width: 72 },

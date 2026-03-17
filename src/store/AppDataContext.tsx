@@ -1136,6 +1136,26 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 setError(formatErrorMessage(error, 'Unable to update booking status.'));
                 throw error;
             }
+
+            if (['accepted', 'completed'].includes(newStatus)) {
+              const actorId = stateRef.current.currentUser?.id;
+              const providerId = booking.model_id ?? booking.photographer_id;
+              const targetUserId = actorId === booking.client_id ? providerId : booking.client_id;
+              if (actorId && targetUserId && targetUserId !== actorId) {
+                const { error: mailError } = await supabase.functions.invoke('send-app-email', {
+                  body: {
+                    action: 'booking_status',
+                    booking_id: bookingId,
+                    status: newStatus,
+                    user_id: targetUserId,
+                    booking_date: booking.booking_date ?? null,
+                  },
+                });
+                if (mailError) {
+                  console.warn('booking status email failed:', mailError.message);
+                }
+              }
+            }
         } catch(err) {
              // Revert optimistic update
              setState({ bookings: originalBookings });
@@ -2170,8 +2190,49 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
       }
 
-      // 4. Immediate local state feedback — no need to wait for Realtime
-      setState({ currentUser: { ...stateRef.current.currentUser!, ...changes } });
+      // 4. Immediate local state feedback across all profile-backed collections.
+      const nextCurrentUser = { ...stateRef.current.currentUser!, ...changes };
+      setState({
+        currentUser: nextCurrentUser,
+        profiles: stateRef.current.profiles.map((p: any) =>
+          p.id === userId
+            ? {
+                ...p,
+                full_name: changes.full_name !== undefined ? changes.full_name : p.full_name,
+                avatar_url: changes.avatar_url !== undefined ? changes.avatar_url : p.avatar_url,
+                bio: changes.bio !== undefined ? changes.bio : p.bio,
+                city: changes.city !== undefined ? changes.city : p.city,
+                username: changes.username !== undefined ? changes.username : p.username,
+                instagram: changes.instagram !== undefined ? changes.instagram : p.instagram,
+                website: changes.website !== undefined ? changes.website : p.website,
+              }
+            : p
+        ),
+        photographers: stateRef.current.photographers.map((p: any) =>
+          p.id === userId
+            ? {
+                ...p,
+                name: changes.full_name !== undefined ? changes.full_name : p.name,
+                bio: changes.bio !== undefined ? changes.bio : p.bio,
+                city: changes.city !== undefined ? changes.city : p.city,
+                instagram: changes.instagram !== undefined ? changes.instagram : p.instagram,
+                website: changes.website !== undefined ? changes.website : p.website,
+              }
+            : p
+        ),
+        models: stateRef.current.models.map((m: any) =>
+          m.id === userId
+            ? {
+                ...m,
+                name: changes.full_name !== undefined ? changes.full_name : m.name,
+                bio: changes.bio !== undefined ? changes.bio : m.bio,
+                city: changes.city !== undefined ? changes.city : m.city,
+                instagram: changes.instagram !== undefined ? changes.instagram : m.instagram,
+                website: changes.website !== undefined ? changes.website : m.website,
+              }
+            : m
+        ),
+      });
     } catch (err: any) {
       logError('updateProfile', err);
       const msg = formatErrorMessage(err, 'Unable to update profile.');

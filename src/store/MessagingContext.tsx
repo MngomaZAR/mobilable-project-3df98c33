@@ -7,6 +7,8 @@ import { sendConversationLockedMediaMessage } from '../services/chatMessageServi
 import { trackEvent } from '../services/analyticsService';
 import { useAuth } from './AuthContext';
 import { Analytics } from '../utils/analytics';
+import { BUCKETS } from '../config/environment';
+import { parseStorageRef, resolveStorageRef } from '../services/uploadService';
 
 export type Reaction = { emoji: string; count: number; myReaction: boolean };
 export type ReactionsMap = Record<string, Reaction[]>; // keyed by messageId
@@ -33,6 +35,13 @@ type MessagingContextValue = {
 };
 
 const MessagingContext = createContext<MessagingContextValue | undefined>(undefined);
+
+const withTimeout = async <T,>(promiseLike: PromiseLike<T>, timeoutMs = 12000): Promise<T> => {
+  return await Promise.race<T>([
+    Promise.resolve(promiseLike),
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error('Request timed out.')), timeoutMs)),
+  ]);
+};
 
 export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { currentUser } = useAuth();
@@ -86,10 +95,17 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           if (row.user_id === currentUser.id) return;
           const profile = profilesMap[row.user_id];
           if (!profile) return;
+          const avatarRaw = profile.avatar_url ?? '';
+          const parsed = parseStorageRef(avatarRaw);
+          const avatar = parsed
+            ? supabase.storage.from(parsed.bucket as any).getPublicUrl(parsed.path).data.publicUrl
+            : avatarRaw && !/^https?:\/\//i.test(avatarRaw)
+              ? supabase.storage.from(BUCKETS.avatars as any).getPublicUrl(avatarRaw).data.publicUrl
+              : avatarRaw;
           participantMap[row.conversation_id] = {
             id: profile.id,
             name: profile.full_name ?? 'User',
-            avatar_url: profile.avatar_url ?? '',
+            avatar_url: avatar,
             last_active_at: profile.updated_at ?? row.last_read_at ?? null,
           };
         });
@@ -209,33 +225,45 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     if (!hasSupabase || !chatId) return;
     try {
       // Direct DB query using the correct column name: chat_id
-      const { data, error } = await supabase
-        .from('messages')
-        .select('id, chat_id, sender_id, body, message_type, media_url, preview_url, locked, unlocked, unlock_booking_id, created_at, read_at, reply_to_id, reply_preview, audio_url, audio_duration_seconds')
-        .eq('chat_id', chatId)
-        .is('deleted_at', null)
-        .order('created_at', { ascending: true });
+      const { data, error } = await withTimeout<{ data: any[] | null; error: any }>(
+        supabase
+          .from('messages')
+          .select('id, chat_id, sender_id, body, message_type, media_url, preview_url, locked, unlocked, unlock_booking_id, unlock_price, created_at, read_at, reply_to_id, reply_preview, audio_url, audio_duration_seconds')
+          .eq('chat_id', chatId)
+          .is('deleted_at', null)
+          .order('created_at', { ascending: true })
+      );
 
       if (error) throw error;
 
-      const mapped = (data ?? []).map((m: any) => ({
-        id: m.id,
-        conversation_id: m.chat_id,
-        from_user: m.sender_id === currentUser?.id,
-        body: m.body ?? '',
-        timestamp: m.created_at,
-        message_type: m.message_type ?? 'text',
-        media_url: m.media_url ?? null,
-        preview_url: m.preview_url ?? null,
-        locked: m.locked ?? false,
-        unlocked: m.unlocked ?? true,
-        unlock_booking_id: m.unlock_booking_id ?? null,
-        unlock_price: m.unlock_price ?? m.unlockPrice ?? null,
-        read_at: m.read_at ?? null,
-        reply_to_id: m.reply_to_id ?? null,
-        reply_preview: m.reply_preview ?? null,
-        audio_url: m.audio_url ?? null,
-        audio_duration_seconds: m.audio_duration_seconds ?? null,
+      const mapped = await Promise.all((data ?? []).map(async (m: any) => {
+        let mediaUrl = m.media_url ?? null;
+        let previewUrl = m.preview_url ?? null;
+        try {
+          mediaUrl = mediaUrl ? await resolveStorageRef(mediaUrl, BUCKETS.previews) : null;
+          previewUrl = previewUrl ? await resolveStorageRef(previewUrl, BUCKETS.previews) : null;
+        } catch {
+          // Non-fatal, keep raw refs
+        }
+        return {
+          id: m.id,
+          conversation_id: m.chat_id,
+          from_user: m.sender_id === currentUser?.id,
+          body: m.body ?? '',
+          timestamp: m.created_at,
+          message_type: m.message_type ?? 'text',
+          media_url: mediaUrl,
+          preview_url: previewUrl,
+          locked: m.locked ?? false,
+          unlocked: m.unlocked ?? true,
+          unlock_booking_id: m.unlock_booking_id ?? null,
+          unlock_price: m.unlock_price ?? m.unlockPrice ?? null,
+          read_at: m.read_at ?? null,
+          reply_to_id: m.reply_to_id ?? null,
+          reply_preview: m.reply_preview ?? null,
+          audio_url: m.audio_url ?? null,
+          audio_duration_seconds: m.audio_duration_seconds ?? null,
+        };
       }));
       setMessages(prev => ({ ...prev, [chatId]: mapped }));
       // Fetch reactions for these messages
@@ -256,9 +284,17 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         schema: 'public',
         table: 'messages',
         filter: `chat_id=eq.${chatId}`,
-      }, payload => {
+      }, async payload => {
         const raw = payload.new as any;
         if (raw.sender_id === currentUser.id) return;
+        let mediaUrl = raw.media_url ?? null;
+        let previewUrl = raw.preview_url ?? null;
+        try {
+          mediaUrl = mediaUrl ? await resolveStorageRef(mediaUrl, BUCKETS.previews) : null;
+          previewUrl = previewUrl ? await resolveStorageRef(previewUrl, BUCKETS.previews) : null;
+        } catch {
+          // Non-fatal, keep raw refs
+        }
 
         const msg: Message = {
           id: raw.id,
@@ -267,8 +303,8 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           body: raw.body ?? '',
           timestamp: raw.created_at ?? new Date().toISOString(),
           message_type: raw.message_type ?? 'text',
-          media_url: raw.media_url ?? null,
-          preview_url: raw.preview_url ?? null,
+          media_url: mediaUrl,
+          preview_url: previewUrl,
           locked: raw.locked ?? false,
           unlocked: raw.unlocked ?? true,
           unlock_booking_id: raw.unlock_booking_id ?? null,

@@ -34,6 +34,29 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(false);
 
+  const sendBookingStatusEmail = useCallback(
+    async (booking: Booking, status: BookingStatus) => {
+      if (!currentUser?.id) return;
+      if (!['accepted', 'completed'].includes(status)) return;
+
+      const providerId = booking.model_id ?? booking.photographer_id;
+      const targetUserId = currentUser.id === booking.client_id ? providerId : booking.client_id;
+      if (!targetUserId || targetUserId === currentUser.id) return;
+
+      const { error } = await supabase.functions.invoke('send-app-email', {
+        body: {
+          action: 'booking_status',
+          booking_id: booking.id,
+          status,
+          user_id: targetUserId,
+          booking_date: booking.booking_date ?? null,
+        },
+      });
+      if (error) throw error;
+    },
+    [currentUser?.id],
+  );
+
   const fetchBookings = useCallback(async () => {
     if (!hasSupabase || !currentUser) return;
     setLoading(true);
@@ -124,9 +147,18 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const updateBookingStatus = async (bookingId: string, status: BookingStatus) => {
     try {
+      const currentBooking = bookings.find((b) => b.id === bookingId);
       const { error } = await supabase.from('bookings').update({ status }).eq('id', bookingId);
       if (error) throw error;
       setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status } : b));
+
+      if (currentBooking) {
+        try {
+          await sendBookingStatusEmail({ ...currentBooking, status }, status);
+        } catch (mailErr) {
+          logError('Booking:statusEmail', mailErr);
+        }
+      }
     } catch (err) {
       logError('Booking:updateStatus', err);
       throw err;

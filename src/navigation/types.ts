@@ -42,6 +42,7 @@ export type RootStackParamList = {
   Legal: { title: string; content: string };
   CreditsWallet: undefined;
   CreatorAnalytics: undefined;
+  PayoutMethods: undefined;
 };
 
 declare global {

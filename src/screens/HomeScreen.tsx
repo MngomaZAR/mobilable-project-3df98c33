@@ -205,7 +205,7 @@ const HomeScreen: React.FC = () => {
     <ScrollView
       style={[styles.container, { backgroundColor: colors.bg }]}
       refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} tintColor={colors.accent} />}
-      contentContainerStyle={styles.scrollContent}
+      contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(120, insets.bottom + 96) }]}
     >
       <View style={[styles.topBar, { paddingTop: Math.max(insets.top, 24) }]}>
         <View style={styles.brandRow}>
@@ -235,6 +235,25 @@ const HomeScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
       </View>
+
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickActionsRail}>
+        {[
+          { icon: 'map-outline', label: 'Live Map', onPress: () => navigation.navigate('Map') },
+          { icon: 'calendar-outline', label: 'Bookings', onPress: () => navigation.navigate('Bookings') },
+          { icon: 'chatbubble-ellipses-outline', label: 'Messages', onPress: () => navigation.navigate('Chat') },
+          { icon: 'help-buoy-outline', label: 'Support', onPress: () => parentNavigation?.navigate('Support') },
+        ].map((item) => (
+          <TouchableOpacity
+            key={item.label}
+            style={[styles.quickActionBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+            onPress={item.onPress}
+            activeOpacity={0.85}
+          >
+            <Ionicons name={item.icon as any} size={16} color={colors.accent} />
+            <Text style={[styles.quickActionText, { color: colors.text }]}>{item.label}</Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
 
       <LinearGradient colors={isDark ? ['#1e293b', '#0f172a', '#020617'] : ['#e8edff', '#e0e7ff', '#cfd9f9']} style={[styles.hero, !isWideHero && styles.heroStacked, { borderColor: colors.border }]}>
         <View style={[styles.heroText, !isWideHero && styles.heroTextCentered]}>
@@ -517,6 +536,23 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 16,
     paddingBottom: 120,
+  },
+  quickActionsRail: {
+    paddingBottom: 12,
+    gap: 10,
+  },
+  quickActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderRadius: 999,
+    minHeight: 40,
+    paddingHorizontal: 12,
+  },
+  quickActionText: {
+    fontSize: 13,
+    fontWeight: '700',
   },
   topBar: {
     flexDirection: 'row',

@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
-import { MapLibreGL } from '../components/MapLibreWrapper';
+import { MapLibreGL, isMapLibreNativeAvailable } from '../components/MapLibreWrapper';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -390,116 +390,128 @@ const MapScreen: React.FC = () => {
 
   return (
     <View style={s.container}>
-      <MapLibreGL.MapView
-        style={StyleSheet.absoluteFill}
-        mapStyle={MAP_STYLE_URL}
-        logoEnabled={false}
-        attributionEnabled={false}
-        compassEnabled
-      >
-        <MapLibreGL.Camera
-          ref={cameraRef}
-          centerCoordinate={mapCenter as [number, number]}
-          zoomLevel={11.5}
-          animationMode="flyTo"
-          animationDuration={700}
-        />
-
-        {/* Alt route (dashed, muted Uber-like fallback) */}
-        {altSlice.length > 1 && (
-          <MapLibreGL.ShapeSource id="route-alt" shape={toGeoJson(altSlice) as any}>
-            <MapLibreGL.LineLayer id="route-alt-line" style={{ lineColor: isDark ? '#6b7280' : '#9ca3af', lineOpacity: 0.45, lineWidth: 4, lineDasharray: [2, 3] }} />
-          </MapLibreGL.ShapeSource>
-        )}
-
-        {/* Primary route */}
-        {primarySlice.length > 1 && (
-          <MapLibreGL.ShapeSource id="route-primary" shape={toGeoJson(primarySlice) as any}>
-            <MapLibreGL.LineLayer id="route-primary-line" style={{ lineColor: isDark ? '#f3f4f6' : '#111827', lineOpacity: 0.96, lineWidth: 6, lineCap: 'round', lineJoin: 'round' }} />
-          </MapLibreGL.ShapeSource>
-        )}
-
-        {/* Clustered talent markers using GeoJSON ShapeSource */}
-        <MapLibreGL.ShapeSource
-          id="talent-cluster"
-          shape={markersGeoJson}
-          cluster
-          clusterMaxZoomLevel={14}
-          clusterRadius={50}
-          onPress={(e) => {
-            const feature = e.features?.[0];
-            if (!feature) return;
-            if (feature.properties?.cluster) {
-              // Zoom into cluster
-              cameraRef.current?.setCamera({
-                centerCoordinate: (feature.geometry as any).coordinates,
-                zoomLevel: 13,
-                animationMode: 'flyTo',
-                animationDuration: 500,
-              });
-            } else {
-              const {id, sourceId, title, description, type} = feature.properties ?? {};
-              const coord = (feature.geometry as any).coordinates;
-              setSelectedMarker({ id, sourceId, title, description, latitude: coord[1], longitude: coord[0], type });
-              snapTo(SCREEN_HEIGHT - SHEET_HALF);
-            }
-          }}
+      {isMapLibreNativeAvailable ? (
+        <MapLibreGL.MapView
+          style={StyleSheet.absoluteFill}
+          mapStyle={MAP_STYLE_URL}
+          logoEnabled={false}
+          attributionEnabled={false}
+          compassEnabled
         >
-          {/* Cluster circle */}
-          <MapLibreGL.CircleLayer
-            id="clusters"
-            belowLayerID="cluster-count"
-            filter={['has', 'point_count']}
-            style={{
-              circleColor: ['step', ['get', 'point_count'], '#374151', 10, '#1f2937', 30, '#111827'],
-              circleRadius: ['step', ['get', 'point_count'], 20, 10, 28, 30, 36],
-              circleStrokeWidth: 3,
-              circleStrokeColor: isDark ? '#0f172a' : '#f9fafb',
-              circleOpacity: 0.92,
-            }}
+          <MapLibreGL.Camera
+            ref={cameraRef}
+            centerCoordinate={mapCenter as [number, number]}
+            zoomLevel={11.5}
+            animationMode="flyTo"
+            animationDuration={700}
           />
-          {/* Cluster count label */}
-          <MapLibreGL.SymbolLayer
-            id="cluster-count"
-            filter={['has', 'point_count']}
-            style={{
-              textField: ['get', 'point_count_abbreviated'],
-              textFont: ['Open Sans Bold', 'Arial Unicode MS Bold'],
-              textSize: 13,
-              textColor: '#ffffff',
-            }}
-          />
-          {/* Individual talent pins */}
-          <MapLibreGL.CircleLayer
-            id="unclustered-point"
-            filter={['!', ['has', 'point_count']]}
-            style={{
-              circleColor: ['case',
-                ['get', 'isOnline'], ['case', ['==', ['get', 'type'], 'model'], '#059669', '#10b981'],
-                ['case', ['==', ['get', 'type'], 'model'], '#9ca3af', '#6b7280'],
-              ],
-              circleRadius: 14,
-              circleStrokeWidth: ['case', ['get', 'isOnline'], 3, 2],
-              circleStrokeColor: ['case', ['get', 'isOnline'], '#ffffff', '#d1d5db'],
-              circleOpacity: 0.95,
-            }}
-          />
-        </MapLibreGL.ShapeSource>
 
-        {/* User location pin */}
-        {userMarker && (
-          <MapLibreGL.PointAnnotation id={userMarker.id} key={userMarker.id} coordinate={[userMarker.longitude, userMarker.latitude]}>
-            <View style={s.userPinWrapper}>
-              <Animated.View style={[s.userPulse, {
-                opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.6, 0] }),
-                transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.5, 2.0] }) }],
-              }]} />
-              <View style={s.userPinCore} />
-              <View style={s.userPinRing} />
-            </View>
-          </MapLibreGL.PointAnnotation>
-        )}
-      </MapLibreGL.MapView>
+          {/* Alt route (dashed, muted Uber-like fallback) */}
+          {altSlice.length > 1 && (
+            <MapLibreGL.ShapeSource id="route-alt" shape={toGeoJson(altSlice) as any}>
+              <MapLibreGL.LineLayer id="route-alt-line" style={{ lineColor: isDark ? '#6b7280' : '#9ca3af', lineOpacity: 0.45, lineWidth: 4, lineDasharray: [2, 3] }} />
+            </MapLibreGL.ShapeSource>
+          )}
+
+          {/* Primary route */}
+          {primarySlice.length > 1 && (
+            <MapLibreGL.ShapeSource id="route-primary" shape={toGeoJson(primarySlice) as any}>
+              <MapLibreGL.LineLayer id="route-primary-line" style={{ lineColor: isDark ? '#f3f4f6' : '#111827', lineOpacity: 0.96, lineWidth: 6, lineCap: 'round', lineJoin: 'round' }} />
+            </MapLibreGL.ShapeSource>
+          )}
+
+          {/* Clustered talent markers using GeoJSON ShapeSource */}
+          <MapLibreGL.ShapeSource
+            id="talent-cluster"
+            shape={markersGeoJson}
+            cluster
+            clusterMaxZoomLevel={14}
+            clusterRadius={50}
+            onPress={(e: any) => {
+              const feature = e.features?.[0];
+              if (!feature) return;
+              if (feature.properties?.cluster) {
+                // Zoom into cluster
+                cameraRef.current?.setCamera({
+                  centerCoordinate: (feature.geometry as any).coordinates,
+                  zoomLevel: 13,
+                  animationMode: 'flyTo',
+                  animationDuration: 500,
+                });
+              } else {
+                const {id, sourceId, title, description, type} = feature.properties ?? {};
+                const coord = (feature.geometry as any).coordinates;
+                setSelectedMarker({ id, sourceId, title, description, latitude: coord[1], longitude: coord[0], type });
+                snapTo(SCREEN_HEIGHT - SHEET_HALF);
+              }
+            }}
+          >
+            {/* Cluster circle */}
+            <MapLibreGL.CircleLayer
+              id="clusters"
+              belowLayerID="cluster-count"
+              filter={['has', 'point_count']}
+              style={{
+                circleColor: ['step', ['get', 'point_count'], '#374151', 10, '#1f2937', 30, '#111827'],
+                circleRadius: ['step', ['get', 'point_count'], 20, 10, 28, 30, 36],
+                circleStrokeWidth: 3,
+                circleStrokeColor: isDark ? '#0f172a' : '#f9fafb',
+                circleOpacity: 0.92,
+              }}
+            />
+            {/* Cluster count label */}
+            <MapLibreGL.SymbolLayer
+              id="cluster-count"
+              filter={['has', 'point_count']}
+              style={{
+                textField: ['get', 'point_count_abbreviated'],
+                textFont: ['Open Sans Bold', 'Arial Unicode MS Bold'],
+                textSize: 13,
+                textColor: '#ffffff',
+              }}
+            />
+            {/* Individual talent pins */}
+            <MapLibreGL.CircleLayer
+              id="unclustered-point"
+              filter={['!', ['has', 'point_count']]}
+              style={{
+                circleColor: ['case',
+                  ['get', 'isOnline'], ['case', ['==', ['get', 'type'], 'model'], '#059669', '#10b981'],
+                  ['case', ['==', ['get', 'type'], 'model'], '#9ca3af', '#6b7280'],
+                ],
+                circleRadius: 14,
+                circleStrokeWidth: ['case', ['get', 'isOnline'], 3, 2],
+                circleStrokeColor: ['case', ['get', 'isOnline'], '#ffffff', '#d1d5db'],
+                circleOpacity: 0.95,
+              }}
+            />
+          </MapLibreGL.ShapeSource>
+
+          {/* User location pin */}
+          {userMarker && (
+            <MapLibreGL.PointAnnotation id={userMarker.id} key={userMarker.id} coordinate={[userMarker.longitude, userMarker.latitude]}>
+              <View style={s.userPinWrapper}>
+                <Animated.View style={[s.userPulse, {
+                  opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.6, 0] }),
+                  transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.5, 2.0] }) }],
+                }]} />
+                <View style={s.userPinCore} />
+                <View style={s.userPinRing} />
+              </View>
+            </MapLibreGL.PointAnnotation>
+          )}
+        </MapLibreGL.MapView>
+      ) : (
+        <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24, backgroundColor: isDark ? '#0b1220' : '#f1f5f9' }]}>
+          <Ionicons name="map-outline" size={32} color={isDark ? '#94a3b8' : '#64748b'} />
+          <Text style={{ marginTop: 10, fontSize: 16, fontWeight: '800', color: isDark ? '#e2e8f0' : '#1e293b' }}>
+            Live map requires a development build
+          </Text>
+          <Text style={{ marginTop: 6, textAlign: 'center', color: isDark ? '#94a3b8' : '#475569' }}>
+            Expo Go cannot load the native MapLibre module. Use an iOS development build to see the live Uber-style map.
+          </Text>
+        </View>
+      )}
 
       {/* Map style + locate controls (top-right floating buttons Uber-style) */}
       <SafeAreaView style={[s.safeOverlay, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">

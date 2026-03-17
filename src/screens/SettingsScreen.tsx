@@ -18,6 +18,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppData } from '../store/AppDataContext';
 import { useTheme, ThemeMode } from '../store/ThemeContext';
 import { environment } from '../config/environment';
@@ -42,10 +43,12 @@ const THEME_OPTIONS: { label: string; value: ThemeMode; icon: string }[] = [
 const SettingsScreen: React.FC = () => {
   const { resetState, saving, currentUser, signOut, updateProfilePicture } = useAppData();
   const { colors, isDark, themeMode, setThemeMode } = useTheme();
+  const insets = useSafeAreaInsets();
   const navigation = useNavigation<Navigation>();
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [biometricsEnabled, setBiometricsEnabled] = useState(false);
   const [language, setLanguage] = useState('English');
+  const [avatarPreviewUri, setAvatarPreviewUri] = useState<string | null>(null);
 
   useEffect(() => {
     const checkStatus = async () => {
@@ -224,26 +227,43 @@ const SettingsScreen: React.FC = () => {
     });
 
     if (!result.canceled && result.assets[0]?.uri) {
+      const pickedUri = result.assets[0].uri;
       try {
         setIsUploadingAvatar(true);
-        await updateProfilePicture(result.assets[0].uri);
+        setAvatarPreviewUri(pickedUri);
+        await updateProfilePicture(pickedUri);
+        setTimeout(() => setAvatarPreviewUri(null), 350);
         Alert.alert('Success', 'Profile picture updated successfully!');
       } catch (err) {
-        // error handled in context
+        setAvatarPreviewUri(null);
+        Alert.alert('Update failed', 'Could not update your profile picture. Please try again.');
       } finally {
         setIsUploadingAvatar(false);
       }
     }
   };
 
+  const resolvedAvatarUri =
+    avatarPreviewUri ||
+    currentUser?.avatar_url ||
+    (currentUser as any)?.user_metadata?.avatar_url ||
+    PLACEHOLDER_AVATAR;
+
   return (
-    <ScrollView contentContainerStyle={s.container}>
+    <SafeAreaView edges={['left', 'right']} style={[s.safeArea, { backgroundColor: colors.bg }]}>
+    <ScrollView contentContainerStyle={[s.container, { paddingTop: Math.max(12, insets.top + 4), paddingBottom: Math.max(40, insets.bottom + 22) }]}>
       {/* Profile Card */}
       <View style={s.profileSection}>
-        <TouchableOpacity style={s.avatarContainer} onPress={handleUpdateAvatar} disabled={isUploadingAvatar}>
+        <TouchableOpacity
+          style={s.avatarContainer}
+          onPress={handleUpdateAvatar}
+          disabled={isUploadingAvatar}
+          activeOpacity={0.85}
+          hitSlop={{ top: 12, left: 12, right: 12, bottom: 12 }}
+        >
           <Image
-            key={currentUser?.avatar_url || 'avatar'}
-            source={{ uri: currentUser?.avatar_url || (currentUser as any)?.user_metadata?.avatar_url || PLACEHOLDER_AVATAR }}
+            key={resolvedAvatarUri || 'avatar'}
+            source={{ uri: resolvedAvatarUri }}
             style={[s.profileAvatar, isUploadingAvatar && s.avatarUploading]}
           />
           <View style={s.cameraBadge}>
@@ -261,6 +281,8 @@ const SettingsScreen: React.FC = () => {
         <TouchableOpacity 
           style={s.editProfileButton} 
           onPress={() => navigation.navigate('AccountConfig')}
+          activeOpacity={0.85}
+          hitSlop={{ top: 12, left: 12, right: 12, bottom: 12 }}
         >
           <Ionicons name="create-outline" size={20} color={colors.accent} />
           <Text style={s.editProfileText}>Edit</Text>
@@ -440,6 +462,17 @@ const SettingsScreen: React.FC = () => {
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </TouchableOpacity>
+          {(currentUser?.role === 'model' || currentUser?.role === 'photographer') && (
+            <TouchableOpacity style={[s.groupItem, s.groupItemBorder]} onPress={() => navigation.navigate('PayoutMethods')}>
+              <View style={s.itemLeft}>
+                <View style={[s.iconContainer, { backgroundColor: '#0ea5e9' }]}>
+                  <Ionicons name="wallet" size={16} color="#fff" />
+                </View>
+                <Text style={s.itemText}>Payout Methods</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+            </TouchableOpacity>
+          )}
           <TouchableOpacity style={[s.groupItem, s.groupItemBorder]} onPress={() => navigation.navigate('Support')}>
             <View style={s.itemLeft}>
               <View style={[s.iconContainer, { backgroundColor: '#f43f5e' }]}>
@@ -554,6 +587,7 @@ const SettingsScreen: React.FC = () => {
         confirmLabel="Close"
       />
     </ScrollView>
+    </SafeAreaView>
   );
 };
 
@@ -561,10 +595,14 @@ type Colors = ReturnType<typeof useTheme>['colors'];
 
 const makeStyles = (colors: Colors, isDark: boolean) =>
   StyleSheet.create({
+    safeArea: {
+      flex: 1,
+      backgroundColor: colors.bg,
+    },
     container: {
       backgroundColor: colors.bg,
       minHeight: '100%',
-      paddingTop: 16,
+      paddingTop: 12,
       paddingBottom: 40,
     },
     profileSection: {
@@ -576,11 +614,15 @@ const makeStyles = (colors: Colors, isDark: boolean) =>
     },
     avatarContainer: {
       position: 'relative',
+      minWidth: 72,
+      minHeight: 72,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     profileAvatar: {
-      width: 64,
-      height: 64,
-      borderRadius: 32,
+      width: 72,
+      height: 72,
+      borderRadius: 36,
       backgroundColor: colors.border,
     },
     avatarUploading: {
@@ -605,10 +647,13 @@ const makeStyles = (colors: Colors, isDark: boolean) =>
     editProfileButton: {
       flexDirection: 'row',
       alignItems: 'center',
+      justifyContent: 'center',
       backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
-      paddingVertical: 6,
-      paddingHorizontal: 10,
-      borderRadius: 16,
+      minHeight: 44,
+      minWidth: 72,
+      paddingVertical: 10,
+      paddingHorizontal: 14,
+      borderRadius: 22,
       borderWidth: 1,
       borderColor: colors.border,
     },

@@ -1,7 +1,7 @@
 export default {
   expo: {
     name: "Papzi",
-    slug: "papzi",
+    slug: "my-simple-expo",
     scheme: "papzi",
     version: "1.0.0",
     orientation: "portrait",

@@ -6,6 +6,7 @@ import { PaymentWebView } from '../components/PaymentWebView';
 import { RootStackParamList } from '../navigation/types';
 import { useAppData } from '../store/AppDataContext';
 import { createPayfastCheckoutLink } from '../services/paymentService';
+import HowItWorksCard from '../components/HowItWorksCard';
 
 type Route = RouteProp<RootStackParamList, 'Payment'>;
 type Navigation = StackNavigationProp<RootStackParamList, 'Payment'>;
@@ -145,6 +146,16 @@ const PaymentScreen: React.FC = () => {
           <Text style={styles.secondaryText}>Return to booking</Text>
         </TouchableOpacity>
       </View>
+
+      <HowItWorksCard
+        title="How Payment Protection Works"
+        items={[
+          'A signed checkout link is generated before redirecting to the payment gateway.',
+          'Booking status updates only after verified callback confirmation from backend.',
+          'Delayed confirmations keep your booking pending until reconciliation completes.',
+          'Return to booking details for the latest payment and status timeline.',
+        ]}
+      />
 
       <View style={styles.status}>
         <Text style={styles.statusLabel}>Status</Text>

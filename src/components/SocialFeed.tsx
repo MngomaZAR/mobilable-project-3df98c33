@@ -32,6 +32,7 @@ import { HashtagText } from './HashtagText';
 import { PLACEHOLDER_IMAGE } from '../utils/constants';
 import { supabase } from '../config/supabaseClient';
 import { getForYouRanking } from '../services/dispatchService';
+import HowItWorksCard from './HowItWorksCard';
 
 type SocialFeedProps = {
   onCreatePost?: () => void;
@@ -448,6 +449,18 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
         ))}
       </ScrollView>
       {appState.error && <Text style={[styles.errorText, { color: colors.destructive }]}>{appState.error}</Text>}
+
+      <View style={{ paddingHorizontal: 16, marginTop: 12 }}>
+        <HowItWorksCard
+          title="How Premium Unlocks Work"
+          items={[
+            'Locked posts show a price or subscription requirement before media is revealed.',
+            'Unlocks are tied to your account entitlement and persist after successful payment.',
+            'Subscription-only content unlocks when your active tier matches the creator gate.',
+            'Report and block actions are reviewed by moderation and can remove unsafe content.',
+          ]}
+        />
+      </View>
       
       {STORIES_ENABLED && mockStories.length > 0 && (
          <View style={{ marginTop: 16 }}>

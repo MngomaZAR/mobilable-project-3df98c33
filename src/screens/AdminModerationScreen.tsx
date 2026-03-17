@@ -17,6 +17,7 @@ import { useMessaging } from '../store/MessagingContext';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
+import HowItWorksCard from '../components/HowItWorksCard';
 
 type ModerationCase = {
   id: string;
@@ -230,6 +231,18 @@ const AdminModerationScreen: React.FC = () => {
         </View>
       </View>
 
+      <View style={styles.howWrap}>
+        <HowItWorksCard
+          title="How Moderation Outcomes Work"
+          items={[
+            'In Review keeps a case open while evidence and user context are gathered.',
+            'Escalate moves high-risk cases to priority review and tighter SLA handling.',
+            'Resolve finalizes action logs; blocked or removed violations remain auditable.',
+            'Reporter and target messaging should be used for clarifications before closure.',
+          ]}
+        />
+      </View>
+
       <View style={styles.tabRow}>
         <TouchableOpacity style={[styles.tab, tab === 'queue' && { borderBottomColor: colors.accent }]} onPress={() => setTab('queue')}>
           <Text style={[styles.tabText, { color: tab === 'queue' ? colors.text : colors.textMuted }]}>QUEUE</Text>
@@ -270,6 +283,7 @@ const styles = StyleSheet.create({
   screenTitle: { fontSize: 22, fontWeight: '900' },
   kpiRow: { flexDirection: 'row', gap: 10, paddingHorizontal: 16, marginBottom: 10 },
   kpiCard: { flex: 1, borderWidth: 1, borderRadius: 12, padding: 12 },
+  howWrap: { paddingHorizontal: 16, marginBottom: 10 },
   kpiLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase' },
   kpiValue: { fontSize: 22, fontWeight: '900', marginTop: 4 },
   tabRow: { flexDirection: 'row', paddingHorizontal: 16, gap: 18 },

@@ -18,6 +18,7 @@ import { RootStackParamList } from '../navigation/types';
 import { supabase } from '../config/supabaseClient';
 import { DEFAULT_CAPE_TOWN_COORDINATES, ensureSouthAfricanCoordinates } from '../utils/geo';
 import { NewMessageModal } from '../components/NewMessageModal';
+import HowItWorksCard from '../components/HowItWorksCard';
 
 type Navigation = StackNavigationProp<RootStackParamList, 'Root'>;
 
@@ -233,6 +234,19 @@ const PhotographerDashboardScreen: React.FC = () => {
           </View>
         </View>
 
+        <HowItWorksCard
+          title="How Request Actions Work"
+          items={[
+            'Accept reserves the session and updates client tracking + ETA flows.',
+            'Decline closes the request and returns client flow to matching immediately.',
+            'Mark Done records completion and triggers payout release processing.',
+            'Disputes or policy issues should be opened from booking detail for audit tracking.',
+          ]}
+          containerStyle={s.howCard}
+          titleStyle={s.howTitle}
+          itemStyle={s.howItem}
+        />
+
         {/* Pending booking requests */}
         {pendingBookings.length > 0 && (
           <View style={s.card}>
@@ -440,6 +454,9 @@ const s = StyleSheet.create({
   statLabel: { color: '#64748b', fontWeight: '700', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 },
   statValue: { fontSize: 26, fontWeight: '900', color: '#fff', marginTop: 4 },
   statMeta: { color: '#475569', marginTop: 4, fontSize: 12 },
+  howCard: { marginBottom: 14, backgroundColor: '#111827', borderColor: '#334155' },
+  howTitle: { color: '#cbd5e1' },
+  howItem: { color: '#94a3b8' },
   card: { backgroundColor: '#1e293b', borderRadius: 20, padding: 18, borderWidth: 1, borderColor: '#334155', marginBottom: 14 },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
   cardTitle: { fontSize: 16, fontWeight: '800', color: '#fff' },

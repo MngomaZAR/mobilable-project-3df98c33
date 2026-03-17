@@ -10,6 +10,7 @@ import { BookingCalendar } from '../components/BookingCalendar';
 import { Ionicons } from '@expo/vector-icons';
 import { BOOKING_PACKAGES } from '../constants/pricing';
 import { createDispatch } from '../services/dispatchService';
+import HowItWorksCard from '../components/HowItWorksCard';
 
 type Route = RouteProp<RootStackParamList, 'BookingForm'>;
 type Navigation = StackNavigationProp<RootStackParamList, 'BookingForm'>;
@@ -319,6 +320,18 @@ const BookingFormScreen: React.FC = () => {
           <Text style={[styles.breakdownValue, { color: '#16a34a', fontWeight: '800' }]}>R{photographerPayout.toLocaleString('en-ZA')}</Text>
         </View>
         <Text style={styles.breakdownNote}>* Exact total calculated at checkout based on final scope. You will be charged R{estimatedBaseAmount.toLocaleString('en-ZA')}</Text>
+      </View>
+
+      <View style={{ marginTop: 12 }}>
+        <HowItWorksCard
+          title="How Booking Works"
+          items={[
+            'Request mode sends your details to the selected talent for approval.',
+            'Instant Book fans out offers immediately and the first accepted offer wins.',
+            'You only proceed to payment after final confirmation and secure checkout.',
+            'Cancellation and refund timing is shown on your booking detail screen.',
+          ]}
+        />
       </View>
 
       <TouchableOpacity

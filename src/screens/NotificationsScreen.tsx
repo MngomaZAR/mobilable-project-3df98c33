@@ -17,6 +17,7 @@ import { useAppData } from '../store/AppDataContext';
 import { RootStackParamList } from '../navigation/types';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { respondToDispatch } from '../services/dispatchService';
+import HowItWorksCard from '../components/HowItWorksCard';
 
 type Navigation = StackNavigationProp<RootStackParamList, 'Notifications'>;
 
@@ -138,6 +139,18 @@ const NotificationsScreen: React.FC = () => {
         ))}
       </View>
 
+      <View style={styles.howWrap}>
+        <HowItWorksCard
+          title="How Notification Actions Work"
+          items={[
+            'Accept or Decline sends an auditable dispatch response with idempotency protection.',
+            'If dispatch details are missing, no action is executed and status stays unchanged.',
+            'Viewed actions open chat or booking detail so you can complete next steps safely.',
+            'Resolved cards are removed from this list after local acknowledgement.',
+          ]}
+        />
+      </View>
+
       <FlatList
         data={filteredNotifications}
         keyExtractor={(item) => item.id}
@@ -200,6 +213,7 @@ const styles = StyleSheet.create({
   backBtn: { padding: 4 },
   title: { fontSize: 20, fontWeight: '800' },
   tabBar: { flexDirection: 'row', paddingHorizontal: 16, gap: 20, marginTop: 8 },
+  howWrap: { paddingHorizontal: 16, marginTop: 8 },
   tab: { paddingVertical: 8, borderBottomWidth: 2, borderBottomColor: 'transparent' },
   tabText: { fontSize: 12, fontWeight: '700' },
   list: { padding: 16, gap: 10 },

@@ -8,6 +8,7 @@ import { useAppData } from '../store/AppDataContext';
 import { useTheme } from '../store/ThemeContext';
 import { BookingStatus } from '../types';
 import { Ionicons } from '@expo/vector-icons';
+import HowItWorksCard from '../components/HowItWorksCard';
 
 type Route = RouteProp<RootStackParamList, 'BookingDetail'>;
 type Navigation = StackNavigationProp<RootStackParamList, 'BookingDetail'>;
@@ -222,6 +223,18 @@ const BookingDetailScreen: React.FC = () => {
           <Ionicons name="document-text-outline" size={18} color={colors.text} style={{ marginBottom: 4 }} />
           <Text style={[styles.secondaryText, { color: colors.text }]}>Legal Documents & Contracts</Text>
         </TouchableOpacity>
+
+        <View style={{ marginTop: 14 }}>
+          <HowItWorksCard
+            title="How Changes Work"
+            items={[
+              'Reschedule requests are coordinated in chat and reflected in booking updates.',
+              'Cancellation triggers policy-based refunds, then status syncs across both users.',
+              'Disputes create a support workflow with review logs and final resolution status.',
+              'Legal release and contract records stay attached to this booking timeline.',
+            ]}
+          />
+        </View>
 
         <View style={styles.policyCard}>
            <Text style={[styles.policyTitle, { color: colors.text }]}>Cancellation Policy</Text>

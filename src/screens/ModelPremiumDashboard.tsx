@@ -17,6 +17,7 @@ import { supabase } from '../config/supabaseClient';
 import CreatePremiumBox from './CreatePremiumBox';
 import { NewMessageModal } from '../components/NewMessageModal';
 import { sendTip } from '../services/monetisationService';
+import HowItWorksCard from '../components/HowItWorksCard';
 
 const { width } = Dimensions.get('window');
 type Navigation = StackNavigationProp<RootStackParamList, 'Root'>;
@@ -421,6 +422,19 @@ const ModelPremiumDashboard: React.FC = () => {
           </LinearGradient>
         </TouchableOpacity>
 
+        <HowItWorksCard
+          title="How Earnings Work"
+          items={[
+            'Accepted bookings move to active sessions and are eligible for payout after completion.',
+            'Declined requests close that offer and notify clients to continue matching.',
+            'Tips, subscriptions, and PPV sales are recorded in your earnings ledger separately.',
+            'Payout methods require verification before withdrawals are released.',
+          ]}
+          containerStyle={s.howCard}
+          titleStyle={s.howTitle}
+          itemStyle={s.howItem}
+        />
+
         {/* Payout Settings */}
         <TouchableOpacity 
           style={s.payoutBtn} 
@@ -556,6 +570,9 @@ const s = StyleSheet.create({
   fanAmount: { color: '#10b981', fontWeight: '800' },
   payoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#334155', padding: 16, borderRadius: 16, marginTop: 12, gap: 10, borderWidth: 1, borderColor: '#475569' },
   payoutBtnText: { color: '#fff', fontWeight: '800', fontSize: 14 },
+  howCard: { marginTop: 14, backgroundColor: '#111827', borderColor: '#334155' },
+  howTitle: { color: '#cbd5e1' },
+  howItem: { color: '#94a3b8' },
   // Modal
   modalBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: '#1e293b', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40, maxHeight: '80%' },

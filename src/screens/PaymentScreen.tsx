@@ -149,6 +149,8 @@ const PaymentScreen: React.FC = () => {
 
       <HowItWorksCard
         title="How Payment Protection Works"
+        dismissible={false}
+        variant="warning"
         items={[
           'A signed checkout link is generated before redirecting to the payment gateway.',
           'Booking status updates only after verified callback confirmation from backend.',

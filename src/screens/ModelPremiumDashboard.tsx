@@ -424,6 +424,7 @@ const ModelPremiumDashboard: React.FC = () => {
 
         <HowItWorksCard
           title="How Earnings Work"
+          persistKey="model-dashboard-earnings-how"
           items={[
             'Accepted bookings move to active sessions and are eligible for payout after completion.',
             'Declined requests close that offer and notify clients to continue matching.',

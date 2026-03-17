@@ -234,6 +234,7 @@ const AdminModerationScreen: React.FC = () => {
       <View style={styles.howWrap}>
         <HowItWorksCard
           title="How Moderation Outcomes Work"
+          persistKey="admin-moderation-outcomes-how"
           items={[
             'In Review keeps a case open while evidence and user context are gathered.',
             'Escalate moves high-risk cases to priority review and tighter SLA handling.',

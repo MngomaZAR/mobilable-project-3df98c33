@@ -227,6 +227,7 @@ const BookingDetailScreen: React.FC = () => {
         <View style={{ marginTop: 14 }}>
           <HowItWorksCard
             title="How Changes Work"
+            persistKey="booking-detail-how"
             items={[
               'Reschedule requests are coordinated in chat and reflected in booking updates.',
               'Cancellation triggers policy-based refunds, then status syncs across both users.',

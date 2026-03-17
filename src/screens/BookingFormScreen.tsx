@@ -325,6 +325,7 @@ const BookingFormScreen: React.FC = () => {
       <View style={{ marginTop: 12 }}>
         <HowItWorksCard
           title="How Booking Works"
+          persistKey="booking-form-how"
           items={[
             'Request mode sends your details to the selected talent for approval.',
             'Instant Book fans out offers immediately and the first accepted offer wins.',

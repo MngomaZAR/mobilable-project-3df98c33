@@ -142,6 +142,7 @@ const NotificationsScreen: React.FC = () => {
       <View style={styles.howWrap}>
         <HowItWorksCard
           title="How Notification Actions Work"
+          persistKey="notifications-actions-how"
           items={[
             'Accept or Decline sends an auditable dispatch response with idempotency protection.',
             'If dispatch details are missing, no action is executed and status stays unchanged.',

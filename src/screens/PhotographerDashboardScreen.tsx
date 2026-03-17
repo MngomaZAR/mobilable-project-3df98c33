@@ -236,6 +236,7 @@ const PhotographerDashboardScreen: React.FC = () => {
 
         <HowItWorksCard
           title="How Request Actions Work"
+          persistKey="photographer-dashboard-actions-how"
           items={[
             'Accept reserves the session and updates client tracking + ETA flows.',
             'Decline closes the request and returns client flow to matching immediately.',

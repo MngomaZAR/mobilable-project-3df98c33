@@ -453,6 +453,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
       <View style={{ paddingHorizontal: 16, marginTop: 12 }}>
         <HowItWorksCard
           title="How Premium Unlocks Work"
+          persistKey="social-feed-ppv-how"
           items={[
             'Locked posts show a price or subscription requirement before media is revealed.',
             'Unlocks are tied to your account entitlement and persist after successful payment.',

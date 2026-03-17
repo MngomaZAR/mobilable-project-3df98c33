@@ -67,7 +67,9 @@ const tabBarIcon = (routeName: keyof TabParamList, focused: boolean, color: stri
 };
 
 const TabsNavigator = () => {
-  const { currentUser } = useAppData();
+  const { currentUser, state } = useAppData();
+  const unreadNotifications = state.notifications.filter(n => n.status === 'queued').length;
+
   const role = currentUser?.role ?? 'client';
   const homeComponent =
     role === 'photographer'
@@ -96,7 +98,14 @@ const TabsNavigator = () => {
       <Tab.Screen name="Bookings" component={BookingsScreen} />
       <Tab.Screen name="Feed" component={FeedScreen} />
       <Tab.Screen name="Chat" component={ConversationsListScreen} />
-      <Tab.Screen name="Settings" component={SettingsScreen} />
+      <Tab.Screen 
+        name="Settings" 
+        component={SettingsScreen} 
+        options={{ 
+          tabBarBadge: unreadNotifications > 0 ? unreadNotifications : undefined,
+          tabBarBadgeStyle: { backgroundColor: '#ef4444', color: '#fff' }
+        }} 
+      />
     </Tab.Navigator>
   );
 };

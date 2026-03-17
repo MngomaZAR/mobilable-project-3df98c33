@@ -12,7 +12,9 @@ import {
   Text,
   TouchableOpacity,
   View,
+  Share,
 } from 'react-native';
+import { Video, ResizeMode } from 'expo-av';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { AnimatedHeart } from './AnimatedHeart';
@@ -58,6 +60,8 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
   const [likedAnimPostId, setLikedAnimPostId] = useState<string | null>(null);
   const [lightboxUri, setLightboxUri] = useState<string | null>(null);
   const [followingOnly, setFollowingOnly] = useState(false);
+  const [forYouOnly, setForYouOnly] = useState(false);
+  const [bookmarkedPostIds, setBookmarkedPostIds] = useState<Set<string>>(new Set());
 
   const lastTapRef = useRef<number | null>(null);
   const loadMoreInFlightRef = useRef(false);
@@ -126,6 +130,33 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
     } catch (err) { }
   };
 
+  const handleToggleBookmark = (post: Post) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    const isBookmarked = bookmarkedPostIds.has(post.id);
+    const newSet = new Set(bookmarkedPostIds);
+    if (isBookmarked) newSet.delete(post.id);
+    else newSet.add(post.id);
+    setBookmarkedPostIds(newSet);
+    
+    // Optimistic background save
+    import('../config/supabaseClient').then(async ({ supabase }) => {
+       const { data: { user } } = await supabase.auth.getUser();
+       if (!user) return;
+       if (isBookmarked) await supabase.from('post_bookmarks').delete().eq('post_id', post.id).eq('user_id', user.id);
+       else await supabase.from('post_bookmarks').insert({ post_id: post.id, user_id: user.id });
+    });
+  };
+
+  const handleShare = async (post: Post) => {
+    try {
+      await Share.share({
+        message: `Check out this amazing post by ${post.profile?.full_name || 'a creator'} on Papzi!\n\nhttps://papzi.com/post/${post.id}`,
+      });
+    } catch (error) {
+      console.warn('Share error', error);
+    }
+  };
+
   const loadFeed = useCallback(async () => {
     setLoading(true);
     try {
@@ -142,14 +173,22 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
 
   const filteredPosts = useMemo(() => {
     let filtered = appState.posts.filter((post) => !blockedUserIds.has(post.author_id) && !reportedPostIds.has(post.id));
-    if (selectedProfileId) {
+    
+    if (forYouOnly) {
+        // Algorithmic sort for "For You": weight by likes_count and recency
+        filtered = [...filtered].sort((a, b) => {
+           const scoreA = a.likes_count * 2 + new Date(a.created_at).getTime() / 1000000000;
+           const scoreB = b.likes_count * 2 + new Date(b.created_at).getTime() / 1000000000;
+           return scoreB - scoreA;
+        });
+    } else if (selectedProfileId) {
         filtered = filtered.filter((post) => post.author_id === selectedProfileId);
     } else if (followingOnly && appState.currentUser) {
         const followings = new Set((appState.follows || []).map(f => f.following_id));
         filtered = filtered.filter(post => followings.has(post.author_id));
     }
     return filtered;
-  }, [appState.posts, selectedProfileId, blockedUserIds, reportedPostIds, followingOnly, appState.currentUser, appState.follows]);
+  }, [appState.posts, selectedProfileId, blockedUserIds, reportedPostIds, followingOnly, forYouOnly, appState.currentUser, appState.follows]);
 
   const visiblePosts = useMemo(() => {
     const base = isWeb ? filteredPosts.slice(0, WEB_VISIBLE_FEED_ITEMS) : filteredPosts;
@@ -260,18 +299,38 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
           style={[
             styles.textChip, 
             { backgroundColor: colors.card, borderColor: colors.border },
-            !selectedProfileId && !followingOnly && [styles.textChipActive, { backgroundColor: colors.accent }]
+            !selectedProfileId && !followingOnly && !forYouOnly && [styles.textChipActive, { backgroundColor: colors.accent }]
           ]} 
           onPress={() => {
               setSelectedProfileId(null);
               setFollowingOnly(false);
+              setForYouOnly(false);
           }}
         >
           <Text style={[
             styles.textChipLabel, 
             { color: colors.textMuted },
-            !selectedProfileId && !followingOnly && [styles.textChipLabelActive, { color: colors.card }]
+            !selectedProfileId && !followingOnly && !forYouOnly && [styles.textChipLabelActive, { color: colors.card }]
           ]}>All Photographers</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={[
+            styles.textChip, 
+            { backgroundColor: colors.card, borderColor: colors.border },
+            forYouOnly && [styles.textChipActive, { backgroundColor: colors.accent }]
+          ]} 
+          onPress={() => {
+              setSelectedProfileId(null);
+              setFollowingOnly(false);
+              setForYouOnly(true);
+          }}
+        >
+          <Text style={[
+            styles.textChipLabel, 
+            { color: colors.textMuted },
+            forYouOnly && [styles.textChipLabelActive, { color: colors.card }]
+          ]}>🌟 For You</Text>
         </TouchableOpacity>
         
         {appState.currentUser && (
@@ -283,6 +342,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
               ]} 
               onPress={() => {
                   setSelectedProfileId(null);
+                  setForYouOnly(false);
                   setFollowingOnly(true);
               }}
             >
@@ -303,6 +363,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
             ]} 
             onPress={() => {
                 setFollowingOnly(false);
+                setForYouOnly(false);
                 setSelectedProfileId(p.id);
             }}
           >
@@ -374,15 +435,49 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
             lastTapRef.current = null;
           } else {
             lastTapRef.current = now;
-            setLightboxUri(item.image_url);
+            if (item.media_type !== 'video') {
+              setLightboxUri(item.image_url);
+            }
           }
       }}>
         <View style={styles.imageWrapper}>
-          <Image
-            source={{ uri: item.image_url || PLACEHOLDER_IMAGE }}
-            style={styles.image}
-            onError={() => { /* handled via PLACEHOLDER_IMAGE fallback */ }}
-          />
+          {(item as any).media_type === 'video' || item.image_url?.endsWith('.mp4') ? (
+            <Video
+              source={{ uri: (item as any).video_url || item.image_url }}
+              style={styles.image}
+              resizeMode={ResizeMode.COVER}
+              shouldPlay={!item.is_locked}
+              isMuted={true}
+              isLooping={true}
+            />
+          ) : (
+            <Image
+              source={{ uri: item.image_url || PLACEHOLDER_IMAGE }}
+              style={styles.image}
+              onError={() => { /* handled via PLACEHOLDER_IMAGE fallback */ }}
+            />
+          )}
+
+          {item.is_locked && (
+            <BlurView intensity={Platform.OS === 'ios' ? 70 : 100} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill}>
+              <View style={styles.paywallContent}>
+                <View style={styles.lockBadge}>
+                  <Ionicons name="lock-closed" size={32} color="#fff" />
+                </View>
+                <Text style={styles.paywallTitle}>Premium Content</Text>
+                <Text style={styles.paywallText}>
+                  {item.price ? `Unlock this post for R${item.price}` : 'Subscribe to view this creator\'s exclusive content'}
+                </Text>
+                <TouchableOpacity 
+                  style={styles.unlockButton} 
+                  onPress={() => item.price ? Alert.alert('PPV Unlock', 'Unlock logic coming soon.') : onViewProfile?.(item.author_id)}
+                >
+                  <Text style={styles.unlockButtonText}>{item.price ? 'Unlock Post' : 'View Tiers'}</Text>
+                </TouchableOpacity>
+              </View>
+            </BlurView>
+          )}
+
           {!isWeb && <AnimatedHeart visible={likedAnimPostId === item.id} />}
         </View>
       </TouchableOpacity>
@@ -399,18 +494,17 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
           <TouchableOpacity onPress={() => onViewPost?.(item)} style={styles.iconAction}>
             <Ionicons name="chatbubble-outline" size={24} color={colors.text} />
           </TouchableOpacity>
-          <TouchableOpacity 
-            onPress={async () => {
-              try {
-                const convo = await startConversationWithUser(item.author_id, item.profile?.full_name || 'Creator');
-                navigation.navigate('ChatThread', { conversationId: convo.id, title: convo.title });
-              } catch (e) {
-                console.warn('Feed: Failed to start chat:', e);
-              }
-            }} 
-            style={styles.iconAction}
-          >
-            <Ionicons name="paper-plane-outline" size={24} color={colors.accent} />
+          <TouchableOpacity onPress={() => handleShare(item)} style={styles.iconAction}>
+            <Ionicons name="paper-plane-outline" size={24} color={colors.text} />
+          </TouchableOpacity>
+        </View>
+        <View style={styles.rightActions}>
+          <TouchableOpacity onPress={() => handleToggleBookmark(item)} style={styles.iconActionRight}>
+            <Ionicons 
+              name={bookmarkedPostIds.has(item.id) ? "bookmark" : "bookmark-outline"} 
+              size={24} 
+              color={colors.text} 
+            />
           </TouchableOpacity>
         </View>
       </View>
@@ -512,7 +606,9 @@ const styles = StyleSheet.create({
   image: { width: '100%', height: '100%' },
   interactionBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 12 },
   leftActions: { flexDirection: 'row', alignItems: 'center' },
+  rightActions: { flexDirection: 'row', alignItems: 'center' },
   iconAction: { marginRight: 16 },
+  iconActionRight: { marginLeft: 16 },
   cardBody: { paddingHorizontal: 12, paddingBottom: 16 },
   likesCount: { fontWeight: '700', marginBottom: 4 },
   captionRow: { flexDirection: 'row', flexWrap: 'wrap' },
@@ -522,7 +618,50 @@ const styles = StyleSheet.create({
   lightboxOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.9)', zIndex: 1000, justifyContent: 'center', alignItems: 'center' },
   lightboxClose: { position: 'absolute', top: 50, right: 20, padding: 10 },
   lightboxCloseText: { color: '#fff', fontWeight: '700' },
-  lightboxImage: { width: '100%', height: '80%', resizeMode: 'contain' },
+  lightboxImage: {
+    width: '100%',
+    height: '80%',
+    resizeMode: 'contain',
+  },
+  paywallContent: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  lockBadge: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  paywallTitle: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: '800',
+    marginBottom: 8,
+  },
+  paywallText: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 20,
+  },
+  unlockButton: {
+    backgroundColor: '#ec4899',
+    paddingHorizontal: 32,
+    paddingVertical: 12,
+    borderRadius: 24,
+  },
+  unlockButtonText: {
+    color: '#fff',
+    fontWeight: '800',
+    fontSize: 16,
+  },
   emptyContainer: { alignItems: 'center', paddingVertical: 40 },
   emptyText: { marginTop: 16, fontWeight: '600', fontSize: 16 },
   storyAvatarWrap: {

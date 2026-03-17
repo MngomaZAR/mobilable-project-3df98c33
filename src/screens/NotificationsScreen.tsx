@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import {
   FlatList,
   RefreshControl,
@@ -7,6 +7,7 @@ import {
   Text,
   TouchableOpacity,
   View,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -25,6 +26,9 @@ interface NotificationItem {
   body: string;
   status: string;
   created_at: string;
+  category?: 'booking' | 'social' | 'message' | 'earnings';
+  action_type?: string;
+  action_payload?: any;
 }
 
 const NotificationsScreen: React.FC = () => {
@@ -33,6 +37,7 @@ const NotificationsScreen: React.FC = () => {
   const { state } = useAppData();
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<'all' | 'booking' | 'social' | 'earnings'>('all');
 
   const fetchNotifications = useCallback(async () => {
     if (!hasSupabase || !state.currentUser) return;
@@ -40,13 +45,12 @@ const NotificationsScreen: React.FC = () => {
     try {
       const { data, error } = await supabase
         .from('notification_events')
-        .select('id, event_type, title, body, status, created_at')
+        .select('id, event_type, title, body, status, created_at, category, action_type, action_payload')
         .eq('user_id', state.currentUser.id)
         .order('created_at', { ascending: false })
         .limit(50);
       if (!error) {
         setNotifications((data ?? []) as NotificationItem[]);
-        // Mark all queued notifications as 'sent' (read) so push-dispatcher doesn't re-fire them
         const queuedIds = (data ?? [])
           .filter((n: any) => n.status === 'queued')
           .map((n: any) => n.id);
@@ -61,6 +65,26 @@ const NotificationsScreen: React.FC = () => {
       setLoading(false);
     }
   }, [state.currentUser]);
+
+  const filteredNotifications = useMemo(() => {
+    if (activeTab === 'all') return notifications;
+    return notifications.filter(n => n.category === activeTab);
+  }, [notifications, activeTab]);
+
+  const handleAction = async (item: NotificationItem, action: string) => {
+    if (action === 'accept' && item.event_type.includes('booking')) {
+       Alert.alert('Booking Accepted', 'You have accepted this booking request.');
+       // Logic to update booking status would go here
+    } else if (action === 'view') {
+       if (item.action_type === 'chat') {
+          navigation.navigate('ChatThread', { conversationId: item.action_payload?.chatId });
+       } else if (item.action_type === 'booking') {
+          navigation.navigate('BookingDetail', { bookingId: item.action_payload?.bookingId });
+       }
+    }
+    // Mark as read/dismissed
+    setNotifications(prev => prev.filter(n => n.id !== item.id));
+  };
 
   useEffect(() => { fetchNotifications(); }, [fetchNotifications]);
 
@@ -82,24 +106,62 @@ const NotificationsScreen: React.FC = () => {
         <Text style={[styles.title, { color: colors.text }]}>Notifications</Text>
       </View>
 
+      <View style={styles.tabBar}>
+        {['all', 'booking', 'social', 'earnings'].map((tab) => (
+          <TouchableOpacity
+            key={tab}
+            style={[styles.tab, activeTab === tab && { borderBottomColor: colors.accent }]}
+            onPress={() => setActiveTab(tab as any)}
+          >
+            <Text style={[styles.tabText, { color: activeTab === tab ? colors.text : colors.textMuted }]}>
+              {tab.toUpperCase()}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
       <FlatList
-        data={notifications}
+        data={filteredNotifications}
         keyExtractor={(item) => item.id}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={fetchNotifications} />}
         contentContainerStyle={styles.list}
         renderItem={({ item }) => (
-          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <TouchableOpacity 
+            style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
+            onPress={() => handleAction(item, 'view')}
+          >
             <View style={[styles.iconBox, { backgroundColor: colors.accent + '22' }]}>
               <Ionicons name={iconFor(item.event_type) as any} size={20} color={colors.accent} />
             </View>
             <View style={styles.cardBody}>
-              <Text style={[styles.cardTitle, { color: colors.text }]}>{item.title}</Text>
+              <View style={styles.cardHeader}>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>{item.title}</Text>
+                {item.status === 'queued' && <View style={[styles.unreadDot, { backgroundColor: colors.accent }]} />}
+              </View>
               <Text style={[styles.cardBody2, { color: colors.textSecondary }]}>{item.body}</Text>
+              
+              {item.event_type.includes('booking_request') && (
+                <View style={styles.actionRow}>
+                  <TouchableOpacity 
+                    style={[styles.actionBtn, { backgroundColor: colors.accent }]} 
+                    onPress={() => handleAction(item, 'accept')}
+                  >
+                    <Text style={styles.actionBtnText}>Accept</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={[styles.actionBtn, { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border }]} 
+                    onPress={() => handleAction(item, 'dismiss')}
+                  >
+                    <Text style={[styles.actionBtnText, { color: colors.text }]}>Dismiss</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
               <Text style={[styles.cardTime, { color: colors.textMuted }]}>
                 {new Date(item.created_at).toLocaleString()}
               </Text>
             </View>
-          </View>
+          </TouchableOpacity>
         )}
         ListEmptyComponent={
           !loading ? (
@@ -119,13 +181,21 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth, gap: 12 },
   backBtn: { padding: 4 },
   title: { fontSize: 20, fontWeight: '800' },
+  tabBar: { flexDirection: 'row', paddingHorizontal: 16, gap: 20, marginTop: 8 },
+  tab: { paddingVertical: 8, borderBottomWidth: 2, borderBottomColor: 'transparent' },
+  tabText: { fontSize: 12, fontWeight: '700' },
   list: { padding: 16, gap: 10 },
   card: { flexDirection: 'row', borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, padding: 14, gap: 12, alignItems: 'flex-start' },
   iconBox: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   cardBody: { flex: 1 },
-  cardTitle: { fontWeight: '700', fontSize: 15, marginBottom: 2 },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 },
+  cardTitle: { fontWeight: '700', fontSize: 15 },
+  unreadDot: { width: 8, height: 8, borderRadius: 4 },
   cardBody2: { fontSize: 13, lineHeight: 18 },
-  cardTime: { fontSize: 11, marginTop: 4 },
+  actionRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  actionBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, alignItems: 'center', justifyContent: 'center', minWidth: 80 },
+  actionBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  cardTime: { fontSize: 11, marginTop: 8 },
   empty: { alignItems: 'center', marginTop: 80, gap: 12 },
   emptyTxt: { fontSize: 16 },
 });

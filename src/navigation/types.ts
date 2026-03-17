@@ -40,6 +40,7 @@ export type RootStackParamList = {
   ModelRelease: { bookingId: string };
   Legal: { title: string; content: string };
   CreditsWallet: undefined;
+  CreatorAnalytics: undefined;
 };
 
 declare global {

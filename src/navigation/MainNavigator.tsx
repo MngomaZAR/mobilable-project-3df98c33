@@ -174,7 +174,7 @@ export const MainNavigator: React.FC<MainNavigatorProps> = ({ logoSource }) => {
         ) : (
           // Authenticated Stack
           <>
-            {(currentUser as any)?.kyc_status !== 'age_verified' ? (
+            {(currentUser as any)?.kyc_status !== 'approved' ? (
               <Stack.Screen name="AgeVerification" component={AgeVerificationScreen} options={{ headerShown: false }} />
             ) : !currentUser.role || (currentUser.role as string) === 'guest' ? (
               <Stack.Screen name="RoleSelection" component={RoleSelectionScreen} options={{ headerShown: false }} />

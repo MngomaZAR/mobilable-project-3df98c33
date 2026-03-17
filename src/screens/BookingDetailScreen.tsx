@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { Alert, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -19,7 +19,8 @@ const BookingDetailScreen: React.FC = () => {
   const navigation = useNavigation<Navigation>();
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
-  const { state, startConversationWithUser } = useAppData();
+  const { state, startConversationWithUser, updateBookingStatus } = useAppData();
+  const [loadingAction, setLoadingAction] = useState<string | null>(null);
 
   const booking = useMemo(
     () => state.bookings.find((item) => item.id === params.bookingId),
@@ -64,6 +65,50 @@ const BookingDetailScreen: React.FC = () => {
       navigation.navigate('ChatThread', { conversationId: convo.id, title: convo.title });
     } catch (_err) {
       navigation.navigate('Root', { screen: 'Chat' });
+    }
+  };
+
+  const handleCancel = () => {
+    Alert.alert(
+      'Cancel Booking',
+      'Are you sure you want to cancel this booking? Please review the cancellation policy.',
+      [
+        { text: 'Nevermind', style: 'cancel' },
+        { 
+          text: 'Confirm Cancel', 
+          style: 'destructive',
+          onPress: async () => {
+            setLoadingAction('cancel');
+            try {
+               await updateBookingStatus(booking.id, 'cancelled');
+               Alert.alert('Booking Cancelled', 'Your booking has been cancelled and any applicable refunds are being processed.');
+            } catch (e: any) {
+               Alert.alert('Error', e.message || 'Could not cancel booking.');
+            } finally {
+               setLoadingAction(null);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleReschedule = () => {
+    Alert.alert('Reschedule Request', 'Please send a message to the talent to coordinate a new time, then they will update the booking.');
+  };
+
+  const handleDispute = () => {
+    Alert.alert('Open Dispute', 'A support specialist will join this conversation shortly.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Open Dispute', style: 'destructive' }
+    ]);
+  };
+
+  const handleBookAgain = () => {
+    if (photographer) {
+       navigation.navigate('BookingForm', { photographerId: photographer.id });
+    } else if (model) {
+       navigation.navigate('BookingForm', { photographerId: model.id });
     }
   };
 
@@ -128,13 +173,62 @@ const BookingDetailScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
 
+        {booking.status === 'completed' || booking.status === 'reviewed' ? (
+           <TouchableOpacity
+             style={[styles.secondary, { backgroundColor: colors.accent, marginTop: 16 }]}
+             onPress={handleBookAgain}
+           >
+             <Text style={[styles.secondaryText, { color: isDark ? colors.bg : '#fff' }]}>Book Again</Text>
+           </TouchableOpacity>
+        ) : null}
+
+        {booking.status === 'pending' || booking.status === 'accepted' ? (
+           <>
+             <View style={styles.row}>
+               <TouchableOpacity
+                 style={[styles.secondary, styles.rowButton, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}
+                 onPress={handleReschedule}
+                 disabled={!!loadingAction}
+               >
+                 <Text style={[styles.secondaryText, { color: colors.text }]}>Reschedule</Text>
+               </TouchableOpacity>
+               <TouchableOpacity
+                 style={[styles.secondary, styles.rowButton, { backgroundColor: colors.card, borderColor: colors.destructive, borderWidth: 1 }]}
+                 onPress={handleCancel}
+                 disabled={!!loadingAction}
+               >
+                 <Text style={[styles.secondaryText, { color: colors.destructive }]}>
+                   {loadingAction === 'cancel' ? 'Cancelling...' : 'Cancel'}
+                 </Text>
+               </TouchableOpacity>
+             </View>
+           </>
+        ) : null}
+
+        {booking.status === 'completed' ? (
+           <TouchableOpacity
+             style={[styles.secondary, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}
+             onPress={handleDispute}
+             disabled={!!loadingAction}
+           >
+             <Text style={[styles.secondaryText, { color: colors.text }]}>Report Issue / Dispute</Text>
+           </TouchableOpacity>
+        ) : null}
+
         <TouchableOpacity
           style={[styles.secondary, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}
           onPress={() => navigation.navigate('ModelRelease', { bookingId: booking.id })}
         >
           <Ionicons name="document-text-outline" size={18} color={colors.text} style={{ marginBottom: 4 }} />
-          <Text style={[styles.secondaryText, { color: colors.text }]}>Legal Documents & Release</Text>
+          <Text style={[styles.secondaryText, { color: colors.text }]}>Legal Documents & Contracts</Text>
         </TouchableOpacity>
+
+        <View style={styles.policyCard}>
+           <Text style={[styles.policyTitle, { color: colors.text }]}>Cancellation Policy</Text>
+           <Text style={[styles.policyText, { color: colors.textSecondary }]}>• Free cancellation for 48 hours after booking.</Text>
+           <Text style={[styles.policyText, { color: colors.textSecondary }]}>• Cancel before 7 days of the shoot for a 50% refund.</Text>
+           <Text style={[styles.policyText, { color: colors.textSecondary }]}>• No refunds within 7 days of the shoot date.</Text>
+        </View>
       </ScrollView>
     </View>
   );
@@ -228,6 +322,23 @@ const styles = StyleSheet.create({
   },
   secondaryText: {
     fontWeight: '700',
+  },
+  policyCard: {
+    marginTop: 24,
+    marginBottom: 8,
+    padding: 16,
+    borderRadius: 12,
+    backgroundColor: '#f8fafc',
+  },
+  policyTitle: {
+    fontWeight: '700',
+    fontSize: 16,
+    marginBottom: 8,
+  },
+  policyText: {
+    fontSize: 13,
+    marginBottom: 4,
+    lineHeight: 18,
   },
 });
 

@@ -7,7 +7,7 @@ import { createBookingRequest, updateBookingStatusInDb } from '../services/booki
 import { BUCKETS } from '../config/environment';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
-import { AppState, AppUser, Booking, BookingStatus, Comment, ConversationSummary, Message, Model, Post, PrivacySettings, Review, UserRole, CreditsWallet, CreditsLedgerEntry } from '../types';
+import { AppState, AppUser, Booking, BookingStatus, Comment, ConversationSummary, Message, Model, NotificationEvent, Post, PrivacySettings, Review, UserRole, CreditsWallet, CreditsLedgerEntry } from '../types';
 import { uid } from '../utils/id';
 import { formatAuthError, formatErrorMessage, logError } from '../utils/errors';
 import { mapPhotographerRow, mapPostRow, mapSupabaseUser } from '../utils/mappings';
@@ -84,6 +84,7 @@ type AppDataContextValue = {
   updateProfile: (changes: Partial<AppUser>) => Promise<void>;
   fetchEarnings: (userId: string) => Promise<void>;
   fetchCredits: (userId?: string | null) => Promise<void>;
+  fetchNotifications: (userId?: string | null) => Promise<void>;
   adjustCredits: (amount: number, reason?: string, refType?: string, refId?: string) => Promise<number>;
   redeemCreditsCode: (code: string) => Promise<number>;
   setState: (payload: Partial<AppState>) => void;
@@ -600,6 +601,27 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   }, []);
 
+  const fetchNotifications = useCallback(async (userId?: string | null) => {
+    if (!hasSupabase) return;
+    const targetUserId = userId ?? stateRef.current.currentUser?.id;
+    if (!targetUserId) {
+      setState({ notifications: [] });
+      return;
+    }
+    try {
+      const { data, error } = await supabase
+        .from('notification_events')
+        .select('id, user_id, event_type, title, body, status, created_at')
+        .eq('user_id', targetUserId)
+        .order('created_at', { ascending: false })
+        .limit(50);
+      if (error) throw error;
+      setState({ notifications: (data ?? []) as NotificationEvent[] });
+    } catch (err) {
+      logError('fetch_notifications', err);
+    }
+  }, []);
+
   const adjustCredits = useCallback(async (amount: number, reason?: string, refType?: string, refId?: string) => {
     if (!hasSupabase) return 0;
     try {
@@ -746,6 +768,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           fetchEarnings(session.user.id).catch(e => console.warn('Delayed earnings fetch failed', e));
           fetchSubscriptions(session.user.id).catch(e => console.warn('Delayed subscriptions fetch failed', e));
           fetchCredits(session.user.id).catch(e => console.warn('Delayed credits fetch failed', e));
+          fetchNotifications(session.user.id).catch(e => console.warn('Delayed notifications fetch failed', e));
         } catch (eventErr) {
           console.error('Error handling auth session change:', eventErr);
         }
@@ -841,6 +864,19 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const booking = (payload.new || payload.old) as any;
         if (booking.client_id === currentUserId || booking.photographer_id === currentUserId) {
             fetchBookings(currentUserId);
+        }
+      })
+      .subscribe();
+
+    // Notification Sync
+    const notificationChannel = supabase
+      .channel('global:notifications-sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notification_events' }, async (payload) => {
+        const currentUserId = stateRef.current.currentUser?.id;
+        if (!currentUserId) return;
+        const notification = (payload.new || payload.old) as any;
+        if (notification.user_id === currentUserId) {
+          fetchNotifications(currentUserId);
         }
       })
       .subscribe();
@@ -1719,7 +1755,9 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           }
         }
         const user: AppUser | null = data.user ? mapSupabaseUser(data.user, role, { role, verified: false }) : null;
-        setState({ currentUser: user });
+        if (data.session) {
+          setState({ currentUser: user });
+        }
         return user;
       } catch (err: any) {
         logError('sign_up', err);
@@ -2141,10 +2179,11 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       fetchEarnings,
       fetchSubscriptions,
       fetchCredits,
+      fetchNotifications,
       adjustCredits,
       redeemCreditsCode,
     }),
-    [state, createBooking, updateBookingStatus, sendMessage, sendLockedMediaMessage, fetchMessages, fetchMessagesForChat, fetchComments, updateBookingClientLocation, updatePhotographerLocation, startConversationWithUser, addPost, toggleLike, addComment, setState, signUp, signIn, signOut, updatePrivacy, requestDataDeletion, refresh, revalidateSession, resetState, updateProfilePicture, updateProfile, fetchEarnings, fetchSubscriptions, fetchCredits, adjustCredits, redeemCreditsCode]
+    [state, createBooking, updateBookingStatus, sendMessage, sendLockedMediaMessage, fetchMessages, fetchMessagesForChat, fetchComments, updateBookingClientLocation, updatePhotographerLocation, startConversationWithUser, addPost, toggleLike, addComment, setState, signUp, signIn, signOut, updatePrivacy, requestDataDeletion, refresh, revalidateSession, resetState, updateProfilePicture, updateProfile, fetchEarnings, fetchSubscriptions, fetchCredits, fetchNotifications, adjustCredits, redeemCreditsCode]
   );
 
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>;

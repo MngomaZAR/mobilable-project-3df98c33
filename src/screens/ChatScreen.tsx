@@ -27,7 +27,12 @@ const ChatScreen: React.FC = () => {
   const route = useRoute<Route>();
   const navigation = useNavigation<Navigation>();
   const { currentUser } = useAuth();
-  const { messages: allMessages, sendMessage, sendLockedMediaMessage, fetchMessages, subscribeToMessages, unlockPremiumMessage } = useMessaging();
+  const {
+    messages: allMessages, sendMessage, sendLockedMediaMessage,
+    fetchMessages, subscribeToMessages, unlockPremiumMessage,
+    typingUsers, broadcastTyping, markMessagesRead, reactions,
+    addReaction, removeReaction, deleteMessage
+  } = useMessaging();
   const { bookings } = useBooking();
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
@@ -38,12 +43,16 @@ const ChatScreen: React.FC = () => {
   const [pendingMedia, setPendingMedia] = useState<{ uri: string; preview: string } | null>(null);
   const [isLockedPending, setIsLockedPending] = useState(true);
   const [unlockPriceInput, setUnlockPriceInput] = useState('50');
+  
+  // Chat UX states
+  const [replyTo, setReplyTo] = useState<any>(null);
+  const [activeMenuMsg, setActiveMenuMsg] = useState<string | null>(null);
 
   const listRef = useRef<FlatList>(null);
 
   const chatId = route.params.conversationId;
   const messages = useMemo(() => allMessages[chatId] ?? [], [chatId, allMessages]);
-  const latestUnlockBooking = useMemo(() => bookings[0] ?? null, [bookings]);
+  const currentTypers = typingUsers[chatId] ?? [];
 
 
   const otherAvatar = route.params?.avatarUrl ?? PLACEHOLDER_IMAGE;
@@ -87,11 +96,19 @@ const ChatScreen: React.FC = () => {
     setSending(true);
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      await sendMessage(chatId, text);
+      await sendMessage(chatId, text, replyTo?.id);
       setText('');
+      setReplyTo(null);
+      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
     } finally {
       setSending(false);
     }
+  };
+
+  const handleReaction = async (msgId: string, emoji: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    await addReaction(chatId, msgId, emoji);
+    setActiveMenuMsg(null);
   };
 
   const handlePickMedia = async () => {
@@ -149,6 +166,8 @@ const ChatScreen: React.FC = () => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setPendingMedia(null);
       setText('');
+      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
+      setText('');
     } catch (err: any) {
       Alert.alert('Upload failed', err.message || 'Could not upload image.');
     } finally {
@@ -178,7 +197,9 @@ const ChatScreen: React.FC = () => {
           keyExtractor={(item) => item.id}
           onRefresh={() => fetchMessages(chatId)}
           refreshing={messagesLoading}
-          contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 20 }]}
+          onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
+          onLayout={() => listRef.current?.scrollToEnd({ animated: true })}
+          contentContainerStyle={[styles.listContent, { paddingBottom: currentTypers.length > 0 ? 40 : 20 }]}
           ListHeaderComponent={
             <View style={[styles.banner, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <Text style={[styles.bannerTitle, { color: colors.text }]}>Conversations</Text>
@@ -188,67 +209,142 @@ const ChatScreen: React.FC = () => {
           renderItem={({ item }) => {
             const isMe = item.from_user;
             
-            if (item.message_type === 'media') {
-              return (
-                <View style={[styles.messageRow, isMe ? styles.meRow : styles.otherRow]}>
-                  <TouchableOpacity
-                    style={styles.mediaBubble}
-                    activeOpacity={0.8}
-                    onPress={() => {
-                      if (item.unlocked) {
-                        setLightboxUri(item.media_url || null);
-                      } else if (!isMe) {
-                        if (item.unlock_price) {
-                          Alert.alert('Unlock Message', `Would you like to unlock this message for R${item.unlock_price}?`, [
-                            { text: 'Cancel', style: 'cancel' },
-                            { text: 'Unlock', onPress: async () => {
-                                try {
-                                  await unlockPremiumMessage(chatId, item.id);
-                                } catch (err: any) {
-                                  Alert.alert('Unlock failed', err.message);
-                                }
-                            }},
-                          ]);
-                        } else {
-                          Alert.alert('Locked', 'This message needs to be unlocked by an active booking.');
+            const msgReactions = reactions[item.id] ?? [];
+            const showMenu = activeMenuMsg === item.id;
+
+            const MessageContent = () => (
+              <View style={[styles.messageRow, isMe ? styles.meRow : styles.otherRow, { zIndex: showMenu ? 10 : 1 }]}>
+                <View style={[isMe ? { alignItems: 'flex-end' } : { alignItems: 'flex-start' }]}>
+                  {item.reply_preview && (
+                    <View style={styles.inlineReplyPreview}>
+                      <Ionicons name="arrow-undo" size={12} color={colors.textSecondary} />
+                      <Text style={[styles.inlineReplyText, { color: colors.textSecondary }]} numberOfLines={1}>
+                        {item.reply_preview}
+                      </Text>
+                    </View>
+                  )}
+                  {item.message_type === 'media' ? (
+                    <TouchableOpacity
+                      style={styles.mediaBubble}
+                      activeOpacity={0.8}
+                      onLongPress={() => { Haptics.selectionAsync(); setActiveMenuMsg(item.id); }}
+                      onPress={() => {
+                        if (item.unlocked) {
+                          setLightboxUri(item.media_url || null);
+                        } else if (!isMe) {
+                          if (item.unlock_price) {
+                            Alert.alert('Unlock Message', `Would you like to unlock this message for R${item.unlock_price}?`, [
+                              { text: 'Cancel', style: 'cancel' },
+                              { text: 'Unlock', onPress: async () => {
+                                  try {
+                                    await unlockPremiumMessage(chatId, item.id);
+                                  } catch (err: any) {
+                                    Alert.alert('Unlock failed', err.message);
+                                  }
+                              }},
+                            ]);
+                          } else {
+                            Alert.alert('Locked', 'This message needs to be unlocked by an active booking.');
+                          }
                         }
-                      }
-                    }}
-                  >
-                    <Image
-                      source={{ uri: item.unlocked ? item.media_url ?? item.preview_url ?? PLACEHOLDER_IMAGE : item.preview_url ?? PLACEHOLDER_IMAGE }}
-                      style={styles.mediaImage}
-                    />
-                    {item.locked && !item.unlocked && (
-                      <View style={[styles.lockedOverlay, { padding: 10 }]}>
-                        <Ionicons name="lock-closed" size={32} color="#fff" />
-                        <Text style={styles.unlockPrice}>{item.unlock_price ? `R${item.unlock_price}` : 'LOCKED'}</Text>
-                        <Text style={styles.unlockHint}>{item.unlock_price ? 'Tap here to unlock' : 'Unlock after payment'}</Text>
+                      }}
+                    >
+                      <Image
+                        source={{ uri: item.unlocked ? item.media_url ?? item.preview_url ?? PLACEHOLDER_IMAGE : item.preview_url ?? PLACEHOLDER_IMAGE }}
+                        style={styles.mediaImage}
+                      />
+                      {item.locked && !item.unlocked && (
+                        <View style={[styles.lockedOverlay, { padding: 10 }]}>
+                          <Ionicons name="lock-closed" size={32} color="#fff" />
+                          <Text style={styles.unlockPrice}>{item.unlock_price ? `R${item.unlock_price}` : 'LOCKED'}</Text>
+                          <Text style={styles.unlockHint}>{item.unlock_price ? 'Tap here to unlock' : 'Unlock after payment'}</Text>
+                        </View>
+                      )}
+                      {item.body ? <Text style={[styles.messageText, isMe ? styles.meText : styles.otherText, styles.mediaCaption]}>{item.body}</Text> : null}
+                    </TouchableOpacity>
+                  ) : (
+                    <AnimatedBubble
+                      style={[
+                        styles.messageBubble,
+                        isMe ? styles.meBubble : styles.otherBubble,
+                        isMe ? { backgroundColor: colors.accent } : { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }
+                      ]}
+                      onLongPress={() => { Haptics.selectionAsync(); setActiveMenuMsg(item.id); }}
+                    >
+                      {isMe && !isDark && <LinearGradient colors={['#3b82f6', '#2563eb', '#1d4ed8']} style={StyleSheet.absoluteFillObject} />}
+                      <Text style={[styles.messageText, isMe ? [styles.meText, { color: isDark ? colors.bg : '#fff' }] : [styles.otherText, { color: colors.text }]]}>
+                        {item.body}
+                      </Text>
+                      <View style={styles.bubbleFooter}>
+                        <Text style={[styles.timestamp, isMe ? [styles.meTimestamp, { color: 'rgba(255,255,255,0.7)' }] : [styles.otherTimestamp, { color: colors.textMuted }]]}>
+                          {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </Text>
+                        {isMe && (
+                          <Ionicons 
+                            name={item.read_at ? "checkmark-done" : "checkmark"} 
+                            size={14} 
+                            color={item.read_at ? "#34d399" : "rgba(255,255,255,0.6)"} 
+                            style={{ marginLeft: 4 }}
+                          />
+                        )}
                       </View>
-                    )}
-                    {item.body ? <Text style={[styles.messageText, isMe ? styles.meText : styles.otherText, styles.mediaCaption]}>{item.body}</Text> : null}
-                  </TouchableOpacity>
+                    </AnimatedBubble>
+                  )}
+                  
+                  {/* Emoji Reactions Pill */}
+                  {msgReactions.length > 0 && (
+                    <View style={[styles.reactionPillContainer, isMe ? { right: 8 } : { left: 8 }]}>
+                      {msgReactions.map(r => (
+                        <TouchableOpacity 
+                          key={r.emoji} 
+                          style={[styles.reactionPill, r.myReaction && { borderColor: colors.accent, borderWidth: 1 }]}
+                          onPress={() => r.myReaction ? removeReaction(chatId, item.id, r.emoji) : addReaction(chatId, item.id, r.emoji)}
+                        >
+                          <Text style={styles.reactionEmoji}>{r.emoji}</Text>
+                          {r.count > 1 && <Text style={styles.reactionCount}>{r.count}</Text>}
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
                 </View>
-              );
-            }
+              </View>
+            );
 
             return (
-              <View style={[styles.messageRow, isMe ? styles.meRow : styles.otherRow]}>
-                <AnimatedBubble
-                  style={[
-                    styles.messageBubble,
-                    isMe ? styles.meBubble : styles.otherBubble,
-                    isMe ? { backgroundColor: colors.accent } : { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }
-                  ]}
-                >
-                  {isMe && !isDark && <LinearGradient colors={['#3b82f6', '#2563eb', '#1d4ed8']} style={StyleSheet.absoluteFillObject} />}
-                  <Text style={[styles.messageText, isMe ? [styles.meText, { color: isDark ? colors.bg : '#fff' }] : [styles.otherText, { color: colors.text }]]}>
-                    {item.body}
-                  </Text>
-                  <Text style={[styles.timestamp, isMe ? [styles.meTimestamp, { color: 'rgba(255,255,255,0.7)' }] : [styles.otherTimestamp, { color: colors.textMuted }]]}>
-                    {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </Text>
-                </AnimatedBubble>
+              <View style={styles.messageRowWrapper}>
+                {showMenu && (
+                  <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => setActiveMenuMsg(null)} activeOpacity={1} />
+                )}
+                <MessageContent />
+                {showMenu && (
+                  <View style={[styles.contextMenu, isMe ? { right: 16 } : { left: 16 }]}>
+                    <View style={styles.reactionRow}>
+                      {['❤️','😂','😮','😢','🔥','💯'].map(emoji => (
+                        <TouchableOpacity key={emoji} onPress={() => handleReaction(item.id, emoji)} style={styles.reactionBtn}>
+                          <Text style={{ fontSize: 24 }}>{emoji}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                    <View style={styles.menuActions}>
+                      <TouchableOpacity 
+                        style={styles.menuItem} 
+                        onPress={() => { setReplyTo(item); setActiveMenuMsg(null); }}
+                      >
+                        <Ionicons name="arrow-undo" size={18} color={colors.text} />
+                        <Text style={[styles.menuText, { color: colors.text }]}>Reply</Text>
+                      </TouchableOpacity>
+                      {isMe && (
+                        <TouchableOpacity 
+                          style={styles.menuItem} 
+                          onPress={() => { deleteMessage(chatId, item.id); setActiveMenuMsg(null); }}
+                        >
+                          <Ionicons name="trash" size={18} color="#ef4444" />
+                          <Text style={[styles.menuText, { color: '#ef4444' }]}>Delete</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  </View>
+                )}
               </View>
             );
           }}
@@ -305,7 +401,26 @@ const ChatScreen: React.FC = () => {
         </View>
       )}
 
+      {currentTypers.length > 0 && (
+        <View style={styles.typingContainer}>
+          <Text style={[styles.typingText, { color: colors.textSecondary }]}>
+            {currentTypers.join(', ')} {currentTypers.length === 1 ? 'is' : 'are'} typing...
+          </Text>
+        </View>
+      )}
+
       <View style={[styles.inputWrapper, { backgroundColor: colors.card, borderTopColor: colors.border, paddingBottom: Math.max(insets.bottom, 12) }]}>
+        {replyTo && (
+          <View style={[styles.replyBanner, { backgroundColor: colors.bg, borderLeftColor: colors.accent }]}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.replyBannerTitle, { color: colors.accent }]}>Replying to {replyTo.from_user ? 'yourself' : 'them'}</Text>
+              <Text style={[styles.replyBannerText, { color: colors.text }]} numberOfLines={1}>{replyTo.body || 'Media message'}</Text>
+            </View>
+            <TouchableOpacity onPress={() => setReplyTo(null)}>
+              <Ionicons name="close-circle" size={20} color={colors.textMuted} />
+            </TouchableOpacity>
+          </View>
+        )}
         <View style={[styles.inputContainer, { backgroundColor: colors.bg, borderColor: colors.border }]}>
           <TouchableOpacity 
             style={styles.attachButton} 
@@ -317,7 +432,7 @@ const ChatScreen: React.FC = () => {
           <TextInput
             style={[styles.input, { color: colors.text }]}
             value={text}
-            onChangeText={setText}
+            onChangeText={(v) => { setText(v); broadcastTyping(chatId); }}
             placeholder="Type a message..."
             placeholderTextColor={colors.textMuted}
             multiline
@@ -363,24 +478,28 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
   },
+  messageRowWrapper: {
+    marginBottom: 4,
+  },
   messageRow: {
     flexDirection: 'row',
-    marginBottom: 4,
-    maxWidth: '85%',
   },
   meRow: {
     alignSelf: 'flex-end',
     justifyContent: 'flex-end',
+    paddingLeft: 40,
   },
   otherRow: {
     alignSelf: 'flex-start',
     justifyContent: 'flex-start',
+    paddingRight: 40,
   },
   messageBubble: {
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 20,
     overflow: 'hidden',
+    minWidth: 80,
   },
   meBubble: {
     borderBottomRightRadius: 4,
@@ -407,10 +526,14 @@ const styles = StyleSheet.create({
   },
   otherText: {
   },
+  bubbleFooter: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    marginTop: 4,
+  },
   timestamp: {
     fontSize: 10,
-    marginTop: 4,
-    alignSelf: 'flex-end',
   },
   meTimestamp: {
   },
@@ -609,6 +732,123 @@ const styles = StyleSheet.create({
   confirmBtnText: {
     fontSize: 16,
     fontWeight: '700',
+  },
+  typingContainer: {
+    position: 'absolute',
+    bottom: 90,
+    left: 16,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  typingText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  reactionPillContainer: {
+    flexDirection: 'row',
+    position: 'absolute',
+    bottom: -15,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderRadius: 12,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#e2e8f0',
+    zIndex: 5,
+  },
+  reactionPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  reactionEmoji: {
+    fontSize: 14,
+  },
+  reactionCount: {
+    fontSize: 10,
+    fontWeight: '800',
+    marginLeft: 2,
+    color: '#475569',
+  },
+  contextMenu: {
+    position: 'absolute',
+    bottom: -80,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 10,
+    zIndex: 20,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#e2e8f0',
+  },
+  reactionRow: {
+    flexDirection: 'row',
+    gap: 12,
+    paddingHorizontal: 8,
+    paddingBottom: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#cbd5e1',
+  },
+  reactionBtn: {
+    padding: 2,
+  },
+  menuActions: {
+    paddingTop: 8,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    gap: 12,
+  },
+  menuText: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  inlineReplyPreview: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+    opacity: 0.7,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    maxWidth: '100%',
+  },
+  inlineReplyText: {
+    fontSize: 11,
+    marginLeft: 4,
+  },
+  replyBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 12,
+    marginBottom: 8,
+    padding: 8,
+    borderRadius: 8,
+    borderLeftWidth: 4,
+  },
+  replyBannerTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    marginBottom: 2,
+  },
+  replyBannerText: {
+    fontSize: 13,
   },
 });
 

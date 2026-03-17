@@ -54,6 +54,11 @@ export interface Photographer {
   phone?: string | null;
   portfolio_urls?: string[] | null;
   subscription_tiers?: SubscriptionTier[];
+  website?: string | null;
+  instagram?: string | null;
+  tiktok?: string | null;
+  is_online?: boolean;
+  pinned_post_ids?: string[] | null;
   created_at?: string;
 }
 
@@ -77,6 +82,14 @@ export interface Model {
   price_range: string;
   tags: string[];
   portfolio_urls: string[];
+  experience_years?: number | null;
+  website?: string | null;
+  instagram?: string | null;
+  tiktok?: string | null;
+  is_online?: boolean;
+  specialties?: string[] | null;
+  hourly_rate?: number | null;
+  pinned_post_ids?: string[] | null;
   created_at?: string;
 }
 
@@ -112,19 +125,26 @@ export interface Message {
   from_user: boolean;
   body: string;
   timestamp: string;
-  message_type?: 'text' | 'media';
+  message_type?: string;
   media_url?: string | null;
   preview_url?: string | null;
   locked?: boolean;
   unlocked?: boolean;
   unlock_booking_id?: string | null;
   unlock_price?: number | null;
+  read_at?: string | null;
+  reply_to_id?: string | null;
+  reply_preview?: string | null;
+  audio_url?: string | null;
+  audio_duration_seconds?: number | null;
 }
 
 export interface Post {
   id: string;
   author_id: string;
   image_url: string;
+  video_url?: string | null;
+  media_type?: string | null;
   caption: string;
   created_at: string;
   location?: string;
@@ -132,6 +152,9 @@ export interface Post {
   liked: boolean;
   comment_count: number;
   profile?: ProfileSummary;
+  is_locked?: boolean;
+  price?: number;
+  is_premium?: boolean;
 }
 
 export interface Comment {

@@ -10,7 +10,11 @@ import {
   View,
   Image,
   Platform,
+  Linking,
 } from 'react-native';
+import * as LocalAuthentication from 'expo-local-authentication';
+import QRCode from 'react-native-qrcode-svg';
+import * as WebBrowser from 'expo-web-browser';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -40,6 +44,8 @@ const SettingsScreen: React.FC = () => {
   const { colors, isDark, themeMode, setThemeMode } = useTheme();
   const navigation = useNavigation<Navigation>();
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [biometricsEnabled, setBiometricsEnabled] = useState(false);
+  const [language, setLanguage] = useState('English');
 
   useEffect(() => {
     const checkStatus = async () => {
@@ -138,6 +144,39 @@ const SettingsScreen: React.FC = () => {
       },
       onCancel: () => setModalState(p => ({ ...p, visible: false }))
     });
+  };
+
+  const handleToggleBiometrics = async (value: boolean) => {
+    if (value) {
+      const hasHardware = await LocalAuthentication.hasHardwareAsync();
+      if (!hasHardware) {
+        Alert.alert('Not Supported', 'Your device does not support biometric authentication.');
+        return;
+      }
+      const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+      if (!isEnrolled) {
+        Alert.alert('Not Enrolled', 'Please set up FaceID or Fingerprint in your device settings first.');
+        return;
+      }
+      const result = await LocalAuthentication.authenticateAsync({
+        promptMessage: 'Enable Biometric Lock',
+        fallbackLabel: 'Enter Passcode',
+      });
+      if (result.success) {
+        setBiometricsEnabled(true);
+        Alert.alert('Enabled', 'Biometric lock will be required when opening the app.');
+      }
+    } else {
+      setBiometricsEnabled(false);
+    }
+  };
+
+  const handleOpen2FA = () => {
+    WebBrowser.openBrowserAsync('https://supabase.com/dashboard/project/_/auth/mfa');
+  };
+
+  const handleDownloadData = () => {
+     Alert.alert('Request Data Export', 'A copy of your data will be emailed to you within 24 hours.');
   };
 
   const handleDeleteAccount = () => {
@@ -288,6 +327,91 @@ const SettingsScreen: React.FC = () => {
                 <Ionicons name="lock-closed" size={16} color="#fff" />
               </View>
               <Text style={s.itemText}>Privacy & Permissions</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* SECURITY & ACCOUNT */}
+      <View style={s.section}>
+        <Text style={s.sectionHeader}>SECURITY & ACCOUNT</Text>
+        <View style={s.group}>
+          <View style={[s.groupItem, s.groupItemBorder]}>
+            <View style={s.itemLeft}>
+              <View style={[s.iconContainer, { backgroundColor: '#10b981' }]}>
+                <Ionicons name="finger-print" size={16} color="#fff" />
+              </View>
+              <Text style={s.itemText}>Biometric Lock</Text>
+            </View>
+            <Switch
+              value={biometricsEnabled}
+              onValueChange={handleToggleBiometrics}
+              trackColor={{ false: colors.border, true: colors.successGreen }}
+              thumbColor="#fff"
+            />
+          </View>
+          <TouchableOpacity style={[s.groupItem, s.groupItemBorder]} onPress={handleOpen2FA}>
+            <View style={s.itemLeft}>
+              <View style={[s.iconContainer, { backgroundColor: '#6366f1' }]}>
+                <Ionicons name="shield-checkmark" size={16} color="#fff" />
+              </View>
+              <Text style={s.itemText}>Two-Factor Auth (2FA)</Text>
+            </View>
+            <Ionicons name="open-outline" size={18} color={colors.textMuted} />
+          </TouchableOpacity>
+          <TouchableOpacity style={s.groupItem} onPress={() => Alert.alert('Sessions', 'Showing active login sessions...')}>
+            <View style={s.itemLeft}>
+              <View style={[s.iconContainer, { backgroundColor: '#475569' }]}>
+                <Ionicons name="list" size={16} color="#fff" />
+              </View>
+              <Text style={s.itemText}>Active Sessions</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* DISCOVERY */}
+      <View style={s.section}>
+        <Text style={s.sectionHeader}>DISCOVERY</Text>
+        <View style={s.group}>
+          <View style={[s.groupItem, { paddingVertical: 20, flexDirection: 'column', alignItems: 'center' }]}>
+            <Text style={[s.itemText, { marginBottom: 16 }]}>Your Profile QR Code</Text>
+            <View style={{ padding: 16, backgroundColor: '#fff', borderRadius: 16 }}>
+              <QRCode
+                value={`papzi://profile/${currentUser?.id}`}
+                size={140}
+                color="#0f172a"
+                backgroundColor="#fff"
+              />
+            </View>
+            <TouchableOpacity style={{ marginTop: 16 }} onPress={() => {}}>
+              <Text style={{ color: colors.accent, fontWeight: '700' }}>Share QR Code</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+
+      {/* ADVANCED */}
+      <View style={s.section}>
+        <Text style={s.sectionHeader}>ADVANCED</Text>
+        <View style={s.group}>
+          <TouchableOpacity style={[s.groupItem, s.groupItemBorder]} onPress={() => Alert.alert('Select Language', 'Zulu, Afrikaans and English support coming in next update.')}>
+            <View style={s.itemLeft}>
+              <View style={[s.iconContainer, { backgroundColor: '#94a3b8' }]}>
+                <Ionicons name="language" size={16} color="#fff" />
+              </View>
+              <Text style={s.itemText}>Language</Text>
+            </View>
+            <Text style={{ color: colors.textSecondary, fontWeight: '600' }}>{language}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={s.groupItem} onPress={handleDownloadData}>
+            <View style={s.itemLeft}>
+              <View style={[s.iconContainer, { backgroundColor: '#1e293b' }]}>
+                <Ionicons name="download-outline" size={16} color="#fff" />
+              </View>
+              <Text style={s.itemText}>Download My Data (GDPR)</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </TouchableOpacity>

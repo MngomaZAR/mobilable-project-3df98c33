@@ -73,7 +73,7 @@ const ROLE_OPTIONS: RoleOption[] = [
 ];
 
 const AuthScreen: React.FC = () => {
-  const { signIn, signUp, signInWithOAuth, resetState, authenticating, error } = useAppData();
+  const { signIn, signUp, signInWithOAuth, resetState, authenticating, error, setState } = useAppData();
   const [mode, setMode] = useState<Mode>('signin');
   const [localSubmitting, setLocalSubmitting] = useState(false);
 
@@ -234,13 +234,13 @@ const AuthScreen: React.FC = () => {
           <View style={styles.switcher}>
             <TouchableOpacity
               style={[styles.switchBtn, mode === 'signin' && styles.switchBtnActive]}
-              onPress={() => { setMode('signin'); setLocalMessage(null); setLocalSuccess(null); setFullName(''); }}
+              onPress={() => { setMode('signin'); setLocalMessage(null); setLocalSuccess(null); setFullName(''); setState({ error: null }); }}
             >
               <Text style={[styles.switchTxt, mode === 'signin' && styles.switchTxtActive]}>Sign In</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.switchBtn, mode === 'signup' && styles.switchBtnActive]}
-              onPress={() => { setMode('signup'); setLocalMessage(null); setLocalSuccess(null); setFullName(''); }}
+              onPress={() => { setMode('signup'); setLocalMessage(null); setLocalSuccess(null); setFullName(''); setState({ error: null }); }}
             >
               <Text style={[styles.switchTxt, mode === 'signup' && styles.switchTxtActive]}>Create Account</Text>
             </TouchableOpacity>

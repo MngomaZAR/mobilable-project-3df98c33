@@ -258,6 +258,58 @@ const ModelPremiumDashboard: React.FC = () => {
           ))}
         </View>
 
+        {/* Tip Goal Bar */}
+        <View style={s.section}>
+          <View style={s.sectionHeader}>
+            <Text style={s.sectionTitle}>Tip Goal</Text>
+            <TouchableOpacity onPress={() => Alert.alert('Edit Goal', 'Feature coming soon.')}>
+              <Text style={s.viewAll}>Edit</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={s.goalCard}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+              <Text style={s.goalTitle}>New Camera Kit</Text>
+              <Text style={s.goalAmount}>R1,200 / R5,000</Text>
+            </View>
+            <View style={s.goalTrack}>
+              <View style={[s.goalFill, { width: '24%' }]} />
+            </View>
+            <Text style={s.goalSub}>24% completed • 12 contributors</Text>
+          </View>
+        </View>
+
+        {/* Subscription Tiers */}
+        <View style={s.section}>
+          <View style={s.sectionHeader}>
+            <Text style={s.sectionTitle}>Subscription Tiers</Text>
+            <TouchableOpacity onPress={() => Alert.alert('Add Tier', 'Feature coming soon.')}>
+              <Text style={s.viewAll}>+ Add New</Text>
+            </TouchableOpacity>
+          </View>
+          {Object.entries(tierMap).length === 0 ? (
+            <Text style={s.empty}>You haven't set up any subscription tiers yet.</Text>
+          ) : (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ paddingBottom: 8 }}>
+              {Object.entries(tierMap).map(([id, tier]) => (
+                <View key={id} style={s.tierCard}>
+                   <View style={s.tierHeader}>
+                     <Text style={s.tierName}>{tier.name}</Text>
+                     <TouchableOpacity onPress={() => Alert.alert('Edit Tier', 'Feature coming soon.')}>
+                       <Ionicons name="ellipsis-horizontal" size={18} color="#94a3b8" />
+                     </TouchableOpacity>
+                   </View>
+                   <Text style={s.tierPrice}>R{tier.price ?? 0} <Text style={{ fontSize: 13, color: '#64748b' }}>/ mo</Text></Text>
+                   <View style={s.tierPerks}>
+                     <Text style={s.tierPerk}>✓ Exclusive feed access</Text>
+                     <Text style={s.tierPerk}>✓ Direct messaging</Text>
+                     <Text style={s.tierPerk}>✓ Priority booking</Text>
+                   </View>
+                </View>
+              ))}
+            </ScrollView>
+          )}
+        </View>
+
         {/* Recent bookings */}
         <View style={s.section}>
           <View style={s.sectionHeader}>
@@ -311,6 +363,28 @@ const ModelPremiumDashboard: React.FC = () => {
           )}
         </View>
 
+        {/* Fan Leaderboard */}
+        <View style={s.section}>
+          <View style={s.sectionHeader}>
+            <Text style={s.sectionTitle}>Top Fans (This Month)</Text>
+            <Ionicons name="trophy-outline" size={18} color="#f59e0b" />
+          </View>
+          <View style={s.leaderboardCard}>
+            {[
+              { name: 'John Doe', amount: 2400, rank: 1, avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100' },
+              { name: 'Sarah W.', amount: 1850, rank: 2, avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100' },
+              { name: 'Mike R.', amount: 900, rank: 3, avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100' },
+            ].map((fan, i) => (
+              <View key={fan.name} style={[s.fanRow, i === 2 && { borderBottomWidth: 0 }]}>
+                <Text style={s.fanRank}>{fan.rank}</Text>
+                <Image source={{ uri: fan.avatar }} style={s.fanAvatar} />
+                <Text style={s.fanName}>{fan.name}</Text>
+                <Text style={s.fanAmount}>R{fan.amount.toLocaleString('en-ZA')}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+
         {/* Top photographers to collaborate */}
         {(state.photographers ?? []).length > 0 && (
           <View style={s.section}>
@@ -345,6 +419,15 @@ const ModelPremiumDashboard: React.FC = () => {
             </View>
             <Ionicons name="chevron-forward" size={20} color="#fbbf24" />
           </LinearGradient>
+        </TouchableOpacity>
+
+        {/* Payout Settings */}
+        <TouchableOpacity 
+          style={s.payoutBtn} 
+          onPress={() => Alert.alert('Payout Setup', 'Bank account verification coming soon.')}
+        >
+          <Ionicons name="card-outline" size={20} color="#fff" />
+          <Text style={s.payoutBtnText}>Manage Payout Methods</Text>
         </TouchableOpacity>
       </ScrollView>
 
@@ -453,6 +536,26 @@ const s = StyleSheet.create({
   upgradeBannerInner: { flexDirection: 'row', alignItems: 'center', padding: 18, borderRadius: 20 },
   upgradeTitle: { color: '#fbbf24', fontWeight: '900', fontSize: 15 },
   upgradeSub: { color: '#a5b4fc', fontSize: 12, marginTop: 2 },
+  goalCard: { backgroundColor: '#1e293b', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#334155' },
+  goalTitle: { color: '#fff', fontWeight: '800', fontSize: 15 },
+  goalAmount: { color: '#ec4899', fontWeight: '800', fontSize: 14 },
+  goalTrack: { height: 8, backgroundColor: '#0f172a', borderRadius: 4, overflow: 'hidden', marginBottom: 8 },
+  goalFill: { height: '100%', backgroundColor: '#ec4899', borderRadius: 4 },
+  goalSub: { color: '#94a3b8', fontSize: 12 },
+  tierCard: { backgroundColor: '#1e293b', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#334155', width: 220, marginRight: 12 },
+  tierHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  tierName: { color: '#a855f7', fontWeight: '800', fontSize: 15, textTransform: 'uppercase' },
+  tierPrice: { color: '#fff', fontWeight: '900', fontSize: 24, marginBottom: 12 },
+  tierPerks: { gap: 6 },
+  tierPerk: { color: '#cbd5e1', fontSize: 13 },
+  leaderboardCard: { backgroundColor: '#1e293b', borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: '#334155' },
+  fanRow: { flexDirection: 'row', alignItems: 'center', padding: 12, borderBottomWidth: 1, borderBottomColor: '#334155', gap: 12 },
+  fanRank: { color: '#94a3b8', fontWeight: '800', width: 20 },
+  fanAvatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#334155' },
+  fanName: { color: '#fff', fontWeight: '600', flex: 1 },
+  fanAmount: { color: '#10b981', fontWeight: '800' },
+  payoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#334155', padding: 16, borderRadius: 16, marginTop: 12, gap: 10, borderWidth: 1, borderColor: '#475569' },
+  payoutBtnText: { color: '#fff', fontWeight: '800', fontSize: 14 },
   // Modal
   modalBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: '#1e293b', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40, maxHeight: '80%' },

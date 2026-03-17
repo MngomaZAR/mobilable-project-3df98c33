@@ -1,5 +1,4 @@
-import React, { useMemo, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+﻿import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -13,6 +12,12 @@ import { BOOKING_PACKAGES } from '../constants/pricing';
 type Route = RouteProp<RootStackParamList, 'BookingForm'>;
 type Navigation = StackNavigationProp<RootStackParamList, 'BookingForm'>;
 
+const ADDONS = [
+  { id: 'studio', label: 'Studio Hire (2h)', price: 500 },
+  { id: 'makeup', label: 'Make-up Artist', price: 800 },
+  { id: 'rush', label: 'Rush Delivery (24h)', price: 300 },
+];
+
 const BookingFormScreen: React.FC = () => {
   const { params } = useRoute<Route>();
   const navigation = useNavigation<Navigation>();
@@ -21,6 +26,8 @@ const BookingFormScreen: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [timeSlot, setTimeSlot] = useState('Golden hour (4-7)');
   const [selectedPackageId, setSelectedPackageId] = useState(BOOKING_PACKAGES[1]?.id ?? 'starter');
+  const [selectedAddons, setSelectedAddons] = useState<Set<string>>(new Set());
+  const [isInstantBook, setIsInstantBook] = useState(false);
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -44,7 +51,7 @@ const BookingFormScreen: React.FC = () => {
 
   const formattedDate = useMemo(() => {
     if (!selectedDate) return 'Pick a date and time slot below';
-    return `${selectedDate.toDateString()} · ${timeSlot}`;
+    return `${selectedDate.toDateString()} Ã‚Â· ${timeSlot}`;
   }, [selectedDate, timeSlot]);
 
   const selectedPackage = useMemo(
@@ -56,12 +63,18 @@ const BookingFormScreen: React.FC = () => {
   const estimatedBaseAmount = useMemo(() => {
     const level = ((talent?.price_range || '').match(/\$/g) || []).length || 2;
     const multiplier = Math.max(0.75, level / 2); // level 2 = 1x baseline
-    return Math.round(selectedPackage.basePrice * multiplier);
-  }, [talent.price_range, selectedPackage.basePrice]);
+    let total = Math.round(selectedPackage.basePrice * multiplier);
+    selectedAddons.forEach(id => {
+      const addon = ADDONS.find(a => a.id === id);
+      if (addon) total += addon.price;
+    });
+    return total;
+  }, [talent.price_range, selectedPackage.basePrice, selectedAddons]);
 
   const estimatedRate = `From R${estimatedBaseAmount.toLocaleString('en-ZA')}`;
   const commissionAmount = Math.round(estimatedBaseAmount * 0.30);
-  const photographerPayout = estimatedBaseAmount - commissionAmount;
+  const vatAmount = Math.round(commissionAmount * 0.15); // VAT on the platform fee
+  const photographerPayout = estimatedBaseAmount - commissionAmount - vatAmount;
 
   const handleSubmit = async () => {
     if (!selectedDate) {
@@ -71,20 +84,26 @@ const BookingFormScreen: React.FC = () => {
 
     try {
       setSubmitting(true);
-      // Store booking_date as clean ISO date (YYYY-MM-DD) — Postgres date column compatible
+      // Store booking_date as clean ISO date (YYYY-MM-DD) Ã¢â‚¬â€ Postgres date column compatible
       const normalizedDate = new Date(selectedDate);
       normalizedDate.setUTCHours(12, 0, 0, 0);
       const bookingDate = normalizedDate.toISOString().split('T')[0]; // e.g. '2026-03-15'
+      
+      const addonNames = Array.from(selectedAddons).map(id => ADDONS.find(a => a.id === id)?.label).filter(Boolean);
+      const finalNotes = addonNames.length > 0
+        ? `[Add-ons: ${addonNames.join(', ')}]\n${notes}`
+        : notes;
+        
       const booking = await createBooking({
         talent_id: talent.id,
         talent_type: isModelTalent ? 'model' : 'photographer',
         booking_date: bookingDate,
-        package_type: `${selectedPackage.label} � ${timeSlot}`,
-        notes,
+        package_type: `${selectedPackage.label} â€¢ ${timeSlot}${isInstantBook ? ' (Instant Request)' : ''}`,
+        notes: finalNotes,
         base_amount: estimatedBaseAmount,
         travel_amount: 0,
       });
-      Alert.alert('Request sent', 'Your booking request was submitted and is ready to review.', [
+      Alert.alert(isInstantBook ? 'Booking Confirmed' : 'Request sent', isInstantBook ? 'Your booking was instantly confirmed!' : 'Your booking request was submitted and is ready to review.', [
         {
           text: 'View booking',
           onPress: () => navigation.replace('BookingDetail', { bookingId: booking.id }),
@@ -110,7 +129,7 @@ const BookingFormScreen: React.FC = () => {
     <ScrollView contentContainerStyle={styles.container}>
       <View style={styles.heroCard}>
         <Text style={styles.heroTitle}>Book {talent.name}</Text>
-        <Text style={styles.heroMeta}>{talent.style} · {talent.location}</Text>
+        <Text style={styles.heroMeta}>{talent.style} Ã‚Â· {talent.location}</Text>
         <View style={styles.heroFooter}>
           <Text style={styles.heroPrice}>{estimatedRate}</Text>
           <TouchableOpacity style={styles.msgBadge} onPress={handleMessage}>
@@ -129,9 +148,9 @@ const BookingFormScreen: React.FC = () => {
       </View>
       <BookingCalendar value={selectedDate} onChange={setSelectedDate} timeSlot={timeSlot} onTimeChange={setTimeSlot} />
       <View style={styles.detailsCard}>
-        <Text style={styles.label}>Package</Text>
-        <Text style={styles.packageHint}>Choose a package for instant pricing clarity.</Text>
-        <View style={styles.packageGrid}>
+        <Text style={styles.label}>Package Comparison</Text>
+        <Text style={styles.packageHint}>Swipe to compare packages side-by-side.</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.packageGrid}>
           {BOOKING_PACKAGES.map((pkg) => {
             const isActive = pkg.id === selectedPackageId;
             return (
@@ -150,13 +169,56 @@ const BookingFormScreen: React.FC = () => {
                 </Text>
                 <Text style={[styles.packageMeta, isActive && styles.packageMetaActive]}>{pkg.description}</Text>
                 <Text style={[styles.packageMeta, isActive && styles.packageMetaActive]}>
-                  {pkg.highlights.join(' � ')}
+                  {pkg.highlights.join(' â€¢ ')}
                 </Text>
               </TouchableOpacity>
             );
           })}
-        </View>
+        </ScrollView>
+      </View>
 
+      <View style={styles.detailsCard}>
+        <Text style={styles.label}>Add-ons</Text>
+        <Text style={styles.packageHint}>Enhance your shoot with these optional extras.</Text>
+        {ADDONS.map(addon => {
+          const isSelected = selectedAddons.has(addon.id);
+          return (
+            <TouchableOpacity 
+              key={addon.id} 
+              style={[styles.addonRow, isSelected && styles.addonRowActive]}
+              onPress={() => {
+                Haptics.selectionAsync();
+                const next = new Set(selectedAddons);
+                if (next.has(addon.id)) next.delete(addon.id); else next.add(addon.id);
+                setSelectedAddons(next);
+              }}
+            >
+              <View style={styles.addonLeft}>
+                <Ionicons name={isSelected ? "checkbox" : "square-outline"} size={20} color={isSelected ? "#f97316" : "#cbd5e1"} />
+                <Text style={[styles.addonLabel, isSelected && styles.addonLabelActive]}>{addon.label}</Text>
+              </View>
+              <Text style={styles.addonPrice}>+R{addon.price}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      <View style={styles.detailsCard}>
+         <View style={styles.instantRow}>
+            <View style={{ flex: 1, paddingRight: 16 }}>
+              <Text style={styles.label}>Instant Book</Text>
+              <Text style={styles.packageHint}>Skip the approval process and lock in the date instantly.</Text>
+            </View>
+            <TouchableOpacity 
+               style={[styles.toggleSwitch, isInstantBook && styles.toggleSwitchActive]}
+               onPress={() => { Haptics.selectionAsync(); setIsInstantBook(!isInstantBook); }}
+            >
+               <View style={[styles.toggleKnob, isInstantBook && styles.toggleKnobActive]} />
+            </TouchableOpacity>
+         </View>
+      </View>
+
+      <View style={styles.detailsCard}>
         <Text style={styles.label}>Notes</Text>
         <TextInput
           placeholder="Shot list, vibe, must-have moments"
@@ -176,23 +238,27 @@ const BookingFormScreen: React.FC = () => {
           <Text style={styles.breakdownValue}>R{estimatedBaseAmount.toLocaleString('en-ZA')}</Text>
         </View>
         <View style={styles.breakdownRow}>
-          <Text style={styles.breakdownLabel}>Platform fee (30%)</Text>
-          <Text style={[styles.breakdownValue, { color: '#ef4444' }]}>−R{commissionAmount.toLocaleString('en-ZA')}</Text>
+          <Text style={styles.breakdownLabel}>Platform fee</Text>
+          <Text style={[styles.breakdownValue, { color: '#ef4444' }]}>-R{commissionAmount.toLocaleString('en-ZA')}</Text>
+        </View>
+        <View style={styles.breakdownRow}>
+          <Text style={styles.breakdownLabel}>VAT (15% on fee)</Text>
+          <Text style={[styles.breakdownValue, { color: '#ef4444' }]}>-R{vatAmount.toLocaleString('en-ZA')}</Text>
         </View>
         <View style={[styles.breakdownRow, styles.breakdownTotal]}>
           <Text style={[styles.breakdownLabel, { fontWeight: '800', color: '#0f172a' }]}>Talent payout</Text>
           <Text style={[styles.breakdownValue, { color: '#16a34a', fontWeight: '800' }]}>R{photographerPayout.toLocaleString('en-ZA')}</Text>
         </View>
-        <Text style={styles.breakdownNote}>* Exact total calculated at checkout based on final scope</Text>
+        <Text style={styles.breakdownNote}>* Exact total calculated at checkout based on final scope. You will be charged R{estimatedBaseAmount.toLocaleString('en-ZA')}</Text>
       </View>
 
       <TouchableOpacity
         style={[styles.cta, submitting && { opacity: 0.7 }]}
         onPress={handleSubmit}
-        disabled={submitting}
-        activeOpacity={submitting ? 1 : 0.8}
+        disabled={submitting || !selectedDate}
+        activeOpacity={submitting || !selectedDate ? 1 : 0.8}
       >
-        <Text style={styles.ctaText}>{submitting ? 'Saving...' : 'Send request'}</Text>
+        <Text style={styles.ctaText}>{submitting ? 'Saving...' : isInstantBook ? 'Instant Book' : 'Send Request'}</Text>
       </TouchableOpacity>
     </ScrollView>
   );
@@ -288,8 +354,8 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   packageGrid: {
-    gap: 10,
-    marginBottom: 14,
+    gap: 12,
+    marginBottom: 4,
   },
   packageCard: {
     backgroundColor: '#f8fafc',
@@ -297,6 +363,7 @@ const styles = StyleSheet.create({
     padding: 12,
     borderWidth: 1,
     borderColor: '#e5e7eb',
+    width: 200,
   },
   packageCardActive: {
     borderColor: '#0f172a',
@@ -319,11 +386,6 @@ const styles = StyleSheet.create({
     color: '#f97316',
     fontWeight: '800',
     marginTop: 6,
-  },
-  packageMeta: {
-    color: '#64748b',
-    fontSize: 11,
-    marginTop: 4,
   },
   packageMetaActive: {
     color: '#475569',
@@ -396,12 +458,66 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     marginTop: 4,
   },
+  addonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#f1f5f9',
+  },
+  addonRowActive: {
+  },
+  addonLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  addonLabel: {
+    fontSize: 14,
+    color: '#475569',
+    fontWeight: '500',
+  },
+  addonLabelActive: {
+    color: '#0f172a',
+    fontWeight: '700',
+  },
+  addonPrice: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#f97316',
+  },
+  instantRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+  },
+  toggleSwitch: {
+    width: 50,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#cbd5e1',
+    padding: 2,
+    justifyContent: 'center',
+  },
+  toggleSwitchActive: {
+    backgroundColor: '#16a34a',
+  },
+  toggleKnob: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  toggleKnobActive: {
+    transform: [{ translateX: 20 }],
+  },
 });
 
 export default BookingFormScreen;
-
-
-
-
-
-

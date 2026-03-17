@@ -40,7 +40,7 @@ const AgeVerificationScreen: React.FC = () => {
 
       // Mark profile as age-verified
       const { error } = await supabase.from('profiles')
-        .update({ kyc_status: 'age_verified' })
+        .update({ kyc_status: 'approved' })
         .eq('id', currentUser!.id);
         
       if (error) throw error;

@@ -1,23 +1,35 @@
-import React, { createContext, useCallback, useContext, useState } from 'react';
+import React, { createContext, useCallback, useContext, useRef, useState } from 'react';
 import { supabase, hasSupabase } from '../config/supabaseClient';
 import { ConversationSummary, Message, AppUser } from '../types';
 import { logError } from '../utils/errors';
 import { startConversationViaEdge } from '../services/chatService';
-import { sendConversationTextMessage, sendConversationLockedMediaMessage } from '../services/chatMessageService';
+import { sendConversationLockedMediaMessage } from '../services/chatMessageService';
 import { trackEvent } from '../services/analyticsService';
 import { useAuth } from './AuthContext';
+import { Analytics } from '../utils/analytics';
+
+export type Reaction = { emoji: string; count: number; myReaction: boolean };
+export type ReactionsMap = Record<string, Reaction[]>; // keyed by messageId
 
 type MessagingContextValue = {
   conversations: ConversationSummary[];
   messages: Record<string, Message[]>;
+  reactions: ReactionsMap;
+  typingUsers: Record<string, string[]>; // chatId -> [userName, ...]
   loading: boolean;
   fetchConversations: () => Promise<void>;
   fetchMessages: (chatId: string) => Promise<void>;
-  sendMessage: (chatId: string, text: string) => Promise<Message>;
+  sendMessage: (chatId: string, text: string, replyToId?: string) => Promise<Message>;
   sendLockedMediaMessage: (chatId: string, payload: { mediaUrl: string; previewUrl?: string; text?: string; unlockBookingId?: string; unlockPrice?: number; }) => Promise<Message>;
   unlockPremiumMessage: (chatId: string, messageId: string) => Promise<boolean>;
   startConversationWithUser: (participantId: string, title?: string) => Promise<{ id: string; title: string }>;
   subscribeToMessages: (chatId: string) => () => void;
+  markMessagesRead: (chatId: string) => Promise<void>;
+  broadcastTyping: (chatId: string) => void;
+  addReaction: (chatId: string, messageId: string, emoji: string) => Promise<void>;
+  removeReaction: (chatId: string, messageId: string, emoji: string) => Promise<void>;
+  fetchReactions: (messageIds: string[]) => Promise<void>;
+  deleteMessage: (chatId: string, messageId: string) => Promise<void>;
 };
 
 const MessagingContext = createContext<MessagingContextValue | undefined>(undefined);
@@ -26,7 +38,10 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const { currentUser } = useAuth();
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [messages, setMessages] = useState<Record<string, Message[]>>({});
+  const [reactions, setReactions] = useState<ReactionsMap>({});
+  const [typingUsers, setTypingUsers] = useState<Record<string, string[]>>({});
   const [loading, setLoading] = useState(false);
+  const typingTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   const fetchConversations = useCallback(async () => {
     if (!hasSupabase || !currentUser) return;
@@ -112,35 +127,120 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   }, [currentUser]);
 
+  const markMessagesRead = useCallback(async (chatId: string) => {
+    if (!currentUser || !hasSupabase) return;
+    try {
+      await supabase
+        .from('messages')
+        .update({ read_at: new Date().toISOString() })
+        .eq('chat_id', chatId)
+        .neq('sender_id', currentUser.id)
+        .is('read_at', null);
+    } catch { /* silent */ }
+  }, [currentUser]);
+
+  const broadcastTyping = useCallback((chatId: string) => {
+    if (!currentUser || !hasSupabase) return;
+    supabase.channel(`typing-${chatId}`).track({
+      user_id: currentUser.id,
+      name: (currentUser as any).full_name ?? 'Someone',
+      typing: true,
+    });
+    // Auto-clear after 3s
+    if (typingTimers.current[chatId]) clearTimeout(typingTimers.current[chatId]);
+    typingTimers.current[chatId] = setTimeout(() => {
+      supabase.channel(`typing-${chatId}`).track({ user_id: currentUser.id, typing: false });
+    }, 3000);
+  }, [currentUser]);
+
+  const addReaction = useCallback(async (chatId: string, messageId: string, emoji: string) => {
+    if (!currentUser || !hasSupabase) return;
+    try {
+      await supabase.from('message_reactions').insert({ message_id: messageId, user_id: currentUser.id, emoji });
+      await fetchReactions([messageId]);
+    } catch { /* likely duplicate — ignore */ }
+  }, [currentUser]); // eslint-disable-line
+
+  const removeReaction = useCallback(async (chatId: string, messageId: string, emoji: string) => {
+    if (!currentUser || !hasSupabase) return;
+    try {
+      await supabase.from('message_reactions')
+        .delete()
+        .eq('message_id', messageId)
+        .eq('user_id', currentUser.id)
+        .eq('emoji', emoji);
+      await fetchReactions([messageId]);
+    } catch { /* silent */ }
+  }, [currentUser]); // eslint-disable-line
+
+  const fetchReactions = useCallback(async (messageIds: string[]) => {
+    if (!currentUser || !hasSupabase || messageIds.length === 0) return;
+    try {
+      const { data } = await supabase
+        .from('message_reactions')
+        .select('message_id, emoji, user_id')
+        .in('message_id', messageIds);
+      if (!data) return;
+      const grouped: ReactionsMap = {};
+      messageIds.forEach(id => { grouped[id] = []; });
+      data.forEach((row: any) => {
+        const existing = grouped[row.message_id]?.find((r: Reaction) => r.emoji === row.emoji);
+        if (existing) {
+          existing.count++;
+          if (row.user_id === currentUser.id) existing.myReaction = true;
+        } else {
+          if (!grouped[row.message_id]) grouped[row.message_id] = [];
+          grouped[row.message_id].push({ emoji: row.emoji, count: 1, myReaction: row.user_id === currentUser.id });
+        }
+      });
+      setReactions(prev => ({ ...prev, ...grouped }));
+    } catch { /* silent */ }
+  }, [currentUser]);
+
+  const deleteMessage = useCallback(async (chatId: string, messageId: string) => {
+    if (!currentUser || !hasSupabase) return;
+    try {
+      await supabase.from('messages').update({ deleted_at: new Date().toISOString(), body: 'Message deleted' }).eq('id', messageId).eq('sender_id', currentUser.id);
+      setMessages(prev => ({ ...prev, [chatId]: (prev[chatId] ?? []).filter(m => m.id !== messageId) }));
+    } catch { /* silent */ }
+  }, [currentUser]);
+
   const fetchMessages = useCallback(async (chatId: string) => {
     if (!hasSupabase || !chatId) return;
     try {
       // Direct DB query using the correct column name: chat_id
       const { data, error } = await supabase
         .from('messages')
-        .select('id, chat_id, sender_id, body, message_type, media_url, preview_url, locked, unlocked, unlock_booking_id, created_at')
+        .select('id, chat_id, sender_id, body, message_type, media_url, preview_url, locked, unlocked, unlock_booking_id, created_at, read_at, reply_to_id, reply_preview, audio_url, audio_duration_seconds')
         .eq('chat_id', chatId)
+        .is('deleted_at', null)
         .order('created_at', { ascending: true });
 
       if (error) throw error;
 
-      setMessages(prev => ({
-        ...prev,
-        [chatId]: (data ?? []).map((m: any) => ({
-          id: m.id,
-          conversation_id: m.chat_id,
-          from_user: m.sender_id === currentUser?.id,
-          body: m.body ?? '',
-          timestamp: m.created_at,
-          message_type: m.message_type ?? 'text',
-          media_url: m.media_url ?? null,
-          preview_url: m.preview_url ?? null,
-          locked: m.locked ?? false,
-          unlocked: m.unlocked ?? true,
-          unlock_booking_id: m.unlock_booking_id ?? null,
-          unlock_price: m.unlock_price ?? m.unlockPrice ?? null,
-        })),
+      const mapped = (data ?? []).map((m: any) => ({
+        id: m.id,
+        conversation_id: m.chat_id,
+        from_user: m.sender_id === currentUser?.id,
+        body: m.body ?? '',
+        timestamp: m.created_at,
+        message_type: m.message_type ?? 'text',
+        media_url: m.media_url ?? null,
+        preview_url: m.preview_url ?? null,
+        locked: m.locked ?? false,
+        unlocked: m.unlocked ?? true,
+        unlock_booking_id: m.unlock_booking_id ?? null,
+        unlock_price: m.unlock_price ?? m.unlockPrice ?? null,
+        read_at: m.read_at ?? null,
+        reply_to_id: m.reply_to_id ?? null,
+        reply_preview: m.reply_preview ?? null,
+        audio_url: m.audio_url ?? null,
+        audio_duration_seconds: m.audio_duration_seconds ?? null,
       }));
+      setMessages(prev => ({ ...prev, [chatId]: mapped }));
+      // Fetch reactions for these messages
+      const ids = mapped.map((m: any) => m.id);
+      if (ids.length > 0) fetchReactions(ids);
     } catch (err) {
       logError('Messaging:fetchMessages', err);
     }
@@ -158,7 +258,7 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         filter: `chat_id=eq.${chatId}`,
       }, payload => {
         const raw = payload.new as any;
-        if (raw.sender_id === currentUser.id) return; // already optimistically added
+        if (raw.sender_id === currentUser.id) return;
 
         const msg: Message = {
           id: raw.id,
@@ -173,6 +273,9 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           unlocked: raw.unlocked ?? true,
           unlock_booking_id: raw.unlock_booking_id ?? null,
           unlock_price: raw.unlock_price ?? raw.unlockPrice ?? null,
+          read_at: null,
+          reply_to_id: raw.reply_to_id ?? null,
+          reply_preview: raw.reply_preview ?? null,
         };
 
         setMessages(prev => {
@@ -180,13 +283,25 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           if (list.some(m => m.id === msg.id)) return prev;
           return { ...prev, [chatId]: [...list, msg] };
         });
+
+        // Auto-mark read when screen is open
+        markMessagesRead(chatId);
+      })
+      // Typing presence
+      .on('presence', { event: 'sync' }, () => {
+        const state = channel.presenceState<{ user_id: string; name: string; typing: boolean }>();
+        const typers = Object.values(state)
+          .flat()
+          .filter((u: any) => u.user_id !== currentUser.id && u.typing)
+          .map((u: any) => u.name);
+        setTypingUsers(prev => ({ ...prev, [chatId]: typers }));
       })
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [currentUser]);
+  }, [currentUser, markMessagesRead]);
 
-  const sendMessage = async (chatId: string, text: string): Promise<Message> => {
+  const sendMessage = async (chatId: string, text: string, replyToId?: string): Promise<Message> => {
     if (!currentUser || !hasSupabase) throw new Error('Auth required');
     const trimmed = text.trim();
     if (!trimmed) throw new Error('Message required');
@@ -207,9 +322,16 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       // Insert directly to DB (chat_id is the real column)
       const { data, error } = await supabase
         .from('messages')
-        .insert({ chat_id: chatId, sender_id: currentUser.id, body: trimmed, message_type: 'text' })
-        .select('id, chat_id, sender_id, body, message_type, created_at')
+        .insert({
+          chat_id: chatId,
+          sender_id: currentUser.id,
+          body: trimmed,
+          message_type: 'text',
+          reply_to_id: replyToId ?? null,
+        })
+        .select('id, chat_id, sender_id, body, message_type, created_at, reply_to_id')
         .single();
+      Analytics.messageSent(chatId, false);
 
       if (error) throw error;
 
@@ -315,10 +437,13 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   return (
     <MessagingContext.Provider value={{
-      conversations, messages, loading,
+      conversations, messages, reactions, typingUsers, loading,
       fetchConversations, fetchMessages,
       sendMessage, sendLockedMediaMessage, unlockPremiumMessage,
       startConversationWithUser, subscribeToMessages,
+      markMessagesRead, broadcastTyping,
+      addReaction, removeReaction, fetchReactions,
+      deleteMessage,
     }}>
       {children}
     </MessagingContext.Provider>

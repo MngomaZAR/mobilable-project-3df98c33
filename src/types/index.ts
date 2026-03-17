@@ -1,4 +1,5 @@
 export type BookingStatus = 'pending' | 'accepted' | 'in_progress' | 'completed' | 'reviewed' | 'cancelled' | 'declined';
+export type AssignmentState = 'queued' | 'offered' | 'accepted' | 'expired' | 'cancelled';
 
 export type UserRole = 'client' | 'photographer' | 'model' | 'admin' | null;
 
@@ -115,8 +116,83 @@ export interface Booking {
   commission_amount: number;
   payout_amount: number;
   currency?: string;
+  fanout_count?: number | null;
+  intensity_level?: number | null;
+  quote_token?: string | null;
+  assignment_state?: AssignmentState | null;
+  eta_confidence?: number | null;
+  dispatch_request_id?: string | null;
   photographer?: { id: string; name: string; avatar_url: string; city: string | null };
   client?: { id: string; name: string; avatar_url: string; city: string | null };
+}
+
+export interface DispatchRequest {
+  id: string;
+  booking_id?: string | null;
+  client_id: string;
+  service_type: 'photography' | 'modeling' | 'combined' | 'video_call';
+  fanout_count: number;
+  intensity_level: number;
+  sla_timeout_seconds: number;
+  status: AssignmentState;
+  assignment_profile_id?: string | null;
+  quote_token?: string | null;
+  requested_lat?: number | null;
+  requested_lng?: number | null;
+  price_base?: number | null;
+  price_multiplier?: number | null;
+  price_estimate?: number | null;
+  expires_at?: string | null;
+  accepted_at?: string | null;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface DispatchOffer {
+  id: string;
+  dispatch_request_id: string;
+  provider_id: string;
+  offer_rank: number;
+  status: 'offered' | 'accepted' | 'declined' | 'expired' | 'cancelled';
+  idempotency_key?: string | null;
+  responded_at?: string | null;
+  created_at: string;
+}
+
+export interface PricingQuote {
+  id: string;
+  quote_token: string;
+  fanout_count: number;
+  intensity_level: number;
+  base_amount: number;
+  surge_multiplier: number;
+  intensity_multiplier: number;
+  total_amount: number;
+  currency: string;
+  status: 'preview' | 'accepted' | 'expired' | 'cancelled';
+  expires_at?: string | null;
+  created_at: string;
+}
+
+export interface EtaSnapshot {
+  booking_id: string;
+  eta_seconds: number;
+  eta_minutes: number;
+  eta_confidence: number;
+  distance_km?: number | null;
+  source: string;
+}
+
+export interface LeaderboardEntry {
+  rank: number;
+  user_id: string;
+  full_name: string;
+  seen_score: number;
+  scene_rank: number;
+  badges?: string[];
+  avatar_url?: string | null;
+  city?: string | null;
+  role?: UserRole;
 }
 
 export interface Message {

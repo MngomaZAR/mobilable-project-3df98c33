@@ -19,6 +19,12 @@ const AdminDashboardScreen: React.FC = () => {
   const { startConversationWithUser } = useMessaging();
   const [showNewMessage, setShowNewMessage] = React.useState(false);
   const [liveRevenue, setLiveRevenue] = useState<number | null>(null);
+  const [opsMetrics, setOpsMetrics] = useState({
+    dispatchOpen: 0,
+    avgEtaConfidence: 0,
+    moderationOpen: 0,
+    payoutExceptions: 0,
+  });
   const { colors, isDark } = useTheme();
 
   useEffect(() => {
@@ -34,6 +40,33 @@ const AdminDashboardScreen: React.FC = () => {
       } catch { /* silent — shows R0 */ }
     };
     fetchRevenue();
+  }, []);
+
+  useEffect(() => {
+    const fetchOpsMetrics = async () => {
+      try {
+        const [dispatchRes, etaRes, modRes, payoutRes] = await Promise.all([
+          supabase.from('dispatch_requests').select('id', { count: 'exact', head: true }).in('status', ['queued', 'offered']),
+          supabase.from('eta_snapshots').select('eta_confidence').order('created_at', { ascending: false }).limit(100),
+          supabase.from('moderation_cases').select('id', { count: 'exact', head: true }).in('status', ['open', 'in_review', 'escalated']),
+          supabase.from('payments').select('id', { count: 'exact', head: true }).in('status', ['failed', 'cancelled']),
+        ]);
+
+        const avgEtaConfidence = etaRes.data && etaRes.data.length > 0
+          ? etaRes.data.reduce((acc: number, row: any) => acc + Number(row.eta_confidence || 0), 0) / etaRes.data.length
+          : 0;
+
+        setOpsMetrics({
+          dispatchOpen: dispatchRes.count ?? 0,
+          avgEtaConfidence,
+          moderationOpen: modRes.count ?? 0,
+          payoutExceptions: payoutRes.count ?? 0,
+        });
+      } catch {
+        // keep defaults
+      }
+    };
+    fetchOpsMetrics();
   }, []);
 
   const pendingBookings = useMemo(
@@ -59,6 +92,24 @@ const AdminDashboardScreen: React.FC = () => {
               <Ionicons name="chatbubble-ellipses-outline" size={20} color={colors.accent} />
               <Text style={[styles.heroBtnText, { color: colors.text }]}>New Message</Text>
             </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={styles.statsRow}>
+          <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.statLabel, { color: colors.textMuted }]}>Dispatch Open</Text>
+            <Text style={[styles.statValue, { color: colors.text }]}>{opsMetrics.dispatchOpen}</Text>
+            <Text style={[styles.statMeta, { color: colors.accent }]}>Queued/offered</Text>
+          </View>
+          <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.statLabel, { color: colors.textMuted }]}>ETA Confidence</Text>
+            <Text style={[styles.statValue, { color: colors.text }]}>{(opsMetrics.avgEtaConfidence * 100).toFixed(0)}%</Text>
+            <Text style={[styles.statMeta, { color: '#10b981' }]}>Rolling avg</Text>
+          </View>
+          <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border, marginRight: 0 }]}>
+            <Text style={[styles.statLabel, { color: colors.textMuted }]}>Safety/Payout</Text>
+            <Text style={[styles.statValue, { color: colors.text }]}>{opsMetrics.moderationOpen}/{opsMetrics.payoutExceptions}</Text>
+            <Text style={[styles.statMeta, { color: colors.destructive }]}>Open mod / pay issues</Text>
           </View>
         </View>
 

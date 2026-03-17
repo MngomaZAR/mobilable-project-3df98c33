@@ -30,6 +30,8 @@ import { Post } from '../types';
 import { Story, StoryViewer } from './StoryViewer';
 import { HashtagText } from './HashtagText';
 import { PLACEHOLDER_IMAGE } from '../utils/constants';
+import { supabase } from '../config/supabaseClient';
+import { getForYouRanking } from '../services/dispatchService';
 
 type SocialFeedProps = {
   onCreatePost?: () => void;
@@ -62,6 +64,9 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
   const [followingOnly, setFollowingOnly] = useState(false);
   const [forYouOnly, setForYouOnly] = useState(false);
   const [bookmarkedPostIds, setBookmarkedPostIds] = useState<Set<string>>(new Set());
+  const [unlockedPostIds, setUnlockedPostIds] = useState<Set<string>>(new Set());
+  const [subscribedCreatorIds, setSubscribedCreatorIds] = useState<Set<string>>(new Set());
+  const [forYouRankedPostIds, setForYouRankedPostIds] = useState<string[]>([]);
 
   const lastTapRef = useRef<number | null>(null);
   const loadMoreInFlightRef = useRef(false);
@@ -171,16 +176,83 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
     loadFeed();
   }, [loadFeed]);
 
+  useEffect(() => {
+    if (!forYouOnly) return;
+    let active = true;
+    const hydrateRanking = async () => {
+      try {
+        const ranking = await getForYouRanking({ limit: 100 });
+        if (!active) return;
+        setForYouRankedPostIds((ranking.ranked_posts ?? []).map((r) => r.post_id));
+      } catch {
+        if (!active) return;
+        setForYouRankedPostIds([]);
+      }
+    };
+    hydrateRanking();
+    return () => { active = false; };
+  }, [forYouOnly, appState.currentUser?.id]);
+
+  useEffect(() => {
+    const userId = appState.currentUser?.id;
+    if (!userId) {
+      setUnlockedPostIds(new Set());
+      setSubscribedCreatorIds(new Set());
+      return;
+    }
+
+    const hydrateEntitlements = async () => {
+      const [unlocksRes, subsRes] = await Promise.all([
+        supabase.from('post_unlocks').select('post_id').eq('user_id', userId),
+        supabase.from('subscriptions').select('creator_id,status').eq('subscriber_id', userId).eq('status', 'active'),
+      ]);
+
+      if (unlocksRes.data) setUnlockedPostIds(new Set(unlocksRes.data.map((r: any) => r.post_id)));
+      if (subsRes.data) setSubscribedCreatorIds(new Set(subsRes.data.map((r: any) => r.creator_id)));
+    };
+
+    hydrateEntitlements().catch(() => {});
+  }, [appState.currentUser?.id]);
+
+  const handleUnlockPost = async (post: Post) => {
+    const userId = appState.currentUser?.id;
+    if (!userId) {
+      Alert.alert('Sign in required', 'Please sign in to unlock premium content.');
+      return;
+    }
+
+    if (!post.price || post.price <= 0) {
+      onViewProfile?.(post.author_id);
+      return;
+    }
+
+    try {
+      const { error } = await supabase.from('post_unlocks').upsert(
+        { user_id: userId, post_id: post.id, amount_paid: post.price },
+        { onConflict: 'user_id,post_id' }
+      );
+      if (error) throw error;
+      setUnlockedPostIds(prev => new Set(prev).add(post.id));
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    } catch (err: any) {
+      Alert.alert('Unlock failed', err?.message || 'Unable to unlock this post right now.');
+    }
+  };
+
   const filteredPosts = useMemo(() => {
     let filtered = appState.posts.filter((post) => !blockedUserIds.has(post.author_id) && !reportedPostIds.has(post.id));
     
     if (forYouOnly) {
-        // Algorithmic sort for "For You": weight by likes_count and recency
-        filtered = [...filtered].sort((a, b) => {
-           const scoreA = a.likes_count * 2 + new Date(a.created_at).getTime() / 1000000000;
-           const scoreB = b.likes_count * 2 + new Date(b.created_at).getTime() / 1000000000;
-           return scoreB - scoreA;
-        });
+        if (forYouRankedPostIds.length > 0) {
+          const rankIndex = new Map(forYouRankedPostIds.map((id, idx) => [id, idx]));
+          filtered = [...filtered].sort((a, b) => (rankIndex.get(a.id) ?? 999999) - (rankIndex.get(b.id) ?? 999999));
+        } else {
+          filtered = [...filtered].sort((a, b) => {
+             const scoreA = a.likes_count * 2 + new Date(a.created_at).getTime() / 1000000000;
+             const scoreB = b.likes_count * 2 + new Date(b.created_at).getTime() / 1000000000;
+             return scoreB - scoreA;
+          });
+        }
     } else if (selectedProfileId) {
         filtered = filtered.filter((post) => post.author_id === selectedProfileId);
     } else if (followingOnly && appState.currentUser) {
@@ -188,7 +260,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
         filtered = filtered.filter(post => followings.has(post.author_id));
     }
     return filtered;
-  }, [appState.posts, selectedProfileId, blockedUserIds, reportedPostIds, followingOnly, forYouOnly, appState.currentUser, appState.follows]);
+  }, [appState.posts, selectedProfileId, blockedUserIds, reportedPostIds, followingOnly, forYouOnly, appState.currentUser, appState.follows, forYouRankedPostIds]);
 
   const visiblePosts = useMemo(() => {
     const base = isWeb ? filteredPosts.slice(0, WEB_VISIBLE_FEED_ITEMS) : filteredPosts;
@@ -413,7 +485,13 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
     </View>
   );
 
-  const renderItem = ({ item }: { item: Post }) => (
+  const renderItem = ({ item }: { item: Post }) => {
+    const needsSubscription = Boolean((item as any).subscribers_only);
+    const subscribed = subscribedCreatorIds.has(item.author_id);
+    const unlocked = unlockedPostIds.has(item.id);
+    const isActuallyLocked = Boolean(item.is_locked) && !unlocked && (!needsSubscription || !subscribed);
+
+    return (
     <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
       <View style={styles.cardHeader}>
         <TouchableOpacity style={styles.authorRow} onPress={() => onViewProfile?.(item.author_id)}>
@@ -446,7 +524,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
               source={{ uri: (item as any).video_url || item.image_url }}
               style={styles.image}
               resizeMode={ResizeMode.COVER}
-              shouldPlay={!item.is_locked}
+              shouldPlay={!isActuallyLocked}
               isMuted={true}
               isLooping={true}
             />
@@ -458,7 +536,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
             />
           )}
 
-          {item.is_locked && (
+          {isActuallyLocked && (
             <BlurView intensity={Platform.OS === 'ios' ? 70 : 100} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill}>
               <View style={styles.paywallContent}>
                 <View style={styles.lockBadge}>
@@ -470,7 +548,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
                 </Text>
                 <TouchableOpacity 
                   style={styles.unlockButton} 
-                  onPress={() => item.price ? Alert.alert('PPV Unlock', 'Unlock logic coming soon.') : onViewProfile?.(item.author_id)}
+                  onPress={() => handleUnlockPost(item)}
                 >
                   <Text style={styles.unlockButtonText}>{item.price ? 'Unlock Post' : 'View Tiers'}</Text>
                 </TouchableOpacity>
@@ -522,7 +600,8 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
         <Text style={[styles.timestampBottom, { color: colors.textMuted }]}>{new Date(item.created_at).toLocaleDateString()}</Text>
       </View>
     </View>
-  );
+    );
+  };
 
   const renderFooter = () => {
     if (!loadingMore) return null;

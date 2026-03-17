@@ -11,6 +11,11 @@ export const createBookingRequest = async (params: {
   longitude: number;
   startTime: string;
   endTime: string;
+  fanoutCount?: number;
+  intensityLevel?: number;
+  quoteToken?: string;
+  assignmentState?: 'queued' | 'offered' | 'accepted' | 'expired' | 'cancelled';
+  dispatchRequestId?: string | null;
 }) => {
   const { data, error } = await supabase
     .from('bookings')
@@ -21,10 +26,16 @@ export const createBookingRequest = async (params: {
       package_id: params.packageId,
       status: 'pending',
       total_amount: params.totalAmount,
-      latitude: params.latitude,
-      longitude: params.longitude,
-      start_time: params.startTime,
-      end_time: params.endTime,
+      price_total: params.totalAmount,
+      user_latitude: params.latitude,
+      user_longitude: params.longitude,
+      start_datetime: params.startTime,
+      end_datetime: params.endTime,
+      fanout_count: params.fanoutCount ?? 1,
+      intensity_level: params.intensityLevel ?? 1,
+      quote_token: params.quoteToken ?? null,
+      assignment_state: params.assignmentState ?? 'queued',
+      dispatch_request_id: params.dispatchRequestId ?? null,
     })
     .select('*')
     .single();

@@ -1,4 +1,5 @@
-﻿import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+﻿import React, { useMemo, useState } from 'react';
+import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -8,6 +9,7 @@ import { useMessaging } from '../store/MessagingContext';
 import { BookingCalendar } from '../components/BookingCalendar';
 import { Ionicons } from '@expo/vector-icons';
 import { BOOKING_PACKAGES } from '../constants/pricing';
+import { createDispatch } from '../services/dispatchService';
 
 type Route = RouteProp<RootStackParamList, 'BookingForm'>;
 type Navigation = StackNavigationProp<RootStackParamList, 'BookingForm'>;
@@ -30,6 +32,8 @@ const BookingFormScreen: React.FC = () => {
   const [isInstantBook, setIsInstantBook] = useState(false);
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [fanoutCount, setFanoutCount] = useState(1);
+  const [intensityLevel, setIntensityLevel] = useState(1);
 
   const talent = useMemo(
     () => state.photographers.find((item) => item.id === params.photographerId) || 
@@ -51,7 +55,7 @@ const BookingFormScreen: React.FC = () => {
 
   const formattedDate = useMemo(() => {
     if (!selectedDate) return 'Pick a date and time slot below';
-    return `${selectedDate.toDateString()} Ã‚Â· ${timeSlot}`;
+    return `${selectedDate.toDateString()} · ${timeSlot}`;
   }, [selectedDate, timeSlot]);
 
   const selectedPackage = useMemo(
@@ -72,6 +76,8 @@ const BookingFormScreen: React.FC = () => {
   }, [talent.price_range, selectedPackage.basePrice, selectedAddons]);
 
   const estimatedRate = `From R${estimatedBaseAmount.toLocaleString('en-ZA')}`;
+  const intensityMultiplier = useMemo(() => 1 + ((intensityLevel - 1) * 0.15) + ((fanoutCount - 1) * 0.05), [fanoutCount, intensityLevel]);
+  const previewQuoteTotal = Math.round(estimatedBaseAmount * intensityMultiplier);
   const commissionAmount = Math.round(estimatedBaseAmount * 0.30);
   const vatAmount = Math.round(commissionAmount * 0.15); // VAT on the platform fee
   const photographerPayout = estimatedBaseAmount - commissionAmount - vatAmount;
@@ -84,31 +90,64 @@ const BookingFormScreen: React.FC = () => {
 
     try {
       setSubmitting(true);
-      // Store booking_date as clean ISO date (YYYY-MM-DD) Ã¢â‚¬â€ Postgres date column compatible
+      // Store booking_date as clean ISO date (YYYY-MM-DD) - Postgres date column compatible
       const normalizedDate = new Date(selectedDate);
       normalizedDate.setUTCHours(12, 0, 0, 0);
-      const bookingDate = normalizedDate.toISOString().split('T')[0]; // e.g. '2026-03-15'
-      
+      const bookingDate = normalizedDate.toISOString().split('T')[0];
+
       const addonNames = Array.from(selectedAddons).map(id => ADDONS.find(a => a.id === id)?.label).filter(Boolean);
       const finalNotes = addonNames.length > 0
         ? `[Add-ons: ${addonNames.join(', ')}]\n${notes}`
         : notes;
-        
+
+      let dispatchMeta: {
+        dispatch_request_id?: string | null;
+        quote_token?: string | null;
+        assignment_state?: 'queued' | 'offered' | 'accepted' | 'expired' | 'cancelled';
+      } = {};
+
+      if (isInstantBook) {
+        const dispatch = await createDispatch({
+          service_type: isModelTalent ? 'modeling' : 'photography',
+          fanout_count: fanoutCount,
+          intensity_level: intensityLevel,
+          sla_timeout_seconds: 90,
+          requested_lat: talent.latitude,
+          requested_lng: talent.longitude,
+          base_amount: estimatedBaseAmount,
+        });
+
+        dispatchMeta = {
+          dispatch_request_id: dispatch.dispatch_request?.id ?? null,
+          quote_token: dispatch.quote?.quote_token ?? null,
+          assignment_state: (dispatch.assignment_state as any) ?? 'offered',
+        };
+      }
+
       const booking = await createBooking({
         talent_id: talent.id,
         talent_type: isModelTalent ? 'model' : 'photographer',
         booking_date: bookingDate,
-        package_type: `${selectedPackage.label} â€¢ ${timeSlot}${isInstantBook ? ' (Instant Request)' : ''}`,
+        package_type: `${selectedPackage.label} • ${timeSlot}${isInstantBook ? ' (Instant Request)' : ''}`,
         notes: finalNotes,
         base_amount: estimatedBaseAmount,
         travel_amount: 0,
+        fanout_count: fanoutCount,
+        intensity_level: intensityLevel,
+        quote_token: dispatchMeta.quote_token ?? undefined,
+        assignment_state: dispatchMeta.assignment_state ?? (isInstantBook ? 'offered' : 'queued'),
+        dispatch_request_id: dispatchMeta.dispatch_request_id ?? undefined,
+        latitude: talent.latitude,
+        longitude: talent.longitude,
+        start_datetime: selectedDate.toISOString(),
+        end_datetime: new Date(selectedDate.getTime() + 60 * 60 * 1000).toISOString(),
       });
-      Alert.alert(isInstantBook ? 'Booking Confirmed' : 'Request sent', isInstantBook ? 'Your booking was instantly confirmed!' : 'Your booking request was submitted and is ready to review.', [
-        {
-          text: 'View booking',
-          onPress: () => navigation.replace('BookingDetail', { bookingId: booking.id }),
-        },
-      ]);
+
+      Alert.alert(
+        isInstantBook ? 'Booking Confirmed' : 'Request sent',
+        isInstantBook ? 'Your booking was instantly confirmed!' : 'Your booking request was submitted and is ready to review.',
+        [{ text: 'View booking', onPress: () => navigation.replace('BookingDetail', { bookingId: booking.id }) }]
+      );
     } catch (err: any) {
       Alert.alert('Unable to save', err?.message || 'Please try again.');
     } finally {
@@ -129,7 +168,7 @@ const BookingFormScreen: React.FC = () => {
     <ScrollView contentContainerStyle={styles.container}>
       <View style={styles.heroCard}>
         <Text style={styles.heroTitle}>Book {talent.name}</Text>
-        <Text style={styles.heroMeta}>{talent.style} Ã‚Â· {talent.location}</Text>
+        <Text style={styles.heroMeta}>{talent.style} · {talent.location}</Text>
         <View style={styles.heroFooter}>
           <Text style={styles.heroPrice}>{estimatedRate}</Text>
           <TouchableOpacity style={styles.msgBadge} onPress={handleMessage}>
@@ -169,7 +208,7 @@ const BookingFormScreen: React.FC = () => {
                 </Text>
                 <Text style={[styles.packageMeta, isActive && styles.packageMetaActive]}>{pkg.description}</Text>
                 <Text style={[styles.packageMeta, isActive && styles.packageMetaActive]}>
-                  {pkg.highlights.join(' â€¢ ')}
+                  {pkg.highlights.join(' • ')}
                 </Text>
               </TouchableOpacity>
             );
@@ -216,6 +255,36 @@ const BookingFormScreen: React.FC = () => {
                <View style={[styles.toggleKnob, isInstantBook && styles.toggleKnobActive]} />
             </TouchableOpacity>
          </View>
+         {isInstantBook && (
+           <View style={styles.dispatchConfig}>
+             <Text style={styles.dispatchTitle}>Dispatch settings</Text>
+             <View style={styles.configRow}>
+               <Text style={styles.configLabel}>Paparazzi fanout</Text>
+               <View style={styles.stepper}>
+                 <TouchableOpacity style={styles.stepperBtn} onPress={() => setFanoutCount(v => Math.max(1, v - 1))}>
+                   <Text style={styles.stepperText}>-</Text>
+                 </TouchableOpacity>
+                 <Text style={styles.stepperValue}>{fanoutCount}</Text>
+                 <TouchableOpacity style={styles.stepperBtn} onPress={() => setFanoutCount(v => Math.min(5, v + 1))}>
+                   <Text style={styles.stepperText}>+</Text>
+                 </TouchableOpacity>
+               </View>
+             </View>
+             <View style={styles.configRow}>
+               <Text style={styles.configLabel}>Scene intensity</Text>
+               <View style={styles.stepper}>
+                 <TouchableOpacity style={styles.stepperBtn} onPress={() => setIntensityLevel(v => Math.max(1, v - 1))}>
+                   <Text style={styles.stepperText}>-</Text>
+                 </TouchableOpacity>
+                 <Text style={styles.stepperValue}>{intensityLevel}</Text>
+                 <TouchableOpacity style={styles.stepperBtn} onPress={() => setIntensityLevel(v => Math.min(5, v + 1))}>
+                   <Text style={styles.stepperText}>+</Text>
+                 </TouchableOpacity>
+               </View>
+             </View>
+             <Text style={styles.dispatchQuote}>Preview quote: R{previewQuoteTotal.toLocaleString('en-ZA')} ({intensityMultiplier.toFixed(2)}x)</Text>
+           </View>
+         )}
       </View>
 
       <View style={styles.detailsCard}>
@@ -387,6 +456,12 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     marginTop: 6,
   },
+  packageMeta: {
+    color: '#64748b',
+    fontSize: 12,
+    marginTop: 6,
+    lineHeight: 16,
+  },
   packageMetaActive: {
     color: '#475569',
   },
@@ -493,6 +568,57 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 4,
   },
+  dispatchConfig: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    backgroundColor: '#f8fafc',
+    gap: 10,
+  },
+  dispatchTitle: {
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  configRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  configLabel: {
+    color: '#334155',
+    fontWeight: '600',
+  },
+  stepper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  stepperBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    backgroundColor: '#e2e8f0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepperText: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0f172a',
+    lineHeight: 20,
+  },
+  stepperValue: {
+    width: 24,
+    textAlign: 'center',
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  dispatchQuote: {
+    color: '#0f172a',
+    fontWeight: '700',
+  },
   toggleSwitch: {
     width: 50,
     height: 30,
@@ -521,3 +647,5 @@ const styles = StyleSheet.create({
 });
 
 export default BookingFormScreen;
+
+

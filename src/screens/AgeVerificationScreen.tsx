@@ -5,6 +5,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { useTheme } from '../store/ThemeContext';
 import { supabase } from '../config/supabaseClient';
 import { useAuth } from '../store/AuthContext';
+import { recordConsent as recordComplianceConsent } from '../services/dispatchService';
 
 const AgeVerificationScreen: React.FC = () => {
   const { colors } = useTheme();
@@ -29,13 +30,13 @@ const AgeVerificationScreen: React.FC = () => {
 
     setSubmitting(true);
     try {
-      // Record consent with DOB proof
-      await supabase.from('user_consents').insert({
-        user_id: currentUser!.id,
+      // Record consent with DOB proof using compliance event + immutable audit
+      await recordComplianceConsent({
         consent_type: 'terms',
-        version: '1.0',
-        accepted: true,
-        metadata: { age_verified: true, dob: dob.toISOString().split('T')[0] }
+        enabled: true,
+        legal_basis: 'consent',
+        consent_version: '1.0',
+        context: { age_verified: true, dob: dob.toISOString().split('T')[0] },
       });
 
       // Mark profile as age-verified
@@ -76,7 +77,7 @@ const AgeVerificationScreen: React.FC = () => {
             mode="date"
             maximumDate={new Date()}
             minimumDate={new Date(1900, 0, 1)}
-            onChange={(_, date) => {
+            onChange={(_event: unknown, date?: Date) => {
               setShowPicker(Platform.OS === 'ios');
               if (date) setDob(date);
             }}

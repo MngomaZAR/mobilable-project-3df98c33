@@ -10,6 +10,22 @@ const PLATFORM_FEE_RATE = 0.20
 
 Deno.serve(async (req) => {
   try {
+    const authHeader = req.headers.get('Authorization') || ''
+    const token = authHeader.replace(/^Bearer\s+/i, '').trim()
+    if (!token) {
+      return new Response(JSON.stringify({ error: 'Missing Authorization header' }), {
+        status: 401, headers: { 'Content-Type': 'application/json' }
+      })
+    }
+
+    const { data: authData, error: authError } = await supabase.auth.getUser(token)
+    if (authError || !authData.user) {
+      return new Response(JSON.stringify({ error: 'Invalid auth token' }), {
+        status: 401, headers: { 'Content-Type': 'application/json' }
+      })
+    }
+    const requester = authData.user
+
     const { booking_id } = await req.json()
 
     if (!booking_id) {
@@ -28,6 +44,20 @@ Deno.serve(async (req) => {
     if (bookingError || !booking) {
       return new Response(JSON.stringify({ error: 'Booking not found' }), {
         status: 404, headers: { 'Content-Type': 'application/json' }
+      })
+    }
+
+    const { data: requesterProfile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', requester.id)
+      .maybeSingle()
+
+    const isAdmin = requesterProfile?.role === 'admin'
+    const isBookingProvider = requester.id === booking.photographer_id || requester.id === booking.model_id
+    if (!isAdmin && !isBookingProvider) {
+      return new Response(JSON.stringify({ error: 'Not authorized to release escrow for this booking' }), {
+        status: 403, headers: { 'Content-Type': 'application/json' }
       })
     }
 

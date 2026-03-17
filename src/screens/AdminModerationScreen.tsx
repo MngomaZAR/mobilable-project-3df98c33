@@ -1,14 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  FlatList, 
-  StyleSheet, 
-  Text, 
-  TouchableOpacity, 
-  View, 
-  ActivityIndicator, 
+﻿import React, { useState, useEffect, useMemo } from 'react';
+import {
+  FlatList,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  ActivityIndicator,
   Alert,
-  Image,
-  Platform
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -19,59 +18,111 @@ import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 
-interface Report {
+type ModerationCase = {
   id: string;
-  target_id: string;
-  target_type: 'post' | 'profile' | 'comment';
-  reporter_id: string;
+  reporter_id: string | null;
+  target_user_id: string | null;
+  target_type: 'post' | 'message' | 'profile' | 'booking' | 'payment' | 'other';
+  target_id: string | null;
   reason: string;
-  status: 'pending' | 'resolved' | 'dismissed';
+  severity: number;
+  status: 'open' | 'in_review' | 'escalated' | 'resolved' | 'rejected';
+  sla_due_at: string | null;
   created_at: string;
-  metadata?: any;
-}
+};
+
+type PolicyViolation = {
+  id: string;
+  user_id: string | null;
+  entity_type: string;
+  entity_id: string | null;
+  policy_code: string;
+  severity: number;
+  status: 'warning' | 'blocked' | 'removed' | 'resolved';
+  created_at: string;
+};
 
 const AdminModerationScreen: React.FC = () => {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<StackNavigationProp<RootStackParamList, 'Root'>>();
   const { startConversationWithUser } = useMessaging();
-  const [reports, setReports] = useState<Report[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  const fetchReports = async () => {
+  const [cases, setCases] = useState<ModerationCase[]>([]);
+  const [violations, setViolations] = useState<PolicyViolation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<'queue' | 'violations'>('queue');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'in_review' | 'escalated'>('all');
+
+  const fetchModerationData = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('reports')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const [{ data: caseRows, error: caseErr }, { data: violationRows, error: violationErr }] = await Promise.all([
+        supabase
+          .from('moderation_cases')
+          .select('id,reporter_id,target_user_id,target_type,target_id,reason,severity,status,sla_due_at,created_at')
+          .order('created_at', { ascending: false })
+          .limit(200),
+        supabase
+          .from('policy_violations')
+          .select('id,user_id,entity_type,entity_id,policy_code,severity,status,created_at')
+          .order('created_at', { ascending: false })
+          .limit(200),
+      ]);
 
-      if (error) throw error;
-      setReports(data || []);
+      if (caseErr) throw caseErr;
+      if (violationErr) throw violationErr;
+
+      setCases((caseRows ?? []) as ModerationCase[]);
+      setViolations((violationRows ?? []) as PolicyViolation[]);
     } catch (err: any) {
-      console.warn('Error fetching reports:', err.message);
+      console.warn('Moderation fetch error:', err.message);
+      Alert.alert('Error', err.message || 'Unable to load moderation queue.');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchReports();
+    fetchModerationData();
   }, []);
 
-  const resolveReport = async (reportId: string, status: 'resolved' | 'dismissed') => {
+  const filteredCases = useMemo(() => {
+    const base = statusFilter === 'all' ? cases : cases.filter((c) => c.status === statusFilter);
+    return [...base].sort((a, b) => {
+      const dueA = a.sla_due_at ? new Date(a.sla_due_at).getTime() : Number.MAX_SAFE_INTEGER;
+      const dueB = b.sla_due_at ? new Date(b.sla_due_at).getTime() : Number.MAX_SAFE_INTEGER;
+      if (dueA !== dueB) return dueA - dueB;
+      return b.severity - a.severity;
+    });
+  }, [cases, statusFilter]);
+
+  const openCount = cases.filter((c) => ['open', 'in_review', 'escalated'].includes(c.status)).length;
+  const slaBreached = cases.filter((c) => c.sla_due_at && new Date(c.sla_due_at).getTime() < Date.now() && ['open', 'in_review', 'escalated'].includes(c.status)).length;
+
+  const updateCaseStatus = async (id: string, nextStatus: ModerationCase['status']) => {
     try {
       const { error } = await supabase
-        .from('reports')
-        .update({ status })
-        .eq('id', reportId);
-
+        .from('moderation_cases')
+        .update({ status: nextStatus })
+        .eq('id', id);
       if (error) throw error;
-      
-      setReports(prev => prev.map(r => r.id === reportId ? { ...r, status } : r));
-      Alert.alert('Success', `Report ${status}`);
-    } catch (err: any) {
-      Alert.alert('Error', err.message);
+      setCases((prev) => prev.map((c) => (c.id === id ? { ...c, status: nextStatus } : c)));
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to update case status.');
+    }
+  };
+
+  const updateViolationStatus = async (id: string, nextStatus: PolicyViolation['status']) => {
+    try {
+      const { error } = await supabase
+        .from('policy_violations')
+        .update({ status: nextStatus })
+        .eq('id', id);
+      if (error) throw error;
+      setViolations((prev) => prev.map((v) => (v.id === id ? { ...v, status: nextStatus } : v)));
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to update violation status.');
     }
   };
 
@@ -85,92 +136,128 @@ const AdminModerationScreen: React.FC = () => {
     }
   };
 
-  const renderReportItem = ({ item }: { item: Report }) => (
-    <View style={[styles.reportCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-      <View style={styles.reportHeader}>
-        <View style={[styles.badge, { backgroundColor: item.status === 'pending' ? colors.destructive + '20' : colors.accent + '20' }]}>
-            <Text style={[styles.badgeText, { color: item.status === 'pending' ? colors.destructive : colors.accent }]}>
-                {item.status.toUpperCase()}
-            </Text>
+  const slaState = (item: ModerationCase) => {
+    if (!item.sla_due_at) return { label: 'No SLA', color: '#64748b' };
+    const due = new Date(item.sla_due_at).getTime();
+    if (due < Date.now()) return { label: 'SLA BREACHED', color: '#ef4444' };
+    const hours = Math.max(0, Math.ceil((due - Date.now()) / (1000 * 60 * 60)));
+    return { label: `${hours}h left`, color: hours <= 4 ? '#f59e0b' : '#10b981' };
+  };
+
+  const renderCase = ({ item }: { item: ModerationCase }) => {
+    const sla = slaState(item);
+    return (
+      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}> 
+        <View style={styles.rowTop}>
+          <View style={[styles.badge, { backgroundColor: `${sla.color}22` }]}>
+            <Text style={[styles.badgeText, { color: sla.color }]}>{sla.label}</Text>
+          </View>
+          <Text style={[styles.meta, { color: colors.textMuted }]}>{new Date(item.created_at).toLocaleString()}</Text>
         </View>
-        <Text style={[styles.date, { color: colors.textMuted }]}>{new Date(item.created_at).toLocaleDateString()}</Text>
-      </View>
 
-      <View style={styles.reportBody}>
-        <Text style={[styles.type, { color: colors.textMuted }]}>
-            TARGET: <Text style={{ color: colors.text, fontWeight: '700' }}>{item.target_type.toUpperCase()}</Text>
-        </Text>
-        <Text style={[styles.reason, { color: colors.text }]}>{item.reason}</Text>
-        <Text style={[styles.meta, { color: colors.textSecondary }]}>ID: {item.target_id}</Text>
-      </View>
+        <Text style={[styles.title, { color: colors.text }]}>{item.reason}</Text>
+        <Text style={[styles.meta, { color: colors.textSecondary }]}>Target: {item.target_type} · Severity {item.severity} · Status {item.status}</Text>
+        <Text style={[styles.code, { color: colors.textMuted }]}>Case #{item.id.slice(0, 8)}</Text>
 
-      <View style={styles.messageRow}>
-        <TouchableOpacity
-          style={[styles.messageBtn, { borderColor: colors.border }]}
-          onPress={() => openChatWithUser(item.reporter_id, 'Reporter')}
-        >
-          <Ionicons name="chatbubble-ellipses-outline" size={16} color={colors.text} />
-          <Text style={[styles.messageText, { color: colors.text }]}>Message reporter</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.messageBtn, { borderColor: colors.border }]}
-          onPress={() => openChatWithUser(item.target_id, 'Reported user')}
-        >
-          <Ionicons name="chatbubble-ellipses-outline" size={16} color={colors.text} />
-          <Text style={[styles.messageText, { color: colors.text }]}>Message target</Text>
-        </TouchableOpacity>
-      </View>
+        <View style={styles.messageRow}>
+          <TouchableOpacity style={[styles.messageBtn, { borderColor: colors.border }]} onPress={() => openChatWithUser(item.reporter_id, 'Reporter')}>
+            <Ionicons name="chatbubble-ellipses-outline" size={15} color={colors.text} />
+            <Text style={[styles.messageText, { color: colors.text }]}>Reporter</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.messageBtn, { borderColor: colors.border }]} onPress={() => openChatWithUser(item.target_user_id, 'Target')}>
+            <Ionicons name="chatbubble-ellipses-outline" size={15} color={colors.text} />
+            <Text style={[styles.messageText, { color: colors.text }]}>Target</Text>
+          </TouchableOpacity>
+        </View>
 
-      {item.status === 'pending' && (
         <View style={styles.actions}>
-            <TouchableOpacity 
-                style={[styles.actionBtn, { backgroundColor: colors.destructive }]}
-                onPress={() => Alert.alert('Resolve', 'Take action and mark as resolved?', [
-                    { text: 'Cancel' },
-                    { text: 'Resolve', onPress: () => resolveReport(item.id, 'resolved') }
-                ])}
-            >
-                <Ionicons name="trash" size={16} color="#fff" />
-                <Text style={styles.actionBtnText}>Take Action</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-                style={[styles.actionBtn, { backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border }]}
-                onPress={() => resolveReport(item.id, 'dismissed')}
-            >
-                <Ionicons name="close-circle" size={16} color={colors.text} />
-                <Text style={[styles.actionBtnText, { color: colors.text }]}>Dismiss</Text>
-            </TouchableOpacity>
+          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#0ea5e9' }]} onPress={() => updateCaseStatus(item.id, 'in_review')}>
+            <Text style={styles.actionText}>In Review</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#f59e0b' }]} onPress={() => updateCaseStatus(item.id, 'escalated')}>
+            <Text style={styles.actionText}>Escalate</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#16a34a' }]} onPress={() => updateCaseStatus(item.id, 'resolved')}>
+            <Text style={styles.actionText}>Resolve</Text>
+          </TouchableOpacity>
         </View>
-      )}
+      </View>
+    );
+  };
+
+  const renderViolation = ({ item }: { item: PolicyViolation }) => (
+    <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}> 
+      <View style={styles.rowTop}>
+        <View style={[styles.badge, { backgroundColor: '#ef444422' }]}>
+          <Text style={[styles.badgeText, { color: '#ef4444' }]}>SEV {item.severity}</Text>
+        </View>
+        <Text style={[styles.meta, { color: colors.textMuted }]}>{new Date(item.created_at).toLocaleString()}</Text>
+      </View>
+      <Text style={[styles.title, { color: colors.text }]}>{item.policy_code}</Text>
+      <Text style={[styles.meta, { color: colors.textSecondary }]}>Entity: {item.entity_type} · Status: {item.status}</Text>
+      <Text style={[styles.code, { color: colors.textMuted }]}>Violation #{item.id.slice(0, 8)}</Text>
+      <View style={styles.actions}>
+        <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#dc2626' }]} onPress={() => updateViolationStatus(item.id, 'blocked')}>
+          <Text style={styles.actionText}>Block</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#7c3aed' }]} onPress={() => updateViolationStatus(item.id, 'removed')}>
+          <Text style={styles.actionText}>Remove</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#16a34a' }]} onPress={() => updateViolationStatus(item.id, 'resolved')}>
+          <Text style={styles.actionText}>Resolve</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.bg, paddingTop: insets.top }]}>
+    <View style={[styles.container, { backgroundColor: colors.bg, paddingTop: insets.top }]}> 
       <View style={styles.header}>
-        <Text style={[styles.title, { color: colors.text }]}>Moderation Queue</Text>
-        <TouchableOpacity onPress={fetchReports}>
-            <Ionicons name="refresh" size={24} color={colors.text} />
+        <Text style={[styles.screenTitle, { color: colors.text }]}>Moderation Triage</Text>
+        <TouchableOpacity onPress={fetchModerationData}>
+          <Ionicons name="refresh" size={24} color={colors.text} />
         </TouchableOpacity>
       </View>
 
-      {loading ? (
-        <View style={styles.center}>
-            <ActivityIndicator size="large" color={colors.accent} />
+      <View style={styles.kpiRow}>
+        <View style={[styles.kpiCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[styles.kpiLabel, { color: colors.textMuted }]}>Open Queue</Text>
+          <Text style={[styles.kpiValue, { color: colors.text }]}>{openCount}</Text>
         </View>
+        <View style={[styles.kpiCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[styles.kpiLabel, { color: colors.textMuted }]}>SLA Breached</Text>
+          <Text style={[styles.kpiValue, { color: '#ef4444' }]}>{slaBreached}</Text>
+        </View>
+      </View>
+
+      <View style={styles.tabRow}>
+        <TouchableOpacity style={[styles.tab, tab === 'queue' && { borderBottomColor: colors.accent }]} onPress={() => setTab('queue')}>
+          <Text style={[styles.tabText, { color: tab === 'queue' ? colors.text : colors.textMuted }]}>QUEUE</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.tab, tab === 'violations' && { borderBottomColor: colors.accent }]} onPress={() => setTab('violations')}>
+          <Text style={[styles.tabText, { color: tab === 'violations' ? colors.text : colors.textMuted }]}>VIOLATIONS</Text>
+        </TouchableOpacity>
+      </View>
+
+      {tab === 'queue' && (
+        <View style={styles.filterRow}>
+          {(['all', 'open', 'in_review', 'escalated'] as const).map((f) => (
+            <TouchableOpacity key={f} style={[styles.filterBtn, { borderColor: colors.border, backgroundColor: statusFilter === f ? colors.accent + '22' : 'transparent' }]} onPress={() => setStatusFilter(f)}>
+              <Text style={[styles.filterText, { color: statusFilter === f ? colors.text : colors.textMuted }]}>{f.replace('_', ' ').toUpperCase()}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
+      {loading ? (
+        <View style={styles.center}><ActivityIndicator size="large" color={colors.accent} /></View>
       ) : (
         <FlatList
-          data={reports}
-          keyExtractor={(item) => item.id}
-          renderItem={renderReportItem}
+          data={tab === 'queue' ? filteredCases : violations}
+          keyExtractor={(item: any) => item.id}
+          renderItem={tab === 'queue' ? (renderCase as any) : (renderViolation as any)}
           contentContainerStyle={styles.list}
-          ListEmptyComponent={
-            <View style={styles.center}>
-                <Ionicons name="checkmark-circle" size={64} color={colors.accent} />
-                <Text style={[styles.emptyText, { color: colors.textMuted }]}>No pending reports.</Text>
-            </View>
-          }
+          ListEmptyComponent={<View style={styles.center}><Text style={{ color: colors.textMuted }}>No items</Text></View>}
         />
       )}
     </View>
@@ -178,118 +265,34 @@ const AdminModerationScreen: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(0,0,0,0.1)',
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: '800',
-  },
-  list: {
-    padding: 16,
-    paddingBottom: 40,
-  },
-  reportCard: {
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-  },
-  reportHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  badge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  badgeText: {
-    fontSize: 10,
-    fontWeight: '800',
-  },
-  date: {
-    fontSize: 12,
-  },
-  reportBody: {
-    marginBottom: 16,
-  },
-  type: {
-    fontSize: 11,
-    letterSpacing: 0.5,
-    marginBottom: 4,
-  },
-  reason: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 6,
-  },
-  meta: {
-    fontSize: 12,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-  },
-  actions: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  messageRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 12,
-  },
-  messageBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 8,
-    borderRadius: 10,
-    borderWidth: 1,
-    gap: 6,
-  },
-  messageText: {
-    fontWeight: '700',
-    fontSize: 12,
-  },
-  actionBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    borderRadius: 10,
-    gap: 6,
-  },
-  actionBtnText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 13,
-  },
-  center: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingTop: 100,
-  },
-  emptyText: {
-    marginTop: 12,
-    fontSize: 16,
-  }
+  container: { flex: 1 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 12 },
+  screenTitle: { fontSize: 22, fontWeight: '900' },
+  kpiRow: { flexDirection: 'row', gap: 10, paddingHorizontal: 16, marginBottom: 10 },
+  kpiCard: { flex: 1, borderWidth: 1, borderRadius: 12, padding: 12 },
+  kpiLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase' },
+  kpiValue: { fontSize: 22, fontWeight: '900', marginTop: 4 },
+  tabRow: { flexDirection: 'row', paddingHorizontal: 16, gap: 18 },
+  tab: { paddingVertical: 10, borderBottomWidth: 2, borderBottomColor: 'transparent' },
+  tabText: { fontWeight: '800', fontSize: 12 },
+  filterRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, marginVertical: 10, flexWrap: 'wrap' },
+  filterBtn: { borderWidth: 1, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 6 },
+  filterText: { fontSize: 11, fontWeight: '700' },
+  list: { padding: 16, paddingBottom: 36 },
+  card: { borderWidth: 1, borderRadius: 14, padding: 14, marginBottom: 12 },
+  rowTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+  badge: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4 },
+  badgeText: { fontSize: 10, fontWeight: '900' },
+  title: { fontWeight: '800', fontSize: 15, marginBottom: 5 },
+  meta: { fontSize: 12 },
+  code: { fontSize: 11, marginTop: 4, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
+  messageRow: { flexDirection: 'row', gap: 8, marginTop: 10 },
+  messageBtn: { flex: 1, borderWidth: 1, borderRadius: 10, paddingVertical: 8, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 },
+  messageText: { fontWeight: '700', fontSize: 12 },
+  actions: { flexDirection: 'row', gap: 8, marginTop: 10 },
+  actionBtn: { flex: 1, borderRadius: 10, paddingVertical: 9, alignItems: 'center' },
+  actionText: { color: '#fff', fontSize: 12, fontWeight: '800' },
+  center: { alignItems: 'center', justifyContent: 'center', paddingVertical: 40 },
 });
 
 export default AdminModerationScreen;

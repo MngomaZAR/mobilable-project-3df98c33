@@ -21,6 +21,7 @@ import { resolveStorageRef, uploadImage, uploadAvatar, uploadBlurredPreview } fr
 import { fetchCreatorEarnings } from '../services/monetisationService';
 import { registerForPushNotificationsAsync, savePushTokenAsync } from '../services/notificationService';
 import { assertSouthAfricanLocation, DEFAULT_CAPE_TOWN_COORDINATES, ensureSouthAfricanCoordinates } from '../utils/geo';
+import { recordConsent as recordComplianceConsent } from '../services/dispatchService';
 
 type CreateBookingInput = {
   photographer_id?: string;
@@ -34,6 +35,15 @@ type CreateBookingInput = {
   base_amount?: number;
   /** Travel / distance surcharge in ZAR (Uber-style) */
   travel_amount?: number;
+  fanout_count?: number;
+  intensity_level?: number;
+  quote_token?: string;
+  assignment_state?: Booking['assignment_state'];
+  dispatch_request_id?: string | null;
+  latitude?: number;
+  longitude?: number;
+  start_datetime?: string;
+  end_datetime?: string;
 };
 
 type CreatePostInput = {
@@ -121,7 +131,13 @@ const BOOKING_SELECT = `
   user_longitude,
   price_total,
   commission_amount,
-  photographer_payout
+  photographer_payout,
+  fanout_count,
+  intensity_level,
+  quote_token,
+  assignment_state,
+  eta_confidence,
+  dispatch_request_id
 `;
 
 const AppDataContext = createContext<AppDataContextValue | undefined>(undefined);
@@ -140,6 +156,12 @@ type BookingRow = {
   price_total: number | null;
   commission_amount: number | null;
   photographer_payout: number | null;
+  fanout_count?: number | null;
+  intensity_level?: number | null;
+  quote_token?: string | null;
+  assignment_state?: Booking['assignment_state'] | null;
+  eta_confidence?: number | null;
+  dispatch_request_id?: string | null;
 };
 
 const PROFILE_SELECT = `
@@ -192,6 +214,12 @@ const mapBookingRow = (row: any): Booking => ({
   total_amount: Number(row.total_amount || row.price_total || 0),
   commission_amount: Number(row.commission_amount || 0),
   payout_amount: Number(row.photographer_payout || 0),
+  fanout_count: row.fanout_count ?? 1,
+  intensity_level: row.intensity_level ?? 1,
+  quote_token: row.quote_token ?? null,
+  assignment_state: row.assignment_state ?? 'queued',
+  eta_confidence: row.eta_confidence ?? null,
+  dispatch_request_id: row.dispatch_request_id ?? null,
   photographer: row.photographer ? {
     id: row.photographer.id,
     name: row.photographer.full_name,
@@ -993,6 +1021,11 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         total_amount: total,
         commission_amount: commission,
         payout_amount: payout,
+        fanout_count: payload.fanout_count ?? 1,
+        intensity_level: payload.intensity_level ?? 1,
+        quote_token: payload.quote_token ?? null,
+        assignment_state: payload.assignment_state ?? 'queued',
+        dispatch_request_id: payload.dispatch_request_id ?? null,
       };
 
       let persistedBooking = booking;
@@ -1008,10 +1041,15 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
             talentType: isModel ? 'model' : 'photographer',
             packageId: payload.package_type,
             totalAmount: total,
-            latitude: (payload as any).latitude || 0,
-            longitude: (payload as any).longitude || 0,
-            startTime: payload.booking_date.split('|')[0] || new Date().toISOString(),
-            endTime: payload.booking_date.split('|')[1] || new Date().toISOString(),
+            latitude: payload.latitude || 0,
+            longitude: payload.longitude || 0,
+            startTime: payload.start_datetime || payload.booking_date.split('|')[0] || new Date().toISOString(),
+            endTime: payload.end_datetime || payload.booking_date.split('|')[1] || new Date().toISOString(),
+            fanoutCount: payload.fanout_count ?? 1,
+            intensityLevel: payload.intensity_level ?? 1,
+            quoteToken: payload.quote_token ?? undefined,
+            assignmentState: payload.assignment_state ?? 'queued',
+            dispatchRequestId: payload.dispatch_request_id ?? undefined,
           });
 
           persistedBooking = {
@@ -1019,16 +1057,25 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
             photographer_id: data.photographer_id,
             model_id: data.model_id,
             client_id: data.client_id,
-            package_id: data.package_id,
+            booking_date: data.booking_date ?? payload.booking_date,
+            package_type: data.package_type ?? payload.package_type,
+            notes: data.notes ?? payload.notes ?? '',
             status: data.status,
-            start_time: data.start_time,
-            end_time: data.end_time,
-            user_latitude: data.latitude,
-            user_longitude: data.longitude,
-            total_amount: data.total_amount,
-            commission_amount: data.commission_amount,
-            payout_amount: data.payout_amount,
-          } as unknown as Booking;
+            created_at: data.created_at ?? new Date().toISOString(),
+            start_datetime: data.start_datetime ?? payload.start_datetime,
+            end_datetime: data.end_datetime ?? payload.end_datetime,
+            user_latitude: data.user_latitude ?? payload.latitude ?? null,
+            user_longitude: data.user_longitude ?? payload.longitude ?? null,
+            total_amount: Number(data.total_amount ?? data.price_total ?? total),
+            commission_amount: Number(data.commission_amount ?? commission),
+            payout_amount: Number(data.payout_amount ?? data.photographer_payout ?? payout),
+            fanout_count: data.fanout_count ?? payload.fanout_count ?? 1,
+            intensity_level: data.intensity_level ?? payload.intensity_level ?? 1,
+            quote_token: data.quote_token ?? payload.quote_token ?? null,
+            assignment_state: data.assignment_state ?? payload.assignment_state ?? 'queued',
+            eta_confidence: data.eta_confidence ?? null,
+            dispatch_request_id: data.dispatch_request_id ?? payload.dispatch_request_id ?? null,
+          };
         } catch (error: any) {
           logError('createBooking', error);
           setError(formatErrorMessage(error, 'Unable to create booking.'));
@@ -1952,24 +1999,13 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
             for (const [setting, enabled] of consentEntries) {
               const consentType = consentTypeBySetting[setting];
-              if (enabled) {
-                const { error } = await supabase.from('user_consents').upsert(
-                  {
-                    user_id: userId,
-                    consent_type: consentType,
-                    accepted_at: new Date().toISOString(),
-                  },
-                  { onConflict: 'user_id,consent_type' }
-                );
-                if (error) throw error;
-              } else {
-                const { error } = await supabase
-                  .from('user_consents')
-                  .delete()
-                  .eq('user_id', userId)
-                  .eq('consent_type', consentType);
-                if (error) throw error;
-              }
+              await recordComplianceConsent({
+                consent_type: consentType,
+                enabled,
+                legal_basis: 'consent',
+                consent_version: '1.0',
+                context: { setting, source: 'privacy_settings' },
+              });
             }
         } catch(err: any) {
             // Revert

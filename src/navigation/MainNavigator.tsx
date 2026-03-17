@@ -168,7 +168,6 @@ export const MainNavigator: React.FC<MainNavigatorProps> = ({ logoSource }) => {
       }}
     >
       <GlobalRequestManager />
-      <GlobalRequestManager />
       <Stack.Navigator
         screenOptions={{
           headerTitle: () =>

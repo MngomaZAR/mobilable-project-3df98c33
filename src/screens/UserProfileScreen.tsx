@@ -13,6 +13,8 @@ import { sendTip } from '../services/monetisationService';
 import { toggleFollow } from '../services/followService';
 import { trackEvent } from '../services/analyticsService';
 import { PLACEHOLDER_IMAGE } from '../utils/constants';
+import { getStatusLeaderboard } from '../services/dispatchService';
+import { supabase } from '../config/supabaseClient';
 
 type Route = RouteProp<RootStackParamList, 'UserProfile'>;
 type Navigation = StackNavigationProp<RootStackParamList, 'UserProfile'>;
@@ -28,6 +30,9 @@ const UserProfileScreen: React.FC = () => {
   const [tipAmount, setTipAmount] = useState('50');
   const [isSendingTip, setIsSendingTip] = useState(false);
   const [activeTab, setActiveTab] = useState<'grid' | 'portfolio' | 'tagged'>('grid');
+  const [seenScore, setSeenScore] = useState<number>(0);
+  const [sceneRank, setSceneRank] = useState<number>(0);
+  const [localTrendRank, setLocalTrendRank] = useState<number | null>(null);
   
   const s = makeStyles(colors);
 
@@ -50,6 +55,31 @@ const UserProfileScreen: React.FC = () => {
     () => state.posts.filter((post) => post.author_id === params.userId),
     [state.posts, params.userId]
   );
+
+  React.useEffect(() => {
+    let active = true;
+    const hydrateStatus = async () => {
+      const userId = params.userId;
+      try {
+        const [{ data: score }, board] = await Promise.all([
+          supabase.from('status_scores').select('seen_score,scene_rank').eq('user_id', userId).maybeSingle(),
+          getStatusLeaderboard({ city: talent?.location || profileFallback?.city || 'Cape Town', limit: 100 }),
+        ]);
+        if (!active) return;
+        setSeenScore(Number(score?.seen_score || 0));
+        setSceneRank(Number(score?.scene_rank || 0));
+        const idx = (board.leaderboard ?? []).findIndex((entry) => entry.user_id === userId);
+        setLocalTrendRank(idx >= 0 ? idx + 1 : null);
+      } catch {
+        if (!active) return;
+        setSeenScore(0);
+        setSceneRank(0);
+        setLocalTrendRank(null);
+      }
+    };
+    hydrateStatus();
+    return () => { active = false; };
+  }, [params.userId, talent?.location, profileFallback?.city]);
 
   const pinnedPosts = useMemo(
     () => posts.filter(p => talent?.pinned_post_ids?.includes(p.id)).slice(0, 3),
@@ -213,6 +243,24 @@ const UserProfileScreen: React.FC = () => {
         <Text style={{ color: colors.textMuted, fontSize: 13, marginLeft: 4 }}>(128 reviews)</Text>
         <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
       </TouchableOpacity>
+
+      <View style={[s.statusCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <Text style={[s.sectionTitle, { color: colors.textSecondary }]}>STATUS GRAPH</Text>
+        <View style={s.statusRow}>
+          <View style={s.statusMetric}>
+            <Text style={[s.statusValue, { color: colors.text }]}>{seenScore}</Text>
+            <Text style={[s.statusLabel, { color: colors.textMuted }]}>Seen Score</Text>
+          </View>
+          <View style={s.statusMetric}>
+            <Text style={[s.statusValue, { color: colors.text }]}>{sceneRank}</Text>
+            <Text style={[s.statusLabel, { color: colors.textMuted }]}>Scene Rank</Text>
+          </View>
+          <View style={s.statusMetric}>
+            <Text style={[s.statusValue, { color: colors.text }]}>{localTrendRank ? `#${localTrendRank}` : '-'}</Text>
+            <Text style={[s.statusLabel, { color: colors.textMuted }]}>Local Trend</Text>
+          </View>
+        </View>
+      </View>
 
       {/* Highlight Reel */}
       {pinnedPosts.length > 0 && (
@@ -390,6 +438,11 @@ const makeStyles = (colors: any) => StyleSheet.create({
   smallFollowBtnText: { fontWeight: '700', fontSize: 13 },
   ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(0,0,0,0.04)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, marginBottom: 20 },
   ratingText: { fontWeight: '700', fontSize: 14 },
+  statusCard: { width: '90%', borderWidth: 1, borderRadius: 16, padding: 14, marginBottom: 18 },
+  statusRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 6 },
+  statusMetric: { alignItems: 'center', flex: 1 },
+  statusValue: { fontSize: 18, fontWeight: '900' },
+  statusLabel: { fontSize: 11, fontWeight: '700', marginTop: 3 },
   highlightSection: { width: '100%', marginBottom: 20 },
   sectionTitle: { fontSize: 10, fontWeight: '800', marginLeft: 20, marginBottom: 10, letterSpacing: 1 },
   highlightScroll: { paddingHorizontal: 16 },

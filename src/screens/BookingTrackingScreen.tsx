@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -9,6 +9,7 @@ import { Booking, Photographer } from '../types';
 import { useAppData } from '../store/AppDataContext';
 import { DEFAULT_CAPE_TOWN_COORDINATES, ensureSouthAfricanCoordinates, haversineDistanceKm } from '../utils/geo';
 import { hasSupabase, supabase } from '../config/supabaseClient';
+import { getDispatchState, getEta } from '../services/dispatchService';
 
 type Route = RouteProp<RootStackParamList, 'BookingTracking'>;
 type Navigation = StackNavigationProp<RootStackParamList, 'BookingTracking'>;
@@ -39,6 +40,9 @@ const BookingTrackingScreen: React.FC = () => {
       longitude: photographer?.longitude ?? DEFAULT_CAPE_TOWN_COORDINATES.longitude - 0.1,
     })
   );
+  const [assignmentState, setAssignmentState] = useState<string>(booking?.assignment_state || 'queued');
+  const [etaMinutes, setEtaMinutes] = useState<number | null>(null);
+  const [etaConfidence, setEtaConfidence] = useState<number>(booking?.eta_confidence ?? 0.6);
 
   useEffect(() => {
     if (!booking) return;
@@ -170,6 +174,39 @@ const BookingTrackingScreen: React.FC = () => {
     };
   }, [booking, photographer?.id]);
 
+  useEffect(() => {
+    if (!booking?.id) return;
+    let active = true;
+
+    const hydrateEtaAndDispatch = async () => {
+      try {
+        if (booking.dispatch_request_id) {
+          const dispatch = await getDispatchState(booking.dispatch_request_id);
+          if (!active) return;
+          setAssignmentState(dispatch.assignment_state || booking.assignment_state || 'queued');
+          if (dispatch.eta_confidence != null) setEtaConfidence(Number(dispatch.eta_confidence));
+        }
+      } catch {
+        // non-fatal
+      }
+
+      try {
+        const eta = await getEta(booking.id);
+        if (!active) return;
+        if (Number.isFinite(eta.eta_minutes)) setEtaMinutes(Number(eta.eta_minutes));
+        if (eta.eta_confidence != null) setEtaConfidence(Number(eta.eta_confidence));
+      } catch {
+        // non-fatal
+      }
+    };
+
+    hydrateEtaAndDispatch();
+    const timer = setInterval(hydrateEtaAndDispatch, 15000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [booking?.id, booking?.dispatch_request_id, booking?.assignment_state, booking?.eta_confidence]);
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>Booking tracking</Text>
@@ -180,6 +217,7 @@ const BookingTrackingScreen: React.FC = () => {
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Status</Text>
         <Text style={styles.cardValue}>{booking.status.toUpperCase()}</Text>
+        <Text style={[styles.cardMeta, { marginTop: 2 }]}>Assignment: {assignmentState.toUpperCase()}</Text>
         <Text style={styles.cardMeta}>Status updates automatically after secure booking and payment confirmation.</Text>
       </View>
 
@@ -188,12 +226,12 @@ const BookingTrackingScreen: React.FC = () => {
         {(() => {
           const distanceKm = haversineDistanceKm(livePhotographerLocation, liveClientLocation);
           const avgSpeedKmh = 35; // urban travel average
-          const etaMinutes = Math.max(3, Math.round((distanceKm / avgSpeedKmh) * 60));
+          const computedEtaMinutes = Math.max(3, Math.round((distanceKm / avgSpeedKmh) * 60));
           return (
             <>
-              <Text style={styles.cardValue}>{etaMinutes} min</Text>
+              <Text style={styles.cardValue}>{etaMinutes ?? computedEtaMinutes} min</Text>
               <Text style={styles.cardMeta}>
-                ~{distanceKm.toFixed(1)} km away · Updates as your creator moves.
+                ~{distanceKm.toFixed(1)} km away · Confidence {(etaConfidence * 100).toFixed(0)}%
               </Text>
             </>
           );
@@ -298,3 +336,4 @@ const styles = StyleSheet.create({
 });
 
 export default BookingTrackingScreen;
+

@@ -16,6 +16,7 @@ import { supabase, hasSupabase } from '../config/supabaseClient';
 import { useAppData } from '../store/AppDataContext';
 import { RootStackParamList } from '../navigation/types';
 import { StackNavigationProp } from '@react-navigation/stack';
+import { respondToDispatch } from '../services/dispatchService';
 
 type Navigation = StackNavigationProp<RootStackParamList, 'Notifications'>;
 
@@ -72,9 +73,26 @@ const NotificationsScreen: React.FC = () => {
   }, [notifications, activeTab]);
 
   const handleAction = async (item: NotificationItem, action: string) => {
-    if (action === 'accept' && item.event_type.includes('booking')) {
-       Alert.alert('Booking Accepted', 'You have accepted this booking request.');
-       // Logic to update booking status would go here
+    if ((action === 'accept' || action === 'decline') && item.event_type.includes('booking')) {
+      const dispatchRequestId = item.action_payload?.dispatchRequestId || item.action_payload?.dispatch_request_id;
+      const offerId = item.action_payload?.offerId || item.action_payload?.offer_id;
+      if (dispatchRequestId) {
+        try {
+          await respondToDispatch({
+            dispatch_request_id: dispatchRequestId,
+            offer_id: offerId,
+            response: action === 'accept' ? 'accept' : 'decline',
+            idempotency_key: `${item.id}-${action}`,
+          });
+          Alert.alert(action === 'accept' ? 'Booking Accepted' : 'Booking Declined', action === 'accept' ? 'You have accepted this booking request.' : 'You have declined this booking request.');
+        } catch (e: any) {
+          Alert.alert('Dispatch Error', e?.message || 'Could not process request. Try again.');
+          return;
+        }
+      } else {
+        Alert.alert('Missing details', 'Dispatch details are unavailable for this request.');
+        return;
+      }
     } else if (action === 'view') {
        if (item.action_type === 'chat') {
           navigation.navigate('ChatThread', { conversationId: item.action_payload?.chatId });
@@ -150,9 +168,9 @@ const NotificationsScreen: React.FC = () => {
                   </TouchableOpacity>
                   <TouchableOpacity 
                     style={[styles.actionBtn, { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border }]} 
-                    onPress={() => handleAction(item, 'dismiss')}
+                    onPress={() => handleAction(item, 'decline')}
                   >
-                    <Text style={[styles.actionBtnText, { color: colors.text }]}>Dismiss</Text>
+                    <Text style={[styles.actionBtnText, { color: colors.text }]}>Decline</Text>
                   </TouchableOpacity>
                 </View>
               )}

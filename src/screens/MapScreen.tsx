@@ -21,6 +21,7 @@ import { supabase } from '../config/supabaseClient';
 import { routingService } from '../services/routingService';
 import * as Haptics from 'expo-haptics';
 import { Analytics } from '../utils/analytics';
+import { getHeatmap } from '../services/dispatchService';
 
 // 🗺 Carto Open Basemaps — 100% free, no API key, no account. OpenStreetMap data.
 // Positron: Light grey (Uber daytime aesthetic)
@@ -55,9 +56,6 @@ const MapScreen: React.FC = () => {
   const navigation = useNavigation<StackNavigationProp<RootStackParamList, 'Root'>>();
   const currentUser = state.currentUser;
 
-  // Map style (light = bright, dark = CartoDB dark-matter which looks like Uber dark)
-  const MAP_STYLE_URL = isDark ? MAP_STYLES.dark : MAP_STYLES.liberty;
-
   const [userMarker, setUserMarker] = useState<MapMarker | null>(null);
   const [userCoords, setUserCoords] = useState<{ lat: number; lng: number; timestamp: number } | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
@@ -77,6 +75,9 @@ const MapScreen: React.FC = () => {
   const [routeProgress, setRouteProgress] = useState(0);
   const [primaryRoute, setPrimaryRoute] = useState<Array<{ lat: number; lng: number }>>([]);
   const [altRoute, setAltRoute] = useState<Array<{ lat: number; lng: number }>>([]);
+  const [routeDurationSec, setRouteDurationSec] = useState<number | null>(null);
+  const [routeDistanceKm, setRouteDistanceKm] = useState<number | null>(null);
+  const [heatmapSummary, setHeatmapSummary] = useState<{ demand: number; supply: number } | null>(null);
 
   // ── Bottom sheet gesture ─────────────────────────────────────────────────
   const sheetY = useRef(new Animated.Value(SCREEN_HEIGHT - SHEET_COLLAPSED)).current;
@@ -268,11 +269,34 @@ const MapScreen: React.FC = () => {
         lat: lat + (i % 3 === 0 ? 0.0002 : -0.0001),
         lng: lng + (i % 3 === 0 ? 0.0002 : -0.0001),
       })));
+      setRouteDistanceKm(route.distance);
+      setRouteDurationSec(route.duration);
       setRouteProgress(0);
-    } catch {}
+    } catch {
+      setRouteDistanceKm(null);
+      setRouteDurationSec(null);
+    }
   }, [selectedMarker, userCoords]);
 
   useEffect(() => { fetchRoutes(); }, [fetchRoutes]);
+
+  useEffect(() => {
+    let active = true;
+    const hydrateHeatmap = async () => {
+      try {
+        const data = await getHeatmap({ role: 'combined', hours: 6, city: currentUser?.city || 'Cape Town' });
+        if (!active) return;
+        const demand = (data.buckets ?? []).reduce((acc, b) => acc + Number(b.demand_count || 0), 0);
+        const supply = (data.buckets ?? []).reduce((acc, b) => acc + Number(b.online_count || 0), 0);
+        setHeatmapSummary({ demand, supply });
+      } catch {
+        if (!active) return;
+        setHeatmapSummary(null);
+      }
+    };
+    hydrateHeatmap();
+    return () => { active = false; };
+  }, [currentUser?.city]);
 
   // Route draw animation
   useEffect(() => {
@@ -301,15 +325,17 @@ const MapScreen: React.FC = () => {
 
   const selectedDistance = useMemo(() => {
     if (!selectedMarker || !userCoords) return null;
+    if (routeDistanceKm && routeDistanceKm > 0) return `${routeDistanceKm.toFixed(1)} km`;
     const km = haversineDistanceKm({ latitude: userCoords.lat, longitude: userCoords.lng }, { latitude: selectedMarker.latitude, longitude: selectedMarker.longitude });
     return `${km.toFixed(1)} km`;
-  }, [selectedMarker, userCoords]);
+  }, [selectedMarker, userCoords, routeDistanceKm]);
 
   const etaLabel = useMemo(() => {
+    if (routeDurationSec && routeDurationSec > 0) return `${Math.max(3, Math.round(routeDurationSec / 60))} min`;
     if (!selectedDistance) return null;
     const km = parseFloat(selectedDistance);
     return isNaN(km) ? null : `${Math.max(6, Math.round(km * 3.4))} min`;
-  }, [selectedDistance]);
+  }, [selectedDistance, routeDurationSec]);
 
   const handleRequestBooking = async (marker: MapMarker) => {
     if (!userCoords) { Alert.alert('Location required', 'Enable GPS first.'); return; }
@@ -379,17 +405,17 @@ const MapScreen: React.FC = () => {
           animationDuration={700}
         />
 
-        {/* Alt route (dashed) */}
+        {/* Alt route (dashed, muted Uber-like fallback) */}
         {altSlice.length > 1 && (
           <MapLibreGL.ShapeSource id="route-alt" shape={toGeoJson(altSlice) as any}>
-            <MapLibreGL.LineLayer id="route-alt-line" style={{ lineColor: '#94a3b8', lineOpacity: 0.4, lineWidth: 4, lineDasharray: [2, 3] }} />
+            <MapLibreGL.LineLayer id="route-alt-line" style={{ lineColor: isDark ? '#6b7280' : '#9ca3af', lineOpacity: 0.45, lineWidth: 4, lineDasharray: [2, 3] }} />
           </MapLibreGL.ShapeSource>
         )}
 
-        {/* Primary route (bold blue like Uber) */}
+        {/* Primary route */}
         {primarySlice.length > 1 && (
           <MapLibreGL.ShapeSource id="route-primary" shape={toGeoJson(primarySlice) as any}>
-            <MapLibreGL.LineLayer id="route-primary-line" style={{ lineColor: '#2563eb', lineOpacity: 0.95, lineWidth: 6, lineCap: 'round', lineJoin: 'round' }} />
+            <MapLibreGL.LineLayer id="route-primary-line" style={{ lineColor: isDark ? '#f3f4f6' : '#111827', lineOpacity: 0.96, lineWidth: 6, lineCap: 'round', lineJoin: 'round' }} />
           </MapLibreGL.ShapeSource>
         )}
 
@@ -425,11 +451,11 @@ const MapScreen: React.FC = () => {
             belowLayerID="cluster-count"
             filter={['has', 'point_count']}
             style={{
-              circleColor: ['step', ['get', 'point_count'], '#3b82f6', 10, '#8b5cf6', 30, '#ec4899'],
+              circleColor: ['step', ['get', 'point_count'], '#374151', 10, '#1f2937', 30, '#111827'],
               circleRadius: ['step', ['get', 'point_count'], 20, 10, 28, 30, 36],
               circleStrokeWidth: 3,
-              circleStrokeColor: '#fff',
-              circleOpacity: 0.9,
+              circleStrokeColor: isDark ? '#0f172a' : '#f9fafb',
+              circleOpacity: 0.92,
             }}
           />
           {/* Cluster count label */}
@@ -443,18 +469,18 @@ const MapScreen: React.FC = () => {
               textColor: '#ffffff',
             }}
           />
-          {/* Individual talent pins (photographer = camera, model = sparkle) */}
+          {/* Individual talent pins */}
           <MapLibreGL.CircleLayer
             id="unclustered-point"
             filter={['!', ['has', 'point_count']]}
             style={{
               circleColor: ['case',
-                ['get', 'isOnline'], ['case', ['==', ['get', 'type'], 'model'], '#ec4899', '#10b981'],
-                ['case', ['==', ['get', 'type'], 'model'], '#c084fc', '#60a5fa'],
+                ['get', 'isOnline'], ['case', ['==', ['get', 'type'], 'model'], '#059669', '#10b981'],
+                ['case', ['==', ['get', 'type'], 'model'], '#9ca3af', '#6b7280'],
               ],
               circleRadius: 14,
               circleStrokeWidth: ['case', ['get', 'isOnline'], 3, 2],
-              circleStrokeColor: ['case', ['get', 'isOnline'], '#ffffff', '#94a3b8'],
+              circleStrokeColor: ['case', ['get', 'isOnline'], '#ffffff', '#d1d5db'],
               circleOpacity: 0.95,
             }}
           />
@@ -501,6 +527,14 @@ const MapScreen: React.FC = () => {
             <View style={s.liveDot} />
             <Text style={[s.liveText, { color: colors.text }]}>
               Live · {filteredMarkers.filter(m => onlineProfiles.has(m.sourceId ?? '')).length} online nearby
+            </Text>
+          </View>
+        )}
+        {heatmapSummary && (
+          <View style={[s.statusPill, { marginTop: 8, backgroundColor: isDark ? 'rgba(15,23,42,0.85)' : 'rgba(255,255,255,0.9)' }]}>
+            <Ionicons name="flame-outline" size={13} color={isDark ? '#fbbf24' : '#b45309'} />
+            <Text style={[s.liveText, { color: colors.text }]}>
+              Demand {heatmapSummary.demand} · Supply {heatmapSummary.supply}
             </Text>
           </View>
         )}

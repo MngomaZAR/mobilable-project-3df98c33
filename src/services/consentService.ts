@@ -13,13 +13,14 @@ export const recordConsent = async (payload: ConsentPayload): Promise<void> => {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('You must be logged in to record consent.');
 
-  const { error } = await supabase.from('user_consents').insert({
-    user_id: user.id,
-    consent_type: payload.type,
-    version: payload.version,
-    accepted: payload.accepted,
-    accepted_at: new Date().toISOString(),
-    metadata: { user_agent: 'papzi-mobile' },
+  const { error } = await supabase.functions.invoke('compliance-consent', {
+    body: {
+      consent_type: payload.type,
+      enabled: payload.accepted,
+      legal_basis: 'consent',
+      consent_version: payload.version,
+      context: { user_agent: 'papzi-mobile' },
+    },
   });
 
   if (error) throw new Error(error.message || 'Failed to record consent.');

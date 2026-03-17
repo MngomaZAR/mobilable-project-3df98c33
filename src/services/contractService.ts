@@ -58,10 +58,30 @@ export const createContract = async (bookingId: string, type: 'model_release' | 
 };
 
 export const signContract = async (contractId: string, signature: string, role: 'creator' | 'client' | 'model') => {
-  const update: any = { status: 'signed', signed_at: new Date().toISOString() };
-  if (role === 'creator') update.creator_signature = signature;
-  if (role === 'client') update.client_signature = signature;
-  if (role === 'model') update.model_signature = signature;
+  const { data: existing, error: fetchError } = await supabase
+    .from('contracts')
+    .select('id, client_id, model_id, creator_signature, client_signature, model_signature')
+    .eq('id', contractId)
+    .single();
+
+  if (fetchError) throw fetchError;
+
+  const nextCreatorSignature = role === 'creator' ? signature : existing.creator_signature;
+  const nextClientSignature = role === 'client' ? signature : existing.client_signature;
+  const nextModelSignature = role === 'model' ? signature : existing.model_signature;
+
+  // Base required signers are creator + client.
+  // If model is a distinct participant, require model signature as well.
+  const requiresModelSignature = Boolean(existing.model_id) && existing.model_id !== existing.client_id;
+  const fullySigned = Boolean(nextCreatorSignature && nextClientSignature && (!requiresModelSignature || nextModelSignature));
+
+  const update: any = {
+    creator_signature: nextCreatorSignature,
+    client_signature: nextClientSignature,
+    model_signature: nextModelSignature,
+    status: fullySigned ? 'signed' : 'draft',
+    signed_at: fullySigned ? new Date().toISOString() : null,
+  };
 
   const { error } = await supabase
     .from('contracts')

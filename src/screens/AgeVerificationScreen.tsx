@@ -50,14 +50,21 @@ const AgeVerificationScreen: React.FC = () => {
       });
 
       const nowIso = new Date().toISOString();
-      const { error } = await supabase.from('profiles')
-        .update({
-          date_of_birth: isoDob,
-          age_verified: true,
-          age_verified_at: nowIso,
-          ...(requiresKyc ? { kyc_status: 'pending' } : {}),
-        })
-        .eq('id', currentUser.id);
+      const profilePayload: Record<string, unknown> = {
+        id: currentUser.id,
+        date_of_birth: isoDob,
+        age_verified: true,
+        age_verified_at: nowIso,
+        ...(requiresKyc ? { kyc_status: 'pending' } : {}),
+      };
+      if (currentUser.role) {
+        profilePayload.role = currentUser.role;
+      }
+
+      // Use upsert so users without a pre-created profile row cannot get stuck.
+      const { error } = await supabase
+        .from('profiles')
+        .upsert(profilePayload, { onConflict: 'id' });
       if (error) throw error;
 
       if (requiresKyc) {

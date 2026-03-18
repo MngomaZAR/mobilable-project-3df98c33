@@ -116,6 +116,9 @@ const BootGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       if (isFatal) {
         console.warn('BootGuard caught fatal error', message);
         setFatalError(message);
+        import('./src/utils/crashReporting')
+          .then(({ captureError }) => captureError(err, { screen: 'BootGuard', extra: { isFatal: true } }))
+          .catch(() => {});
       }
       if (__DEV__ && previousHandler) {
         previousHandler(err, isFatal);

@@ -14,15 +14,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppLogo } from '../components/AppLogo';
 import { useAppData } from '../store/AppDataContext';
-import { supabase, hasSupabase } from '../config/supabaseClient';
-import * as WebBrowser from 'expo-web-browser';
-import * as Linking from 'expo-linking';
-import { makeRedirectUri } from 'expo-auth-session';
-import Constants, { AppOwnership } from 'expo-constants';
 import { Ionicons } from '@expo/vector-icons';
 import { UserRole } from '../types';
-
-WebBrowser.maybeCompleteAuthSession();
 
 type Mode = 'signin' | 'signup';
 
@@ -164,61 +157,6 @@ const AuthScreen: React.FC = () => {
       setLocalSubmitting(false);
     }
   };
-
-  const exchangeOAuthCode = async (url: string) => {
-    try {
-      let params = new URLSearchParams();
-      let hashParams = new URLSearchParams();
-      
-      try {
-        const parsedUrl = new URL(url);
-        params = new URLSearchParams(parsedUrl.search);
-        hashParams = new URLSearchParams(parsedUrl.hash.replace('#', ''));
-      } catch (e) {
-         const queryString = url.split('?')[1]?.split('#')[0] || '';
-         const hashString = url.split('#')[1] || '';
-         params = new URLSearchParams(queryString);
-         hashParams = new URLSearchParams(hashString);
-      }
-
-      const errorDesc = params.get('error_description') || hashParams.get('error_description');
-      if (errorDesc) {
-        setLocalMessage(errorDesc.replace(/\+/g, ' '));
-        return;
-      }
-
-      const code = params.get('code') || hashParams.get('code');
-      const accessToken = hashParams.get('access_token') || params.get('access_token');
-      const refreshToken = hashParams.get('refresh_token') || params.get('refresh_token');
-
-      if (accessToken && refreshToken) {
-        const { error: sessionErr } = await supabase.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken,
-        });
-        if (sessionErr) setLocalMessage(sessionErr.message);
-      } else if (code) {
-        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-        if (exchangeError) setLocalMessage(exchangeError.message);
-      }
-    } catch (err: any) {
-      setLocalMessage(err.message || 'Authentication failed');
-    }
-  };
-
-  // Listen for the deep-link callback (needed on Android where the system browser
-  // handles the redirect and re-opens the app via papzi://auth?code=...)
-  React.useEffect(() => {
-    // Cold start: app was opened via deep link
-    Linking.getInitialURL().then((url) => {
-      if (url && url.startsWith('papzi://auth')) exchangeOAuthCode(url);
-    });
-    // Warm start: app was already running in foreground/background
-    const subscription = Linking.addEventListener('url', ({ url }) => {
-      if (url && url.startsWith('papzi://auth')) exchangeOAuthCode(url);
-    });
-    return () => subscription.remove();
-  }, []);
 
   const handleOAuth = async (provider: 'google' | 'apple') => {
     setLocalMessage(null);

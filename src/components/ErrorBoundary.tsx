@@ -23,6 +23,9 @@ export class ErrorBoundary extends React.Component<Props, State> {
   componentDidCatch(error: unknown) {
     console.warn('ErrorBoundary caught an error', error);
     this.setState({ errorMessage: error instanceof Error ? error.message : 'Unknown runtime error' });
+    import('../utils/crashReporting')
+      .then(({ captureError }) => captureError(error, { screen: 'ErrorBoundary' }))
+      .catch(() => {});
   }
 
   handleRetry = () => {

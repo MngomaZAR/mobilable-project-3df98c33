@@ -23,21 +23,25 @@ const AvailabilityScreen: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [availability, setAvailability] = useState<Availability[]>([]);
+  const userId = currentUser?.id ?? null;
 
   useEffect(() => {
-    if (currentUser) {
+    if (userId) {
       loadAvailability();
+    } else {
+      setLoading(false);
     }
-  }, [currentUser]);
+  }, [userId]);
 
   const loadAvailability = async () => {
+    if (!userId) return;
     try {
-      const data = await fetchAvailability(currentUser!.id);
+      const data = await fetchAvailability(userId);
       // Initialize with all days if empty
       if (data.length === 0) {
         setAvailability(DAYS.map((_, i) => ({
           id: '',
-          user_id: currentUser!.id,
+          user_id: userId,
           day_of_week: i,
           start_time: '09:00',
           end_time: '18:00',
@@ -60,9 +64,13 @@ const AvailabilityScreen: React.FC = () => {
   };
 
   const handleSave = async () => {
+    if (!userId) {
+      Alert.alert('Session Error', 'Please sign in again to update your availability.');
+      return;
+    }
     setSaving(true);
     try {
-      await updateAvailability(currentUser!.id, availability);
+      await updateAvailability(userId, availability);
       Alert.alert('Success', 'Availability updated successfully.');
     } catch (err: any) {
       Alert.alert('Error', 'Failed to save changes.');
@@ -97,9 +105,9 @@ const AvailabilityScreen: React.FC = () => {
                   {DAYS[item.day_of_week]}
                 </Text>
                 {item.is_available ? (
-                   <Text style={[styles.timeRange, { color: colors.accent }]}>
-                     {item.start_time} — {item.end_time}
-                   </Text>
+                  <Text style={[styles.timeRange, { color: colors.accent }]}>
+                    {item.start_time} - {item.end_time}
+                  </Text>
                 ) : (
                   <Text style={[styles.timeRange, { color: colors.textMuted }]}>Unavailable</Text>
                 )}

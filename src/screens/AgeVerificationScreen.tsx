@@ -15,6 +15,11 @@ const AgeVerificationScreen: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
 
   const handleConfirm = async () => {
+    if (!currentUser?.id) {
+      Alert.alert('Session Error', 'Please sign in again to continue age verification.');
+      return;
+    }
+
     const today = new Date();
     const age = today.getFullYear() - dob.getFullYear() -
       (today < new Date(today.getFullYear(), dob.getMonth(), dob.getDate()) ? 1 : 0);
@@ -49,7 +54,7 @@ const AgeVerificationScreen: React.FC = () => {
           age_verified_at: new Date().toISOString(),
           ...(requiresKyc ? { kyc_status: 'pending' } : {}),
         })
-        .eq('id', currentUser!.id);
+        .eq('id', currentUser.id);
       if (error) throw error;
 
       if (requiresKyc) {
@@ -57,7 +62,7 @@ const AgeVerificationScreen: React.FC = () => {
         const { data: existingCase, error: existingCaseErr } = await supabase
           .from('moderation_cases')
           .select('id')
-          .eq('target_user_id', currentUser!.id)
+          .eq('target_user_id', currentUser.id)
           .eq('target_type', 'profile')
           .eq('reason', 'KYC verification review required')
           .in('status', ['open', 'in_review'])
@@ -66,10 +71,10 @@ const AgeVerificationScreen: React.FC = () => {
 
         if (!existingCase?.id) {
           const { error: insertCaseErr } = await supabase.from('moderation_cases').insert({
-            reporter_id: currentUser!.id,
-            target_user_id: currentUser!.id,
+            reporter_id: currentUser.id,
+            target_user_id: currentUser.id,
             target_type: 'profile',
-            target_id: currentUser!.id,
+            target_id: currentUser.id,
             reason: 'KYC verification review required',
             severity: 2,
             status: 'open',

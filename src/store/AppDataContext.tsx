@@ -331,11 +331,11 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const fetchProfile = useCallback(async (userId: string): Promise<ProfileRow> => {
     if (!hasSupabase) return null;
-    console.log('Fetching profile for:', userId);
+    if (__DEV__) console.log('Fetching profile for:', userId);
     try {
       const { data, error } = await supabase.from('profiles').select(PROFILE_SELECT).eq('id', userId).maybeSingle();
       if (error) throw error;
-      console.log('Profile fetch result:', data);
+      if (__DEV__) console.log('Profile fetch result:', data);
       return (data as any) ?? null;
     } catch (err) {
       logError('fetchProfile', err);
@@ -801,14 +801,14 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   useEffect(() => {
     if (!hasSupabase) return;
     const { data } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth State Change Event:', event);
+      if (__DEV__) console.log('Auth State Change Event:', event);
       if (session?.user) {
         try {
           let profile = await fetchProfile(session.user.id);
           
           // Handle OAuth sign-ups where profile doesn't exist yet
           if (!profile) {
-            console.log('No profile found, profile creation will be handled by RoleSelectionScreen for:', session.user.id);
+            if (__DEV__) console.log('No profile found, profile creation will be handled by RoleSelectionScreen for:', session.user.id);
             // We set role to null to trigger RoleSelectionScreen in MainNavigator
             profile = { role: null, verified: false };
           }
@@ -1917,16 +1917,16 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setAuthenticating(true);
     setError(null);
     try {
-      console.log('Attempting sign in for:', email);
+      if (__DEV__) console.log('Attempting sign in for:', email);
       const { data, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
       if (signInError) {
         console.error('SignIn Error:', signInError);
         setError(signInError.message);
         return null;
       }
-      console.log('SignIn Successful, fetching profile for:', data.user?.id);
+      if (__DEV__) console.log('SignIn Successful, fetching profile for:', data.user?.id);
       const profile = data.user ? await fetchProfile(data.user.id) : null;
-      console.log('Profile fetched:', profile);
+      if (__DEV__) console.log('Profile fetched:', profile);
       const user: AppUser | null = data.user ? mapSupabaseUser(data.user, 'client', profile) : null;
       setState({ currentUser: user });
       return user;
@@ -2305,7 +2305,11 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
 
       // 4. Immediate local state feedback across all profile-backed collections.
-      const nextCurrentUser = { ...stateRef.current.currentUser!, ...changes };
+      const currentUserState = stateRef.current.currentUser;
+      if (!currentUserState) {
+        throw new Error('Profile update requires an authenticated user.');
+      }
+      const nextCurrentUser = { ...currentUserState, ...changes };
       setState({
         currentUser: nextCurrentUser,
         profiles: stateRef.current.profiles.map((p: any) =>

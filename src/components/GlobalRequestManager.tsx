@@ -36,7 +36,7 @@ export const GlobalRequestManager: React.FC = () => {
       },
       (payload) => {
         if (payload.new.status === 'pending') {
-          console.log('Global Request Received:', payload.new.id);
+          if (__DEV__) console.log('Global Request Received:', payload.new.id);
           setIncomingRequest(payload.new);
           setShowPopup(true);
         }

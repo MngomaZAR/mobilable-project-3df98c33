@@ -213,12 +213,11 @@ export const MainNavigator: React.FC<MainNavigatorProps> = ({ logoSource }) => {
                 return <Stack.Screen name="AgeVerification" component={AgeVerificationScreen} options={{ headerShown: false }} />;
               }
 
-              if (requiresKyc && kycStatus === 'rejected') {
-                return <Stack.Screen name="PendingVerification" component={VerificationRejectedScreen} options={{ headerShown: false }} />;
-              }
-
               if (requiresKyc && kycStatus !== 'approved') {
-                return <Stack.Screen name="PendingVerification" component={PendingVerificationScreen} options={{ headerShown: false }} />;
+                const pendingComponent = kycStatus === 'rejected'
+                  ? VerificationRejectedScreen
+                  : PendingVerificationScreen;
+                return <Stack.Screen name="PendingVerification" component={pendingComponent} options={{ headerShown: false }} />;
               }
 
               if (!currentUser.role || (currentUser.role as string) === 'guest') {

@@ -38,6 +38,10 @@ const toHourlyRateRand = (price_range: string) => {
   return `R${amount.toLocaleString('en-ZA')}/hr`;
 };
 
+const toSafeLower = (value: unknown) => String(value ?? '').toLowerCase();
+const toSafeTags = (value: unknown): string[] => (Array.isArray(value) ? value.filter((tag): tag is string => typeof tag === 'string') : []);
+const toSafeRating = (value: unknown) => (Number.isFinite(Number(value)) ? Number(value) : 0);
+
 const HomeScreen: React.FC = () => {
   const { state, loading, error, refresh } = useAppData();
   const { startConversationWithUser } = useMessaging();
@@ -84,20 +88,24 @@ const HomeScreen: React.FC = () => {
     let list = discoveryMode === 'photographers' ? [...state.photographers] : [...state.models];
 
     if (category !== 'All Categories') {
-      list = list.filter((item) => item.tags.some((tag) => category.toLowerCase().includes(tag.toLowerCase())));
+      const categoryLower = toSafeLower(category);
+      list = list.filter((item: any) =>
+        toSafeTags(item?.tags).some((tag) => categoryLower.includes(toSafeLower(tag)))
+      );
     }
 
     if (priceRange !== 'Any budget') {
-      list = list.filter((item) => item.price_range.includes(priceRange.replace(/[^$]/g, '')));
+      const priceFilter = priceRange.replace(/[^$]/g, '');
+      list = list.filter((item: any) => String(item?.price_range ?? '').includes(priceFilter));
     }
 
     if (location.trim().length > 0) {
-      const query = location.toLowerCase();
-      list = list.filter((item) => item.location.toLowerCase().includes(query));
+      const query = toSafeLower(location);
+      list = list.filter((item: any) => toSafeLower(item?.location).includes(query));
     }
 
     if (sort === 'Highest Rated') {
-      list = list.sort((a, b) => b.rating - a.rating);
+      list = list.sort((a: any, b: any) => toSafeRating(b?.rating) - toSafeRating(a?.rating));
     } else if (sort === 'Most Recent') {
       list = list.sort((a, b) => {
         const da = new Date(a.created_at || 0).valueOf();
@@ -154,24 +162,24 @@ const HomeScreen: React.FC = () => {
         <Image source={{ uri: item.avatar_url || 'https://via.placeholder.com/150' }} style={styles.avatar} />
         <View style={[styles.ratingBadge, { backgroundColor: isDark ? 'rgba(0,0,0,0.6)' : '#111827cc' }]}>
           <Ionicons name="star" size={14} color="#fbbf24" />
-          <Text style={styles.ratingText}>{item.rating.toFixed(1)}</Text>
+          <Text style={styles.ratingText}>{toSafeRating(item?.rating).toFixed(1)}</Text>
         </View>
         <View style={styles.availabilityBadge}>
           <Text style={styles.availabilityText}>{discoveryMode === 'models' ? 'Ready to Shoot' : 'Available Today'}</Text>
         </View>
       </View>
       <View style={styles.cardContent}>
-        <Text style={[styles.name, { color: colors.text }]}>{discoveryMode === 'models' ? item.name : item.name}</Text>
-        <Text style={[styles.meta, { color: colors.textMuted }]}>{item.location}</Text>
+        <Text style={[styles.name, { color: colors.text }]}>{String(item?.name ?? 'Creator')}</Text>
+        <Text style={[styles.meta, { color: colors.textMuted }]}>{String(item?.location ?? 'South Africa')}</Text>
         <View style={styles.tagRowCompact}>
-          {item.tags.slice(0, 3).map((tag: string) => (
+          {toSafeTags(item?.tags).slice(0, 3).map((tag: string) => (
             <View style={[styles.tag, { backgroundColor: colors.bg }]} key={tag}>
               <Text style={[styles.tagText, { color: colors.text }]}>{tag}</Text>
             </View>
           ))}
         </View>
         <View style={styles.metaRow}>
-          <Text style={[styles.price, { color: colors.text }]}>{toHourlyRateRand(item.price_range)}</Text>
+          <Text style={[styles.price, { color: colors.text }]}>{toHourlyRateRand(String(item?.price_range ?? '$$'))}</Text>
           <Text style={[styles.dot, { color: colors.textMuted }]}>•</Text>
           <Text style={[styles.duration, { color: colors.textMuted }]}>{discoveryMode === 'models' ? 'Min 2 hours' : '~1 hour'}</Text>
         </View>
@@ -325,7 +333,7 @@ const HomeScreen: React.FC = () => {
                 <Text style={[styles.heroCardMeta, { color: isDark ? '#94a3b8' : '#cbd5e1' }]}>{featuredPhotographer.location}</Text>
                 <View style={styles.heroCardRatingRow}>
                   <Ionicons name="star" size={14} color="#fbbf24" />
-                  <Text style={styles.heroCardRatingText}>{featuredPhotographer.rating.toFixed(1)} rating</Text>
+                  <Text style={styles.heroCardRatingText}>{toSafeRating(featuredPhotographer.rating).toFixed(1)} rating</Text>
                 </View>
               </View>
             </>

@@ -21,13 +21,24 @@ const buildFallback = () => {
 };
 
 let nativeMapLibre: any = null;
+let nativeAvailable = false;
 if (!isExpoGo) {
   try {
-    nativeMapLibre = require('@maplibre/maplibre-react-native').default;
+    const loaded = require('@maplibre/maplibre-react-native').default;
+    if (loaded?.MapView) {
+      try {
+        if (typeof loaded.setAccessToken === 'function') loaded.setAccessToken(null);
+      } catch {
+        // Native module exists in JS but is not correctly linked for this build.
+      }
+      nativeMapLibre = loaded;
+      nativeAvailable = true;
+    }
   } catch {
     nativeMapLibre = null;
+    nativeAvailable = false;
   }
 }
 
-export const isMapLibreNativeAvailable = Boolean(nativeMapLibre && !isExpoGo);
+export const isMapLibreNativeAvailable = Boolean(nativeMapLibre && nativeAvailable && !isExpoGo);
 export const MapLibreGL: any = nativeMapLibre ?? buildFallback();

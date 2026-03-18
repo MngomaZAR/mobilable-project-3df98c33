@@ -100,6 +100,7 @@ const TabsNavigator = () => {
 
   return (
     <Tab.Navigator
+      initialRouteName="Home"
       screenOptions={({ route }) => ({
         tabBarIcon: ({ focused, color, size }) => tabBarIcon(route.name, focused, color, size),
         tabBarActiveTintColor: '#111827',

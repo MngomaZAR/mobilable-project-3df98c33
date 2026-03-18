@@ -1984,19 +1984,55 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const signInWithOAuth = useCallback(async (provider: 'google' | 'apple') => {
     setState({ authenticating: true, error: null });
     try {
+      const redirectTo = Linking.createURL('auth');
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          redirectTo: Linking.createURL('/'),
+          redirectTo,
+          skipBrowserRedirect: true,
         },
       });
 
       if (error) throw error;
       if (data?.url) {
-        const result = await WebBrowser.openAuthSessionAsync(data.url, Linking.createURL('/'));
-        if (result.type === 'success' && result.url) {
-           await revalidateSession();
+        const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+
+        if (result.type === 'cancel' || result.type === 'dismiss') {
+          return;
         }
+
+        if (result.type === 'success' && result.url) {
+          const parsed = Linking.parse(result.url);
+          const query = parsed.queryParams ?? {};
+
+          const code = typeof query.code === 'string' ? query.code : null;
+          const accessToken = typeof query.access_token === 'string' ? query.access_token : null;
+          const refreshToken = typeof query.refresh_token === 'string' ? query.refresh_token : null;
+          const errorDescription = typeof query.error_description === 'string' ? query.error_description : null;
+
+          if (errorDescription) {
+            throw new Error(errorDescription);
+          }
+
+          if (accessToken && refreshToken) {
+            const { error: sessionErr } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            });
+            if (sessionErr) throw sessionErr;
+          } else if (code) {
+            const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+            if (exchangeError) throw exchangeError;
+          }
+        }
+
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) throw sessionError;
+        if (!sessionData.session) {
+          throw new Error('Auth session missing. Please try signing in again.');
+        }
+
+        await revalidateSession();
       }
     } catch (err: any) {
       logError(`oauth_${provider}`, err);

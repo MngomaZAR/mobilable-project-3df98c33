@@ -43,6 +43,8 @@ const friendlyAuthError = (raw: string): string => {
     return 'This sign-in method isn\'t enabled yet. Please use email & password for now.';
   if (r.includes('network') || r.includes('failed to fetch'))
     return 'Unable to connect. Check your internet connection and try again.';
+  if (r.includes('auth session missing'))
+    return 'Sign-in session expired. Please try Google/Apple sign-in again.';
   return raw;
 };
 

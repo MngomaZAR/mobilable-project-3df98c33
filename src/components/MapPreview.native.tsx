@@ -5,11 +5,6 @@ import { MapMarker, MapPreviewProps } from './mapTypes';
 import { DEFAULT_CAPE_TOWN_COORDINATES, ensureSouthAfricanCoordinates } from '../utils/geo';
 import { MapLibreGL, isMapLibreNativeAvailable } from './MapLibreWrapper';
 
-// Suppress the default API key warning (we use OpenStreetMap tiles, no key needed)
-if (isMapLibreNativeAvailable) {
-  MapLibreGL.setAccessToken(null);
-}
-
 export const MapPreview: React.FC<MapPreviewProps> = ({ markers, onMapError, onMarkerPress }) => {
   const cameraRef = useRef<any>(null);
   const { width } = useWindowDimensions();

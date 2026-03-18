@@ -3,11 +3,6 @@ import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { BookingStatus } from '../types';
 import { MapLibreGL, isMapLibreNativeAvailable } from './MapLibreWrapper';
 
-// Suppress the default API key warning (we use OpenStreetMap tiles, no key needed)
-if (isMapLibreNativeAvailable) {
-  MapLibreGL.setAccessToken(null);
-}
-
 type Coordinate = {
   latitude: number;
   longitude: number;

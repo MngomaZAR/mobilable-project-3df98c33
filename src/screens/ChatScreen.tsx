@@ -18,6 +18,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { PLACEHOLDER_IMAGE } from '../utils/constants';
 import { uploadBlurredPreview, uploadImage } from '../services/uploadService';
 import { BUCKETS } from '../config/environment';
+import { reportContent } from '../services/reportService';
+import HowItWorksCard from '../components/HowItWorksCard';
 
 type Route = RouteProp<RootStackParamList, 'ChatThread'>;
 type Navigation = StackNavigationProp<RootStackParamList, 'ChatThread'>;
@@ -107,6 +109,8 @@ const ChatScreen: React.FC = () => {
       setText('');
       setReplyTo(null);
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
+    } catch (err: any) {
+      Alert.alert('Message blocked', err?.message || 'Unable to send this message right now.');
     } finally {
       setSending(false);
     }
@@ -184,6 +188,33 @@ const ChatScreen: React.FC = () => {
     }
   };
 
+  const handleReportConversation = () => {
+    const submit = async (reason: string) => {
+      try {
+        await reportContent({
+          targetType: 'message',
+          targetId: chatId,
+          reason,
+          details: `Conversation report from chat thread ${chatId}`,
+        });
+        Alert.alert('Report submitted', 'Our moderation team will review this conversation.');
+      } catch (err: any) {
+        Alert.alert('Report failed', err?.message || 'Unable to submit this report right now.');
+      }
+    };
+
+    Alert.alert(
+      'Report conversation',
+      'Select the reason so moderation can triage this quickly.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Harassment / abuse', style: 'destructive', onPress: () => submit('Harassment or abuse in conversation') },
+        { text: 'Spam', onPress: () => submit('Spam or repeated unsolicited messages') },
+        { text: 'Suspicious payment request', onPress: () => submit('Suspicious payment or off-platform request') },
+      ]
+    );
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: colors.bg, paddingTop: insets.top }]}>
       <KeyboardAvoidingView
@@ -219,6 +250,21 @@ const ChatScreen: React.FC = () => {
             <View style={[styles.banner, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <Text style={[styles.bannerTitle, { color: colors.text }]}>Conversations</Text>
               <Text style={[styles.bannerText, { color: colors.textSecondary }]}>Messages stay synced to your account and booking activity.</Text>
+              <View style={styles.bannerActions}>
+                <TouchableOpacity style={[styles.reportBtn, { borderColor: colors.border }]} onPress={handleReportConversation}>
+                  <Ionicons name="flag-outline" size={14} color={colors.text} />
+                  <Text style={[styles.reportBtnText, { color: colors.text }]}>Report chat</Text>
+                </TouchableOpacity>
+              </View>
+              <HowItWorksCard
+                title="How Safe Messaging Works"
+                persistKey={`chat-how-${chatId}`}
+                items={[
+                  'Unknown contacts can send only one intro message until you reply or book together.',
+                  'Report chat creates a moderation case with SLA tracking and audit history.',
+                  'Blocked or policy-violating users can lose messaging access after review.',
+                ]}
+              />
             </View>
           }
           renderItem={({ item }) => {
@@ -492,6 +538,25 @@ const styles = StyleSheet.create({
   bannerText: {
     fontSize: 13,
     lineHeight: 18,
+  },
+  bannerActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: 10,
+    marginBottom: 8,
+  },
+  reportBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  reportBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
   },
   messageRowWrapper: {
     marginBottom: 4,

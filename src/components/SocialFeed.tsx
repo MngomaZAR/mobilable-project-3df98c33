@@ -31,8 +31,9 @@ import { Story, StoryViewer } from './StoryViewer';
 import { HashtagText } from './HashtagText';
 import { PLACEHOLDER_IMAGE } from '../utils/constants';
 import { supabase } from '../config/supabaseClient';
-import { getForYouRanking } from '../services/dispatchService';
+import { getForYouRanking, recordRecommendationEvents } from '../services/dispatchService';
 import HowItWorksCard from './HowItWorksCard';
+import { reportContent } from '../services/reportService';
 
 type SocialFeedProps = {
   onCreatePost?: () => void;
@@ -71,6 +72,9 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
 
   const lastTapRef = useRef<number | null>(null);
   const loadMoreInFlightRef = useRef(false);
+  const trackedImpressionsRef = useRef<Set<string>>(new Set());
+  const recommendationQueueRef = useRef<Array<{ post_id: string; event_type: 'impression' | 'open' | 'like' | 'comment' | 'share' | 'unlock' | 'skip' | 'hide' | 'booking_conversion'; dwell_ms?: number; metadata?: Record<string, any> }>>([]);
+  const recommendationFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [blockedUserIds, setBlockedUserIds] = useState<Set<string>>(new Set());
   const [reportedPostIds, setReportedPostIds] = useState<Set<string>>(new Set());
 
@@ -133,6 +137,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
         setTimeout(() => setLikedAnimPostId(null), 700);
       }
       await toggleLike(postId);
+      queueRecommendationEvent({ post_id: postId, event_type: 'like' });
     } catch (err) { }
   };
 
@@ -158,10 +163,30 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
       await Share.share({
         message: `Check out this amazing post by ${post.profile?.full_name || 'a creator'} on Papzi!\n\nhttps://papzi.com/post/${post.id}`,
       });
+      queueRecommendationEvent({ post_id: post.id, event_type: 'share' });
     } catch (error) {
       console.warn('Share error', error);
     }
   };
+
+  const flushRecommendationQueue = useCallback(async () => {
+    if (!recommendationQueueRef.current.length) return;
+    const payload = recommendationQueueRef.current.splice(0, recommendationQueueRef.current.length);
+    try {
+      await recordRecommendationEvents(payload);
+    } catch {
+      // Best-effort telemetry only.
+    }
+  }, []);
+
+  const queueRecommendationEvent = useCallback((event: { post_id: string; event_type: 'impression' | 'open' | 'like' | 'comment' | 'share' | 'unlock' | 'skip' | 'hide' | 'booking_conversion'; dwell_ms?: number; metadata?: Record<string, any> }) => {
+    if (!appState.currentUser?.id) return;
+    recommendationQueueRef.current.push(event);
+    if (recommendationFlushTimerRef.current) clearTimeout(recommendationFlushTimerRef.current);
+    recommendationFlushTimerRef.current = setTimeout(() => {
+      flushRecommendationQueue().catch(() => {});
+    }, 1200);
+  }, [appState.currentUser?.id, flushRecommendationQueue]);
 
   const loadFeed = useCallback(async () => {
     setLoading(true);
@@ -194,6 +219,11 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
     return () => { active = false; };
   }, [forYouOnly, appState.currentUser?.id]);
 
+  useEffect(() => () => {
+    if (recommendationFlushTimerRef.current) clearTimeout(recommendationFlushTimerRef.current);
+    flushRecommendationQueue().catch(() => {});
+  }, [flushRecommendationQueue]);
+
   useEffect(() => {
     const userId = appState.currentUser?.id;
     if (!userId) {
@@ -205,7 +235,12 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
     const hydrateEntitlements = async () => {
       const [unlocksRes, subsRes] = await Promise.all([
         supabase.from('post_unlocks').select('post_id').eq('user_id', userId),
-        supabase.from('subscriptions').select('creator_id,status').eq('subscriber_id', userId).eq('status', 'active'),
+        supabase
+          .from('subscriptions')
+          .select('creator_id,status,current_period_end')
+          .eq('subscriber_id', userId)
+          .eq('status', 'active')
+          .or(`current_period_end.is.null,current_period_end.gt.${new Date().toISOString()}`),
       ]);
 
       if (unlocksRes.data) setUnlockedPostIds(new Set(unlocksRes.data.map((r: any) => r.post_id)));
@@ -234,6 +269,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
       );
       if (error) throw error;
       setUnlockedPostIds(prev => new Set(prev).add(post.id));
+      queueRecommendationEvent({ post_id: post.id, event_type: 'unlock' });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     } catch (err: any) {
       Alert.alert('Unlock failed', err?.message || 'Unable to unlock this post right now.');
@@ -301,13 +337,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
       setReportedPostIds((prev) => new Set([...prev, post.id]));
       // Persist report to backend
       try {
-        const { supabase } = await import('../config/supabaseClient');
-        const { error } = await supabase.from('reports').insert({
-          target_type: 'post',
-          target_id: post.id,
-          reason: 'user_report',
-        });
-        if (error) throw error;
+        await reportContent({ targetType: 'post', targetId: post.id, reason: 'Community report from feed options' });
         Platform.OS === 'web'
           ? window.alert('Report submitted. Thanks for keeping Papzi safe.')
           : Alert.alert('Report submitted', 'Thanks for keeping Papzi safe.');
@@ -527,6 +557,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
             lastTapRef.current = null;
           } else {
             lastTapRef.current = now;
+            queueRecommendationEvent({ post_id: item.id, event_type: 'open' });
             if (item.media_type !== 'video') {
               setLightboxUri(item.image_url);
             }
@@ -661,6 +692,14 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
           windowSize={7}
           removeClippedSubviews={Platform.OS === 'android'}
           updateCellsBatchingPeriod={50}
+          onViewableItemsChanged={({ viewableItems }) => {
+            viewableItems.forEach(({ item, isViewable }) => {
+              if (!isViewable || !item?.id || trackedImpressionsRef.current.has(item.id)) return;
+              trackedImpressionsRef.current.add(item.id);
+              queueRecommendationEvent({ post_id: item.id, event_type: 'impression' });
+            });
+          }}
+          viewabilityConfig={{ itemVisiblePercentThreshold: 65, minimumViewTime: 600 }}
         />
       )}
       

@@ -9,6 +9,9 @@ export interface AppUser {
   role: UserRole;
   verified?: boolean;
   kyc_status?: 'pending' | 'approved' | 'rejected' | null;
+  date_of_birth?: string | null;
+  age_verified?: boolean;
+  age_verified_at?: string | null;
   full_name?: string | null;
   avatar_url?: string | null;
   bio?: string | null;
@@ -285,7 +288,7 @@ export interface Subscription {
   creator_id: string;
   subscriber_id: string;
   tier_id: string;
-  status: 'active' | 'cancelled';
+  status: 'active' | 'cancelled' | 'expired';
   current_period_start: string;
   current_period_end: string;
 }

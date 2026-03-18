@@ -30,43 +30,52 @@ const AgeVerificationScreen: React.FC = () => {
 
     setSubmitting(true);
     try {
+      const isoDob = dob.toISOString().split('T')[0];
+      const requiresKyc = currentUser?.role === 'photographer' || currentUser?.role === 'model';
+
       // Record consent with DOB proof using compliance event + immutable audit
       await recordComplianceConsent({
         consent_type: 'terms',
         enabled: true,
         legal_basis: 'consent',
         consent_version: '1.0',
-        context: { age_verified: true, dob: dob.toISOString().split('T')[0] },
+        context: { age_verified: true, dob: isoDob },
       });
 
-      // Move profile into pending manual review queue for admin approval.
       const { error } = await supabase.from('profiles')
-        .update({ kyc_status: 'pending' })
+        .update({
+          date_of_birth: isoDob,
+          age_verified: true,
+          age_verified_at: new Date().toISOString(),
+          ...(requiresKyc ? { kyc_status: 'pending' } : {}),
+        })
         .eq('id', currentUser!.id);
       if (error) throw error;
 
-      // Create moderation queue item once so retries do not duplicate open tickets.
-      const { data: existingCase, error: existingCaseErr } = await supabase
-        .from('moderation_cases')
-        .select('id')
-        .eq('target_user_id', currentUser!.id)
-        .eq('target_type', 'profile')
-        .eq('reason', 'KYC verification review required')
-        .in('status', ['open', 'in_review'])
-        .maybeSingle();
-      if (existingCaseErr) throw existingCaseErr;
+      if (requiresKyc) {
+        // Create moderation queue item once so retries do not duplicate open tickets.
+        const { data: existingCase, error: existingCaseErr } = await supabase
+          .from('moderation_cases')
+          .select('id')
+          .eq('target_user_id', currentUser!.id)
+          .eq('target_type', 'profile')
+          .eq('reason', 'KYC verification review required')
+          .in('status', ['open', 'in_review'])
+          .maybeSingle();
+        if (existingCaseErr) throw existingCaseErr;
 
-      if (!existingCase?.id) {
-        const { error: insertCaseErr } = await supabase.from('moderation_cases').insert({
-          reporter_id: currentUser!.id,
-          target_user_id: currentUser!.id,
-          target_type: 'profile',
-          target_id: currentUser!.id,
-          reason: 'KYC verification review required',
-          severity: 2,
-          status: 'open',
-        });
-        if (insertCaseErr) throw insertCaseErr;
+        if (!existingCase?.id) {
+          const { error: insertCaseErr } = await supabase.from('moderation_cases').insert({
+            reporter_id: currentUser!.id,
+            target_user_id: currentUser!.id,
+            target_type: 'profile',
+            target_id: currentUser!.id,
+            reason: 'KYC verification review required',
+            severity: 2,
+            status: 'open',
+          });
+          if (insertCaseErr) throw insertCaseErr;
+        }
       }
 
       await revalidateSession();

@@ -183,6 +183,22 @@ const BookingDetailScreen: React.FC = () => {
            </TouchableOpacity>
         ) : null}
 
+        {booking.status === 'completed' ? (
+          <TouchableOpacity
+            style={[styles.secondary, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}
+            onPress={() => {
+              const reviewTargetId = model?.id ?? photographer?.id;
+              if (!reviewTargetId) {
+                Alert.alert('Review unavailable', 'We could not identify the service provider for this booking.');
+                return;
+              }
+              navigation.navigate('Reviews', { photographerId: reviewTargetId });
+            }}
+          >
+            <Text style={[styles.secondaryText, { color: colors.text }]}>Leave a review</Text>
+          </TouchableOpacity>
+        ) : null}
+
         {booking.status === 'pending' || booking.status === 'accepted' ? (
            <>
              <View style={styles.row}>

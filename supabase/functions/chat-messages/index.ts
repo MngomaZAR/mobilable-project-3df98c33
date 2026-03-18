@@ -42,6 +42,79 @@ const isParticipant = async (conversationId: string, userId: string) => {
   return Boolean(data?.conversation_id);
 };
 
+const canSendMessage = async (conversationId: string, senderId: string) => {
+  // Only enforce anti-spam for 1:1 conversations.
+  const { data: participants, error: participantsError } = await supabaseAdmin
+    .from('conversation_participants')
+    .select('user_id')
+    .eq('conversation_id', conversationId);
+
+  if (participantsError) {
+    throw new Error(participantsError.message || 'Unable to validate conversation participants.');
+  }
+
+  const participantIds = (participants ?? []).map((p: any) => p.user_id).filter(Boolean);
+  const recipientIds = participantIds.filter((id: string) => id !== senderId);
+
+  if (recipientIds.length !== 1) {
+    return { allowed: true };
+  }
+
+  const recipientId = recipientIds[0];
+
+  // If this pair has a confirmed booking history, allow normal messaging.
+  const { count: bookingCount, error: bookingError } = await supabaseAdmin
+    .from('bookings')
+    .select('id', { count: 'exact', head: true })
+    .or(
+      [
+        `and(client_id.eq.${senderId},photographer_id.eq.${recipientId})`,
+        `and(client_id.eq.${recipientId},photographer_id.eq.${senderId})`,
+        `and(client_id.eq.${senderId},model_id.eq.${recipientId})`,
+        `and(client_id.eq.${recipientId},model_id.eq.${senderId})`,
+      ].join(',')
+    )
+    .in('status', ['accepted', 'in_progress', 'completed', 'reviewed']);
+
+  if (bookingError) {
+    throw new Error(bookingError.message || 'Unable to validate booking relationship.');
+  }
+  if ((bookingCount ?? 0) > 0) {
+    return { allowed: true };
+  }
+
+  // No booking history: recipient must reply before sender can send message #2.
+  const [{ count: myCount, error: myCountError }, { count: recipientCount, error: recipientCountError }] = await Promise.all([
+    supabaseAdmin
+      .from('messages')
+      .select('id', { count: 'exact', head: true })
+      .eq('chat_id', conversationId)
+      .eq('sender_id', senderId),
+    supabaseAdmin
+      .from('messages')
+      .select('id', { count: 'exact', head: true })
+      .eq('chat_id', conversationId)
+      .eq('sender_id', recipientId),
+  ]);
+
+  if (myCountError || recipientCountError) {
+    throw new Error(myCountError?.message || recipientCountError?.message || 'Unable to validate messaging policy.');
+  }
+
+  const senderMessages = myCount ?? 0;
+  const recipientMessages = recipientCount ?? 0;
+
+  if (senderMessages >= 1 && recipientMessages === 0) {
+    return {
+      allowed: false,
+      code: 'message_limit_unknown_contact',
+      message: 'For safety, you can send only one intro message until this user replies or you complete a booking together.',
+    };
+  }
+
+  return { allowed: true };
+};
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { status: 200, headers: corsHeaders });
@@ -114,6 +187,11 @@ serve(async (req) => {
       }
       if (messageType === 'media' && !mediaUrl) {
         return jsonResponse(400, { error: 'media_url is required for media messages.' });
+      }
+
+      const permission = await canSendMessage(conversationId, user.id);
+      if (!permission.allowed) {
+        return jsonResponse(429, { error: permission.message, code: permission.code });
       }
 
       const { data: inserted, error: insertError } = await supabaseAdmin

@@ -183,14 +183,18 @@ const HomeScreen: React.FC = () => {
             <Ionicons name="chatbubble-outline" size={18} color={colors.accent} />
           </TouchableOpacity>
           <TouchableOpacity 
-            style={[styles.buttonGhost, { borderColor: colors.border }, discoveryMode === 'models' && styles.buttonVideo]} 
-            onPress={() => discoveryMode === 'models'
+            style={[
+              styles.buttonGhost,
+              { borderColor: colors.border },
+              discoveryMode === 'models' && role === 'client' && styles.buttonVideo
+            ]} 
+            onPress={() => (discoveryMode === 'models' && role === 'client')
               ? parentNavigation?.navigate('PaidVideoCall', { creatorId: item.id, role: 'viewer' })
               : openProfile(item)}
           >
-            {discoveryMode === 'models' && <Ionicons name="videocam" size={16} color="#fff" style={{ marginRight: 6 }} />}
-            <Text style={[styles.buttonGhostText, { color: colors.text }, discoveryMode === 'models' && styles.buttonVideoText]}>
-              {discoveryMode === 'models' ? 'Video' : 'Profile'}
+            {(discoveryMode === 'models' && role === 'client') && <Ionicons name="videocam" size={16} color="#fff" style={{ marginRight: 6 }} />}
+            <Text style={[styles.buttonGhostText, { color: colors.text }, (discoveryMode === 'models' && role === 'client') && styles.buttonVideoText]}>
+              {(discoveryMode === 'models' && role === 'client') ? 'Video' : 'Profile'}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.buttonPrimary, { backgroundColor: colors.accent }]} onPress={() => (discoveryMode === 'models' ? startModelBooking(item) : startBooking(item))}>

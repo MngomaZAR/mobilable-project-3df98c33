@@ -209,6 +209,10 @@ const SettingsScreen: React.FC = () => {
       Alert.alert('Not ready', 'Please sign in before starting a test call.');
       return;
     }
+    if (currentUser.role !== 'model') {
+      Alert.alert('Unavailable', 'Video hosting is currently available for model accounts only.');
+      return;
+    }
     navigation.navigate('PaidVideoCall', { creatorId: currentUser.id, role: 'creator' });
   };
 
@@ -252,6 +256,9 @@ const SettingsScreen: React.FC = () => {
   return (
     <SafeAreaView edges={['left', 'right']} style={[s.safeArea, { backgroundColor: colors.bg }]}>
     <ScrollView contentContainerStyle={[s.container, { paddingTop: Math.max(12, insets.top + 4), paddingBottom: Math.max(40, insets.bottom + 22) }]}>
+      <View style={s.header}>
+        <Text style={s.headerTitle}>Settings</Text>
+      </View>
       {/* Profile Card */}
       <View style={s.profileSection}>
         <TouchableOpacity
@@ -462,6 +469,19 @@ const SettingsScreen: React.FC = () => {
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </TouchableOpacity>
+          <TouchableOpacity
+            style={[s.groupItem, s.groupItemBorder]}
+            onPress={() => currentUser?.id && navigation.navigate('Reviews', { photographerId: currentUser.id })}
+            disabled={!currentUser?.id}
+          >
+            <View style={s.itemLeft}>
+              <View style={[s.iconContainer, { backgroundColor: '#8b5cf6' }]}>
+                <Ionicons name="star" size={16} color="#fff" />
+              </View>
+              <Text style={s.itemText}>Reviews</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          </TouchableOpacity>
           {(currentUser?.role === 'model' || currentUser?.role === 'photographer') && (
             <TouchableOpacity style={[s.groupItem, s.groupItemBorder]} onPress={() => navigation.navigate('PayoutMethods')}>
               <View style={s.itemLeft}>
@@ -524,21 +544,22 @@ const SettingsScreen: React.FC = () => {
         </View>
       </View>
 
-      {/* VIDEO CALL TEST */}
-      <View style={s.section}>
-        <Text style={s.sectionHeader}>VIDEO CALL</Text>
-        <View style={s.group}>
-          <TouchableOpacity style={s.groupItem} onPress={handleTestVideoCall}>
-            <View style={s.itemLeft}>
-              <View style={[s.iconContainer, { backgroundColor: '#3b82f6' }]}>
-                <Ionicons name="videocam" size={16} color="#fff" />
+      {currentUser?.role === 'model' && (
+        <View style={s.section}>
+          <Text style={s.sectionHeader}>VIDEO CALL</Text>
+          <View style={s.group}>
+            <TouchableOpacity style={s.groupItem} onPress={handleTestVideoCall}>
+              <View style={s.itemLeft}>
+                <View style={[s.iconContainer, { backgroundColor: '#3b82f6' }]}>
+                  <Ionicons name="videocam" size={16} color="#fff" />
+                </View>
+                <Text style={s.itemText}>Start Test Call</Text>
               </View>
-              <Text style={s.itemText}>Start Test Call</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-          </TouchableOpacity>
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
+      )}
 
       {/* DESTRUCTIVE ACTIONS */}
       <View style={s.section}>
@@ -604,6 +625,15 @@ const makeStyles = (colors: Colors, isDark: boolean) =>
       minHeight: '100%',
       paddingTop: 12,
       paddingBottom: 40,
+    },
+    header: {
+      paddingHorizontal: 20,
+      paddingBottom: 8,
+    },
+    headerTitle: {
+      color: colors.text,
+      fontSize: 28,
+      fontWeight: '800',
     },
     profileSection: {
       flexDirection: 'row',

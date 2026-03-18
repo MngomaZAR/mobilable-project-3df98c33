@@ -281,6 +281,10 @@ const MapScreen: React.FC = () => {
   useEffect(() => { fetchRoutes(); }, [fetchRoutes]);
 
   useEffect(() => {
+    if (currentUser?.role !== 'admin') {
+      setHeatmapSummary(null);
+      return;
+    }
     let active = true;
     const hydrateHeatmap = async () => {
       try {
@@ -296,7 +300,7 @@ const MapScreen: React.FC = () => {
     };
     hydrateHeatmap();
     return () => { active = false; };
-  }, [currentUser?.city]);
+  }, [currentUser?.city, currentUser?.role]);
 
   // Route draw animation
   useEffect(() => {
@@ -538,15 +542,15 @@ const MapScreen: React.FC = () => {
           <View style={[s.statusPill, { backgroundColor: isDark ? 'rgba(15,23,42,0.85)' : 'rgba(255,255,255,0.9)' }]}>
             <View style={s.liveDot} />
             <Text style={[s.liveText, { color: colors.text }]}>
-              Live · {filteredMarkers.filter(m => onlineProfiles.has(m.sourceId ?? '')).length} online nearby
+              Live - {filteredMarkers.filter(m => onlineProfiles.has(m.sourceId ?? '')).length} online nearby
             </Text>
           </View>
         )}
-        {heatmapSummary && (
+        {currentUser?.role === 'admin' && heatmapSummary && (
           <View style={[s.statusPill, { marginTop: 8, backgroundColor: isDark ? 'rgba(15,23,42,0.85)' : 'rgba(255,255,255,0.9)' }]}>
             <Ionicons name="flame-outline" size={13} color={isDark ? '#fbbf24' : '#b45309'} />
             <Text style={[s.liveText, { color: colors.text }]}>
-              Demand {heatmapSummary.demand} · Supply {heatmapSummary.supply}
+              Demand {heatmapSummary.demand} - Supply {heatmapSummary.supply}
             </Text>
           </View>
         )}
@@ -735,3 +739,4 @@ const s = StyleSheet.create({
 });
 
 export default MapScreen;
+

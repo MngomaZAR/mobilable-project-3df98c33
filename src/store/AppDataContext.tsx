@@ -83,7 +83,7 @@ type AppDataContextValue = {
   fetchPosts: (options?: FetchPostsOptions) => Promise<{ hasMore: boolean }>;
   fetchProfiles: () => Promise<void>;
   fetchSubscriptions: (userId?: string | null) => Promise<void>;
-  signUp: (email: string, password: string, role?: AppUser['role'], fullName?: string) => Promise<AppUser | null>;
+  signUp: (email: string, password: string, role?: AppUser['role'], fullName?: string, dob?: string) => Promise<AppUser | null>;
   signIn: (email: string, password: string) => Promise<AppUser | null>;
   signInWithOAuth: (provider: 'google' | 'apple') => Promise<void>;
   signOut: () => Promise<void>;
@@ -146,6 +146,9 @@ type ProfileRow = {
   role?: AppUser['role'];
   verified?: boolean;
   kyc_status?: AppUser['kyc_status'];
+  date_of_birth?: string | null;
+  age_verified?: boolean | null;
+  age_verified_at?: string | null;
 } | null;
 type BookingRow = {
   id: string;
@@ -176,6 +179,9 @@ const PROFILE_SELECT = `
   role, 
   verified, 
   kyc_status,
+  date_of_birth,
+  age_verified,
+  age_verified_at,
   bio, 
   phone, 
   push_token, 
@@ -1110,8 +1116,16 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           };
         } catch (error: any) {
           logError('createBooking', error);
-          setError(formatErrorMessage(error, 'Unable to create booking.'));
-          throw error;
+          const rawMessage = String(error?.message || '');
+          const isOverlapError =
+            /overlap/i.test(rawMessage) ||
+            /already has an overlapping booking/i.test(rawMessage) ||
+            /prevent_booking_overlap/i.test(rawMessage);
+          const friendlyMessage = isOverlapError
+            ? 'This provider is already booked in that time slot. Please choose a different time.'
+            : formatErrorMessage(error, 'Unable to create booking.');
+          setError(friendlyMessage);
+          throw new Error(friendlyMessage);
         }
       }
 
@@ -1801,7 +1815,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, []);
 
   const signUp = useCallback(
-    async (email: string, password: string, role: UserRole = 'client', fullName?: string) => {
+    async (email: string, password: string, role: UserRole = 'client', fullName?: string, dob?: string) => {
       setAuthenticating(true);
       setError(null);
       try {
@@ -1818,11 +1832,15 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
         if (data.user) {
           // Save full_name and role to profiles on signup
+          const ageVerified = Boolean(dob);
           await supabase.from('profiles').upsert({
             id: data.user.id,
             role,
             verified: false,
             full_name: fullName ?? null,
+            date_of_birth: dob ?? null,
+            age_verified: ageVerified,
+            age_verified_at: ageVerified ? new Date().toISOString() : null,
           });
 
           // Auto-create photographer row if user signs up as photographer
@@ -1853,7 +1871,13 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
             });
           }
         }
-        const user: AppUser | null = data.user ? mapSupabaseUser(data.user, role, { role, verified: false }) : null;
+        const user: AppUser | null = data.user ? mapSupabaseUser(data.user, role, {
+          role,
+          verified: false,
+          date_of_birth: dob ?? null,
+          age_verified: Boolean(dob),
+          age_verified_at: dob ? new Date().toISOString() : null,
+        }) : null;
         if (data.session) {
           setState({ currentUser: user });
         }

@@ -69,7 +69,7 @@ BEGIN
       EXISTS (
         SELECT 1
         FROM public.conversation_participants cp
-        JOIN public.messages m ON m.conversation_id = cp.conversation_id
+        JOIN public.messages m ON m.chat_id = cp.conversation_id
         WHERE m.id = message_id AND cp.user_id = auth.uid()
       )
     );

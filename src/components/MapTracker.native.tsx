@@ -98,7 +98,7 @@ export const MapTracker: React.FC<Props> = ({ client, photographer, status }) =>
         <MapLibreGL.PointAnnotation
           id="client-pin"
           coordinate={[client.longitude, client.latitude]}
-          title={`You · ${status}`}
+          title={`You - ${status}`}
         >
           <View style={[styles.pin, { backgroundColor: '#2563eb' }]} />
         </MapLibreGL.PointAnnotation>
@@ -124,3 +124,4 @@ const styles = StyleSheet.create({
     borderColor: '#fff',
   },
 });
+

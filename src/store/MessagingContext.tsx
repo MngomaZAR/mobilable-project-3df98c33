@@ -3,7 +3,7 @@ import { supabase, hasSupabase } from '../config/supabaseClient';
 import { ConversationSummary, Message, AppUser } from '../types';
 import { logError } from '../utils/errors';
 import { startConversationViaEdge } from '../services/chatService';
-import { sendConversationLockedMediaMessage } from '../services/chatMessageService';
+import { sendConversationLockedMediaMessage, sendConversationTextMessage } from '../services/chatMessageService';
 import { trackEvent } from '../services/analyticsService';
 import { useAuth } from './AuthContext';
 import { Analytics } from '../utils/analytics';
@@ -355,28 +355,18 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     setMessages(prev => ({ ...prev, [chatId]: [...(prev[chatId] ?? []), optimistic] }));
 
     try {
-      // Insert directly to DB (chat_id is the real column)
-      const { data, error } = await supabase
-        .from('messages')
-        .insert({
-          chat_id: chatId,
-          sender_id: currentUser.id,
-          body: trimmed,
-          message_type: 'text',
-          reply_to_id: replyToId ?? null,
-        })
-        .select('id, chat_id, sender_id, body, message_type, created_at, reply_to_id')
-        .single();
+      const data = await sendConversationTextMessage({
+        conversationId: chatId,
+        text: trimmed,
+      });
       Analytics.messageSent(chatId, false);
-
-      if (error) throw error;
 
       const confirmed: Message = {
         id: data.id,
-        conversation_id: data.chat_id,
+        conversation_id: data.conversation_id,
         from_user: true,
         body: data.body ?? trimmed,
-        timestamp: data.created_at,
+        timestamp: data.timestamp,
         message_type: 'text',
       };
 
@@ -389,7 +379,7 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       // Update conversation preview
       await supabase
         .from('conversations')
-        .update({ last_message: trimmed, last_message_at: data.created_at })
+        .update({ last_message: trimmed, last_message_at: data.timestamp })
         .eq('id', chatId);
 
       trackEvent('message_sent', { conversation_id: chatId });

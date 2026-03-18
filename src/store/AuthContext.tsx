@@ -8,7 +8,7 @@ type AuthContextValue = {
   authenticating: boolean;
   error: string | null;
   signIn: (email: string, password: string) => Promise<AppUser | null>;
-  signUp: (email: string, password: string, role?: UserRole, fullName?: string) => Promise<AppUser | null>;
+  signUp: (email: string, password: string, role?: UserRole, fullName?: string, dob?: string) => Promise<AppUser | null>;
   signInWithOAuth: (provider: 'google' | 'apple') => Promise<void>;
   signOut: () => Promise<void>;
   updateProfile: (changes: Partial<AppUser>) => Promise<void>;

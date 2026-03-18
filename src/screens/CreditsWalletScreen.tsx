@@ -2,12 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { Alert, FlatList, Linking, Modal, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../store/ThemeContext';
 import { useAppData } from '../store/AppDataContext';
 import { supabase } from '../config/supabaseClient';
 
 const CreditsWalletScreen: React.FC = () => {
   const { colors, isDark } = useTheme();
+  const navigation = useNavigation<any>();
   const { state, fetchCredits, redeemCreditsCode } = useAppData();
   const [loading, setLoading] = useState(false);
   const [redeemCode, setRedeemCode] = useState('');
@@ -86,6 +88,13 @@ const CreditsWalletScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
+      <View style={styles.headerRow}>
+        <TouchableOpacity style={[styles.backBtn, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={() => navigation.goBack()}>
+          <Ionicons name="chevron-back" size={20} color={colors.text} />
+        </TouchableOpacity>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>Credits Wallet</Text>
+        <View style={{ width: 38 }} />
+      </View>
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <Text style={[styles.label, { color: colors.textMuted }]}>Papzi Credits</Text>
         <Text style={[styles.balance, { color: colors.text }]}>{balance.toLocaleString('en-ZA')}</Text>
@@ -229,6 +238,9 @@ const CreditsWalletScreen: React.FC = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 16 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  backBtn: { width: 38, height: 38, borderRadius: 19, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { fontSize: 22, fontWeight: '800' },
   card: { borderRadius: 16, padding: 16, borderWidth: 1, marginBottom: 20 },
   label: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 },
   balance: { fontSize: 32, fontWeight: '900', marginTop: 6 },

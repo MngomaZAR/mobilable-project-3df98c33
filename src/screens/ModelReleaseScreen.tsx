@@ -17,7 +17,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { useTheme } from '../store/ThemeContext';
 import { useAppData } from '../store/AppDataContext';
-import { fetchBookingContracts, signContract, createContract, Contract } from '../services/contractService';
+import { fetchBookingContracts, signContract, ensureBookingContracts, Contract } from '../services/contractService';
 
 type Route = RouteProp<RootStackParamList, 'ModelRelease'>;
 type Navigation = StackNavigationProp<RootStackParamList>;
@@ -29,7 +29,8 @@ const ModelReleaseScreen: React.FC = () => {
   const { currentUser } = useAppData();
   
   const [loading, setLoading] = useState(true);
-  const [contract, setContract] = useState<Contract | null>(null);
+  const [contracts, setContracts] = useState<Contract[]>([]);
+  const [activeContractType, setActiveContractType] = useState<'model_release' | 'shoot_agreement'>('shoot_agreement');
   const [signature, setSignature] = useState('');
   const [signing, setSigning] = useState(false);
 
@@ -39,19 +40,16 @@ const ModelReleaseScreen: React.FC = () => {
 
   const loadContract = async () => {
     try {
-      const contracts = await fetchBookingContracts(params.bookingId);
-      const release = contracts.find(c => c.contract_type === 'model_release');
-      
-      if (release) {
-        setContract(release);
-      } else if (currentUser?.role === 'photographer') {
-        // Auto-create a draft if photographer opens it and none exists
-         const newContract = await createContract(
-           params.bookingId, 
-           'model_release', 
-           'I hereby grant permission to the photographer to use my likeness in the photographs taken during this session for promotional and commercial purposes...'
-         );
-         setContract(newContract);
+      let docs = await fetchBookingContracts(params.bookingId);
+      if (docs.length < 2) {
+        docs = await ensureBookingContracts(params.bookingId);
+      }
+      const sorted = [...docs].sort((a, b) => a.contract_type.localeCompare(b.contract_type));
+      setContracts(sorted);
+      if (sorted.some((c) => c.contract_type === activeContractType)) {
+        // keep selected tab
+      } else if (sorted.length > 0) {
+        setActiveContractType(sorted[0].contract_type);
       }
     } catch (err: any) {
       Alert.alert('Error', 'Failed to load legal documents.');
@@ -66,6 +64,7 @@ const ModelReleaseScreen: React.FC = () => {
       return;
     }
 
+    const contract = contracts.find((c) => c.contract_type === activeContractType);
     if (!contract || !currentUser) return;
 
     setSigning(true);
@@ -74,8 +73,9 @@ const ModelReleaseScreen: React.FC = () => {
       if (currentUser.role === 'photographer') role = 'creator';
       if (currentUser.role === 'model') role = 'model';
 
-      await signContract(contract.id, signature, role);
+      await signContract(contract.id, signature.trim(), role);
       Alert.alert('Success', 'Document signed successfully.');
+      setSignature('');
       loadContract();
     } catch (err: any) {
       Alert.alert('Error', 'Failed to sign document.');
@@ -92,12 +92,14 @@ const ModelReleaseScreen: React.FC = () => {
     );
   }
 
+  const contract = contracts.find((c) => c.contract_type === activeContractType) ?? null;
+
   if (!contract) {
     return (
       <View style={[styles.center, { backgroundColor: colors.bg, padding: 24 }]}>
         <Ionicons name="document-text-outline" size={64} color={colors.textMuted} />
         <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-          No model release has been generated for this booking yet.
+          No legal documents were found for this booking yet.
         </Text>
         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
             <Text style={{ color: colors.accent, fontWeight: '700' }}>Go Back</Text>
@@ -118,8 +120,31 @@ const ModelReleaseScreen: React.FC = () => {
             <View style={[styles.iconBox, { backgroundColor: colors.accent + '20' }]}>
                 <Ionicons name="ribbon" size={24} color={colors.accent} />
             </View>
-            <Text style={[styles.title, { color: colors.text }]}>Model Release Form</Text>
-            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Legal Authorization & Usage Rights</Text>
+            <Text style={[styles.title, { color: colors.text }]}>Legal Documents</Text>
+            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Booking contracts and signatures</Text>
+        </View>
+
+        <View style={styles.tabRow}>
+          {contracts.map((item) => {
+            const active = item.contract_type === activeContractType;
+            return (
+              <TouchableOpacity
+                key={item.id}
+                style={[
+                  styles.tab,
+                  {
+                    backgroundColor: active ? colors.accent : colors.card,
+                    borderColor: colors.border,
+                  },
+                ]}
+                onPress={() => setActiveContractType(item.contract_type)}
+              >
+                <Text style={{ color: active ? '#fff' : colors.text, fontWeight: '700', fontSize: 12 }}>
+                  {item.contract_type === 'model_release' ? 'Model Release' : 'Shoot Agreement'}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
 
         <View style={[styles.paper, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -214,6 +239,8 @@ const styles = StyleSheet.create({
   signedText: { fontWeight: '700', fontSize: 15 },
   footer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 32, gap: 8 },
   footerText: { fontSize: 12, fontWeight: '600' },
+  tabRow: { flexDirection: 'row', gap: 10, marginBottom: 14 },
+  tab: { flex: 1, borderWidth: 1, borderRadius: 12, paddingVertical: 10, alignItems: 'center' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   emptyText: { textAlign: 'center', marginTop: 16, fontSize: 16, lineHeight: 22 },
   backBtn: { marginTop: 24 },

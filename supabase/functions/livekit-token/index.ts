@@ -55,27 +55,63 @@ serve(async (req) => {
 
       const startedAt = session.started_at ? new Date(session.started_at).getTime() : Date.now();
       const durationSeconds = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
-      const ratePerMinute = 15;
-      const totalAmount = Number(((durationSeconds / 60) * ratePerMinute).toFixed(2));
 
       const { error: updateErr } = await admin
         .from('video_call_sessions')
         .update({
           ended_at: new Date().toISOString(),
           duration_seconds: durationSeconds,
-          total_amount: totalAmount,
           status: 'ended',
         })
         .eq('id', sessionId);
       if (updateErr) throw updateErr;
 
-      return jsonResponse(200, { success: true, sessionId, durationSeconds, totalAmount });
+      const { data: settlementRows, error: settleErr } = await admin.rpc('settle_video_call_session', {
+        p_session_id: sessionId,
+      });
+      if (settleErr) throw settleErr;
+
+      const settlement = Array.isArray(settlementRows) ? settlementRows[0] : settlementRows;
+
+      return jsonResponse(200, {
+        success: true,
+        sessionId,
+        durationSeconds,
+        settlement: settlement ?? null,
+      });
     }
 
     const creatorId = payload?.creator_id;
     const role = payload?.role ?? 'viewer'; // 'creator' or 'viewer'
 
     if (!creatorId) return jsonResponse(400, { error: 'creator_id is required' });
+
+    const { data: roleRows, error: roleError } = await admin
+      .from('profiles')
+      .select('id, role')
+      .in('id', [user.id, creatorId]);
+    if (roleError) throw roleError;
+
+    const roleMap: Record<string, string> = {};
+    (roleRows ?? []).forEach((r: any) => { roleMap[r.id] = r.role; });
+    const requesterRole = roleMap[user.id];
+    const creatorRole = roleMap[creatorId];
+
+    // Policy: video calls are only for client <-> model.
+    if (role === 'viewer') {
+      if (requesterRole !== 'client' || creatorRole !== 'model') {
+        return jsonResponse(403, {
+          error: 'Video calls are available only between clients and models.',
+        });
+      }
+    }
+    if (role === 'creator') {
+      if (user.id !== creatorId || requesterRole !== 'model') {
+        return jsonResponse(403, {
+          error: 'Only approved model accounts can host video calls.',
+        });
+      }
+    }
 
     const roomName = `room_${creatorId}`;
     const participantIdentity = user.id;
@@ -119,6 +155,24 @@ serve(async (req) => {
 
     const livekitToken = `${signingInput}.${sigB64}`;
 
+    const minHoldCredits = Math.max(1, Number(Deno.env.get('VIDEO_CALL_MIN_HOLD_CREDITS') ?? 30));
+    const ratePerMinute = Math.max(1, Number(Deno.env.get('VIDEO_CALL_RATE_PER_MINUTE') ?? 15));
+
+    if (role === 'viewer') {
+      const { count: debtCount, error: debtErr } = await admin
+        .from('video_call_sessions')
+        .select('id', { count: 'exact', head: true })
+        .eq('viewer_id', user.id)
+        .eq('billing_status', 'insufficient_credits');
+      if (debtErr) throw debtErr;
+      if ((debtCount ?? 0) > 0) {
+        return jsonResponse(402, {
+          error: 'You have an unsettled previous video session. Top up credits before starting a new call.',
+          code: 'video_call_unsettled_balance',
+        });
+      }
+    }
+
     // Record the session start
     let sessionId: string | null = null;
     if (role === 'viewer') {
@@ -126,14 +180,42 @@ serve(async (req) => {
         creator_id: creatorId,
         viewer_id: user.id,
         room_name: roomName,
-        rate_per_minute: 15,
+        rate_per_minute: ratePerMinute,
+        credits_held: minHoldCredits,
+        billing_status: 'pending',
         status: 'active',
       }).select('id').single();
       if (insErr) throw insErr;
       sessionId = inserted?.id ?? null;
+
+      const { error: holdErr } = await admin.rpc('credits_adjust_for_user', {
+        p_user_id: user.id,
+        p_amount: -minHoldCredits,
+        p_reason: 'Video call hold',
+        p_ref_type: 'video_call_hold',
+        p_ref_id: sessionId,
+      });
+
+      if (holdErr) {
+        if (sessionId) {
+          await admin.from('video_call_sessions').delete().eq('id', sessionId);
+        }
+        return jsonResponse(402, {
+          error: `You need at least ${minHoldCredits} credits to start a video call.`,
+          code: 'video_call_insufficient_hold',
+          minimum_credits: minHoldCredits,
+        });
+      }
     }
 
-    return jsonResponse(200, { token: livekitToken, url: livekitUrl, roomName, sessionId });
+    return jsonResponse(200, {
+      token: livekitToken,
+      url: livekitUrl,
+      roomName,
+      sessionId,
+      holdCredits: role === 'viewer' ? minHoldCredits : 0,
+      ratePerMinute,
+    });
   } catch (err: any) {
     console.error('livekit-token error:', err);
     return jsonResponse(500, { error: err.message || 'Internal Server Error' });

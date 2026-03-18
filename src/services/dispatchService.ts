@@ -71,6 +71,20 @@ export const getForYouRanking = async (params?: { limit?: number }) => {
   return data as { ranked_posts: Array<{ post_id: string; score: number }>; generated_at: string };
 };
 
+export const recordRecommendationEvents = async (events: Array<{
+  post_id: string;
+  event_type: 'impression' | 'open' | 'like' | 'comment' | 'share' | 'unlock' | 'skip' | 'hide' | 'booking_conversion';
+  dwell_ms?: number;
+  metadata?: Record<string, any>;
+}>) => {
+  if (!events?.length) return { success: true, inserted: 0 };
+  const { data, error } = await supabase.functions.invoke('recommendation-events', {
+    body: { events },
+  });
+  if (error) throw new Error(error.message || 'Unable to record recommendation events.');
+  return data as { success: boolean; inserted: number };
+};
+
 export const getHeatmap = async (params?: { role?: 'photographer' | 'model' | 'combined'; hours?: number; city?: string }) => {
   const { data, error } = await supabase.functions.invoke('heatmap', {
     body: { role: params?.role, hours: params?.hours, city: params?.city },

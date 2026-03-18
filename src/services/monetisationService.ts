@@ -111,10 +111,11 @@ export const subscribeToCreator = async (
     // Check for existing active subscription
     const { data: existing } = await supabase
       .from('subscriptions')
-      .select('id, status')
+      .select('id, status, current_period_end')
       .eq('subscriber_id', user.id)
       .eq('creator_id', creatorId)
       .eq('status', 'active')
+      .or(`current_period_end.is.null,current_period_end.gt.${new Date().toISOString()}`)
       .maybeSingle();
 
     if (existing) return failure(new Error('You already have an active subscription to this creator.'));

@@ -204,8 +204,13 @@ export const MainNavigator: React.FC<MainNavigatorProps> = ({ logoSource }) => {
           <>
             {(() => {
               const role = currentUser.role;
+              const ageVerified = currentUser.age_verified === true;
               const requiresKyc = role === 'photographer' || role === 'model';
               const kycStatus = currentUser.kyc_status ?? (currentUser.verified ? 'approved' : 'pending');
+
+              if (!ageVerified) {
+                return <Stack.Screen name="AgeVerification" component={AgeVerificationScreen} options={{ headerShown: false }} />;
+              }
 
               if (requiresKyc && kycStatus === 'rejected') {
                 return <Stack.Screen name="PendingVerification" component={VerificationRejectedScreen} options={{ headerShown: false }} />;

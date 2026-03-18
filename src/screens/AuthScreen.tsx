@@ -98,6 +98,7 @@ const AuthScreen: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
+  const [dob, setDob] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [localMessage, setLocalMessage] = useState<string | null>(null);
   const [localSuccess, setLocalSuccess] = useState<string | null>(null);
@@ -126,16 +127,34 @@ const AuthScreen: React.FC = () => {
           setLocalMessage('Please enter your full name.');
           return;
         }
+        const dobTrimmed = dob.trim();
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(dobTrimmed)) {
+          setLocalMessage('Enter date of birth as YYYY-MM-DD.');
+          return;
+        }
+        const parsedDob = new Date(`${dobTrimmed}T00:00:00Z`);
+        if (Number.isNaN(parsedDob.getTime())) {
+          setLocalMessage('Please enter a valid date of birth.');
+          return;
+        }
+        const today = new Date();
+        const age = today.getFullYear() - parsedDob.getUTCFullYear() -
+          (today < new Date(today.getFullYear(), parsedDob.getUTCMonth(), parsedDob.getUTCDate()) ? 1 : 0);
+        if (age < 18) {
+          setLocalMessage('You must be 18 or older to create an account.');
+          return;
+        }
         if (password.length < 6) {
           setLocalMessage('Your password must be at least 6 characters long.');
           return;
         }
-        const user = await signUp(email.trim(), password, selectedRole, fullName.trim());
+        const user = await signUp(email.trim(), password, selectedRole, fullName.trim(), dobTrimmed);
         if (user) {
           setLocalSuccess('🎉 Account created! Check your email to verify, then sign in.');
           setEmail('');
           setPassword('');
           setFullName('');
+          setDob('');
           setMode('signin');
         }
       }
@@ -290,6 +309,20 @@ const AuthScreen: React.FC = () => {
                   placeholderTextColor="#94a3b8"
                   style={styles.input}
                   autoComplete="name"
+                />
+              </View>
+            )}
+
+            {mode === 'signup' && (
+              <View style={[styles.inputRow, { marginTop: 14 }]}>
+                <Ionicons name="calendar-outline" size={20} color="#64748b" style={styles.inputIcon} />
+                <TextInput
+                  value={dob}
+                  onChangeText={setDob}
+                  autoCapitalize="none"
+                  placeholder="Date of birth (YYYY-MM-DD)"
+                  placeholderTextColor="#94a3b8"
+                  style={styles.input}
                 />
               </View>
             )}

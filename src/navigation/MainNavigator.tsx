@@ -170,7 +170,7 @@ export const MainNavigator: React.FC<MainNavigatorProps> = ({ logoSource }) => {
         CreatorAnalytics: 'analytics',
         CreatorSubscriptions: 'subscriptions',
         CreditsWallet: 'wallet/credits',
-        Reviews: 'reviews/:userId',
+        Reviews: 'reviews/:photographerId',
         MediaLibrary: 'media',
         AdminModeration: 'admin/moderation',
         Availability: 'availability',

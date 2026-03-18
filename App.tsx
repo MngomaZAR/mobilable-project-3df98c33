@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as Notifications from 'expo-notifications';
+import * as WebBrowser from 'expo-web-browser';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { LoadingOverlay } from './src/components/LoadingOverlay';
 import { ActionModal } from './src/components/ActionModal';
@@ -29,6 +30,8 @@ Notifications.setNotificationHandler({
     shouldShowList: true,
   }),
 });
+
+WebBrowser.maybeCompleteAuthSession();
 
 const AppContent = () => {
   const { loading, error, currentUser } = useAppData();

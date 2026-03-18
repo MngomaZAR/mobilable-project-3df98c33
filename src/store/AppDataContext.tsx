@@ -7,6 +7,7 @@ import { createBookingRequest, updateBookingStatusInDb } from '../services/booki
 import { BUCKETS } from '../config/environment';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
+import Constants from 'expo-constants';
 import { AppState, AppUser, Booking, BookingStatus, Comment, ConversationSummary, Message, Model, NotificationEvent, Post, PrivacySettings, Review, UserRole, CreditsWallet, CreditsLedgerEntry } from '../types';
 import { uid } from '../utils/id';
 import { formatAuthError, formatErrorMessage, logError } from '../utils/errors';
@@ -116,6 +117,25 @@ const dedupeById = <T extends { id: string }>(items: T[]): T[] => {
 const isRecoverableAbort = (err: unknown) => {
   const message = (err as any)?.message ?? '';
   return (err as any)?.name === 'AbortError' || /abort/i.test(String(message));
+};
+
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+const parseAuthCallbackParams = (url: string) => {
+  try {
+    const parsed = Linking.parse(url);
+    const query = { ...(parsed.queryParams ?? {}) } as Record<string, unknown>;
+    const hashIndex = url.indexOf('#');
+    if (hashIndex !== -1) {
+      const hashParams = new URLSearchParams(url.slice(hashIndex + 1));
+      hashParams.forEach((value, key) => {
+        query[key] = value;
+      });
+    }
+    return query;
+  } catch {
+    return {};
+  }
 };
 const BOOKING_SELECT = `
   id, 
@@ -1984,7 +2004,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const signInWithOAuth = useCallback(async (provider: 'google' | 'apple') => {
     setState({ authenticating: true, error: null });
     try {
-      const redirectTo = Linking.createURL('auth');
+      const redirectTo = Constants.appOwnership === 'expo' ? Linking.createURL('auth') : 'papzi://auth';
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
@@ -2002,8 +2022,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
 
         if (result.type === 'success' && result.url) {
-          const parsed = Linking.parse(result.url);
-          const query = parsed.queryParams ?? {};
+          const query = parseAuthCallbackParams(result.url);
 
           const code = typeof query.code === 'string' ? query.code : null;
           const accessToken = typeof query.access_token === 'string' ? query.access_token : null;
@@ -2026,9 +2045,17 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           }
         }
 
-        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-        if (sessionError) throw sessionError;
-        if (!sessionData.session) {
+        let sessionData: Awaited<ReturnType<typeof supabase.auth.getSession>>['data'] | null = null;
+        for (let attempt = 0; attempt < 10; attempt += 1) {
+          const { data: nextSession, error: sessionError } = await supabase.auth.getSession();
+          if (sessionError) throw sessionError;
+          if (nextSession.session) {
+            sessionData = nextSession;
+            break;
+          }
+          await sleep(250);
+        }
+        if (!sessionData?.session) {
           throw new Error('Auth session missing. Please try signing in again.');
         }
 

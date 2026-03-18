@@ -4,14 +4,11 @@ name: EAS Submit iOS
 # Requires EXPO_TOKEN and App Store Connect setup in EAS.
 
 on:
-  workflow_run:
-    workflows: ["EAS Build iOS"]
-    types:
-      - completed
+  workflow_dispatch: {}
 
 jobs:
   submit_ios:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ false }} # Disabled: using ios-testflight-no-eas.yml to avoid EAS quota usage
     runs-on: ubuntu-latest
     steps:
       - name: Setup Node.js

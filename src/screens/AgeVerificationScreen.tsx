@@ -5,11 +5,13 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { useTheme } from '../store/ThemeContext';
 import { supabase } from '../config/supabaseClient';
 import { useAuth } from '../store/AuthContext';
+import { useAppData } from '../store/AppDataContext';
 import { recordConsent as recordComplianceConsent } from '../services/dispatchService';
 
 const AgeVerificationScreen: React.FC = () => {
   const { colors } = useTheme();
   const { currentUser, revalidateSession } = useAuth();
+  const { setState } = useAppData();
   const [dob, setDob] = useState(new Date(2000, 0, 1));
   const [showPicker, setShowPicker] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -47,11 +49,12 @@ const AgeVerificationScreen: React.FC = () => {
         context: { age_verified: true, dob: isoDob },
       });
 
+      const nowIso = new Date().toISOString();
       const { error } = await supabase.from('profiles')
         .update({
           date_of_birth: isoDob,
           age_verified: true,
-          age_verified_at: new Date().toISOString(),
+          age_verified_at: nowIso,
           ...(requiresKyc ? { kyc_status: 'pending' } : {}),
         })
         .eq('id', currentUser.id);
@@ -83,9 +86,20 @@ const AgeVerificationScreen: React.FC = () => {
         }
       }
 
+      // Optimistic local state update so user is never trapped on this screen
+      setState({
+        currentUser: {
+          ...currentUser,
+          age_verified: true,
+          age_verified_at: nowIso,
+          date_of_birth: isoDob,
+          ...(requiresKyc ? { kyc_status: 'pending' } : {}),
+        },
+      });
       await revalidateSession();
     } catch (err) {
       console.error('Age verification error:', err);
+      Alert.alert('Verification Failed', 'Could not complete age verification right now. Please try again.');
     } finally {
       setSubmitting(false);
     }

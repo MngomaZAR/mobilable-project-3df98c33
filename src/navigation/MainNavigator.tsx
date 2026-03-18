@@ -205,7 +205,7 @@ export const MainNavigator: React.FC<MainNavigatorProps> = ({ logoSource }) => {
           <>
             {(() => {
               const role = currentUser.role;
-              const ageVerified = currentUser.age_verified === true;
+              const ageVerified = Boolean(currentUser.age_verified);
               const requiresKyc = role === 'photographer' || role === 'model';
               const kycStatus = currentUser.kyc_status ?? (currentUser.verified ? 'approved' : 'pending');
 

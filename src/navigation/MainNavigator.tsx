@@ -227,7 +227,6 @@ export const MainNavigator: React.FC<MainNavigatorProps> = ({ logoSource }) => {
 
               return <Stack.Screen name="Root" component={TabsNavigator} options={{ headerShown: false }} />;
             })()}
-            <Stack.Screen name="AgeVerification" component={AgeVerificationScreen} options={{ headerShown: false }} />
             <Stack.Screen name="Profile" component={UserProfileScreen} options={{ title: 'Photographer Profile' }} />
             <Stack.Screen name="BookingForm" component={BookingFormScreen} options={{ title: 'Booking Request' }} />
             <Stack.Screen name="BookingDetail" component={BookingDetailScreen} options={{ title: 'Booking Detail' }} />

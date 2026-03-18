@@ -73,6 +73,15 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
   const lastTapRef = useRef<number | null>(null);
   const loadMoreInFlightRef = useRef(false);
   const trackedImpressionsRef = useRef<Set<string>>(new Set());
+  const queueRecommendationEventRef = useRef<(event: { post_id: string; event_type: 'impression' | 'open' | 'like' | 'comment' | 'share' | 'unlock' | 'skip' | 'hide' | 'booking_conversion'; dwell_ms?: number; metadata?: Record<string, any> }) => void>(() => {});
+  const viewabilityConfigRef = useRef({ itemVisiblePercentThreshold: 65, minimumViewTime: 600 });
+  const onViewableItemsChangedRef = useRef(({ viewableItems }: { viewableItems: Array<{ item: Post; isViewable?: boolean | null }> }) => {
+    viewableItems.forEach(({ item, isViewable }) => {
+      if (!isViewable || !item?.id || trackedImpressionsRef.current.has(item.id)) return;
+      trackedImpressionsRef.current.add(item.id);
+      queueRecommendationEventRef.current({ post_id: item.id, event_type: 'impression' });
+    });
+  });
   const recommendationQueueRef = useRef<Array<{ post_id: string; event_type: 'impression' | 'open' | 'like' | 'comment' | 'share' | 'unlock' | 'skip' | 'hide' | 'booking_conversion'; dwell_ms?: number; metadata?: Record<string, any> }>>([]);
   const recommendationFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [blockedUserIds, setBlockedUserIds] = useState<Set<string>>(new Set());
@@ -187,6 +196,10 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
       flushRecommendationQueue().catch(() => {});
     }, 1200);
   }, [appState.currentUser?.id, flushRecommendationQueue]);
+
+  useEffect(() => {
+    queueRecommendationEventRef.current = queueRecommendationEvent;
+  }, [queueRecommendationEvent]);
 
   const loadFeed = useCallback(async () => {
     setLoading(true);
@@ -692,14 +705,8 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
           windowSize={7}
           removeClippedSubviews={Platform.OS === 'android'}
           updateCellsBatchingPeriod={50}
-          onViewableItemsChanged={({ viewableItems }) => {
-            viewableItems.forEach(({ item, isViewable }) => {
-              if (!isViewable || !item?.id || trackedImpressionsRef.current.has(item.id)) return;
-              trackedImpressionsRef.current.add(item.id);
-              queueRecommendationEvent({ post_id: item.id, event_type: 'impression' });
-            });
-          }}
-          viewabilityConfig={{ itemVisiblePercentThreshold: 65, minimumViewTime: 600 }}
+          onViewableItemsChanged={onViewableItemsChangedRef.current}
+          viewabilityConfig={viewabilityConfigRef.current}
         />
       )}
       

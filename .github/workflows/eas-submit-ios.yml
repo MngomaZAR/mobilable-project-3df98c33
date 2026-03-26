@@ -8,7 +8,6 @@ on:
 
 jobs:
   submit_ios:
-    if: ${{ false }} # Disabled: using ios-testflight-no-eas.yml to avoid EAS quota usage
     runs-on: ubuntu-latest
     steps:
       - name: Setup Node.js

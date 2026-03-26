@@ -128,6 +128,12 @@ const isRecoverableAbort = (err: unknown) => {
 };
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+const withTimeout = async <T,>(promiseLike: PromiseLike<T>, timeoutMs = 12000): Promise<T> => {
+  return await Promise.race<T>([
+    Promise.resolve(promiseLike),
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error('Request timed out.')), timeoutMs)),
+  ]);
+};
 
 const parseAuthCallbackParams = (url: string) => {
   try {
@@ -503,20 +509,24 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const start = reset ? 0 : stateRef.current.posts.length;
       const end = start + 11; // Fetch 12 at a time
 
-      const { data: rawPosts, error: postError } = await supabase
-        .from('posts')
-        .select(`
-          id, author_id, caption, location, comment_count, created_at, image_url, likes_count
-        `)
-        .order('created_at', { ascending: false })
-        .range(start, end);
+        const { data: rawPosts, error: postError } = await withTimeout(
+          supabase
+            .from('posts')
+            .select(`
+              id, author_id, caption, location, comment_count, created_at, image_url, likes_count
+            `)
+            .order('created_at', { ascending: false })
+            .range(start, end)
+        );
 
       if (postError) throw postError;
 
       const profileIds = [...new Set((rawPosts ?? []).map((p: any) => p.author_id).filter(Boolean))];
       let profilesMap: Record<string, any> = {};
       if (profileIds.length > 0) {
-        const { data: profilesData } = await supabase.from('profiles').select('id, full_name, city, avatar_url').in('id', profileIds);
+          const { data: profilesData } = await withTimeout(
+            supabase.from('profiles').select('id, full_name, city, avatar_url').in('id', profileIds)
+          );
         (profilesData ?? []).forEach((p: any) => { profilesMap[p.id] = p; });
       }
 
@@ -532,11 +542,13 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const currentUserId = stateRef.current.currentUser?.id;
       if (currentUserId && mapped.length > 0) {
         const postIds = mapped.map(p => p.id);
-        const { data: likesData } = await supabase
-          .from('post_likes')
-          .select('post_id')
-          .eq('user_id', currentUserId)
-          .in('post_id', postIds);
+          const { data: likesData } = await withTimeout(
+            supabase
+              .from('post_likes')
+              .select('post_id')
+              .eq('user_id', currentUserId)
+              .in('post_id', postIds)
+          );
         
         if (likesData) {
           const likedSet = new Set(likesData.map(l => l.post_id));
@@ -567,10 +579,12 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const fetchProfiles = useCallback(async () => {
     if (!hasSupabase) return;
     try {
-      const { data, error: profileError } = await supabase
-        .from('profiles')
-        .select(PROFILE_SELECT)
-        .limit(40)
+        const { data, error: profileError } = await withTimeout(
+          supabase
+            .from('profiles')
+            .select(PROFILE_SELECT)
+            .limit(40)
+        );
       if (profileError) throw profileError;
       setState({ profiles: data ?? [] });
     } catch (err: any) {

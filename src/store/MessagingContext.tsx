@@ -53,14 +53,19 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const typingTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   const fetchConversations = useCallback(async () => {
-    if (!hasSupabase || !currentUser) return;
+    if (!hasSupabase || !currentUser) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       // Step 1: get conversation IDs this user participates in
-      const { data: participations, error: partError } = await supabase
+    const { data: participations, error: partError } = await withTimeout(
+      supabase
         .from('conversation_participants')
         .select('conversation_id, user_id, last_read_at')
-        .eq('user_id', currentUser.id);
+        .eq('user_id', currentUser.id)
+    );
 
       if (partError) throw partError;
       if (!participations || participations.length === 0) {
@@ -74,18 +79,22 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       const participantMap: Record<string, { id: string; name: string; avatar_url: string; last_active_at?: string | null }> = {};
       const participantsByConvo: Record<string, string[]> = {};
       try {
-        const { data: allParticipants } = await supabase
-          .from('conversation_participants')
-          .select('conversation_id, user_id, last_read_at')
-          .in('conversation_id', ids);
+        const { data: allParticipants } = await withTimeout(
+          supabase
+            .from('conversation_participants')
+            .select('conversation_id, user_id, last_read_at')
+            .in('conversation_id', ids)
+        );
 
         const profileIds = [...new Set((allParticipants ?? []).map((row: any) => row.user_id).filter(Boolean))];
         let profilesMap: Record<string, any> = {};
         if (profileIds.length > 0) {
-          const { data: profilesData } = await supabase
-            .from('profiles')
-            .select('id, full_name, avatar_url, updated_at')
-            .in('id', profileIds);
+          const { data: profilesData } = await withTimeout(
+            supabase
+              .from('profiles')
+              .select('id, full_name, avatar_url, updated_at')
+              .in('id', profileIds)
+          );
           (profilesData ?? []).forEach((p: any) => { profilesMap[p.id] = p; });
         }
 
@@ -114,11 +123,13 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       }
 
       // Step 2: fetch conversation details
-      const { data, error } = await supabase
-        .from('conversations')
-        .select('id, title, last_message, last_message_at, created_at')
-        .in('id', ids)
-        .order('last_message_at', { ascending: false, nullsFirst: false });
+      const { data, error } = await withTimeout(
+        supabase
+          .from('conversations')
+          .select('id, title, last_message, last_message_at, created_at')
+          .in('id', ids)
+          .order('last_message_at', { ascending: false, nullsFirst: false })
+      );
 
       if (error) throw error;
 

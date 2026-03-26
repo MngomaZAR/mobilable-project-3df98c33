@@ -77,7 +77,8 @@ const bookingInsert = await client
     package_type: 'Payment QA booking',
     booking_date: new Date().toISOString(),
     price_total: 3600,
-    total_amount: 3600,
+    base_amount: 3600,
+    travel_amount: 0,
     notes: 'QA payment flow verification',
   })
   .select('id')
@@ -91,7 +92,32 @@ if (bookingInsert.error || !bookingInsert.data?.id) {
 const bookingId = bookingInsert.data.id;
 log('Booking created', bookingId);
 
-// 4. Create PayFast checkout link (verifies PayFast config + payment row)
+// 4. Ensure payment row exists with intended amount before PayFast signing
+const { data: existingPayment } = await service
+  .from('payments')
+  .select('id, amount')
+  .eq('booking_id', bookingId)
+  .order('created_at', { ascending: false })
+  .limit(1)
+  .maybeSingle();
+
+if (!existingPayment?.id) {
+  const { error: createPaymentErr } = await service.from('payments').insert({
+    booking_id: bookingId,
+    customer_id: clientSession.user.id,
+    description: 'Payment QA booking',
+    amount: 3600,
+    currency: 'ZAR',
+    provider: 'payfast',
+    status: 'pending',
+  });
+  if (createPaymentErr) {
+    console.error('Payment row create failed:', createPaymentErr.message);
+    process.exit(1);
+  }
+}
+
+// 5. Create PayFast checkout link (verifies PayFast config + payment row)
 const checkoutRes = await client.functions.invoke('payfast-handler', {
   body: { booking_id: bookingId, return_url: `${url}/payfast/return`, cancel_url: `${url}/payfast/cancel` },
 });
@@ -102,7 +128,7 @@ if (checkoutRes.error) {
 }
 log('Payfast checkout ok', checkoutRes.data?.paymentId ?? checkoutRes.data?.payment_id ?? 'unknown');
 
-// 5. Simulate payment completion by updating payment + booking
+// 6. Simulate payment completion by updating payment + booking
 const { data: paymentRow } = await service
   .from('payments')
   .select('id, status')
@@ -117,11 +143,11 @@ if (!paymentRow?.id) {
 }
 
 await service.from('payments').update({ status: 'completed' }).eq('id', paymentRow.id);
-await service.from('bookings').update({ status: 'completed', total_amount: 3600 }).eq('id', bookingId);
+await service.from('bookings').update({ status: 'completed' }).eq('id', bookingId);
 
 log('Payment marked completed', paymentRow.id);
 
-// 6. Sign in as admin to release escrow
+// 7. Sign in as admin to release escrow
 const { data: adminSession, error: adminError } = await adminAuth.auth.signInWithPassword({
   email: adminEmail,
   password: adminPassword,
@@ -138,7 +164,7 @@ if (escrowRes.error) {
 }
 log('Escrow release response', escrowRes.data);
 
-// 7. Verify booking paid_out + earnings created
+// 8. Verify booking paid_out + earnings created
 const { data: bookingAfter } = await service
   .from('bookings')
   .select('id, status')

@@ -204,7 +204,6 @@ const seedProfiles = async () => {
     age_verified: true,
     age_verified_at: nowIso,
     availability_status: 'online',
-    is_online: true,
   }));
 
   const { error } = await supabase.from('profiles').upsert(payload, { onConflict: 'id' });
@@ -250,4 +249,3 @@ main().catch((err) => {
   console.error('Seed failed:', err?.message || err);
   process.exit(1);
 });
-

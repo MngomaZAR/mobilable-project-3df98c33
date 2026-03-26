@@ -1,5 +1,6 @@
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
+import { AppState as RNAppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { initialState } from '../data/initialData';
 import { supabase, hasSupabase } from '../config/supabaseClient';
@@ -340,6 +341,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const stateRef = useRef(state);
   const profileFetchInFlightRef = useRef<Map<string, Promise<ProfileRow | null>>>(new Map());
   const profileFetchLastRef = useRef<Map<string, number>>(new Map());
+  const presenceRef = useRef<'online' | 'offline' | null>(null);
 
   useEffect(() => {
     stateRef.current = state;
@@ -350,6 +352,43 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const setSaving = (payload: boolean) => dispatch({ type: 'SET_SAVING', payload });
   const setAuthenticating = (payload: boolean) => dispatch({ type: 'SET_AUTHENTICATING', payload });
   const setError = (payload: string | null) => dispatch({ type: 'SET_ERROR', payload });
+
+  useEffect(() => {
+    if (!hasSupabase || !state.currentUser?.id) return;
+    const userId = state.currentUser.id;
+    const role = state.currentUser.role;
+
+    const updatePresence = async (nextStatus: 'online' | 'offline') => {
+      if (presenceRef.current === nextStatus) return;
+      presenceRef.current = nextStatus;
+      try {
+        await supabase
+          .from('profiles')
+          .update({ availability_status: nextStatus })
+          .eq('id', userId);
+        if (role === 'photographer') {
+          await supabase
+            .from('photographers')
+            .update({ is_online: nextStatus === 'online' })
+            .eq('id', userId);
+        }
+      } catch {
+        // Best-effort presence updates
+      }
+    };
+
+    const handleAppState = (nextState: string) => {
+      if (nextState === 'active') updatePresence('online');
+      if (nextState === 'background' || nextState === 'inactive') updatePresence('offline');
+    };
+
+    updatePresence('online');
+    const subscription = RNAppState.addEventListener('change', handleAppState);
+    return () => {
+      subscription.remove();
+      updatePresence('offline');
+    };
+  }, [state.currentUser?.id, state.currentUser?.role]);
 
   const fetchProfile = useCallback(async (userId: string): Promise<ProfileRow> => {
     if (!hasSupabase) return null;

@@ -218,7 +218,7 @@ const ensureUsers = async () => {
       user_metadata: { full_name: spec.full_name },
     });
     if (created.error && !/already registered|duplicate/i.test(created.error.message)) {
-      throw created.error;
+      throw new Error(`createUser(${email}) failed: ${created.error.message}`);
     }
     idMap.set(email, id);
   }
@@ -244,7 +244,7 @@ const seedProfiles = async (idMap) => {
   })).filter((row) => Boolean(row.id));
 
   const { error } = await supabase.from('profiles').upsert(payload, { onConflict: 'id' });
-  if (error) throw error;
+  if (error) throw new Error(`seedProfiles failed: ${error.message}`);
 };
 
 const seedPhotographers = async (idMap) => {
@@ -266,13 +266,13 @@ const seedPhotographers = async (idMap) => {
     specialties: p.specialties,
   })).filter((row) => Boolean(row.id));
   const { error } = await supabase.from('photographers').upsert(payload, { onConflict: 'id' });
-  if (error) throw error;
+  if (error) throw new Error(`seedPhotographers failed: ${error.message}`);
 };
 
 const seedBookings = async (idMap) => {
   const payload = buildBookings(idMap);
   const { error } = await supabase.from('bookings').upsert(payload, { onConflict: 'id' });
-  if (error) throw error;
+  if (error) throw new Error(`seedBookings failed: ${error.message}`);
 };
 
 const main = async () => {

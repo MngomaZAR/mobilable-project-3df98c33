@@ -218,7 +218,7 @@ const UserProfileScreen: React.FC = () => {
   const renderHeader = () => (
     <View style={s.profileInfo}>
       <View style={s.avatarWrapper}>
-        <Image source={{ uri: talent?.avatar_url ?? PLACEHOLDER_IMAGE }} style={s.profileAvatar} />
+        <Image source={{ uri: talent?.avatar_url ?? profileFallback?.avatar_url ?? PLACEHOLDER_IMAGE }} style={s.profileAvatar} />
         {talent?.is_online && (
           <View style={s.onlineBadge}>
              <View style={s.onlineDot} />

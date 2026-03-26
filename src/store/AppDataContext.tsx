@@ -930,9 +930,20 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const updatedProfile = payload.new as any;
         const currentUserId = stateRef.current.currentUser?.id;
 
-        if (updatedProfile.id === currentUserId) {
-          setState({ currentUser: mapSupabaseUser(stateRef.current.currentUser, updatedProfile.role, updatedProfile) });
-        }
+          if (updatedProfile.id === currentUserId) {
+            setState({ currentUser: mapSupabaseUser(stateRef.current.currentUser, updatedProfile.role, updatedProfile) });
+          }
+
+          setState({
+            profiles: stateRef.current.profiles.map((p) =>
+              p.id === updatedProfile.id ? { ...p, ...updatedProfile } : p
+            ),
+            posts: stateRef.current.posts.map((post) =>
+              post.author_id === updatedProfile.id
+                ? { ...post, profile: { ...(post.profile ?? {}), avatar_url: updatedProfile.avatar_url, full_name: updatedProfile.full_name ?? post.profile?.full_name } }
+                : post
+            ),
+          });
 
         // Update list views if the profile belongs to a photographer or model
         if (stateRef.current.photographers.some(p => p.id === updatedProfile.id)) {
@@ -2270,20 +2281,25 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       await supabase.auth.refreshSession();
       // Immediate local update so UI reflects new avatar without restart
       const currentUser = stateRef.current.currentUser;
-      if (currentUser) {
-        setState({
-          currentUser: { ...currentUser, avatar_url: versionedUrl },
-          profiles: stateRef.current.profiles.map(p =>
-            p.id === userId ? { ...p, avatar_url: versionedUrl } : p
-          ),
-          photographers: stateRef.current.photographers.map(p =>
-            p.id === userId ? { ...p, avatar_url: versionedUrl } : p
-          ),
-          models: stateRef.current.models.map(m =>
-            m.id === userId ? { ...m, avatar_url: versionedUrl } : m
-          ),
-        });
-      }
+        if (currentUser) {
+          setState({
+            currentUser: { ...currentUser, avatar_url: versionedUrl },
+            profiles: stateRef.current.profiles.map(p =>
+              p.id === userId ? { ...p, avatar_url: versionedUrl } : p
+            ),
+            photographers: stateRef.current.photographers.map(p =>
+              p.id === userId ? { ...p, avatar_url: versionedUrl } : p
+            ),
+            models: stateRef.current.models.map(m =>
+              m.id === userId ? { ...m, avatar_url: versionedUrl } : m
+            ),
+            posts: stateRef.current.posts.map(post =>
+              post.author_id === userId
+                ? { ...post, profile: { ...(post.profile ?? {}), avatar_url: versionedUrl } }
+                : post
+            ),
+          });
+        }
     } catch (err: any) {
       logError('updateProfilePicture', err);
       const msg = formatErrorMessage(err, 'Unable to update profile picture.');

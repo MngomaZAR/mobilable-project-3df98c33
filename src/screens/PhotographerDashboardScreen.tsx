@@ -112,7 +112,7 @@ const PhotographerDashboardScreen: React.FC = () => {
           if (!mounted) return;
           const { latitude, longitude } = coords;
           if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
-          try { await updatePhotographerLocation(latitude, longitude); } catch { /* soft fail */ }
+          try { await updatePhotographerLocation(latitude, longitude, undefined, position.coords.accuracy); } catch { /* soft fail */ }
         }
       );
     };

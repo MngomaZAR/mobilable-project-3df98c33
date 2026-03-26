@@ -76,8 +76,8 @@ type AppDataContextValue = {
   fetchMessages: (chatId: string) => Promise<void>;
   fetchMessagesForChat: (chatId: string) => Promise<void>;
   fetchComments: (postId: string) => Promise<void>;
-  updateBookingClientLocation: (bookingId: string, latitude: number, longitude: number) => Promise<void>;
-  updatePhotographerLocation: (latitude: number, longitude: number) => Promise<void>;
+  updateBookingClientLocation: (bookingId: string, latitude: number, longitude: number, accuracy?: number) => Promise<void>;
+  updatePhotographerLocation: (latitude: number, longitude: number, bookingId?: string, accuracy?: number) => Promise<void>;
   startConversationWithUser: (participantId: string, title?: string) => Promise<{ id: string; title: string }>;
   addPost: (payload: CreatePostInput) => Promise<Post>;
   toggleLike: (postId: string) => Promise<Post | undefined>;
@@ -1898,7 +1898,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   }, []);
 
-  const updateBookingClientLocation = useCallback(async (bookingId: string, latitude: number, longitude: number) => {
+  const updateBookingClientLocation = useCallback(async (bookingId: string, latitude: number, longitude: number, accuracy?: number) => {
     if (!hasSupabase) return;
     const userId = stateRef.current.currentUser?.id;
     if (!userId) return;
@@ -1918,13 +1918,25 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       .eq('id', bookingId)
       .eq('client_id', userId);
 
+    await supabase
+      .from('location_tracks')
+      .insert({
+        booking_id: bookingId,
+        user_id: userId,
+        role: 'client',
+        latitude,
+        longitude,
+        accuracy_m: Number.isFinite(accuracy) ? accuracy : null,
+        source: 'app',
+      });
+
     const updated = stateRef.current.bookings.map((booking) =>
       booking.id === bookingId ? { ...booking, user_latitude: latitude, user_longitude: longitude } : booking
     );
     setState({ bookings: updated });
   }, []);
 
-  const updatePhotographerLocation = useCallback(async (latitude: number, longitude: number) => {
+  const updatePhotographerLocation = useCallback(async (latitude: number, longitude: number, bookingId?: string, accuracy?: number) => {
     if (!hasSupabase) return;
     const user = stateRef.current.currentUser;
     const userId = user?.id;
@@ -1943,6 +1955,20 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       .from(table)
       .update({ latitude, longitude })
       .eq('id', userId);
+
+    if (bookingId) {
+      await supabase
+        .from('location_tracks')
+        .insert({
+          booking_id: bookingId,
+          user_id: userId,
+          role: 'provider',
+          latitude,
+          longitude,
+          accuracy_m: Number.isFinite(accuracy) ? accuracy : null,
+          source: 'app',
+        });
+    }
 
     if (user.role === 'model') {
       const updated = stateRef.current.models.map((m) =>

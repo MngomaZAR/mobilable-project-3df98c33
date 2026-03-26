@@ -127,10 +127,10 @@ const BookingTrackingScreen: React.FC = () => {
           try {
             if (state.currentUser?.role === 'client') {
               setLiveClientLocation(next);
-              await updateBookingClientLocation(booking.id, next.latitude, next.longitude);
+              await updateBookingClientLocation(booking.id, next.latitude, next.longitude, coords.accuracy);
             } else if (state.currentUser?.role === 'photographer') {
               setLivePhotographerLocation(next);
-              await updatePhotographerLocation(next.latitude, next.longitude);
+              await updatePhotographerLocation(next.latitude, next.longitude, booking.id, coords.accuracy);
             }
           } catch {
             // keep UI alive on intermittent sync failures

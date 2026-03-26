@@ -15,6 +15,18 @@ type Navigation = StackNavigationProp<RootStackParamList, 'BookingDetail'>;
 
 const steps: BookingStatus[] = ['pending', 'accepted', 'completed', 'reviewed'];
 
+const bookingDateFormatter = new Intl.DateTimeFormat('en-ZA', {
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
+const toStepLabel = (step: BookingStatus) =>
+  step
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+
 const BookingDetailScreen: React.FC = () => {
   const { params } = useRoute<Route>();
   const navigation = useNavigation<Navigation>();
@@ -125,7 +137,9 @@ const BookingDetailScreen: React.FC = () => {
         </View>
         
         <Text style={[styles.meta, { color: colors.textSecondary }]}>With {talentName}</Text>
-        <Text style={[styles.meta, { color: colors.textSecondary }]}>Date: {booking.booking_date}</Text>
+        <Text style={[styles.meta, { color: colors.textSecondary }]}>
+          Date: {bookingDateFormatter.format(new Date(booking.booking_date))}
+        </Text>
         
         {booking.notes ? (
           <View style={[styles.notes, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -139,7 +153,9 @@ const BookingDetailScreen: React.FC = () => {
             return (
               <View key={step} style={styles.stepRow}>
                 <View style={[styles.stepDot, { backgroundColor: colors.border }, active && [styles.stepDotActive, { backgroundColor: colors.accent }]]} />
-                <Text style={[styles.stepLabel, { color: colors.textMuted }, active && [styles.stepLabelActive, { color: colors.text }]]}>{step}</Text>
+                <Text style={[styles.stepLabel, { color: colors.textMuted }, active && [styles.stepLabelActive, { color: colors.text }]]}>
+                  {toStepLabel(step)}
+                </Text>
               </View>
             );
           })}
@@ -167,7 +183,7 @@ const BookingDetailScreen: React.FC = () => {
             <Text style={[styles.secondaryText, { color: colors.text }]}>Track on map</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.secondary, styles.rowButton, { backgroundColor: colors.accent }]}
+            style={[styles.secondary, styles.rowButton, styles.rowButtonLast, { backgroundColor: colors.accent }]}
             onPress={() => navigation.navigate('Payment', { bookingId: booking.id })}
           >
             <Text style={[styles.secondaryText, { color: isDark ? colors.bg : '#fff' }]}>Payments</Text>
@@ -210,7 +226,7 @@ const BookingDetailScreen: React.FC = () => {
                  <Text style={[styles.secondaryText, { color: colors.text }]}>Reschedule</Text>
                </TouchableOpacity>
                <TouchableOpacity
-                 style={[styles.secondary, styles.rowButton, { backgroundColor: colors.card, borderColor: colors.destructive, borderWidth: 1 }]}
+                 style={[styles.secondary, styles.rowButton, styles.rowButtonLast, { backgroundColor: colors.card, borderColor: colors.destructive, borderWidth: 1 }]}
                  onPress={handleCancel}
                  disabled={!!loadingAction}
                >
@@ -252,12 +268,11 @@ const BookingDetailScreen: React.FC = () => {
             ]}
           />
         </View>
-
-        <View style={styles.policyCard}>
-           <Text style={[styles.policyTitle, { color: colors.text }]}>Cancellation Policy</Text>
-           <Text style={[styles.policyText, { color: colors.textSecondary }]}>• Free cancellation for 48 hours after booking.</Text>
-           <Text style={[styles.policyText, { color: colors.textSecondary }]}>• Cancel before 7 days of the shoot for a 50% refund.</Text>
-           <Text style={[styles.policyText, { color: colors.textSecondary }]}>• No refunds within 7 days of the shoot date.</Text>
+        <View style={[styles.policyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[styles.policyTitle, { color: colors.text }]}>Cancellation Policy</Text>
+          <Text style={[styles.policyText, { color: colors.textSecondary }]}>- Free cancellation for 48 hours after booking.</Text>
+          <Text style={[styles.policyText, { color: colors.textSecondary }]}>- Cancel before 7 days of the shoot for a 50% refund.</Text>
+          <Text style={[styles.policyText, { color: colors.textSecondary }]}>- No refunds within 7 days of the shoot date.</Text>
         </View>
       </ScrollView>
     </View>
@@ -344,6 +359,9 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 8,
   },
+  rowButtonLast: {
+    marginRight: 0,
+  },
   secondary: {
     marginTop: 10,
     padding: 14,
@@ -358,7 +376,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     padding: 16,
     borderRadius: 12,
-    backgroundColor: '#f8fafc',
+    borderWidth: StyleSheet.hairlineWidth,
   },
   policyTitle: {
     fontWeight: '700',
@@ -373,3 +391,4 @@ const styles = StyleSheet.create({
 });
 
 export default BookingDetailScreen;
+

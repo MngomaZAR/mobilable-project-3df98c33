@@ -147,7 +147,9 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
       }
       await toggleLike(postId);
       queueRecommendationEvent({ post_id: postId, event_type: 'like' });
-    } catch (err) { }
+    } catch (err) {
+      console.warn('Like action failed', err);
+    }
   };
 
   const handleToggleBookmark = (post: Post) => {
@@ -333,7 +335,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
     setLoadingMore(true);
     try {
       const result = await fetchPosts({ reset: false });
-      // fetchPosts returns { hasMore } — if not returned, fall back to modulo check
+      // fetchPosts returns { hasMore } - if not returned, fall back to modulo check
       if (result && typeof result.hasMore === 'boolean') {
         if (!result.hasMore) setHasMore(false);
       } else if (appState.posts.length > 0 && appState.posts.length % PAGE_SIZE !== 0) {
@@ -384,8 +386,8 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
     }
     Alert.alert('Content Options', `Action for post by ${post.profile?.full_name ?? 'user'}?`, [
       { text: 'Cancel', style: 'cancel' },
-      { text: '🚩 Report Post', style: 'destructive', onPress: doReport },
-      { text: '🚫 Block User', style: 'destructive', onPress: doBlock },
+      { text: 'Report Post', style: 'destructive', onPress: doReport },
+      { text: 'Block User', style: 'destructive', onPress: doBlock },
     ]);
   };
 
@@ -394,7 +396,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
       style={[
         styles.headerContainer,
         {
-          paddingTop: Math.max(insets.top, 24),
+          paddingTop: Math.max(insets.top + 12, 32),
           backgroundColor: isDark ? 'rgba(0,0,0,0.92)' : 'rgba(255,255,255,0.97)',
           borderBottomColor: colors.border
         }
@@ -446,7 +448,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
             styles.textChipLabel, 
             { color: colors.textMuted },
             forYouOnly && [styles.textChipLabelActive, { color: colors.card }]
-          ]}>🌟 For You</Text>
+          ]}>For You</Text>
         </TouchableOpacity>
         
         {appState.currentUser && (
@@ -547,6 +549,9 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
     const subscribed = subscribedCreatorIds.has(item.author_id);
     const unlocked = unlockedPostIds.has(item.id);
     const isActuallyLocked = Boolean(item.is_locked) && !unlocked && (!needsSubscription || !subscribed);
+    const mediaUri = String((item as any).video_url || item.image_url || '').trim();
+    const isVideoMedia = (item as any).media_type === 'video' || mediaUri.endsWith('.mp4');
+    const hasRenderableMedia = mediaUri.length > 0;
 
     return (
     <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -571,27 +576,32 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
           } else {
             lastTapRef.current = now;
             queueRecommendationEvent({ post_id: item.id, event_type: 'open' });
-            if (item.media_type !== 'video') {
-              setLightboxUri(item.image_url);
+            if (!isVideoMedia && hasRenderableMedia) {
+              setLightboxUri(mediaUri);
             }
           }
       }}>
         <View style={styles.imageWrapper}>
-          {(item as any).media_type === 'video' || item.image_url?.endsWith('.mp4') ? (
+          {hasRenderableMedia && isVideoMedia ? (
             <Video
-              source={{ uri: (item as any).video_url || item.image_url }}
+              source={{ uri: mediaUri }}
               style={styles.image}
               resizeMode={ResizeMode.COVER}
               shouldPlay={!isActuallyLocked}
               isMuted={true}
               isLooping={true}
             />
-          ) : (
+          ) : hasRenderableMedia ? (
             <Image
-              source={{ uri: item.image_url || PLACEHOLDER_IMAGE }}
+              source={{ uri: mediaUri || PLACEHOLDER_IMAGE }}
               style={styles.image}
               onError={() => { /* handled via PLACEHOLDER_IMAGE fallback */ }}
             />
+          ) : (
+            <View style={[styles.mediaFallback, { backgroundColor: colors.bg }]}>
+              <Ionicons name="image-outline" size={34} color={colors.textMuted} />
+              <Text style={[styles.mediaFallbackText, { color: colors.textMuted }]}>Media unavailable</Text>
+            </View>
           )}
 
           {isActuallyLocked && (
@@ -722,27 +732,38 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  listContent: { padding: 16, paddingBottom: 80 },
-  headerContainer: { paddingBottom: 10, borderBottomWidth: StyleSheet.hairlineWidth },
-  headerInner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16 },
-  headerTitle: { fontSize: 24, fontWeight: '800' },
-  primaryIconButton: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', borderWidth: 1 },
+  listContent: { padding: 16, paddingBottom: 108 },
+  headerContainer: { paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth },
+  headerInner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 16, paddingBottom: 10 },
+  headerTitle: { fontSize: 62, lineHeight: 64, fontWeight: '900' },
+  primaryIconButton: { width: 50, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center', borderWidth: 1 },
   textRailWrapper: { paddingLeft: 16 },
   textRail: { paddingRight: 32 },
-  textChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, marginRight: 8, borderWidth: 1 },
+  textChip: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 22, marginRight: 8, borderWidth: 1 },
   textChipActive: { backgroundColor: '#0f172a' },
-  textChipLabel: { fontWeight: '600' },
+  textChipLabel: { fontWeight: '700', fontSize: 15 },
   textChipLabelActive: { color: '#fff' },
   errorText: { padding: 16, textAlign: 'center' },
-  card: { borderRadius: 18, marginBottom: 20, overflow: 'hidden', elevation: 4, shadowColor: '#0f172a', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.08, shadowRadius: 16, borderWidth: StyleSheet.hairlineWidth },
-  cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 12 },
+  card: { borderRadius: 24, marginBottom: 20, overflow: 'hidden', elevation: 4, shadowColor: '#0f172a', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.08, shadowRadius: 16, borderWidth: StyleSheet.hairlineWidth },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingTop: 14, paddingBottom: 10 },
   authorRow: { flexDirection: 'row', alignItems: 'center' },
-  avatar: { width: 36, height: 36, borderRadius: 18, marginRight: 10 },
+  avatar: { width: 42, height: 42, borderRadius: 21, marginRight: 12 },
   authorText: { flex: 1 },
-  authorName: { fontWeight: '700' },
+  authorName: { fontWeight: '800', fontSize: 17 },
   authorMeta: { fontSize: 12 },
   imageWrapper: { width: '100%', aspectRatio: 1 },
   image: { width: '100%', height: '100%' },
+  mediaFallback: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  mediaFallbackText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
   interactionBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 12 },
   leftActions: { flexDirection: 'row', alignItems: 'center' },
   rightActions: { flexDirection: 'row', alignItems: 'center' },
@@ -833,3 +854,4 @@ const styles = StyleSheet.create({
 });
 
 export default SocialFeed;
+

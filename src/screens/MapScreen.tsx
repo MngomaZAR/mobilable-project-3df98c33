@@ -23,9 +23,7 @@ import * as Haptics from 'expo-haptics';
 import { Analytics } from '../utils/analytics';
 import { getHeatmap } from '../services/dispatchService';
 
-// 🗺 Carto Open Basemaps — 100% free, no API key, no account. OpenStreetMap data.
-// Positron: Light grey (Uber daytime aesthetic)
-// Dark Matter: Dark grey (Uber nighttime aesthetic)
+// Carto Open Basemaps: free and no API key required.
 const MAP_STYLES = {
   light: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
   dark: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
@@ -49,6 +47,11 @@ const formatAccuracy = (a?: number | null) => {
   return 'High accuracy';
 };
 
+const isAvailabilityOnline = (status?: string | null) => {
+  const normalized = String(status ?? '').toLowerCase();
+  return normalized === 'online' || normalized === 'available' || normalized === 'active';
+};
+
 const MapScreen: React.FC = () => {
   const { state } = useAppData();
   const { colors, isDark } = useTheme();
@@ -59,7 +62,7 @@ const MapScreen: React.FC = () => {
   const [userMarker, setUserMarker] = useState<MapMarker | null>(null);
   const [userCoords, setUserCoords] = useState<{ lat: number; lng: number; timestamp: number } | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
-  const [locationWarning, setLocationWarning, ] = useState<string | null>(null);
+  const [locationWarning, setLocationWarning] = useState<string | null>(null);
   const [requesting, setRequesting] = useState(false);
   const [isRequesting, setIsRequesting] = useState(false);
   const [selectedMarker, setSelectedMarker] = useState<MapMarker | null>(null);
@@ -79,7 +82,7 @@ const MapScreen: React.FC = () => {
   const [routeDistanceKm, setRouteDistanceKm] = useState<number | null>(null);
   const [heatmapSummary, setHeatmapSummary] = useState<{ demand: number; supply: number } | null>(null);
 
-  // ── Bottom sheet gesture ─────────────────────────────────────────────────
+  // Bottom sheet gesture
   const sheetY = useRef(new Animated.Value(SCREEN_HEIGHT - SHEET_COLLAPSED)).current;
   const currentSheetY = useRef(SCREEN_HEIGHT - SHEET_COLLAPSED);
 
@@ -118,32 +121,39 @@ const MapScreen: React.FC = () => {
     },
   }), [snapTo, sheetY]);
 
-  // ── Real-time online presence sync ───────────────────────────────────────
+  // Real-time online presence sync
   useEffect(() => {
     if (!currentUser?.id) return;
     // Initial load of online profiles
     const loadOnline = async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('profiles')
-        .select('id')
-        .eq('is_online', true);
-      if (data) setOnlineProfiles(new Set(data.map((r: any) => r.id)));
+        .select('id, availability_status');
+      if (error) {
+        console.warn('Online presence unavailable:', error.message);
+        return;
+      }
+      if (data) {
+        const online = data
+          .filter((r: any) => isAvailabilityOnline(r.availability_status))
+          .map((r: any) => r.id);
+        setOnlineProfiles(new Set(online));
+      }
     };
     loadOnline();
 
-    // Subscribe to realtime changes on profiles.is_online
+    // Subscribe to realtime changes on profiles availability status
     const channel = supabase
       .channel('online-presence')
       .on('postgres_changes', {
         event: 'UPDATE',
         schema: 'public',
         table: 'profiles',
-        filter: 'is_online=eq.true',
       }, (payload) => {
         const profile = payload.new as any;
         setOnlineProfiles(prev => {
           const next = new Set(prev);
-          if (profile.is_online) next.add(profile.id);
+          if (isAvailabilityOnline(profile?.availability_status)) next.add(profile.id);
           else next.delete(profile.id);
           return next;
         });
@@ -247,7 +257,7 @@ const MapScreen: React.FC = () => {
         setLocationError('Currently supporting South African locations only.');
         return;
       }
-      if (accuracy && accuracy > 120) setLocationWarning('Weak GPS signal — location is approximate.');
+      if (accuracy && accuracy > 120) setLocationWarning('Weak GPS signal - location is approximate.');
       setUserMarker({ id: `user-${currentUser?.id ?? 'loc'}`, title: 'You', description: formatAccuracy(accuracy), latitude, longitude, type: 'user' });
       setUserCoords({ lat: latitude, lng: longitude, timestamp: pos.timestamp });
       cameraRef.current?.setCamera({ centerCoordinate: [longitude, latitude], zoomLevel: 13, animationMode: 'flyTo', animationDuration: 900 });
@@ -367,7 +377,7 @@ const MapScreen: React.FC = () => {
       });
       if (error) throw error;
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert('✅ Request Sent', `Waiting for ${marker.title} to accept...`);
+      Alert.alert('Request sent', `Waiting for ${marker.title} to accept...`);
       Analytics.bookingCreated(pkg.label, base);
       snapTo(SCREEN_HEIGHT - SHEET_COLLAPSED);
       setSelectedMarker(null);
@@ -384,6 +394,13 @@ const MapScreen: React.FC = () => {
     setMapStyle(styles[(idx + 1) % styles.length]);
   };
 
+  const panelBackground = isDark ? '#101a2f' : '#fff9f0';
+  const panelCard = isDark ? '#1a2741' : '#f7eee2';
+  const panelBorder = isDark ? '#2f3d5f' : '#e7d8c0';
+  const overlaySurface = isDark ? 'rgba(16,26,47,0.9)' : 'rgba(255,249,240,0.95)';
+  const primaryButtonColor = isDark ? '#dfbf85' : '#b08957';
+  const primaryButtonText = isDark ? '#0f172a' : '#fffdf8';
+
   if (Platform.OS === 'web') {
     return (
       <View style={[s.container, { backgroundColor: colors.bg }]}>
@@ -393,7 +410,7 @@ const MapScreen: React.FC = () => {
   }
 
   return (
-    <View style={s.container}>
+    <View style={[s.container, { backgroundColor: colors.bg }]}>
       {isMapLibreNativeAvailable ? (
         <MapLibreGL.MapView
           style={StyleSheet.absoluteFill}
@@ -413,14 +430,14 @@ const MapScreen: React.FC = () => {
           {/* Alt route (dashed, muted Uber-like fallback) */}
           {altSlice.length > 1 && (
             <MapLibreGL.ShapeSource id="route-alt" shape={toGeoJson(altSlice) as any}>
-              <MapLibreGL.LineLayer id="route-alt-line" style={{ lineColor: isDark ? '#6b7280' : '#9ca3af', lineOpacity: 0.45, lineWidth: 4, lineDasharray: [2, 3] }} />
+              <MapLibreGL.LineLayer id="route-alt-line" style={{ lineColor: isDark ? '#6f7f9c' : '#b8a78f', lineOpacity: 0.45, lineWidth: 4, lineDasharray: [2, 3] }} />
             </MapLibreGL.ShapeSource>
           )}
 
           {/* Primary route */}
           {primarySlice.length > 1 && (
             <MapLibreGL.ShapeSource id="route-primary" shape={toGeoJson(primarySlice) as any}>
-              <MapLibreGL.LineLayer id="route-primary-line" style={{ lineColor: isDark ? '#f3f4f6' : '#111827', lineOpacity: 0.96, lineWidth: 6, lineCap: 'round', lineJoin: 'round' }} />
+              <MapLibreGL.LineLayer id="route-primary-line" style={{ lineColor: isDark ? '#f1d4a1' : '#8f6a38', lineOpacity: 0.96, lineWidth: 6, lineCap: 'round', lineJoin: 'round' }} />
             </MapLibreGL.ShapeSource>
           )}
 
@@ -456,10 +473,10 @@ const MapScreen: React.FC = () => {
               belowLayerID="cluster-count"
               filter={['has', 'point_count']}
               style={{
-                circleColor: ['step', ['get', 'point_count'], '#374151', 10, '#1f2937', 30, '#111827'],
+                circleColor: ['step', ['get', 'point_count'], '#b08957', 10, '#9b774a', 30, '#7f6039'],
                 circleRadius: ['step', ['get', 'point_count'], 20, 10, 28, 30, 36],
                 circleStrokeWidth: 3,
-                circleStrokeColor: isDark ? '#0f172a' : '#f9fafb',
+                circleStrokeColor: isDark ? '#0f172a' : '#fffef8',
                 circleOpacity: 0.92,
               }}
             />
@@ -480,12 +497,12 @@ const MapScreen: React.FC = () => {
               filter={['!', ['has', 'point_count']]}
               style={{
                 circleColor: ['case',
-                  ['get', 'isOnline'], ['case', ['==', ['get', 'type'], 'model'], '#059669', '#10b981'],
-                  ['case', ['==', ['get', 'type'], 'model'], '#9ca3af', '#6b7280'],
+                  ['get', 'isOnline'], ['case', ['==', ['get', 'type'], 'model'], '#24b67f', '#2dc98b'],
+                  ['case', ['==', ['get', 'type'], 'model'], '#a99578', '#8c7a60'],
                 ],
                 circleRadius: 14,
                 circleStrokeWidth: ['case', ['get', 'isOnline'], 3, 2],
-                circleStrokeColor: ['case', ['get', 'isOnline'], '#ffffff', '#d1d5db'],
+                circleStrokeColor: ['case', ['get', 'isOnline'], '#fffef7', '#e5d7c2'],
                 circleOpacity: 0.95,
               }}
             />
@@ -517,13 +534,13 @@ const MapScreen: React.FC = () => {
         </View>
       )}
 
-      {/* Map style + locate controls (top-right floating buttons Uber-style) */}
+      {/* Map style + locate controls */}
       <SafeAreaView style={[s.safeOverlay, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
-        <View style={[s.topBar, { backgroundColor: isDark ? 'rgba(15,23,42,0.9)' : 'rgba(255,255,255,0.95)' }]}>
+        <View style={[s.topBar, { backgroundColor: overlaySurface, borderColor: panelBorder }]}>
           <View style={s.searchBox}>
             <Ionicons name="search" size={16} color={colors.textMuted} />
             <TextInput
-              placeholder="Search photographers or models..."
+              placeholder={state.currentUser?.city ? `Search near ${state.currentUser.city}` : 'Search near Durban'}
               placeholderTextColor={colors.textMuted}
               value={searchQuery}
               onChangeText={setSearchQuery}
@@ -539,18 +556,18 @@ const MapScreen: React.FC = () => {
 
         {/* Live status pill */}
         {userCoords && (
-          <View style={[s.statusPill, { backgroundColor: isDark ? 'rgba(15,23,42,0.85)' : 'rgba(255,255,255,0.9)' }]}>
+          <View style={[s.statusPill, { backgroundColor: overlaySurface, borderColor: panelBorder }]}>
             <View style={s.liveDot} />
             <Text style={[s.liveText, { color: colors.text }]}>
-              Live - {filteredMarkers.filter(m => onlineProfiles.has(m.sourceId ?? '')).length} online nearby
+              Live | {filteredMarkers.filter(m => onlineProfiles.has(m.sourceId ?? '')).length} online nearby
             </Text>
           </View>
         )}
         {currentUser?.role === 'admin' && heatmapSummary && (
-          <View style={[s.statusPill, { marginTop: 8, backgroundColor: isDark ? 'rgba(15,23,42,0.85)' : 'rgba(255,255,255,0.9)' }]}>
+          <View style={[s.statusPill, { marginTop: 8, backgroundColor: overlaySurface, borderColor: panelBorder }]}>
             <Ionicons name="flame-outline" size={13} color={isDark ? '#fbbf24' : '#b45309'} />
             <Text style={[s.liveText, { color: colors.text }]}>
-              Demand {heatmapSummary.demand} - Supply {heatmapSummary.supply}
+              Demand {heatmapSummary.demand} | Supply {heatmapSummary.supply}
             </Text>
           </View>
         )}
@@ -563,22 +580,22 @@ const MapScreen: React.FC = () => {
         )}
       </SafeAreaView>
 
-      {/* Floating action buttons (right side, Uber-style) */}
+      {/* Floating action buttons */}
       <View style={[s.fabColumn, { bottom: SHEET_COLLAPSED + insets.bottom + 20 }]}>
-        <TouchableOpacity style={[s.fab, { backgroundColor: isDark ? '#1e293b' : '#fff' }]} onPress={requestLocation} disabled={requesting}>
+        <TouchableOpacity style={[s.fab, { backgroundColor: panelBackground, borderColor: panelBorder }]} onPress={requestLocation} disabled={requesting}>
           <Ionicons name={requesting ? 'hourglass' : 'locate'} size={22} color={colors.accent} />
         </TouchableOpacity>
-        <TouchableOpacity style={[s.fab, { backgroundColor: isDark ? '#1e293b' : '#fff' }]} onPress={cycleMapStyle}>
+        <TouchableOpacity style={[s.fab, { backgroundColor: panelBackground, borderColor: panelBorder }]} onPress={cycleMapStyle}>
           <Ionicons name="layers" size={22} color={colors.text} />
         </TouchableOpacity>
-        <TouchableOpacity style={[s.fab, { backgroundColor: isDark ? '#1e293b' : '#fff' }]} onPress={() => navigation.navigate('Notifications')}>
+        <TouchableOpacity style={[s.fab, { backgroundColor: panelBackground, borderColor: panelBorder }]} onPress={() => navigation.navigate('Notifications')}>
           <Ionicons name="notifications-outline" size={22} color={colors.text} />
         </TouchableOpacity>
       </View>
 
-      {/* Gesture-driven bottom sheet (better than Uber's) */}
+      {/* Gesture-driven bottom sheet */}
       <Animated.View
-        style={[s.bottomSheet, { backgroundColor: isDark ? '#0f172a' : '#fff', transform: [{ translateY: sheetY }] }]}
+        style={[s.bottomSheet, { backgroundColor: panelBackground, borderColor: panelBorder, transform: [{ translateY: sheetY }] }]}
         {...panResponder.panHandlers}
       >
         {/* Drag handle */}
@@ -594,34 +611,44 @@ const MapScreen: React.FC = () => {
                 </View>
                 <View style={s.sheetInfo}>
                   <Text style={[s.sheetTitle, { color: colors.text }]}>
-                    {activeBooking.status === 'accepted' ? '🚗 En Route to You' : '📸 Shoot in Progress'}
+                    {activeBooking.status === 'accepted' ? 'En Route to You' : 'Shoot in Progress'}
                   </Text>
                   <Text style={[s.sheetSub, { color: colors.textSecondary }]}>
-                    {activeTalent?.name ?? 'Talent'} · ETA {etaLabel ?? '~15 min'}
+                    {activeTalent?.name ?? 'Talent'} - ETA {etaLabel ?? '~15 min'}
                   </Text>
                 </View>
-                <TouchableOpacity onPress={() => navigation.navigate('BookingTracking', { bookingId: activeBooking.id })} style={s.trackBtn}>
+                <TouchableOpacity onPress={() => navigation.navigate('BookingTracking', { bookingId: activeBooking.id })} style={[s.trackBtn, { backgroundColor: isDark ? '#273454' : '#ecdfcc' }]}>
                   <Ionicons name="navigate" size={20} color="#2563eb" />
                 </TouchableOpacity>
               </View>
               <View style={s.metricsRow}>
                 {[
-                  { label: 'Distance', value: selectedDistance ?? '—' },
-                  { label: 'ETA', value: etaLabel ?? '—' },
-                  { label: 'Status', value: activeBooking.status, color: '#10b981' },
+                  { label: 'Distance', value: selectedDistance ?? '--' },
+                  { label: 'ETA', value: etaLabel ?? '--' },
+                  {
+                    label: 'Status',
+                    value: activeBooking.status === 'accepted'
+                      ? 'Accepted'
+                      : activeBooking.status === 'in_progress'
+                        ? 'In progress'
+                        : String(activeBooking.status),
+                    color: '#10b981',
+                  },
                 ].map(m => (
-                  <View key={m.label} style={s.metricItem}>
+                  <View key={m.label} style={[s.metricItem, { backgroundColor: panelCard, borderColor: panelBorder }]}>
                     <Text style={[s.metricLabel, { color: colors.textMuted }]}>{m.label}</Text>
-                    <Text style={[s.metricValue, { color: m.color ?? colors.text }]}>{m.value}</Text>
+                    <Text numberOfLines={1} style={[s.metricValue, { color: m.color ?? colors.text }]}>
+                      {m.value}
+                    </Text>
                   </View>
                 ))}
               </View>
               <TouchableOpacity
-                style={[s.primaryBtn, { backgroundColor: colors.accent }]}
+                style={[s.primaryBtn, { backgroundColor: primaryButtonColor }]}
                 onPress={() => navigation.navigate('ChatThread', { conversationId: `chat-${activeBooking.id}`, title: activeTalent?.name })}
               >
-                <Ionicons name="chatbubble" size={18} color="#fff" style={{ marginRight: 8 }} />
-                <Text style={s.primaryBtnText}>Message {activeTalent?.name?.split(' ')[0] ?? 'Talent'}</Text>
+                <Ionicons name="chatbubble" size={18} color={primaryButtonText} style={{ marginRight: 8 }} />
+                <Text style={[s.primaryBtnText, { color: primaryButtonText }]}>Message {activeTalent?.name?.split(' ')[0] ?? 'Talent'}</Text>
               </TouchableOpacity>
             </>
           ) : selectedMarker ? (
@@ -647,13 +674,15 @@ const MapScreen: React.FC = () => {
 
               <View style={s.metricsRow}>
                 {[
-                  { label: 'Distance', value: selectedDistance ?? '—' },
-                  { label: 'ETA', value: etaLabel ?? '—' },
+                  { label: 'Distance', value: selectedDistance ?? '--' },
+                  { label: 'ETA', value: etaLabel ?? '--' },
                   { label: 'Status', value: onlineProfiles.has(selectedMarker.sourceId ?? '') ? 'Available' : 'Offline', color: onlineProfiles.has(selectedMarker.sourceId ?? '') ? '#10b981' : '#64748b' },
                 ].map(m => (
-                  <View key={m.label} style={s.metricItem}>
+                  <View key={m.label} style={[s.metricItem, { backgroundColor: panelCard, borderColor: panelBorder }]}>
                     <Text style={[s.metricLabel, { color: colors.textMuted }]}>{m.label}</Text>
-                    <Text style={[s.metricValue, { color: m.color ?? colors.text }]}>{m.value}</Text>
+                    <Text numberOfLines={1} style={[s.metricValue, { color: m.color ?? colors.text }]}>
+                      {m.value}
+                    </Text>
                   </View>
                 ))}
               </View>
@@ -668,12 +697,12 @@ const MapScreen: React.FC = () => {
                 </TouchableOpacity>
                 {currentUser?.role === 'client' && (
                   <TouchableOpacity
-                    style={[s.primaryBtn, { flex: 2 }]}
+                    style={[s.primaryBtn, { flex: 2, backgroundColor: primaryButtonColor }]}
                     onPress={() => handleRequestBooking(selectedMarker)}
                     disabled={isRequesting}
                   >
-                    <Ionicons name="flash" size={18} color="#fff" style={{ marginRight: 6 }} />
-                    <Text style={s.primaryBtnText}>{isRequesting ? 'Requesting...' : 'Instant Book'}</Text>
+                    <Ionicons name="flash" size={18} color={primaryButtonText} style={{ marginRight: 6 }} />
+                    <Text style={[s.primaryBtnText, { color: primaryButtonText }]}>{isRequesting ? 'Requesting...' : 'Instant Book'}</Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -685,11 +714,11 @@ const MapScreen: React.FC = () => {
                 {filteredMarkers.length} Talents Nearby
               </Text>
               <Text style={[s.sheetSub, { color: colors.textSecondary }]}>
-                {onlineProfiles.size} available now · Tap a pin to book instantly
+                {onlineProfiles.size} available now | Tap a pin to book instantly
               </Text>
-              <TouchableOpacity style={[s.primaryBtn, { marginTop: 12 }]} onPress={requestLocation} disabled={requesting}>
-                <Ionicons name="navigate" size={18} color="#fff" style={{ marginRight: 8 }} />
-                <Text style={s.primaryBtnText}>{requesting ? 'Finding location...' : 'Find Talent Near Me'}</Text>
+              <TouchableOpacity style={[s.primaryBtn, { marginTop: 12, backgroundColor: primaryButtonColor }]} onPress={requestLocation} disabled={requesting}>
+                <Ionicons name="navigate" size={18} color={primaryButtonText} style={{ marginRight: 8 }} />
+                <Text style={[s.primaryBtnText, { color: primaryButtonText }]}>{requesting ? 'Finding location...' : 'Find Talent Near Me'}</Text>
               </TouchableOpacity>
             </>
           )}
@@ -727,9 +756,9 @@ const s = StyleSheet.create({
   onlineBadge: { backgroundColor: '#10b981', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
   onlineBadgeText: { color: '#fff', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
   metricsRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
-  metricItem: { flex: 1, backgroundColor: '#1e293b', borderRadius: 14, padding: 14, alignItems: 'center' },
+  metricItem: { flex: 1, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 14, alignItems: 'center', borderWidth: 1, minHeight: 92 },
   metricLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 },
-  metricValue: { fontSize: 17, fontWeight: '800' },
+  metricValue: { fontSize: 14, fontWeight: '800', textAlign: 'center', textTransform: 'capitalize' },
   sheetActions: { flexDirection: 'row', gap: 12 },
   primaryBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#2563eb', borderRadius: 16, paddingVertical: 16, shadowColor: '#2563eb', shadowOpacity: 0.4, shadowRadius: 10, shadowOffset: { width: 0, height: 6 }, elevation: 6 },
   primaryBtnText: { color: '#fff', fontWeight: '800', fontSize: 16 },

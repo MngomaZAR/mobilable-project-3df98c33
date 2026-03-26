@@ -255,7 +255,7 @@ const SettingsScreen: React.FC = () => {
 
   return (
     <SafeAreaView edges={['left', 'right']} style={[s.safeArea, { backgroundColor: colors.bg }]}>
-    <ScrollView contentContainerStyle={[s.container, { paddingTop: Math.max(12, insets.top + 4), paddingBottom: Math.max(40, insets.bottom + 22) }]}>
+    <ScrollView contentContainerStyle={[s.container, { paddingTop: Math.max(24, insets.top + 12), paddingBottom: Math.max(40, insets.bottom + 22) }]}>
       <View style={s.header}>
         <Text style={s.headerTitle}>Settings</Text>
       </View>
@@ -632,27 +632,28 @@ const makeStyles = (colors: Colors, isDark: boolean) =>
     },
     headerTitle: {
       color: colors.text,
-      fontSize: 28,
-      fontWeight: '800',
+      fontSize: 66,
+      lineHeight: 70,
+      fontWeight: '900',
     },
     profileSection: {
       flexDirection: 'row',
       alignItems: 'center',
       paddingHorizontal: 20,
-      marginBottom: 32,
-      marginTop: 10,
+      marginBottom: 30,
+      marginTop: 8,
     },
     avatarContainer: {
       position: 'relative',
-      minWidth: 72,
-      minHeight: 72,
+      minWidth: 88,
+      minHeight: 88,
       alignItems: 'center',
       justifyContent: 'center',
     },
     profileAvatar: {
-      width: 72,
-      height: 72,
-      borderRadius: 36,
+      width: 88,
+      height: 88,
+      borderRadius: 44,
       backgroundColor: colors.border,
     },
     avatarUploading: {
@@ -695,12 +696,12 @@ const makeStyles = (colors: Colors, isDark: boolean) =>
     },
     section: { marginBottom: 24 },
     sectionHeader: {
-      fontSize: 13,
-      fontWeight: '600',
+      fontSize: 14,
+      fontWeight: '700',
       color: colors.textMuted,
       marginLeft: 20,
-      marginBottom: 8,
-      letterSpacing: 0.5,
+      marginBottom: 10,
+      letterSpacing: 0.8,
     },
     group: {
       backgroundColor: colors.card,
@@ -712,10 +713,10 @@ const makeStyles = (colors: Colors, isDark: boolean) =>
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingVertical: 12,
+      paddingVertical: 14,
       paddingRight: 16,
       paddingLeft: 20,
-      minHeight: 52,
+      minHeight: 58,
     },
     groupItemBorder: {
       borderBottomWidth: StyleSheet.hairlineWidth,
@@ -730,7 +731,7 @@ const makeStyles = (colors: Colors, isDark: boolean) =>
       justifyContent: 'center',
       marginRight: 14,
     },
-    itemText: { fontSize: 16, color: colors.text },
+    itemText: { fontSize: 17, color: colors.text, fontWeight: '600' },
     versionText: { fontSize: 15, color: colors.textMuted },
     destructiveText: { fontSize: 16, color: colors.destructive, fontWeight: '600' },
     footerText: { textAlign: 'center', color: colors.textMuted, fontSize: 13, marginTop: 12 },
@@ -739,7 +740,7 @@ const makeStyles = (colors: Colors, isDark: boolean) =>
       marginTop: 12,
       marginLeft: 44,
       backgroundColor: colors.bg,
-      borderRadius: 10,
+      borderRadius: 12,
       padding: 3,
       gap: 4,
     },
@@ -748,17 +749,17 @@ const makeStyles = (colors: Colors, isDark: boolean) =>
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      paddingVertical: 8,
+      paddingVertical: 10,
       paddingHorizontal: 10,
-      borderRadius: 8,
+      borderRadius: 10,
       gap: 5,
     },
     themeOptionActive: {
       backgroundColor: isDark ? '#f8fafc' : '#111827',
     },
     themeOptionText: {
-      fontSize: 13,
-      fontWeight: '600',
+      fontSize: 14,
+      fontWeight: '700',
       color: colors.textMuted,
     },
     themeOptionTextActive: {

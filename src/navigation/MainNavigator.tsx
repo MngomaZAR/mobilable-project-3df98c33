@@ -49,6 +49,7 @@ import CreditsWalletScreen from '../screens/CreditsWalletScreen';
 import PayoutMethodsScreen from '../screens/PayoutMethodsScreen';
 import { RootStackParamList, TabParamList } from './types';
 import { useAppData } from '../store/AppDataContext';
+import { useTheme } from '../store/ThemeContext';
 
 const Tab = createBottomTabNavigator<TabParamList>();
 const Stack = createStackNavigator<RootStackParamList>();
@@ -86,6 +87,7 @@ const tabBarIcon = (routeName: keyof TabParamList, focused: boolean, color: stri
 
 const TabsNavigator = () => {
   const { currentUser, state } = useAppData();
+  const { colors, isDark } = useTheme();
   const unreadNotifications = state.notifications.filter(n => n.status === 'queued').length;
 
   const role = currentUser?.role ?? 'client';
@@ -103,8 +105,29 @@ const TabsNavigator = () => {
       initialRouteName="Home"
       screenOptions={({ route }) => ({
         tabBarIcon: ({ focused, color, size }) => tabBarIcon(route.name, focused, color, size),
-        tabBarActiveTintColor: '#111827',
-        tabBarInactiveTintColor: '#9ca3af',
+        tabBarActiveTintColor: colors.accent,
+        tabBarInactiveTintColor: isDark ? '#7f8ba5' : '#9b8a72',
+        tabBarStyle: {
+          position: 'absolute',
+          left: 8,
+          right: 8,
+          bottom: 10,
+          borderRadius: 24,
+          height: 74,
+          paddingBottom: 10,
+          paddingTop: 6,
+          borderTopWidth: 0,
+          elevation: 10,
+          backgroundColor: isDark ? 'rgba(14,20,35,0.94)' : 'rgba(255,249,240,0.96)',
+        },
+        tabBarItemStyle: {
+          paddingHorizontal: 2,
+        },
+        tabBarLabelStyle: {
+          fontSize: 10,
+          fontWeight: '600',
+        },
+        tabBarHideOnKeyboard: true,
         headerShown: false,
       })}
     >
@@ -114,7 +137,7 @@ const TabsNavigator = () => {
         component={homeComponent}
         options={{ tabBarLabel: role === 'client' ? 'Home' : 'Dashboard' }}
       />
-      <Tab.Screen name="Bookings" component={BookingsScreen} />
+      <Tab.Screen name="Bookings" component={BookingsScreen} options={{ tabBarLabel: 'Book' }} />
       <Tab.Screen name="Feed" component={FeedScreen} />
       <Tab.Screen name="Chat" component={ConversationsListScreen} />
       <Tab.Screen 
@@ -131,6 +154,8 @@ const TabsNavigator = () => {
 
 export const MainNavigator: React.FC<MainNavigatorProps> = ({ logoSource }) => {
   const { currentUser, loading } = useAppData();
+  const { colors } = useTheme();
+  const hardBlockPendingKyc = String(process.env.EXPO_PUBLIC_KYC_HARD_BLOCK ?? 'false').toLowerCase() === 'true';
 
   if (loading) {
     return <SplashLoadingScreen />;
@@ -185,7 +210,14 @@ export const MainNavigator: React.FC<MainNavigatorProps> = ({ logoSource }) => {
       linking={linking}
       theme={{
         ...DefaultTheme,
-        colors: { ...DefaultTheme.colors, background: '#f7f7fb' },
+        colors: {
+          ...DefaultTheme.colors,
+          background: colors.bg,
+          card: colors.card,
+          border: colors.border,
+          text: colors.text,
+          primary: colors.accent,
+        },
       }}
     >
       <GlobalRequestManager />
@@ -213,11 +245,12 @@ export const MainNavigator: React.FC<MainNavigatorProps> = ({ logoSource }) => {
                 return <Stack.Screen name="AgeVerification" component={AgeVerificationScreen} options={{ headerShown: false }} />;
               }
 
-              if (requiresKyc && kycStatus !== 'approved') {
-                const pendingComponent = kycStatus === 'rejected'
-                  ? VerificationRejectedScreen
-                  : PendingVerificationScreen;
-                return <Stack.Screen name="PendingVerification" component={pendingComponent} options={{ headerShown: false }} />;
+              if (requiresKyc && kycStatus === 'rejected') {
+                return <Stack.Screen name="PendingVerification" component={VerificationRejectedScreen} options={{ headerShown: false }} />;
+              }
+
+              if (requiresKyc && hardBlockPendingKyc && kycStatus !== 'approved') {
+                return <Stack.Screen name="PendingVerification" component={PendingVerificationScreen} options={{ headerShown: false }} />;
               }
 
               if (!currentUser.role || (currentUser.role as string) === 'guest') {
@@ -226,14 +259,14 @@ export const MainNavigator: React.FC<MainNavigatorProps> = ({ logoSource }) => {
 
               return <Stack.Screen name="Root" component={TabsNavigator} options={{ headerShown: false }} />;
             })()}
-            <Stack.Screen name="Profile" component={UserProfileScreen} options={{ title: 'Photographer Profile' }} />
+            <Stack.Screen name="Profile" component={UserProfileScreen} options={{ headerShown: false }} />
             <Stack.Screen name="BookingForm" component={BookingFormScreen} options={{ title: 'Booking Request' }} />
-            <Stack.Screen name="BookingDetail" component={BookingDetailScreen} options={{ title: 'Booking Detail' }} />
-            <Stack.Screen name="BookingTracking" component={BookingTrackingScreen} options={{ title: 'Track Booking' }} />
+            <Stack.Screen name="BookingDetail" component={BookingDetailScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="BookingTracking" component={BookingTrackingScreen} options={{ headerShown: false }} />
             <Stack.Screen name="Payment" component={PaymentScreen} options={{ title: 'Payments' }} />
             <Stack.Screen name="PostDetail" component={PostDetailScreen} options={{ title: 'Post' }} />
             <Stack.Screen name="CreatePost" component={CreatePostScreen} options={{ title: 'New Post' }} />
-            <Stack.Screen name="UserProfile" component={UserProfileScreen} options={{ title: 'Photographer Profile' }} />
+            <Stack.Screen name="UserProfile" component={UserProfileScreen} options={{ headerShown: false }} />
             <Stack.Screen name="Compliance" component={ComplianceScreen} options={{ title: 'Privacy & Permissions' }} />
             <Stack.Screen name="ChatThread" component={ChatScreen} options={{ title: 'Chat' }} />
             <Stack.Screen name="PaidVideoCall" component={PaidVideoCallScreen} options={{ headerShown: false }} />

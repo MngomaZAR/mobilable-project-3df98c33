@@ -18,9 +18,20 @@ import { useAppData } from '../store/AppDataContext';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { PLACEHOLDER_AVATAR } from '../utils/constants';
+import { getConversationDisplayInfo } from '../utils/conversations';
 import { NewMessageModal } from '../components/NewMessageModal';
 
 type Navigation = StackNavigationProp<RootStackParamList, 'Root'>;
+
+const messageDateFormatter = new Intl.DateTimeFormat('en-ZA', {
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+  second: '2-digit',
+  hour12: true,
+});
 
 const ConversationsListScreen: React.FC = () => {
   const navigation = useNavigation<Navigation>();
@@ -43,7 +54,7 @@ const ConversationsListScreen: React.FC = () => {
 
   const listHeader = useMemo(
     () => (
-      <View style={[styles.header, { paddingTop: Math.max(insets.top, 16) }]}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top + 12, 28) }]}>
         <View>
           <Text style={[styles.title, { color: colors.text }]}>Conversations</Text>
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
@@ -66,14 +77,12 @@ const ConversationsListScreen: React.FC = () => {
 
   const renderItem = ({ item }: { item: typeof conversations[0] }) => {
     const timestamp = item.last_message_at ?? item.created_at;
-    const formatted = timestamp ? new Date(timestamp).toLocaleString() : '';
-    const displayTitle = item.participant?.name ?? (item.title && item.title !== 'Conversation' ? item.title : 'Chat');
-    const avatarUrl = item.participant?.avatar_url ?? PLACEHOLDER_AVATAR;
-    const lastActive = item.participant?.last_active_at
-      ? new Date(item.participant.last_active_at)
-      : null;
-    const lastActiveLabel = lastActive ? `Last active ${lastActive.toLocaleDateString()}` : null;
-
+    const formatted = timestamp
+      ? messageDateFormatter.format(new Date(timestamp)).replace(',', ', ')
+      : '';
+    const display = getConversationDisplayInfo(item as any, state as any);
+    const displayTitle = display.displayTitle && display.displayTitle !== 'Conversation' ? display.displayTitle : 'Chat';
+    const avatarUrl = display.avatarUrl || PLACEHOLDER_AVATAR;
     return (
       <TouchableOpacity
         style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
@@ -104,9 +113,6 @@ const ConversationsListScreen: React.FC = () => {
         <Text style={[styles.cardMessage, { color: colors.textSecondary }]} numberOfLines={2}>
           {item.last_message || 'Start the conversation'}
         </Text>
-        {lastActiveLabel && (
-          <Text style={[styles.cardMeta, { color: colors.textMuted }]}>{lastActiveLabel}</Text>
-        )}
       </TouchableOpacity>
     );
   };
@@ -165,34 +171,40 @@ const ConversationsListScreen: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
-  listContent: { padding: 16, paddingBottom: 80 },
-  header: { marginBottom: 12, gap: 6 },
-  title: { fontSize: 22, fontWeight: '800' },
-  subtitle: {},
+  listContent: { padding: 16, paddingBottom: 120 },
+  header: { marginBottom: 14, gap: 8 },
+  title: { fontSize: 54, fontWeight: '900', lineHeight: 58 },
+  subtitle: { fontSize: 16, lineHeight: 22 },
   avatarRow: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 },
-  convAvatar: { width: 40, height: 40, borderRadius: 10 },
+  convAvatar: { width: 46, height: 46, borderRadius: 12 },
   primaryButton: {
     alignSelf: 'flex-start',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    marginTop: 8,
+    borderRadius: 16,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    marginTop: 10,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
   primaryButtonText: { fontWeight: '700', fontSize: 14 },
-  card: { borderRadius: 14, padding: 14, borderWidth: StyleSheet.hairlineWidth },
+  card: {
+    borderRadius: 24,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderWidth: 1,
+    minHeight: 112,
+    justifyContent: 'center',
+  },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
+    alignItems: 'flex-start',
+    marginBottom: 8,
   },
-  cardTitle: { fontSize: 16, fontWeight: '800', flexShrink: 1, minWidth: 0 },
-  cardTime: { marginLeft: 8, fontSize: 12, flexShrink: 0 },
-  cardMessage: {},
-  cardMeta: { marginTop: 6, fontSize: 11 },
+  cardTitle: { fontSize: 18, fontWeight: '800', flexShrink: 1, minWidth: 0 },
+  cardTime: { marginLeft: 8, fontSize: 12, flexShrink: 0, marginTop: 3 },
+  cardMessage: { fontSize: 15, lineHeight: 21 },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   loadingText: { marginTop: 10, fontWeight: '600' },
   separator: { height: 12 },

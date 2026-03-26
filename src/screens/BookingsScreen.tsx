@@ -1,8 +1,9 @@
-import React, { useMemo } from 'react';
-import { FlatList, StyleSheet, Text, TouchableOpacity, View, Image } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Alert, FlatList, StyleSheet, Text, TouchableOpacity, View, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAppData } from '../store/AppDataContext';
 import { useTheme } from '../store/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
@@ -10,6 +11,7 @@ import { Booking } from '../types';
 import { Ionicons } from '@expo/vector-icons';
 
 type Navigation = StackNavigationProp<RootStackParamList, 'BookingDetail'>;
+const SEEDED_KEY_PREFIX = 'papzi-bookings-seeded';
 
 const statusColors: Record<Booking['status'], string> = {
   pending: '#f59e0b',
@@ -21,11 +23,26 @@ const statusColors: Record<Booking['status'], string> = {
   declined: '#ef4444',
 };
 
+const bookingDateFormatter = new Intl.DateTimeFormat('en-ZA', {
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+  hour12: true,
+});
+
+const toStatusLabel = (status: Booking['status']) => status.replace(/_/g, ' ').toUpperCase();
+
 const BookingsScreen: React.FC = () => {
-  const { state } = useAppData();
+  const { state, createBooking, refresh } = useAppData();
   const navigation = useNavigation<Navigation>();
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
+  const cardSurface = isDark ? 'rgba(18, 27, 47, 0.94)' : '#fffaf2';
+  const cardShadow = isDark ? '#050910' : '#1f1710';
+  const [seeding, setSeeding] = useState(false);
+  const [autoSeedChecked, setAutoSeedChecked] = useState(false);
 
   const providerById = useMemo(
     () => {
@@ -39,14 +56,111 @@ const BookingsScreen: React.FC = () => {
 
   const formatDateTime = (value: string) => {
     const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+    if (Number.isNaN(date.getTime())) return value;
+    return bookingDateFormatter.format(date).replace(',', ', ');
   };
+
+  const seedSampleBookings = useCallback(async (options?: { silent?: boolean }) => {
+    const silent = options?.silent === true;
+    if (!state.currentUser?.id) {
+      if (!silent) {
+        Alert.alert('Sign in required', 'Please sign in before seeding sample bookings.');
+      }
+      return false;
+    }
+    if (seeding) return false;
+    if (state.bookings.length > 0) return true;
+
+    const providers = [
+      ...state.photographers.slice(0, 3).map((p) => ({ id: p.id, type: 'photographer' as const, name: p.name })),
+      ...state.models.slice(0, 1).map((m) => ({ id: m.id, type: 'model' as const, name: m.name })),
+    ];
+
+    if (providers.length === 0) {
+      if (!silent) {
+        Alert.alert('No providers found', 'Could not find providers to create sample bookings.');
+      }
+      return false;
+    }
+
+    setSeeding(true);
+    try {
+      const now = new Date();
+      for (let i = 0; i < providers.length; i += 1) {
+        const provider = providers[i];
+        const start = new Date(now.getTime() + (24 + i * 3) * 60 * 60 * 1000);
+        const end = new Date(start.getTime() + 60 * 60 * 1000);
+        await createBooking({
+          talent_id: provider.id,
+          talent_type: provider.type,
+          booking_date: start.toISOString(),
+          start_datetime: start.toISOString(),
+          end_datetime: end.toISOString(),
+          package_type: i === 0 ? 'Your bookings' : 'Half-day coverage',
+          notes: `Sample booking with ${provider.name}`,
+          base_amount: 1200 + i * 250,
+          travel_amount: 100 + i * 50,
+          latitude: -33.9249,
+          longitude: 18.4241,
+          fanout_count: 1,
+          intensity_level: 1,
+        });
+      }
+      await refresh();
+      if (!silent) {
+        Alert.alert('Sample bookings added', 'Bookings list has been populated.');
+      }
+      return true;
+    } catch (error: any) {
+      if (!silent) {
+        Alert.alert('Seeding failed', error?.message || 'Could not seed bookings.');
+      }
+      return false;
+    } finally {
+      setSeeding(false);
+    }
+  }, [createBooking, refresh, seeding, state.bookings.length, state.currentUser?.id, state.models, state.photographers]);
+
+  useEffect(() => {
+    let active = true;
+    const maybeAutoSeed = async () => {
+      if (!state.currentUser?.id || autoSeedChecked) return;
+      if (state.currentUser.role !== 'client') {
+        if (active) setAutoSeedChecked(true);
+        return;
+      }
+      if (state.bookings.length > 0) {
+        if (active) setAutoSeedChecked(true);
+        return;
+      }
+
+      const key = `${SEEDED_KEY_PREFIX}:${state.currentUser.id}`;
+      const seededAlready = await AsyncStorage.getItem(key);
+      if (seededAlready === '1') {
+        if (active) setAutoSeedChecked(true);
+        return;
+      }
+
+      const seeded = await seedSampleBookings({ silent: true });
+      if (seeded) {
+        await AsyncStorage.setItem(key, '1');
+      }
+      if (active) setAutoSeedChecked(true);
+    };
+
+    maybeAutoSeed().catch(() => {
+      if (active) setAutoSeedChecked(true);
+    });
+    return () => {
+      active = false;
+    };
+  }, [autoSeedChecked, seedSampleBookings, state.bookings.length, state.currentUser?.id, state.currentUser?.role]);
 
   const renderItem = ({ item }: { item: Booking }) => {
     const provider = item.photographer || item.client || providerById.get(item.photographer_id);
     return (
       <TouchableOpacity
-        style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
+        style={[styles.card, { backgroundColor: cardSurface, borderColor: colors.border, shadowColor: cardShadow }]}
         activeOpacity={0.7}
         onPress={() => navigation.navigate('BookingDetail', { bookingId: item.id })}
       >
@@ -58,7 +172,7 @@ const BookingsScreen: React.FC = () => {
           <View style={styles.cardHeader}>
             <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={1}>{item.package_type}</Text>
             <View style={[styles.statusBadge, { backgroundColor: statusColors[item.status] + '20' }]}>
-              <Text style={[styles.statusText, { color: statusColors[item.status] }]}>{item.status}</Text>
+              <Text style={[styles.statusText, { color: statusColors[item.status] }]}>{toStatusLabel(item.status)}</Text>
             </View>
           </View>
           
@@ -74,19 +188,34 @@ const BookingsScreen: React.FC = () => {
             </View>
           ) : null}
         </View>
+        <Ionicons name="chevron-forward" size={18} color={colors.textMuted} style={styles.chevron} />
       </TouchableOpacity>
     );
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.bg, paddingTop: Math.max(16, insets.top + 8) }]}>
+    <View style={[styles.container, { backgroundColor: colors.bg, paddingTop: Math.max(24, insets.top + 12) }]}>
       <Text style={[styles.title, { color: colors.text }]}>Your bookings</Text>
       <FlatList
         data={state.bookings}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         contentContainerStyle={styles.listContent}
-        ListEmptyComponent={<Text style={[styles.empty, { color: colors.textMuted }]}>No bookings yet. Start one from a profile.</Text>}
+        ListEmptyComponent={
+          <View style={styles.emptyWrap}>
+            <Text style={[styles.empty, { color: colors.textMuted }]}>No bookings yet. Start one from a profile.</Text>
+            <TouchableOpacity
+              style={[styles.seedBtn, { backgroundColor: colors.accent }]}
+              onPress={() => { void seedSampleBookings(); }}
+              disabled={seeding}
+            >
+              <Ionicons name={seeding ? 'hourglass-outline' : 'sparkles-outline'} size={16} color={isDark ? colors.bg : '#fffaf2'} />
+              <Text style={[styles.seedBtnText, { color: isDark ? colors.bg : '#fffaf2' }]}>
+                {seeding ? 'Seeding...' : 'Seed sample bookings'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        }
       />
     </View>
   );
@@ -98,35 +227,38 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   title: {
-    fontSize: 24,
-    fontWeight: '800',
-    marginBottom: 20,
-    marginTop: 8,
+    fontSize: 62,
+    lineHeight: 66,
+    fontWeight: '900',
+    marginBottom: 16,
+    marginTop: 2,
   },
   listContent: {
-    paddingBottom: 100,
+    paddingBottom: 112,
   },
   card: {
-    borderRadius: 20,
+    borderRadius: 26,
     flexDirection: 'row',
-    padding: 12,
+    padding: 14,
+    minHeight: 128,
     marginBottom: 16,
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 3,
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 7 },
+    elevation: 5,
     borderWidth: 1,
+    alignItems: 'center',
   },
   thumbnail: {
-    width: 84,
-    height: 84,
-    borderRadius: 12,
+    width: 104,
+    height: 104,
+    borderRadius: 20,
   },
   cardContent: {
     flex: 1,
     marginLeft: 14,
     justifyContent: 'center',
+    paddingRight: 8,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -135,21 +267,23 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   cardTitle: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 21,
+    fontWeight: '800',
     flex: 1,
     marginRight: 8,
   },
   statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 99,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   statusText: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '800',
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.4,
   },
   metaRow: {
     flexDirection: 'row',
@@ -158,29 +292,49 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   metaText: {
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: 16,
+    fontWeight: '600',
   },
   providerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: 1,
   },
   providerType: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.6,
   },
   providerName: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  chevron: {
+    marginLeft: 6,
+  },
+  emptyWrap: {
+    marginTop: 56,
+    alignItems: 'center',
+    paddingHorizontal: 18,
   },
   empty: {
     textAlign: 'center',
-    marginTop: 60,
     fontSize: 16,
     fontWeight: '500',
+  },
+  seedBtn: {
+    marginTop: 14,
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  seedBtnText: {
+    fontSize: 14,
+    fontWeight: '800',
   },
 });
 

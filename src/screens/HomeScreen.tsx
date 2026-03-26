@@ -41,6 +41,7 @@ const toHourlyRateRand = (price_range: string) => {
 const toSafeLower = (value: unknown) => String(value ?? '').toLowerCase();
 const toSafeTags = (value: unknown): string[] => (Array.isArray(value) ? value.filter((tag): tag is string => typeof tag === 'string') : []);
 const toSafeRating = (value: unknown) => (Number.isFinite(Number(value)) ? Number(value) : 0);
+const isOnlineStatus = (value: unknown) => ['online', 'available', 'active'].includes(toSafeLower(value));
 
 const HomeScreen: React.FC = () => {
   const { state, loading, error, refresh } = useAppData();
@@ -120,9 +121,13 @@ const HomeScreen: React.FC = () => {
   const visibleTalent = useMemo(() => filteredTalent.slice(0, MAX_HOME_CARDS), [filteredTalent]);
   const featuredPhotographer = discoveryMode === 'photographers' ? visibleTalent[0] ?? state.photographers[0] ?? null : null;
   const models = state.models ?? [];
+  const onlineNearbyCount = useMemo(
+    () => (state.profiles ?? []).filter((p: any) => isOnlineStatus(p?.availability_status)).length,
+    [state.profiles]
+  );
 
   const startModelBooking = (model: Model) => {
-    // Placeholder navigation — routes to BookingForm with photographer field re-used
+    // Placeholder navigation - routes to BookingForm with photographer field re-used
     // until a dedicated model booking screen is built
     parentNavigation?.navigate('BookingForm', { photographerId: model.id });
   };
@@ -159,7 +164,7 @@ const HomeScreen: React.FC = () => {
       ]}
     >
       <View style={styles.imageWrap}>
-        <Image source={{ uri: item.avatar_url || 'https://via.placeholder.com/150' }} style={styles.avatar} />
+        <Image source={{ uri: item.avatar_url || 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=300&q=80' }} style={styles.avatar} />
         <View style={[styles.ratingBadge, { backgroundColor: isDark ? 'rgba(0,0,0,0.6)' : '#111827cc' }]}>
           <Ionicons name="star" size={14} color="#fbbf24" />
           <Text style={styles.ratingText}>{toSafeRating(item?.rating).toFixed(1)}</Text>
@@ -180,7 +185,7 @@ const HomeScreen: React.FC = () => {
         </View>
         <View style={styles.metaRow}>
           <Text style={[styles.price, { color: colors.text }]}>{toHourlyRateRand(String(item?.price_range ?? '$$'))}</Text>
-          <Text style={[styles.dot, { color: colors.textMuted }]}>•</Text>
+          <Text style={[styles.dot, { color: colors.textMuted }]}>|</Text>
           <Text style={[styles.duration, { color: colors.textMuted }]}>{discoveryMode === 'models' ? 'Min 2 hours' : '~1 hour'}</Text>
         </View>
         <View style={styles.actions}>
@@ -219,7 +224,16 @@ const HomeScreen: React.FC = () => {
       refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} tintColor={colors.accent} />}
       contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(120, insets.bottom + 96) }]}
     >
-      <View style={[styles.topBar, { paddingTop: Math.max(insets.top, 24) }]}>
+      <View
+        style={[
+          styles.topBar,
+          {
+            paddingTop: Math.max(insets.top + 8, 30),
+            backgroundColor: isDark ? 'rgba(17, 26, 45, 0.68)' : '#fff8ef',
+            borderColor: colors.border,
+          },
+        ]}
+      >
         <View style={styles.brandRow}>
           <AppLogo size={48} />
           <Text style={[styles.brandName, { color: colors.text }]}>Papzi</Text>
@@ -248,6 +262,11 @@ const HomeScreen: React.FC = () => {
         </View>
       </View>
 
+      <View style={[styles.livePill, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={styles.liveDot} />
+        <Text style={[styles.livePillText, { color: colors.text }]}>Live | {onlineNearbyCount} online nearby</Text>
+      </View>
+
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickActionsRail}>
         {[
           { icon: 'map-outline', label: 'Live Map', onPress: () => navigation.navigate('Map') },
@@ -267,11 +286,13 @@ const HomeScreen: React.FC = () => {
         ))}
       </ScrollView>
 
-      <LinearGradient colors={isDark ? ['#1e293b', '#0f172a', '#020617'] : ['#e8edff', '#e0e7ff', '#cfd9f9']} style={[styles.hero, !isWideHero && styles.heroStacked, { borderColor: colors.border }]}>
+      <LinearGradient colors={isDark ? ['#121a2b', '#0a1222', '#060b14'] : ['#f7f1e7', '#f1e8da', '#eadfca']} style={[styles.hero, !isWideHero && styles.heroStacked, { borderColor: colors.border }]}>
         <View style={[styles.heroText, !isWideHero && styles.heroTextCentered]}>
-          <Text style={[styles.title, !isWideHero && styles.titleCentered, { color: colors.text }]}>Find the Perfect Photographer for Your Moments</Text>
+          <Text style={[styles.title, !isWideHero && styles.titleCentered, { color: colors.text }]}>
+            {discoveryMode === 'photographers' ? 'Find photographers near you' : 'Find models near you'}
+          </Text>
           <Text style={[styles.subtitle, !isWideHero && styles.subtitleCentered, { color: colors.textSecondary }]}>
-            Connect with professional photographers in your area. Browse, compare, and book in minutes.
+            Browse profiles, compare ratings, and book in minutes.
           </Text>
           <BlurView intensity={70} tint={isDark ? 'dark' : 'light'} style={[styles.searchCard, !isWideHero && styles.searchCardFull, { backgroundColor: isDark ? 'rgba(30,41,59,0.5)' : 'rgba(255, 255, 255, 0.45)', borderColor: colors.border }]}>
             <View style={[styles.searchRow, !isWideHero && styles.searchRowStacked]}>
@@ -280,7 +301,7 @@ const HomeScreen: React.FC = () => {
                 <View style={styles.inputContent}>
                   <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Location</Text>
                   <TextInput
-                    placeholder="Enter your location"
+                    placeholder="Durban"
                     value={location}
                     onChangeText={setLocation}
                     style={[styles.input, { color: colors.text }]}
@@ -305,20 +326,20 @@ const HomeScreen: React.FC = () => {
             >
               <Ionicons name="search" size={18} color={isDark ? colors.bg : colors.card} />
               <Text style={[styles.ctaText, { color: isDark ? colors.bg : colors.card }]}>
-                {isSearching ? 'Matching...' : 'Find Photographers'}
+                {isSearching ? 'Matching...' : discoveryMode === 'photographers' ? 'Find Photographers' : 'Find Models'}
               </Text>
             </Pressable>
           </BlurView>
           <View style={[styles.metricsRow, !isWideHero && styles.metricsRowStacked]}>
-            <View style={[styles.metric, styles.metricPrimary, { backgroundColor: isDark ? '#1e293b' : '#eef2ff', borderColor: isDark ? '#334155' : '#c7d2fe' }]}>
+            <View style={[styles.metric, styles.metricPrimary, { backgroundColor: isDark ? '#1f2d49' : '#efe5d6', borderColor: isDark ? '#334a71' : '#dcc8ab' }]}>
               <Text style={[styles.metricValue, { color: colors.text }]}>500+</Text>
               <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>Photographers</Text>
             </View>
-            <View style={[styles.metric, styles.metricSecondary, { backgroundColor: isDark ? '#0f172a' : '#e0f2fe', borderColor: isDark ? '#1e293b' : '#bae6fd' }]}>
+            <View style={[styles.metric, styles.metricSecondary, { backgroundColor: isDark ? '#182338' : '#e9ddca', borderColor: isDark ? '#2a3a58' : '#d6c2a1' }]}>
               <Text style={[styles.metricValue, { color: colors.text }]}>10k+</Text>
               <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>Happy Customers</Text>
             </View>
-            <View style={[styles.metric, styles.metricTertiary, { backgroundColor: isDark ? '#064e3b' : '#ecfccb', borderColor: isDark ? '#065f46' : '#bef264' }]}>
+            <View style={[styles.metric, styles.metricTertiary, { backgroundColor: isDark ? '#173428' : '#deefdf', borderColor: isDark ? '#1f4f3a' : '#b8d9bd' }]}>
               <Text style={[styles.metricValue, { color: colors.text }]}>4.9</Text>
               <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>Average Rating</Text>
             </View>
@@ -328,7 +349,7 @@ const HomeScreen: React.FC = () => {
           {featuredPhotographer ? (
             <>
               <Image source={{ uri: featuredPhotographer.avatar_url }} style={styles.heroCardImage} />
-              <View style={[styles.heroCardOverlay, { backgroundColor: isDark ? 'rgba(0,0,0,0.8)' : 'rgba(15, 23, 42, 0.72)' }]}>
+              <View style={[styles.heroCardOverlay, { backgroundColor: isDark ? 'rgba(6,10,18,0.84)' : 'rgba(74, 56, 30, 0.74)' }]}>
                 <Text style={styles.heroCardName}>{featuredPhotographer.name}</Text>
                 <Text style={[styles.heroCardMeta, { color: isDark ? '#94a3b8' : '#cbd5e1' }]}>{featuredPhotographer.location}</Text>
                 <View style={styles.heroCardRatingRow}>
@@ -494,7 +515,7 @@ const HomeScreen: React.FC = () => {
                             style={[styles.filterBox, { backgroundColor: priceRange === item ? colors.accent : colors.card, borderColor: colors.border }]}
                             onPress={() => setPriceRange(item)}
                         >
-                            <Text style={[{ color: priceRange === item ? '#fff' : colors.text, textAlign: 'center', fontWeight: '600' }]}>{item}</Text>
+                            <Text style={[{ color: priceRange === item ? (isDark ? colors.bg : '#fffdf8') : colors.text, textAlign: 'center', fontWeight: '600' }]}>{item}</Text>
                         </TouchableOpacity>
                     ))}
                 </View>
@@ -519,7 +540,7 @@ const HomeScreen: React.FC = () => {
                             ]}
                             onPress={() => setCategory(item)}
                         >
-                            <Text style={[{ color: category === item ? '#fff' : colors.text, fontWeight: '600' }]}>{item}</Text>
+                            <Text style={[{ color: category === item ? (isDark ? colors.bg : '#fffdf8') : colors.text, fontWeight: '600' }]}>{item}</Text>
                         </TouchableOpacity>
                     ))}
                 </View>
@@ -543,7 +564,7 @@ const HomeScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f7f7fb',
+    backgroundColor: '#f4f1eb',
   },
   scrollContent: {
     padding: 16,
@@ -553,14 +574,38 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     gap: 10,
   },
+  livePill: {
+    alignSelf: 'flex-start',
+    marginHorizontal: 2,
+    marginTop: -4,
+    marginBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  liveDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#22c55e',
+  },
+  livePillText: {
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
   quickActionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     borderWidth: 1,
     borderRadius: 999,
-    minHeight: 40,
-    paddingHorizontal: 12,
+    minHeight: 44,
+    paddingHorizontal: 14,
   },
   quickActionText: {
     fontSize: 13,
@@ -570,7 +615,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderRadius: 24,
+    paddingHorizontal: 14,
+    paddingBottom: 12,
   },
   brandRow: {
     flexDirection: 'row',
@@ -578,7 +627,7 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   brandName: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: '800',
     color: '#0f172a',
   },
@@ -587,6 +636,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#f1f5f9',
     padding: 4,
     borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#d8c8ab',
   },
   modeBtn: {
     paddingHorizontal: 14,
@@ -618,8 +669,10 @@ const styles = StyleSheet.create({
   linkPill: {
     paddingHorizontal: 14,
     paddingVertical: 10,
-    borderRadius: 12,
+    borderRadius: 14,
     backgroundColor: '#e2e8f0',
+    borderWidth: 1,
+    borderColor: '#dcccb0',
   },
   linkText: {
     color: '#0f172a',
@@ -632,19 +685,19 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   hero: {
-    borderRadius: 20,
-    padding: 20,
+    borderRadius: 32,
+    padding: 24,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: 20,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.6)',
-    shadowColor: '#a5b4fc',
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 5,
+    shadowColor: '#1d160d',
+    shadowOpacity: 0.18,
+    shadowRadius: 26,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 7,
   },
   heroStacked: {
     flexDirection: 'column',
@@ -659,36 +712,36 @@ const styles = StyleSheet.create({
     paddingRight: 0,
   },
   title: {
-    fontSize: 30,
-    fontWeight: '800',
+    fontSize: 46,
+    fontWeight: '900',
     color: '#0f172a',
-    lineHeight: 36,
-    marginTop: 6,
+    lineHeight: 50,
+    marginTop: 2,
   },
   titleCentered: {
     textAlign: 'center',
   },
   subtitle: {
-    fontSize: 15,
+    fontSize: 16,
     color: '#475569',
-    lineHeight: 22,
-    marginTop: 6,
+    lineHeight: 24,
+    marginTop: 8,
   },
   subtitleCentered: {
     textAlign: 'center',
   },
   searchCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.45)',
-    borderRadius: 16,
-    padding: 14,
+    borderRadius: 24,
+    padding: 16,
     shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 4,
+    shadowOpacity: 0.09,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 9 },
+    elevation: 6,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.6)',
-    marginTop: 14,
+    marginTop: 16,
     overflow: 'hidden',
   },
   searchCardFull: {
@@ -707,13 +760,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#f1f5f9',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    borderWidth: 1,
     borderColor: '#e2e8f0',
     shadowColor: '#000',
-    shadowOpacity: 0.02,
+    shadowOpacity: 0.03,
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 2 },
   },
@@ -757,16 +810,16 @@ const styles = StyleSheet.create({
   },
   ctaButton: {
     backgroundColor: '#0f172a',
-    borderRadius: 14,
-    paddingVertical: 14,
+    borderRadius: 18,
+    paddingVertical: 16,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 4,
-    shadowColor: '#0f172a',
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 6 },
+    shadowColor: '#2f2010',
+    shadowOpacity: 0.16,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 7 },
   },
   ctaText: {
     color: '#fff',
@@ -780,8 +833,8 @@ const styles = StyleSheet.create({
   },
   metricsRow: {
     flexDirection: 'row',
-    marginTop: 10,
-    marginBottom: 4,
+    marginTop: 12,
+    marginBottom: 2,
     justifyContent: 'space-between',
     marginHorizontal: -6,
   },
@@ -790,16 +843,16 @@ const styles = StyleSheet.create({
   },
   metric: {
     backgroundColor: '#fff',
-    padding: 14,
-    borderRadius: 14,
+    padding: 16,
+    borderRadius: 20,
     alignItems: 'flex-start',
     flex: 1,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     borderColor: '#e2e8f0',
     shadowColor: '#000',
-    shadowOpacity: 0.03,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
     marginHorizontal: 6,
     marginBottom: 10,
   },
@@ -827,18 +880,18 @@ const styles = StyleSheet.create({
     borderColor: '#bef264',
   },
   heroCard: {
-    width: 230,
+    width: 236,
     minHeight: 220,
     backgroundColor: '#fff',
-    borderRadius: 18,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 18,
     shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    borderWidth: StyleSheet.hairlineWidth,
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    borderWidth: 1,
     borderColor: '#e2e8f0',
     overflow: 'hidden',
   },
@@ -888,23 +941,25 @@ const styles = StyleSheet.create({
   },
   filtersCard: {
     backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 14,
+    borderRadius: 26,
+    padding: 18,
     marginBottom: 14,
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
+    shadowColor: '#17110a',
+    shadowOpacity: 0.07,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 7 },
+    borderWidth: 1,
+    borderColor: '#e2d3bc',
   },
   getStartedCard: {
-    borderRadius: 16,
+    borderRadius: 20,
     padding: 16,
     borderWidth: 1,
     marginBottom: 16,
     shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.07,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
   },
   getStartedHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
   getStartedTitle: { fontWeight: '800', fontSize: 16 },
@@ -923,6 +978,8 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: '#f1f5f9',
     margin: 4,
+    borderWidth: 1,
+    borderColor: '#e0d2bc',
   },
   filterPillActive: {
     backgroundColor: '#0f172a',
@@ -940,10 +997,10 @@ const styles = StyleSheet.create({
   },
   filterBox: {
     flex: 1,
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 16,
+    borderWidth: 1,
     borderColor: '#e2e8f0',
-    padding: 12,
+    padding: 14,
     backgroundColor: '#f8fafc',
   },
   filterBoxSpacer: {
@@ -980,7 +1037,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#e2e8f0',
     paddingHorizontal: 12,
     paddingVertical: 10,
-    borderRadius: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#dfcfb5',
   },
   lightButtonText: {
     fontWeight: '700',
@@ -994,16 +1053,23 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: '#fff',
-    borderRadius: 16,
+    borderRadius: 20,
     overflow: 'hidden',
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     borderColor: '#e5e7eb',
+    shadowColor: '#20170d',
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
   },
   recommendedSection: {
     marginBottom: 20,
-    backgroundColor: 'rgba(99, 102, 241, 0.05)',
+    backgroundColor: 'rgba(176, 137, 87, 0.08)',
     paddingVertical: 16,
-    borderRadius: 16,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#e3d2b8',
   },
   recommendedHeader: {
     flexDirection: 'row',
@@ -1027,8 +1093,8 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     height: '75%',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
     paddingTop: 16,
     shadowColor: '#000',
     shadowOpacity: 0.1,
@@ -1050,7 +1116,7 @@ const styles = StyleSheet.create({
   iconBtn: {
     padding: 8,
     borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.05)',
+    backgroundColor: 'rgba(176, 137, 87, 0.14)',
   },
   modalScroll: {
     paddingHorizontal: 20,
@@ -1079,7 +1145,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 10,
     top: 10,
-    backgroundColor: '#111827cc',
+    backgroundColor: 'rgba(33, 25, 16, 0.78)',
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
@@ -1098,7 +1164,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#22c55e',
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 10,
+    borderRadius: 999,
   },
   availabilityText: {
     color: '#fff',
@@ -1158,7 +1224,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#0f172a',
     paddingVertical: 12,
-    borderRadius: 12,
+    borderRadius: 14,
     alignItems: 'center',
   },
   buttonPrimaryText: {
@@ -1169,7 +1235,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#e2e8f0',
     paddingVertical: 12,
-    borderRadius: 12,
+    borderRadius: 14,
     alignItems: 'center',
   },
   buttonGhostText: {
@@ -1180,7 +1246,7 @@ const styles = StyleSheet.create({
   buttonSmall: {
     width: 44,
     height: 44,
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',

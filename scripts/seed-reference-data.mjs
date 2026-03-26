@@ -217,8 +217,11 @@ const ensureUsers = async () => {
       email_confirm: true,
       user_metadata: { full_name: spec.full_name },
     });
-    if (created.error && !/already registered|duplicate/i.test(created.error.message)) {
-      throw new Error(`createUser(${email}) failed: ${created.error.message}`);
+    if (created.error) {
+      const msg = String(created.error.message || '');
+      if (!/already registered|already been registered|duplicate/i.test(msg)) {
+        throw new Error(`createUser(${email}) failed: ${msg}`);
+      }
     }
     idMap.set(email, id);
   }

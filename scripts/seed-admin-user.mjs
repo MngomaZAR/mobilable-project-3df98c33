@@ -18,6 +18,7 @@ for (const line of envText.split(/\r?\n/)) {
 const url = env.SUPABASE_URL || env.EXPO_PUBLIC_SUPABASE_URL;
 const key = env.SUPABASE_SERVICE_ROLE_KEY;
 const adminEmail = process.env.ADMIN_EMAIL;
+const adminPassword = process.env.ADMIN_PASSWORD;
 
 if (!url || !key) {
   console.error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in .env.local');
@@ -25,6 +26,10 @@ if (!url || !key) {
 }
 if (!adminEmail) {
   console.error('Missing ADMIN_EMAIL in environment.');
+  process.exit(1);
+}
+if (!adminPassword) {
+  console.error('Missing ADMIN_PASSWORD in environment.');
   process.exit(1);
 }
 
@@ -51,9 +56,23 @@ const findUserByEmail = async (email) => {
   return null;
 };
 
-const user = await findUserByEmail(adminEmail);
+let user = await findUserByEmail(adminEmail);
 if (!user) {
-  console.error(`No auth user found for ${adminEmail}`);
+  const { data: created, error: createError } = await supabase.auth.admin.createUser({
+    email: adminEmail,
+    password: adminPassword,
+    email_confirm: true,
+    user_metadata: { full_name: adminEmail.split('@')[0] },
+  });
+  if (createError) {
+    console.error('Failed to create admin user:', createError.message);
+    process.exit(1);
+  }
+  user = created?.user ?? null;
+}
+
+if (!user) {
+  console.error(`Unable to create or fetch auth user for ${adminEmail}`);
   process.exit(1);
 }
 

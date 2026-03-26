@@ -83,7 +83,7 @@ See **scripts/run-migrations.md** for more detail and troubleshooting.
 
 1. In Supabase Dashboard, go to **Settings** → **API** (left sidebar)
 2. Under **"Project API keys"**, find the **`anon` `public`** key
-3. It should look like: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...` (long JWT token)
+3. It should look like a long token string from Supabase (do not paste or commit it to source control).
 4. Compare with your `.env` file:
    ```
    EXPO_PUBLIC_SUPABASE_KEY=sb_publishable_xUwNDTD_7JYmAJWieIm-ug_nICOE4as

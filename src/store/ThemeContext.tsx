@@ -17,27 +17,27 @@ export type ThemeColors = {
 };
 
 const LIGHT: ThemeColors = {
-  bg: '#f1f5f9',
-  card: '#ffffff',
-  border: '#e2e8f0',
-  text: '#0f172a',
-  textSecondary: '#1e293b',
-  textMuted: '#64748b',
-  accent: '#111827',
+  bg: '#f4f1eb',
+  card: '#fffaf2',
+  border: '#e8dcc6',
+  text: '#2f2a23',
+  textSecondary: '#4f463c',
+  textMuted: '#8d7f6b',
+  accent: '#b08957',
   destructive: '#ef4444',
-  successGreen: '#34c759',
+  successGreen: '#2bb673',
 };
 
 const DARK: ThemeColors = {
-  bg: '#0a0a0f',
-  card: '#1c1c1e',
-  border: '#2d2d2d',
-  text: '#f8fafc',
-  textSecondary: '#e2e8f0',
-  textMuted: '#94a3b8',
-  accent: '#f8fafc',
+  bg: '#090f1e',
+  card: '#121b2f',
+  border: '#2b3750',
+  text: '#f7ecd8',
+  textSecondary: '#dec8a3',
+  textMuted: '#9ba7c0',
+  accent: '#dfbf85',
   destructive: '#ff453a',
-  successGreen: '#30d158',
+  successGreen: '#3ccf8e',
 };
 
 type ThemeContextValue = {

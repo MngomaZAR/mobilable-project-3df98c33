@@ -1,12 +1,21 @@
 export type BookingStatus = 'pending' | 'accepted' | 'in_progress' | 'completed' | 'reviewed' | 'cancelled' | 'declined';
 export type AssignmentState = 'queued' | 'offered' | 'accepted' | 'expired' | 'cancelled';
+export type UserGender = 'female' | 'male' | 'non_binary' | 'prefer_not_to_say' | null;
 
 export type UserRole = 'client' | 'photographer' | 'model' | 'admin' | null;
+
+export type EquipmentProfile = {
+  camera: string[];
+  lenses: string[];
+  lighting: string[];
+  extras: string[];
+};
 
 export interface AppUser {
   id: string;
   email: string;
   role: UserRole;
+  gender?: UserGender;
   verified?: boolean;
   kyc_status?: 'pending' | 'approved' | 'rejected' | null;
   date_of_birth?: string | null;
@@ -52,6 +61,8 @@ export interface Photographer {
   rating: number;
   price_range: string;
   tags: string[];
+  tier_id?: string | null;
+  equipment?: EquipmentProfile | null;
   /** ZAR per hour */
   hourly_rate?: number | null;
   experience_years?: number | null;
@@ -87,6 +98,8 @@ export interface Model {
   price_range: string;
   tags: string[];
   portfolio_urls: string[];
+  tier_id?: string | null;
+  equipment?: EquipmentProfile | null;
   experience_years?: number | null;
   website?: string | null;
   instagram?: string | null;

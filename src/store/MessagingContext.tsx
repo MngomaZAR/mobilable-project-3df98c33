@@ -175,7 +175,7 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       await supabase.from('message_reactions').insert({ message_id: messageId, user_id: currentUser.id, emoji });
       await fetchReactions([messageId]);
     } catch { /* likely duplicate — ignore */ }
-  }, [currentUser]); // eslint-disable-line
+  }, [currentUser]);
 
   const removeReaction = useCallback(async (chatId: string, messageId: string, emoji: string) => {
     if (!currentUser || !hasSupabase) return;
@@ -187,7 +187,7 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         .eq('emoji', emoji);
       await fetchReactions([messageId]);
     } catch { /* silent */ }
-  }, [currentUser]); // eslint-disable-line
+  }, [currentUser]);
 
   const fetchReactions = useCallback(async (messageIds: string[]) => {
     if (!currentUser || !hasSupabase || messageIds.length === 0) return;

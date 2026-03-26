@@ -4,6 +4,7 @@ import { PLACEHOLDER_IMAGE } from './constants';
 
 type ProfileRow = { 
   role?: AppUser['role']; 
+  gender?: AppUser['gender'];
   verified?: boolean;
   kyc_status?: AppUser['kyc_status'];
   date_of_birth?: string | null;
@@ -36,6 +37,8 @@ type PhotographerRow = {
   style: string | null;
   bio: string | null;
   tags: string[] | null;
+  tier_id?: string | null;
+  equipment?: any | null;
   created_at?: string;
   profiles: PhotographerProfileRow[] | null;
 };
@@ -59,6 +62,7 @@ export const mapSupabaseUser = (user: any, fallbackRole: AppUser['role'] = 'clie
   id: user.id,
   email: user.email ?? 'unknown-user',
   role: (profile?.role as AppUser['role']) ?? fallbackRole,
+  gender: (profile?.gender as AppUser['gender']) ?? (profile?.contact_details?.gender as AppUser['gender']) ?? null,
   verified: profile?.verified ?? false,
   kyc_status: profile?.kyc_status ?? (user.user_metadata?.kyc_status as AppUser['kyc_status']) ?? null,
   date_of_birth: profile?.date_of_birth ?? null,
@@ -88,6 +92,8 @@ export const mapPhotographerRow = (row: PhotographerRow): Photographer => {
     bio: profile?.bio ?? row.bio ?? '', // Prefer profile bio
     price_range: row.price_range ?? 'R1500',
     tags: row.tags ?? [],
+    tier_id: row.tier_id ?? null,
+    equipment: row.equipment ?? null,
     created_at: row.created_at,
   };
 };

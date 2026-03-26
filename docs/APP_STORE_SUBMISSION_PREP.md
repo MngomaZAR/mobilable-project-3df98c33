@@ -46,10 +46,17 @@ Declare all relevant data uses:
 Before review submission, verify:
 
 - Account deletion path is available in-app.
-- Payment flow explains PayFast usage and secure verification.
+- Payment flow explains PayFast usage for real-world services and store-compliant digital purchase restrictions.
 - Policy links are visible in-app and match published pages.
+- Store-targeted build uses compliance env lock:
+  - `EXPO_PUBLIC_STORE_TARGET=appstore`
+  - `EXPO_PUBLIC_DISABLE_DIGITAL_PURCHASES=true` (unless IAP is implemented)
+
+## Companion docs
+
+- `docs/PAYMENT_COMPLIANCE_PATH.md`
+- `docs/STORE_SUBMISSION_PACKAGE.md`
 
 ## Scope note
 
 This document is for preparation only. It does **not** submit builds or trigger App Store review.
-

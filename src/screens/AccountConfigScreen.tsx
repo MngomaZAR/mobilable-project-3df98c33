@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppData } from '../store/AppDataContext';
+import { TIER_OPTIONS, CAMERA_OPTIONS, LENS_OPTIONS, LIGHTING_OPTIONS, EXTRA_OPTIONS } from '../constants/bookingOptions';
 import { useTheme } from '../store/ThemeContext';
 import { AppUser } from '../types';
 import { PLACEHOLDER_AVATAR } from '../utils/constants';
@@ -24,7 +25,7 @@ import { PLACEHOLDER_AVATAR } from '../utils/constants';
 
 
 const AccountConfigScreen: React.FC = () => {
-  const { currentUser, updateProfile, updateProfilePicture, saving } = useAppData();
+  const { state, currentUser, updateProfile, updateProfilePicture, updateProviderSettings, saving } = useAppData();
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
@@ -38,6 +39,11 @@ const AccountConfigScreen: React.FC = () => {
   const [website, setWebsite] = useState(currentUser?.website || currentUser?.contact_details?.website || '');
   
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [tierId, setTierId] = useState<string | null>(null);
+  const [cameraSet, setCameraSet] = useState<Set<string>>(new Set());
+  const [lensSet, setLensSet] = useState<Set<string>>(new Set());
+  const [lightingSet, setLightingSet] = useState<Set<string>>(new Set());
+  const [extrasSet, setExtrasSet] = useState<Set<string>>(new Set());
 
   const s = makeStyles(colors, isDark);
 
@@ -48,7 +54,16 @@ const AccountConfigScreen: React.FC = () => {
     setCity(currentUser?.city || '');
     setInstagram(currentUser?.instagram || currentUser?.contact_details?.instagram || '');
     setWebsite(currentUser?.website || currentUser?.contact_details?.website || '');
-  }, [currentUser?.id, currentUser?.full_name, currentUser?.bio, currentUser?.phone, currentUser?.city, currentUser?.instagram, currentUser?.website, currentUser?.contact_details]);
+    const provider = currentUser?.role === 'model'
+      ? state.models.find((m) => m.id === currentUser?.id)
+      : state.photographers.find((p) => p.id === currentUser?.id);
+    setTierId(provider?.tier_id ?? null);
+    const equipment = provider?.equipment ?? null;
+    setCameraSet(new Set(equipment?.camera ?? []));
+    setLensSet(new Set(equipment?.lenses ?? []));
+    setLightingSet(new Set(equipment?.lighting ?? []));
+    setExtrasSet(new Set(equipment?.extras ?? []));
+  }, [currentUser?.id, currentUser?.full_name, currentUser?.bio, currentUser?.phone, currentUser?.city, currentUser?.instagram, currentUser?.website, currentUser?.contact_details, state.models, state.photographers]);
 
   const handleSave = async () => {
     try {
@@ -68,11 +83,29 @@ const AccountConfigScreen: React.FC = () => {
       };
 
       await updateProfile(changes);
+      if (currentUser?.role === 'photographer' || currentUser?.role === 'model') {
+        await updateProviderSettings({
+          tier_id: tierId ?? null,
+          equipment: {
+            camera: Array.from(cameraSet),
+            lenses: Array.from(lensSet),
+            lighting: Array.from(lightingSet),
+            extras: Array.from(extrasSet),
+          },
+        });
+      }
       Alert.alert('Success', 'Profile updated successfully!');
       navigation.goBack();
     } catch (err) {
       Alert.alert('Error', 'Failed to update profile. Please try again.');
     }
+  };
+
+  const toggleSetValue = (set: Set<string>, setter: (next: Set<string>) => void, id: string) => {
+    const next = new Set(set);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setter(next);
   };
 
   const handleUpdateAvatar = async () => {
@@ -234,6 +267,103 @@ const AccountConfigScreen: React.FC = () => {
           </View>
         </View>
 
+        {(currentUser?.role === 'photographer' || currentUser?.role === 'model') && (
+          <View style={s.section}>
+            <Text style={s.sectionTitle}>BOOKING READINESS</Text>
+            <Text style={s.helperText}>Set your tier and equipment to appear in matching results.</Text>
+
+            <View style={s.inputGroup}>
+              <Text style={s.label}>Tier</Text>
+              <View style={s.pillRow}>
+                {TIER_OPTIONS.map((tier) => {
+                  const active = tierId === tier.id;
+                  return (
+                    <TouchableOpacity
+                      key={tier.id}
+                      style={[s.pill, active && s.pillActive]}
+                      onPress={() => setTierId(tier.id)}
+                    >
+                      <Text style={[s.pillText, active && s.pillTextActive]}>{tier.label}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+
+            <View style={s.inputGroup}>
+              <Text style={s.label}>Camera</Text>
+              <View style={s.pillRow}>
+                {CAMERA_OPTIONS.map((option) => {
+                  const active = cameraSet.has(option.id);
+                  return (
+                    <TouchableOpacity
+                      key={option.id}
+                      style={[s.pill, active && s.pillActive]}
+                      onPress={() => toggleSetValue(cameraSet, setCameraSet, option.id)}
+                    >
+                      <Text style={[s.pillText, active && s.pillTextActive]}>{option.label}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+
+            <View style={s.inputGroup}>
+              <Text style={s.label}>Lenses</Text>
+              <View style={s.pillRow}>
+                {LENS_OPTIONS.map((option) => {
+                  const active = lensSet.has(option.id);
+                  return (
+                    <TouchableOpacity
+                      key={option.id}
+                      style={[s.pill, active && s.pillActive]}
+                      onPress={() => toggleSetValue(lensSet, setLensSet, option.id)}
+                    >
+                      <Text style={[s.pillText, active && s.pillTextActive]}>{option.label}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+
+            <View style={s.inputGroup}>
+              <Text style={s.label}>Lighting</Text>
+              <View style={s.pillRow}>
+                {LIGHTING_OPTIONS.map((option) => {
+                  const active = lightingSet.has(option.id);
+                  return (
+                    <TouchableOpacity
+                      key={option.id}
+                      style={[s.pill, active && s.pillActive]}
+                      onPress={() => toggleSetValue(lightingSet, setLightingSet, option.id)}
+                    >
+                      <Text style={[s.pillText, active && s.pillTextActive]}>{option.label}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+
+            <View style={s.inputGroup}>
+              <Text style={s.label}>Extras</Text>
+              <View style={s.pillRow}>
+                {EXTRA_OPTIONS.map((option) => {
+                  const active = extrasSet.has(option.id);
+                  return (
+                    <TouchableOpacity
+                      key={option.id}
+                      style={[s.pill, active && s.pillActive]}
+                      onPress={() => toggleSetValue(extrasSet, setExtrasSet, option.id)}
+                    >
+                      <Text style={[s.pillText, active && s.pillTextActive]}>{option.label}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          </View>
+        )}
+
         <View style={{ height: 40 }} />
       </ScrollView>
       </SafeAreaView>
@@ -320,6 +450,11 @@ const makeStyles = (colors: any, isDark: boolean) =>
     section: {
       marginBottom: 32,
     },
+    helperText: {
+      fontSize: 12,
+      color: colors.textMuted,
+      marginBottom: 12,
+    },
     sectionTitle: {
       fontSize: 12,
       fontWeight: '600',
@@ -329,6 +464,31 @@ const makeStyles = (colors: any, isDark: boolean) =>
     },
     inputGroup: {
       marginBottom: 20,
+    },
+    pillRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+    pill: {
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card,
+    },
+    pillActive: {
+      backgroundColor: colors.accent,
+      borderColor: colors.accent,
+    },
+    pillText: {
+      fontWeight: '700',
+      color: colors.text,
+      fontSize: 12,
+    },
+    pillTextActive: {
+      color: colors.bg,
     },
     labelRow: {
       flexDirection: 'row',

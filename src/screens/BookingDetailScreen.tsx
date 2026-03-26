@@ -64,6 +64,7 @@ const BookingDetailScreen: React.FC = () => {
   }
 
   const currentIndex = steps.indexOf(booking.status);
+  const requiresPayment = !booking.dispatch_request_id;
 
   // Chat with the most relevant person: model > photographer > general chat
   const openChatThread = async () => {
@@ -167,6 +168,14 @@ const BookingDetailScreen: React.FC = () => {
             Booking progress updates automatically after secure confirmation from payments and operations.
           </Text>
         </View>
+        {requiresPayment ? (
+          <View style={[styles.noticeCard, { backgroundColor: isDark ? '#2f1b1b' : '#fff7ed', borderColor: isDark ? '#7f1d1d' : '#fed7aa' }]}>
+            <Text style={[styles.noticeTitle, { color: isDark ? '#fca5a5' : '#c2410c' }]}>Payment required</Text>
+            <Text style={[styles.noticeText, { color: isDark ? '#fecaca' : '#9a3412' }]}>
+              Complete payment to start dispatch and unlock live tracking.
+            </Text>
+          </View>
+        ) : null}
 
         <TouchableOpacity
           style={[styles.secondary, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}
@@ -179,8 +188,9 @@ const BookingDetailScreen: React.FC = () => {
           <TouchableOpacity
             style={[styles.secondary, styles.rowButton, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}
             onPress={() => navigation.navigate('BookingTracking', { bookingId: booking.id })}
+            disabled={requiresPayment}
           >
-            <Text style={[styles.secondaryText, { color: colors.text }]}>Track on map</Text>
+            <Text style={[styles.secondaryText, { color: requiresPayment ? colors.textMuted : colors.text }]}>Track on map</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.secondary, styles.rowButton, styles.rowButtonLast, { backgroundColor: colors.accent }]}

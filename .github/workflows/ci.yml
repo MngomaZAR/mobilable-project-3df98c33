@@ -32,6 +32,9 @@ jobs:
       EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
       EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
       EXPO_PUBLIC_SUPABASE_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_KEY }}
+      EXPO_PUBLIC_STORE_TARGET: development
+      EXPO_PUBLIC_DIGITAL_BILLING_PROVIDER: external
+      EXPO_PUBLIC_DISABLE_DIGITAL_PURCHASES: "false"
     steps:
       - uses: actions/checkout@v4
       - name: Use Node.js 20
@@ -40,5 +43,7 @@ jobs:
           node-version: 20
       - name: Install dependencies
         run: npm ci --no-audit --no-fund --omit=optional
+      - name: Validate required env (CI)
+        run: npm run validate:env
       - name: Run end-to-end tests
         run: npm run test:e2e --silent -- --passWithNoTests

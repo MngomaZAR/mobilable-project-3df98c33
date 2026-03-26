@@ -31,15 +31,15 @@ export const StoryViewer: React.FC<StoryViewerProps> = ({ stories, visible, onCl
   const insets = useSafeAreaInsets();
   const progressAnim = useRef(new Animated.Value(0)).current;
 
-  useEffect(() => {
-    if (visible && stories.length > 0) {
-      startAnimation();
+  function nextStory() {
+    if (currentIndex < stories.length - 1) {
+      setCurrentIndex(currentIndex + 1);
     } else {
-      progressAnim.setValue(0);
+      onClose();
     }
-  }, [visible, currentIndex, stories]);
+  }
 
-  const startAnimation = () => {
+  function startAnimation() {
     progressAnim.setValue(0);
     Animated.timing(progressAnim, {
       toValue: 1,
@@ -51,17 +51,9 @@ export const StoryViewer: React.FC<StoryViewerProps> = ({ stories, visible, onCl
         nextStory();
       }
     });
-  };
+  }
 
-  const nextStory = () => {
-    if (currentIndex < stories.length - 1) {
-      setCurrentIndex(currentIndex + 1);
-    } else {
-      onClose();
-    }
-  };
-
-  const prevStory = () => {
+  function prevStory() {
     if (currentIndex > 0) {
       setCurrentIndex(currentIndex - 1);
     } else {
@@ -70,7 +62,15 @@ export const StoryViewer: React.FC<StoryViewerProps> = ({ stories, visible, onCl
       progressAnim.setValue(0);
       startAnimation();
     }
-  };
+  }
+
+  useEffect(() => {
+    if (visible && stories.length > 0) {
+      startAnimation();
+    } else {
+      progressAnim.setValue(0);
+    }
+  }, [visible, currentIndex, stories, progressAnim]);
 
   const handlePress = (evt: any) => {
     const x = evt.nativeEvent.locationX;

@@ -11,7 +11,8 @@ type BookingRow = {
 
 type PaymentRow = {
   id: string;
-  booking_id: string;
+  booking_id: string | null;
+  customer_id: string | null;
   amount: number | null;
   currency: string | null;
   status: string | null;
@@ -36,9 +37,9 @@ const textHeaders = {
 const payfastBaseUrlRaw =
   Deno.env.get("PAYFAST_BASE_URL")?.trim() || "https://www.payfast.co.za";
 const payfastBaseUrl = payfastBaseUrlRaw.replace(/\/eng\/process\/?$/i, "");
-const merchantId = Deno.env.get("PAYFAST_MERCHANT_ID")?.trim() || "27309011";
-const merchantKey = Deno.env.get("PAYFAST_MERCHANT_KEY")?.trim() || "v5zma443niq7w";
-const passphrase = Deno.env.get("PAYFAST_PASSPHRASE")?.trim() || "Paparazzi12345";
+const merchantId = Deno.env.get("PAYFAST_MERCHANT_ID")?.trim() || "";
+const merchantKey = Deno.env.get("PAYFAST_MERCHANT_KEY")?.trim() || "";
+const passphrase = Deno.env.get("PAYFAST_PASSPHRASE")?.trim() || "";
 const allowedIps = (Deno.env.get("PAYFAST_ITN_ALLOWED_IPS") || "")
   .split(",")
   .map((value) => value.trim())
@@ -98,6 +99,13 @@ const asNumber = (value: string | null | undefined) => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
+const validatePayfastConfig = () => {
+  if (!merchantId || !merchantKey || !passphrase) {
+    return "Missing PAYFAST_MERCHANT_ID, PAYFAST_MERCHANT_KEY, or PAYFAST_PASSPHRASE";
+  }
+  return null;
+};
+
 const loadOrCreatePayment = async (
   bookingId: string,
   customerId: string | null,
@@ -106,7 +114,7 @@ const loadOrCreatePayment = async (
 ) => {
   const { data: existing, error: loadError } = await supabase
     .from("payments")
-    .select("id, booking_id, amount, currency, status")
+    .select("id, booking_id, customer_id, amount, currency, status")
     .eq("booking_id", bookingId)
     .order("created_at", { ascending: false })
     .limit(1)
@@ -126,17 +134,57 @@ const loadOrCreatePayment = async (
       provider: "payfast",
       status: "pending",
     })
-    .select("id, booking_id, amount, currency, status")
+    .select("id, booking_id, customer_id, amount, currency, status")
     .single<PaymentRow>();
 
   if (createError) throw createError;
   return created;
 };
 
+const createStandalonePayment = async (
+  customerId: string | null,
+  amount: number,
+  description: string,
+  referenceType: string,
+  referenceId: string | null
+) => {
+  const { data: created, error } = await supabase
+    .from("payments")
+    .insert({
+      booking_id: null,
+      customer_id: customerId,
+      description,
+      amount,
+      currency: "ZAR",
+      provider: "payfast",
+      status: "pending",
+      provider_payload: {
+        reference_type: referenceType,
+        reference_id: referenceId,
+      },
+    })
+    .select("id, booking_id, customer_id, amount, currency, status")
+    .single<PaymentRow>();
+
+  if (error) throw error;
+  return created;
+};
+
 const handleCreateCheckoutLink = async (req: Request) => {
+  const configError = validatePayfastConfig();
+  if (configError) {
+    return jsonResponse(500, { error: configError });
+  }
+
   const payload = (await req.json().catch(() => null)) as
     | {
+        type?: string;
         booking_id?: string;
+        tip_id?: string;
+        user_id?: string;
+        amount?: number | string;
+        credits?: number | string;
+        item_name?: string;
         return_url?: string;
         cancel_url?: string;
         notify_url?: string;
@@ -144,32 +192,90 @@ const handleCreateCheckoutLink = async (req: Request) => {
     | null;
 
   const bookingId = payload?.booking_id?.trim();
-  if (!bookingId) {
-    return jsonResponse(400, { error: "booking_id is required" });
-  }
+  const tipId = payload?.tip_id?.trim();
+  const checkoutType = payload?.type?.trim().toLowerCase();
 
-  const { data: booking, error: bookingError } = await supabase
-    .from("bookings")
-    .select("id, package_type, client_id")
-    .eq("id", bookingId)
-    .maybeSingle<BookingRow>();
+  let itemName = payload?.item_name?.trim() || "Papzi checkout";
+  let amount = 1200;
+  let payment: PaymentRow;
+  const customFields: Record<string, string> = {};
 
-  if (bookingError) {
-    return jsonResponse(500, { error: bookingError.message });
-  }
-  if (!booking) {
-    return jsonResponse(404, { error: "Booking not found" });
-  }
+  if (bookingId) {
+    const { data: booking, error: bookingError } = await supabase
+      .from("bookings")
+      .select("id, package_type, client_id")
+      .eq("id", bookingId)
+      .maybeSingle<BookingRow>();
 
-  const itemName = booking.package_type?.trim() || "Photography booking";
-  const payment = await loadOrCreatePayment(
-    bookingId,
-    booking.client_id ?? null,
-    itemName
-  );
-  const amount = Number.isFinite(payment.amount ?? NaN)
-    ? Number(payment.amount)
-    : 1200;
+    if (bookingError) {
+      return jsonResponse(500, { error: bookingError.message });
+    }
+    if (!booking) {
+      return jsonResponse(404, { error: "Booking not found" });
+    }
+
+    itemName = booking.package_type?.trim() || "Photography booking";
+    payment = await loadOrCreatePayment(
+      bookingId,
+      booking.client_id ?? null,
+      itemName
+    );
+    amount = Number.isFinite(payment.amount ?? NaN) ? Number(payment.amount) : 1200;
+    customFields.custom_str1 = "booking";
+    customFields.custom_str2 = bookingId;
+  } else if (tipId) {
+    const { data: tip, error: tipError } = await supabase
+      .from("tips")
+      .select("id, sender_id, amount")
+      .eq("id", tipId)
+      .maybeSingle();
+    if (tipError) return jsonResponse(500, { error: tipError.message });
+    if (!tip) return jsonResponse(404, { error: "Tip not found" });
+
+    amount = Number.isFinite(Number(tip.amount))
+      ? Number(tip.amount)
+      : Number(payload?.amount ?? 0);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return jsonResponse(400, { error: "Invalid tip amount" });
+    }
+
+    itemName = payload?.item_name?.trim() || "Creator tip";
+    payment = await createStandalonePayment(
+      tip.sender_id ?? null,
+      amount,
+      itemName,
+      "tip",
+      tipId
+    );
+    customFields.custom_str1 = "tip";
+    customFields.custom_str2 = tipId;
+  } else if (checkoutType === "credits") {
+    const parsedAmount = Number(payload?.amount ?? 0);
+    const parsedCredits = Number(payload?.credits ?? 0);
+    const targetUserId = payload?.user_id?.trim() || null;
+    if (!targetUserId) return jsonResponse(400, { error: "user_id is required for credits checkout" });
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      return jsonResponse(400, { error: "Invalid amount for credits checkout" });
+    }
+    if (!Number.isFinite(parsedCredits) || parsedCredits <= 0) {
+      return jsonResponse(400, { error: "Invalid credits quantity" });
+    }
+
+    amount = parsedAmount;
+    itemName = payload?.item_name?.trim() || `Papzi Credits - ${parsedCredits}`;
+    payment = await createStandalonePayment(
+      targetUserId,
+      amount,
+      itemName,
+      "credits",
+      targetUserId
+    );
+    customFields.custom_str1 = "credits";
+    customFields.custom_str2 = targetUserId;
+    customFields.custom_str3 = String(Math.floor(parsedCredits));
+  } else {
+    return jsonResponse(400, { error: "booking_id, tip_id, or type=credits is required" });
+  }
 
   const params: Record<string, string> = {
     merchant_id: merchantId,
@@ -178,37 +284,36 @@ const handleCreateCheckoutLink = async (req: Request) => {
     cancel_url: payload?.cancel_url?.trim() || "",
     notify_url:
       payload?.notify_url?.trim() ||
-      `${supabaseUrl}/functions/v1/payfast-itn`,
+      `${supabaseUrl}/functions/v1/payfast-handler/notify`,
     m_payment_id: payment.id,
     amount: amount.toFixed(2),
     item_name: itemName,
-    custom_str2: bookingId,
+    ...customFields,
   };
 
   const signature = createSignature(params, passphrase);
-  
-  // Split Payment Setup (30% Platform Fee)
-  // Note: 'setup' is NOT included in the signature as per documentation.
-  const splitSetup = {
-    split_payment: {
-      merchant_id: parseInt(merchantId), // In a real production split this would be the Platform's separate merchant ID
-      percentage: 30, // 30% Platform Fee
-      min: 100,
-      max: 1000000
-    }
-  };
-
-  const urlParams = new URLSearchParams({ 
-    ...params, 
+  const urlParams = new URLSearchParams({
+    ...params,
     signature,
-    setup: JSON.stringify(splitSetup)
   });
   const paymentUrl = `${payfastBaseUrl}/eng/process?${urlParams.toString()}`;
 
-  return jsonResponse(200, { paymentUrl, paymentId: payment.id, bookingId });
+  return jsonResponse(200, {
+    paymentUrl,
+    paymentId: payment.id,
+    bookingId: bookingId ?? null,
+    tipId: tipId ?? null,
+    checkoutType: customFields.custom_str1 ?? "booking",
+  });
 };
 
 const handleItn = async (req: Request) => {
+  const configError = validatePayfastConfig();
+  if (configError) {
+    console.error("payfast-handler: config error", configError);
+    return textOk("OK");
+  }
+
   // PayFast requires a plain 200 response body/header to acknowledge ITN delivery.
   const body = await req.text().catch(() => "");
   const payload = Object.fromEntries(new URLSearchParams(body).entries());
@@ -244,7 +349,7 @@ const handleItn = async (req: Request) => {
 
   const { data: payment, error: paymentError } = await supabase
     .from("payments")
-    .select("id, booking_id, amount, currency, status")
+    .select("id, booking_id, customer_id, amount, currency, status")
     .eq("id", paymentId)
     .maybeSingle<PaymentRow>();
 
@@ -287,14 +392,52 @@ const handleItn = async (req: Request) => {
     return textOk("OK");
   }
 
-  const { error: updateBookingError } = await supabase
-    .from("bookings")
-    .update({ status: "accepted", updated_at: now })
-    .eq("id", payment.booking_id);
+  if (payment.booking_id) {
+    const { error: updateBookingError } = await supabase
+      .from("bookings")
+      .update({ status: "accepted", updated_at: now })
+      .eq("id", payment.booking_id);
 
-  if (updateBookingError) {
-    console.error("payfast-handler: booking update failed", updateBookingError.message);
-    return textOk("OK");
+    if (updateBookingError) {
+      console.error("payfast-handler: booking update failed", updateBookingError.message);
+      return textOk("OK");
+    }
+  }
+
+  const checkoutType = (payload.custom_str1 || "").toLowerCase();
+  if (checkoutType === "tip" && payload.custom_str2) {
+    const { error: updateTipError } = await supabase
+      .from("tips")
+      .update({
+        status: "completed",
+        payment_reference: payload.pf_payment_id || payment.id,
+      })
+      .eq("id", payload.custom_str2);
+
+    if (updateTipError) {
+      console.error("payfast-handler: tip update failed", updateTipError.message);
+      return textOk("OK");
+    }
+  }
+
+  if (checkoutType === "credits" && payload.custom_str2) {
+    const creditsAmount = Number.parseInt(payload.custom_str3 || "", 10);
+    const safeCreditAmount = Number.isFinite(creditsAmount) && creditsAmount > 0
+      ? creditsAmount
+      : Math.max(1, Math.floor(receivedAmount));
+
+    const { error: creditAdjustError } = await supabase.rpc("credits_adjust_for_user", {
+      p_user_id: payload.custom_str2,
+      p_amount: safeCreditAmount,
+      p_reason: "Credits top-up",
+      p_ref_type: "credits_topup",
+      p_ref_id: payment.id,
+    });
+
+    if (creditAdjustError) {
+      console.error("payfast-handler: credits wallet update failed", creditAdjustError.message);
+      return textOk("OK");
+    }
   }
 
   return textOk("OK");

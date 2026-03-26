@@ -15,6 +15,11 @@ jobs:
       APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
       APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+      EXPO_PUBLIC_STORE_TARGET: ${{ secrets.EXPO_PUBLIC_STORE_TARGET }}
+      EXPO_PUBLIC_DIGITAL_BILLING_PROVIDER: ${{ secrets.EXPO_PUBLIC_DIGITAL_BILLING_PROVIDER }}
+      EXPO_PUBLIC_DISABLE_DIGITAL_PURCHASES: ${{ secrets.EXPO_PUBLIC_DISABLE_DIGITAL_PURCHASES }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -34,6 +39,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci --no-audit --no-fund --omit=optional
+
+      - name: Validate required env (release)
+        run: npm run validate:env:release
 
       - name: Generate iOS project
         run: npx expo prebuild --platform ios --non-interactive --clean
@@ -132,4 +140,3 @@ jobs:
             --file "$IPA_PATH" \
             --apiKey "$APPLE_API_KEY_ID" \
             --apiIssuer "$APPLE_API_ISSUER_ID"
-

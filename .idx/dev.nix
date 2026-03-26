@@ -15,7 +15,8 @@
 
   # Sets environment variables in the workspace
   env = {
-    EXPO_PUBLIC_SUPABASE_URL = "https://luxppjfrlsnvtslundfz.supabase.co";
-    EXPO_PUBLIC_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx1eHBwamZybHNudnRzbHVuZGZ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc1OTQ0NTgsImV4cCI6MjA4MzE3MDQ1OH0.avBAxx4aEodtIaY8aUTui1DMWS_nui33tSot8Ofeevs";
+    # Read from host env to avoid committing credentials.
+    EXPO_PUBLIC_SUPABASE_URL = builtins.getEnv "EXPO_PUBLIC_SUPABASE_URL";
+    EXPO_PUBLIC_SUPABASE_ANON_KEY = builtins.getEnv "EXPO_PUBLIC_SUPABASE_ANON_KEY";
   };
 }

@@ -1,7 +1,8 @@
 export default {
   expo: {
     name: "Papzi",
-    slug: "my-simple-expo",
+    slug: "papzshipped",
+    owner: "mavuso",
     scheme: "papzi",
     version: "1.0.0",
     orientation: "portrait",
@@ -67,10 +68,10 @@ export default {
     ],
     extra: {
       eas: {
-        projectId: "2d37d693-bc7a-48c7-9729-3fd3a260245e"
+        projectId: "e0a67604-5f21-4215-9b2f-456ae50c632e"
       },
-      EXPO_PUBLIC_SUPABASE_URL: "https://mizdvqhvspkjayffaqqd.supabase.co",
-      EXPO_PUBLIC_SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1pemR2cWh2c3BramF5ZmZhcXFkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjczNjg0NzksImV4cCI6MjA4Mjk0NDQ3OX0.WBEcxhd0WFpay_J9l2_A1wpfkbpcIUiAQnp1VeMvNjY"
+      EXPO_PUBLIC_SUPABASE_URL: process.env.EXPO_PUBLIC_SUPABASE_URL || "",
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || ""
     }
   }
 };

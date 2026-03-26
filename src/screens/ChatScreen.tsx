@@ -95,7 +95,6 @@ const ChatScreen: React.FC = () => {
       mounted = false;
       if (typeof unsubscribe === 'function') unsubscribe();
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatId]);
 
 

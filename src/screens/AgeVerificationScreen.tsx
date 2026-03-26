@@ -40,14 +40,18 @@ const AgeVerificationScreen: React.FC = () => {
       const isoDob = dob.toISOString().split('T')[0];
       const requiresKyc = currentUser?.role === 'photographer' || currentUser?.role === 'model';
 
-      // Record consent with DOB proof using compliance event + immutable audit
-      await recordComplianceConsent({
-        consent_type: 'terms',
-        enabled: true,
-        legal_basis: 'consent',
-        consent_version: '1.0',
-        context: { age_verified: true, dob: isoDob },
-      });
+      // Consent logging should never block age-gate progression if the edge function is unavailable.
+      try {
+        await recordComplianceConsent({
+          consent_type: 'terms',
+          enabled: true,
+          legal_basis: 'consent',
+          consent_version: '1.0',
+          context: { age_verified: true, dob: isoDob },
+        });
+      } catch (consentErr) {
+        console.warn('Consent logging failed during age verification:', consentErr);
+      }
 
       const nowIso = new Date().toISOString();
       const profilePayload: Record<string, unknown> = {

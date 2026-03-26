@@ -1,15 +1,27 @@
-# EAS Build: Environment Variables
+# EAS / CI Environment Variables (Launch Lock)
 
-For **native builds** (iOS/Android), EAS runs on Expo's servers. Set env vars in:
+These variables are now enforced by `scripts/validate-env.mjs`.
 
-**expo.dev** → Your project → **Project settings** → **Environment variables**
-
-Add these for the `production` and `preview` environments:
+## Required in all CI environments
 
 | Variable | Required | Notes |
-|----------|----------|-------|
+|---|---|---|
 | `EXPO_PUBLIC_SUPABASE_URL` | Yes | Supabase project URL |
 | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Yes | Supabase anon key |
-| `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY` | No | For Android maps (optional) |
 
-**Without these**, the build will complete but the app may show a blank screen or fail to connect to Supabase.
+## Required for release builds (`validate:env:release`)
+
+| Variable | Required | Allowed values | Notes |
+|---|---|---|---|
+| `EXPO_PUBLIC_STORE_TARGET` | Yes | `development`, `web`, `internal`, `appstore`, `play`, `both` | Which storefront this build targets |
+| `EXPO_PUBLIC_DIGITAL_BILLING_PROVIDER` | Yes | `iap`, `external`, `disabled` | Digital billing mode in-app |
+| `EXPO_PUBLIC_DISABLE_DIGITAL_PURCHASES` | Yes | `true` / `false` | Hard kill-switch for digital purchases |
+
+## Compliance guard enforced
+
+For `appstore`, `play`, or `both` targets:
+
+- If `EXPO_PUBLIC_DISABLE_DIGITAL_PURCHASES=false`, then `EXPO_PUBLIC_DIGITAL_BILLING_PROVIDER` must be `iap`.
+- Otherwise, build fails.
+
+This prevents accidental non-compliant store builds that expose external digital checkout.

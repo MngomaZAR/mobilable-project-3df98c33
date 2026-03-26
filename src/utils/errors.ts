@@ -27,14 +27,11 @@ export function logError(context: string, err: unknown): void {
     const message = (err as any)?.stack || (err as any)?.message || String(err);
     // Keep expected network/runtime issues visible without triggering redbox-style noise in development.
     if (isDev) {
-      // eslint-disable-next-line no-console
       console.warn(`[AppError] ${context}:`, message);
       return;
     }
-    // eslint-disable-next-line no-console
     console.error(`[AppError] ${context}:`, message);
   } catch (e) {
-    // eslint-disable-next-line no-console
     console.warn('[AppError] failed to log error', e);
   }
 }

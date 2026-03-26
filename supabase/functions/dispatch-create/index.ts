@@ -16,6 +16,32 @@ const asInt = (v: unknown, fallback: number) => {
   return Number.isFinite(n) ? Math.trunc(n) : fallback;
 };
 
+const toArray = (value: unknown) =>
+  Array.isArray(value) ? value.map((v) => String(v)).filter(Boolean) : [];
+
+const normalizeEquipment = (value: any) => ({
+  camera: toArray(value?.camera),
+  lenses: toArray(value?.lenses),
+  lighting: toArray(value?.lighting),
+  extras: toArray(value?.extras),
+});
+
+const equipmentMatches = (provider: any, required: any) => {
+  if (!required) return true;
+  const providerEq = normalizeEquipment(provider ?? {});
+  const requiredEq = normalizeEquipment(required ?? {});
+  const categories: Array<keyof typeof requiredEq> = ['camera', 'lenses', 'lighting', 'extras'];
+  return categories.every((category) => {
+    const needed = requiredEq[category];
+    if (!needed.length) return true;
+    const available = providerEq[category] ?? [];
+    return needed.every((item: string) => available.includes(item));
+  });
+};
+
+const isOnlineStatus = (value: unknown) =>
+  ['online', 'available', 'active'].includes(String(value ?? '').toLowerCase());
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return json(405, { error: 'Method Not Allowed' });
@@ -40,6 +66,8 @@ Deno.serve(async (req) => {
     const fanoutCount = Math.min(5, Math.max(1, asInt(body?.fanout_count, 1)));
     const intensityLevel = Math.min(5, Math.max(1, asInt(body?.intensity_level, 1)));
     const slaTimeout = Math.min(900, Math.max(15, asInt(body?.sla_timeout_seconds, 90)));
+    const requiredTier = typeof body?.required_tier === 'string' ? body.required_tier : null;
+    const requiredEquipment = body?.required_equipment ?? null;
 
     const requestedLat = Number(body?.requested_lat ?? body?.latitude ?? 0);
     const requestedLng = Number(body?.requested_lng ?? body?.longitude ?? 0);
@@ -124,12 +152,27 @@ Deno.serve(async (req) => {
     const lngCol = 'longitude';
     const { data: candidates } = await admin
       .from(table)
-      .select(`id, ${latCol}, ${lngCol}`)
+      .select(`id, ${latCol}, ${lngCol}, tier_id, equipment`)
       .not(latCol, 'is', null)
       .not(lngCol, 'is', null)
       .limit(50);
 
+    const candidateIds = (candidates ?? []).map((c: any) => c.id).filter(Boolean);
+    const { data: profiles } = await admin
+      .from('profiles')
+      .select('id, kyc_status, age_verified, availability_status')
+      .in('id', candidateIds);
+
+    const eligibleIds = new Set(
+      (profiles ?? [])
+        .filter((p: any) => p?.kyc_status === 'approved' && Boolean(p?.age_verified) && isOnlineStatus(p?.availability_status))
+        .map((p: any) => p.id)
+    );
+
     const ranked = (candidates ?? [])
+      .filter((c: any) => eligibleIds.has(c.id))
+      .filter((c: any) => !requiredTier || String(c?.tier_id ?? '') === requiredTier)
+      .filter((c: any) => equipmentMatches(c?.equipment, requiredEquipment))
       .map((c: any) => {
         const dLat = Number(c[latCol]) - requestedLat;
         const dLng = Number(c[lngCol]) - requestedLng;

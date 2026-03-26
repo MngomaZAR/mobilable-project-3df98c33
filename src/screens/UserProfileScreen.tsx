@@ -9,12 +9,13 @@ import { RootStackParamList } from '../navigation/types';
 import { useAppData } from '../store/AppDataContext';
 import { useTheme } from '../store/ThemeContext';
 import { reportContent } from '../services/reportService';
-import { sendTip } from '../services/monetisationService';
+import { createTipCheckoutLink } from '../services/monetisationService';
 import { toggleFollow } from '../services/followService';
 import { trackEvent } from '../services/analyticsService';
 import { PLACEHOLDER_IMAGE } from '../utils/constants';
 import { getStatusLeaderboard } from '../services/dispatchService';
 import { supabase } from '../config/supabaseClient';
+import { getDefaultPayfastNotifyUrl } from '../config/commercePolicy';
 
 type Route = RouteProp<RootStackParamList, 'UserProfile'>;
 type Navigation = StackNavigationProp<RootStackParamList, 'UserProfile'>;
@@ -89,10 +90,30 @@ const UserProfileScreen: React.FC = () => {
   const handleMessage = async () => {
     const targetId = params.userId;
     const targetName = talent?.name ?? profileFallback?.full_name ?? 'User';
+    const currentUserId = state.currentUser?.id;
+    const hasBooking = currentUserId
+      ? state.bookings.some((booking) =>
+          booking.client_id === currentUserId &&
+          (booking.photographer_id === targetId || booking.model_id === targetId)
+        )
+      : false;
+    if (!hasBooking) {
+      Alert.alert(
+        'Booking required',
+        'Start a booking before messaging this creator.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Book now', onPress: () => navigation.navigate('BookingForm', { photographerId: targetId }) },
+        ]
+      );
+      return;
+    }
     try {
       const convo = await startConversationWithUser(targetId, targetName);
       navigation.navigate('ChatThread', { conversationId: convo.id, title: convo.title });
-    } catch (e) {}
+    } catch (e) {
+      console.warn('Could not open chat thread', e);
+    }
   };
 
   const handleReport = async () => {
@@ -137,15 +158,25 @@ const UserProfileScreen: React.FC = () => {
     if (!talent || !tipAmount || isNaN(Number(tipAmount))) return;
     setIsSendingTip(true);
     try {
-      const result = await sendTip(talent.id, Number(tipAmount));
-      if (result.success) {
-        setTipModalVisible(false);
-        trackEvent('tip_sent', { creator_id: talent.id, amount: Number(tipAmount), source: 'profile' });
-        Alert.alert('Success', `Sent R${tipAmount} tip!`);
-      } else {
-        const errorMsg = result.error.message || 'Unable to send tip.';
-        Alert.alert('Error', errorMsg);
+      const amountNum = Number(tipAmount);
+      if (amountNum < 5) {
+        Alert.alert('Minimum tip', 'Minimum tip is R5.');
+        return;
       }
+
+      const { paymentUrl } = await createTipCheckoutLink({
+        receiverId: talent.id,
+        amount: amountNum,
+        message: '',
+        returnUrl: 'papzi://tips/success',
+        cancelUrl: 'papzi://tips/cancel',
+        notifyUrl: getDefaultPayfastNotifyUrl(),
+      });
+
+      setTipModalVisible(false);
+      trackEvent('tip_sent', { creator_id: talent.id, amount: amountNum, source: 'profile' });
+      await Linking.openURL(paymentUrl);
+      Alert.alert('Checkout opened', 'Complete payment to send your tip.');
     } catch (e: any) {
       Alert.alert('Error', e.message || 'Something went wrong.');
     } finally {

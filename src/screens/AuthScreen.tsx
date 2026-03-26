@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
   Alert,
-  Animated,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -15,7 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppLogo } from '../components/AppLogo';
 import { useAppData } from '../store/AppDataContext';
 import { Ionicons } from '@expo/vector-icons';
-import { UserRole } from '../types';
+import { UserGender, UserRole } from '../types';
 
 type Mode = 'signin' | 'signup';
 
@@ -42,6 +41,7 @@ const friendlyAuthError = (raw: string): string => {
 };
 
 type RoleOption = { role: UserRole; label: string; description: string; icon: string; color: string };
+type GenderOption = { value: Exclude<UserGender, null>; label: string };
 
 const ROLE_OPTIONS: RoleOption[] = [
   {
@@ -65,6 +65,13 @@ const ROLE_OPTIONS: RoleOption[] = [
     icon: 'body',
     color: '#ec4899',
   },
+];
+
+const GENDER_OPTIONS: GenderOption[] = [
+  { value: 'female', label: 'Female' },
+  { value: 'male', label: 'Male' },
+  { value: 'non_binary', label: 'Non-binary' },
+  { value: 'prefer_not_to_say', label: 'Prefer not to say' },
 ];
 
 const AuthScreen: React.FC = () => {
@@ -94,6 +101,11 @@ const AuthScreen: React.FC = () => {
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [dob, setDob] = useState('');
+  const [city, setCity] = useState('');
+  const [phone, setPhone] = useState('');
+  const [gender, setGender] = useState<UserGender>(null);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [confirmedAdult, setConfirmedAdult] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [localMessage, setLocalMessage] = useState<string | null>(null);
   const [localSuccess, setLocalSuccess] = useState<string | null>(null);
@@ -122,6 +134,10 @@ const AuthScreen: React.FC = () => {
           setLocalMessage('Please enter your full name.');
           return;
         }
+        if (!city.trim()) {
+          setLocalMessage('Please enter your city.');
+          return;
+        }
         const dobTrimmed = dob.trim();
         if (!/^\d{4}-\d{2}-\d{2}$/.test(dobTrimmed)) {
           setLocalMessage('Enter date of birth as YYYY-MM-DD.');
@@ -139,17 +155,34 @@ const AuthScreen: React.FC = () => {
           setLocalMessage('You must be 18 or older to create an account.');
           return;
         }
+        if (!gender) {
+          setLocalMessage('Please select your gender.');
+          return;
+        }
+        if (!confirmedAdult || !acceptedTerms) {
+          setLocalMessage('Please confirm age and accept Terms before continuing.');
+          return;
+        }
         if (password.length < 6) {
           setLocalMessage('Your password must be at least 6 characters long.');
           return;
         }
-        const user = await signUp(email.trim(), password, selectedRole, fullName.trim(), dobTrimmed);
+        const user = await signUp(email.trim(), password, selectedRole, fullName.trim(), dobTrimmed, {
+          gender,
+          city: city.trim(),
+          phone: phone.trim(),
+        });
         if (user) {
-          setLocalSuccess('🎉 Account created! Check your email to verify, then sign in.');
+          setLocalSuccess('Account created. Check your email to verify, then sign in.');
           setEmail('');
           setPassword('');
           setFullName('');
           setDob('');
+          setCity('');
+          setPhone('');
+          setGender(null);
+          setAcceptedTerms(false);
+          setConfirmedAdult(false);
           setMode('signin');
         }
       }
@@ -193,13 +226,13 @@ const AuthScreen: React.FC = () => {
           <View style={styles.switcher}>
             <TouchableOpacity
               style={[styles.switchBtn, mode === 'signin' && styles.switchBtnActive]}
-              onPress={() => { setMode('signin'); setLocalMessage(null); setLocalSuccess(null); setFullName(''); setState({ error: null }); }}
+              onPress={() => { setMode('signin'); setLocalMessage(null); setLocalSuccess(null); setFullName(''); setDob(''); setCity(''); setPhone(''); setGender(null); setAcceptedTerms(false); setConfirmedAdult(false); setState({ error: null }); }}
             >
               <Text style={[styles.switchTxt, mode === 'signin' && styles.switchTxtActive]}>Sign In</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.switchBtn, mode === 'signup' && styles.switchBtnActive]}
-              onPress={() => { setMode('signup'); setLocalMessage(null); setLocalSuccess(null); setFullName(''); setState({ error: null }); }}
+              onPress={() => { setMode('signup'); setLocalMessage(null); setLocalSuccess(null); setFullName(''); setDob(''); setCity(''); setPhone(''); setGender(null); setAcceptedTerms(false); setConfirmedAdult(false); setState({ error: null }); }}
             >
               <Text style={[styles.switchTxt, mode === 'signup' && styles.switchTxtActive]}>Create Account</Text>
             </TouchableOpacity>
@@ -267,6 +300,53 @@ const AuthScreen: React.FC = () => {
               </View>
             )}
 
+            {mode === 'signup' && (
+              <View style={[styles.inputRow, { marginTop: 14 }]}>
+                <Ionicons name="location-outline" size={20} color="#64748b" style={styles.inputIcon} />
+                <TextInput
+                  value={city}
+                  onChangeText={setCity}
+                  placeholder="City (e.g. Johannesburg)"
+                  placeholderTextColor="#94a3b8"
+                  style={styles.input}
+                />
+              </View>
+            )}
+
+            {mode === 'signup' && (
+              <View style={[styles.inputRow, { marginTop: 14 }]}>
+                <Ionicons name="call-outline" size={20} color="#64748b" style={styles.inputIcon} />
+                <TextInput
+                  value={phone}
+                  onChangeText={setPhone}
+                  keyboardType="phone-pad"
+                  placeholder="Phone (optional)"
+                  placeholderTextColor="#94a3b8"
+                  style={styles.input}
+                />
+              </View>
+            )}
+
+            {mode === 'signup' && (
+              <View style={styles.genderSection}>
+                <Text style={styles.roleLabel}>Gender</Text>
+                <View style={styles.genderGrid}>
+                  {GENDER_OPTIONS.map((opt) => {
+                    const active = gender === opt.value;
+                    return (
+                      <TouchableOpacity
+                        key={opt.value}
+                        style={[styles.genderChip, active && styles.genderChipActive]}
+                        onPress={() => setGender(opt.value)}
+                      >
+                        <Text style={[styles.genderChipText, active && styles.genderChipTextActive]}>{opt.label}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
+
             <View style={[styles.inputRow, mode === 'signup' ? { marginTop: 14 } : undefined]}>
               <Ionicons name="mail-outline" size={20} color="#64748b" style={styles.inputIcon} />
               <TextInput
@@ -296,6 +376,27 @@ const AuthScreen: React.FC = () => {
                 <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color="#94a3b8" />
               </TouchableOpacity>
             </View>
+
+            {mode === 'signup' && (
+              <View style={styles.complianceWrap}>
+                <TouchableOpacity style={styles.checkboxRow} onPress={() => setConfirmedAdult((v) => !v)}>
+                  <Ionicons name={confirmedAdult ? 'checkbox' : 'square-outline'} size={20} color={confirmedAdult ? '#0f172a' : '#94a3b8'} />
+                  <Text style={styles.checkboxText}>I confirm I am 18 or older.</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.checkboxRow} onPress={() => setAcceptedTerms((v) => !v)}>
+                  <Ionicons name={acceptedTerms ? 'checkbox' : 'square-outline'} size={20} color={acceptedTerms ? '#0f172a' : '#94a3b8'} />
+                  <Text style={styles.checkboxText}>I accept the Terms and Privacy Policy.</Text>
+                </TouchableOpacity>
+                {(selectedRole === 'photographer' || selectedRole === 'model') && (
+                  <View style={styles.kycNotice}>
+                    <Ionicons name="shield-checkmark-outline" size={16} color="#8b5cf6" />
+                    <Text style={styles.kycNoticeText}>
+                      Creator accounts enter KYC review after signup.
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
 
             {/* Error / Success feedback */}
             {displayError ? (
@@ -405,6 +506,19 @@ const styles = StyleSheet.create({
   roleTitle: { fontSize: 13, fontWeight: '700', color: '#0f172a', textAlign: 'center', marginBottom: 4 },
   roleDesc: { fontSize: 10, color: '#94a3b8', textAlign: 'center', lineHeight: 14 },
   roleCheck: { position: 'absolute', top: 6, right: 6, width: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  genderSection: { marginTop: 14 },
+  genderGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
+  genderChip: {
+    borderWidth: 1,
+    borderColor: '#dbe3ee',
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#fff',
+  },
+  genderChipActive: { backgroundColor: '#0f172a', borderColor: '#0f172a' },
+  genderChipText: { color: '#334155', fontWeight: '600', fontSize: 12 },
+  genderChipTextActive: { color: '#fff' },
   // Form
   form: { width: '100%' },
   inputRow: {
@@ -420,6 +534,21 @@ const styles = StyleSheet.create({
   inputIcon: { marginRight: 12 },
   input: { flex: 1, fontSize: 15, color: '#0f172a', height: '100%' },
   eyeBtn: { padding: 6 },
+  complianceWrap: { marginTop: 14, gap: 10 },
+  checkboxRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  checkboxText: { color: '#334155', fontSize: 13, flex: 1, lineHeight: 18 },
+  kycNotice: {
+    marginTop: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#f5f3ff',
+    borderColor: '#ddd6fe',
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 10,
+  },
+  kycNoticeText: { color: '#6d28d9', fontSize: 12, fontWeight: '600', flex: 1 },
   alertBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -462,3 +591,4 @@ const styles = StyleSheet.create({
 });
 
 export default AuthScreen;
+

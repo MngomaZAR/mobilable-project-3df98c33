@@ -1,23 +1,49 @@
-﻿import React, { useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import * as Location from 'expo-location';
-import { MapTracker } from '../components/MapTracker';
+import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from '../navigation/types';
 import { Booking, Photographer } from '../types';
 import { useAppData } from '../store/AppDataContext';
 import { DEFAULT_CAPE_TOWN_COORDINATES, ensureSouthAfricanCoordinates, haversineDistanceKm } from '../utils/geo';
 import { hasSupabase, supabase } from '../config/supabaseClient';
 import { getDispatchState, getEta } from '../services/dispatchService';
+import { MapLibreGL, isMapLibreNativeAvailable } from '../components/MapLibreWrapper';
+import { useTheme } from '../store/ThemeContext';
 
 type Route = RouteProp<RootStackParamList, 'BookingTracking'>;
 type Navigation = StackNavigationProp<RootStackParamList, 'BookingTracking'>;
 
+const MAP_STYLE_LIGHT = 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json';
+const MAP_STYLE_DARK = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
+
+const toStatusLabel = (status: Booking['status']) => {
+  if (status === 'accepted') return 'En Route';
+  if (status === 'in_progress') return 'In Progress';
+  if (status === 'pending') return 'Pending';
+  if (status === 'completed') return 'Complete';
+  if (status === 'cancelled') return 'Cancelled';
+  if (status === 'declined') return 'Declined';
+  return String(status ?? 'Unknown');
+};
+
+const formatTimer = (seconds: number) => {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+};
+
 const BookingTrackingScreen: React.FC = () => {
   const { params } = useRoute<Route>();
   const navigation = useNavigation<Navigation>();
-  const { state, startConversationWithUser, updateBookingClientLocation, updatePhotographerLocation } = useAppData();
+  const insets = useSafeAreaInsets();
+  const { colors, isDark } = useTheme();
+  const { state, startConversationWithUser, updateBookingClientLocation, updatePhotographerLocation, updateBookingStatus, refresh } = useAppData();
+  const cameraRef = useRef<any>(null);
+  const pulse = useRef(new Animated.Value(0)).current;
 
   const booking = useMemo(
     () => state.bookings.find((item) => item.id === params.bookingId),
@@ -43,6 +69,19 @@ const BookingTrackingScreen: React.FC = () => {
   const [assignmentState, setAssignmentState] = useState<string>(booking?.assignment_state || 'queued');
   const [etaMinutes, setEtaMinutes] = useState<number | null>(null);
   const [etaConfidence, setEtaConfidence] = useState<number>(booking?.eta_confidence ?? 0.6);
+  const [countdownSec, setCountdownSec] = useState(0);
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.timing(pulse, {
+        toValue: 1,
+        duration: 1800,
+        useNativeDriver: true,
+      })
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse]);
 
   useEffect(() => {
     if (!booking) return;
@@ -63,28 +102,6 @@ const BookingTrackingScreen: React.FC = () => {
       })
     );
   }, [photographer?.id, photographer?.latitude, photographer?.longitude]);
-
-  if (!booking) {
-    return (
-      <View style={styles.centered}>
-        <Text style={styles.muted}>We could not find that booking.</Text>
-      </View>
-    );
-  }
-
-  const openChatThread = async () => {
-    if (!photographer) {
-      navigation.navigate('Root', { screen: 'Chat' });
-      return;
-    }
-
-    try {
-      const convo = await startConversationWithUser(photographer.id, photographer.name);
-      navigation.navigate('ChatThread', { conversationId: convo.id, title: convo.title });
-    } catch (_err) {
-      navigation.navigate('Root', { screen: 'Chat' });
-    }
-  };
 
   useEffect(() => {
     if (!booking || !state.currentUser) return;
@@ -115,8 +132,8 @@ const BookingTrackingScreen: React.FC = () => {
               setLivePhotographerLocation(next);
               await updatePhotographerLocation(next.latitude, next.longitude);
             }
-          } catch (_err) {
-            // do not crash on transient location sync failures
+          } catch {
+            // keep UI alive on intermittent sync failures
           }
         }
       );
@@ -193,7 +210,11 @@ const BookingTrackingScreen: React.FC = () => {
       try {
         const eta = await getEta(booking.id);
         if (!active) return;
-        if (Number.isFinite(eta.eta_minutes)) setEtaMinutes(Number(eta.eta_minutes));
+        if (Number.isFinite(eta.eta_minutes)) {
+          const mins = Number(eta.eta_minutes);
+          setEtaMinutes(mins);
+          setCountdownSec(Math.max(60, Math.round(mins * 60)));
+        }
         if (eta.eta_confidence != null) setEtaConfidence(Number(eta.eta_confidence));
       } catch {
         // non-fatal
@@ -207,66 +228,216 @@ const BookingTrackingScreen: React.FC = () => {
       clearInterval(timer);
     };
   }, [booking?.id, booking?.dispatch_request_id, booking?.assignment_state, booking?.eta_confidence]);
+
+  useEffect(() => {
+    if (countdownSec <= 0) return;
+    const timer = setInterval(() => {
+      setCountdownSec((prev) => Math.max(0, prev - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [countdownSec]);
+
+  const openChatThread = async () => {
+    if (!photographer) {
+      navigation.navigate('Root', { screen: 'Chat' });
+      return;
+    }
+
+    try {
+      const convo = await startConversationWithUser(photographer.id, photographer.name);
+      navigation.navigate('ChatThread', { conversationId: convo.id, title: convo.title });
+    } catch {
+      navigation.navigate('Root', { screen: 'Chat' });
+    }
+  };
+
+  const cancelBooking = async () => {
+    if (!booking) return;
+    Alert.alert('Cancel Booking', 'Are you sure you want to cancel this booking?', [
+      { text: 'Keep', style: 'cancel' },
+      {
+        text: 'Cancel',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await updateBookingStatus(booking.id, 'cancelled');
+            await refresh();
+            navigation.goBack();
+          } catch (err: any) {
+            Alert.alert('Unable to cancel', err?.message ?? 'Please try again.');
+          }
+        },
+      },
+    ]);
+  };
+
+  if (!booking) {
+    return (
+      <View style={[styles.centered, { backgroundColor: colors.bg }]}>
+        <Text style={[styles.muted, { color: colors.textMuted }]}>We could not find that booking.</Text>
+      </View>
+    );
+  }
+
+  const centerLat = (liveClientLocation.latitude + livePhotographerLocation.latitude) / 2;
+  const centerLng = (liveClientLocation.longitude + livePhotographerLocation.longitude) / 2;
+  const routeGeoJson = {
+    type: 'Feature',
+    geometry: {
+      type: 'LineString',
+      coordinates: [
+        [livePhotographerLocation.longitude, livePhotographerLocation.latitude],
+        [liveClientLocation.longitude, liveClientLocation.latitude],
+      ],
+    },
+    properties: {},
+  };
+
+  const distanceKm = haversineDistanceKm(livePhotographerLocation, liveClientLocation);
+  const fallbackMins = Math.max(3, Math.round((distanceKm / 35) * 60));
+  const activeTimer = countdownSec > 0 ? countdownSec : Math.max(60, (etaMinutes ?? fallbackMins) * 60);
+  const isCancellable = booking.status === 'pending' || booking.status === 'accepted' || booking.status === 'in_progress';
+  const statusLabel = toStatusLabel(booking.status);
+
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>Booking tracking</Text>
-      <Text style={styles.subtitle}>Follow your photographer on OpenStreetMap tiles.</Text>
+    <View style={[styles.container, { backgroundColor: colors.bg }]}>
+      {isMapLibreNativeAvailable ? (
+        <MapLibreGL.MapView
+          style={StyleSheet.absoluteFill}
+          mapStyle={isDark ? MAP_STYLE_DARK : MAP_STYLE_LIGHT}
+          logoEnabled={false}
+          attributionEnabled={false}
+          compassEnabled
+        >
+          <MapLibreGL.Camera
+            ref={cameraRef}
+            centerCoordinate={[centerLng, centerLat]}
+            zoomLevel={11}
+            animationMode="flyTo"
+            animationDuration={700}
+          />
 
-      <MapTracker client={liveClientLocation} photographer={livePhotographerLocation} status={booking.status} />
+          <MapLibreGL.ShapeSource id="track-route" shape={routeGeoJson as any}>
+            <MapLibreGL.LineLayer
+              id="track-route-line"
+              style={{
+                lineColor: isDark ? '#f3d7a7' : '#d5b069',
+                lineWidth: 6,
+                lineOpacity: 0.94,
+                lineCap: 'round',
+                lineJoin: 'round',
+              }}
+            />
+          </MapLibreGL.ShapeSource>
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Status</Text>
-        <Text style={styles.cardValue}>{booking.status.toUpperCase()}</Text>
-        <Text style={[styles.cardMeta, { marginTop: 2 }]}>Assignment: {assignmentState.toUpperCase()}</Text>
-        <Text style={styles.cardMeta}>Status updates automatically after secure booking and payment confirmation.</Text>
-      </View>
+          <MapLibreGL.PointAnnotation
+            id="tracking-client"
+            coordinate={[liveClientLocation.longitude, liveClientLocation.latitude]}
+          >
+            <View style={styles.clientPinWrap}>
+              <Animated.View
+                style={[
+                  styles.clientPinPulse,
+                  {
+                    opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.6, 0] }),
+                    transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.7, 2.2] }) }],
+                  },
+                ]}
+              />
+              <View style={styles.clientPinDot} />
+            </View>
+          </MapLibreGL.PointAnnotation>
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Live ETA</Text>
-        {(() => {
-          const distanceKm = haversineDistanceKm(livePhotographerLocation, liveClientLocation);
-          const avgSpeedKmh = 35; // urban travel average
-          const computedEtaMinutes = Math.max(3, Math.round((distanceKm / avgSpeedKmh) * 60));
-          return (
-            <>
-              <Text style={styles.cardValue}>{etaMinutes ?? computedEtaMinutes} min</Text>
-              <Text style={styles.cardMeta}>
-                ~{distanceKm.toFixed(1)} km away · Confidence {(etaConfidence * 100).toFixed(0)}%
+          <MapLibreGL.PointAnnotation
+            id="tracking-provider"
+            coordinate={[livePhotographerLocation.longitude, livePhotographerLocation.latitude]}
+          >
+            <View style={[styles.providerPin, { borderColor: '#f5e3be' }]}>
+              {photographer?.avatar_url ? (
+                <Animated.Image source={{ uri: photographer.avatar_url }} style={styles.providerAvatar} />
+              ) : (
+                <Ionicons name="person" size={22} color="#0f172a" />
+              )}
+            </View>
+          </MapLibreGL.PointAnnotation>
+        </MapLibreGL.MapView>
+      ) : (
+        <View style={[styles.webFallback, { backgroundColor: isDark ? '#0d1628' : '#eef2f7' }]}>
+          <Ionicons name="map-outline" size={28} color={isDark ? '#a5b4cf' : '#56627a'} />
+          <Text style={[styles.webFallbackTitle, { color: colors.text }]}>Live tracking map is available on iOS and Android builds</Text>
+          <Text style={[styles.webFallbackText, { color: colors.textSecondary }]}>
+            Client: {liveClientLocation.latitude.toFixed(4)}, {liveClientLocation.longitude.toFixed(4)}
+          </Text>
+          <Text style={[styles.webFallbackText, { color: colors.textSecondary }]}>
+            Provider: {livePhotographerLocation.latitude.toFixed(4)}, {livePhotographerLocation.longitude.toFixed(4)}
+          </Text>
+        </View>
+      )}
+
+      <SafeAreaView edges={['top']} style={styles.overlayTop} pointerEvents="box-none">
+        <View style={[styles.statusPill, { marginTop: insets.top + 2, backgroundColor: isDark ? 'rgba(14, 24, 42, 0.88)' : 'rgba(255, 252, 246, 0.92)', borderColor: isDark ? '#2c3c5e' : '#e9dcc7' }]}>
+          <View style={styles.liveDot} />
+          <Text style={[styles.statusText, { color: colors.text }]}>
+            {statusLabel} - {assignmentState.replace('_', ' ')}
+          </Text>
+        </View>
+      </SafeAreaView>
+
+      <View style={[styles.bottomPanelWrap, { paddingBottom: Math.max(insets.bottom + 6, 18) }]}>
+        <View style={[styles.bottomPanel, { backgroundColor: isDark ? 'rgba(12, 20, 38, 0.94)' : 'rgba(255, 250, 241, 0.96)', borderColor: isDark ? '#2a3755' : '#e8dbc4' }]}>
+          <View style={[styles.avatarFloat, { backgroundColor: isDark ? '#101c34' : '#fff5e6', borderColor: isDark ? '#f0dbb7' : '#e7cb93' }]}>
+            {photographer?.avatar_url ? (
+              <Animated.Image source={{ uri: photographer.avatar_url }} style={styles.avatarFloatImage} />
+            ) : (
+              <Ionicons name="person" size={22} color={colors.text} />
+            )}
+          </View>
+
+          <Text style={[styles.timerText, { color: colors.text }]}>{formatTimer(activeTimer)}</Text>
+          <Text style={[styles.timerSub, { color: colors.textMuted }]}>
+            {distanceKm.toFixed(1)} km away | Confidence {(etaConfidence * 100).toFixed(0)}%
+          </Text>
+
+          <View style={styles.actionRow}>
+            <TouchableOpacity
+              style={[
+                styles.actionBtn,
+                {
+                  backgroundColor: isDark ? '#1a2948' : '#f8f1e4',
+                  borderColor: isDark ? '#32466d' : '#e3d2b4',
+                },
+              ]}
+              onPress={openChatThread}
+            >
+              <Ionicons name="chatbubble-outline" size={17} color={colors.textSecondary} />
+              <Text style={[styles.actionBtnText, { color: colors.textSecondary }]}>Chat</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.actionBtn,
+                {
+                  backgroundColor: isDark ? '#1a2038' : '#f9f2e6',
+                  borderColor: isDark ? '#3a4667' : '#e4d4b7',
+                },
+              ]}
+              onPress={cancelBooking}
+              disabled={!isCancellable}
+            >
+              <Ionicons name="close-circle-outline" size={17} color={isCancellable ? '#d97706' : colors.textMuted} />
+              <Text style={[styles.actionBtnText, { color: isCancellable ? '#d97706' : colors.textMuted }]}>
+                {isCancellable ? 'Cancel' : 'Locked'}
               </Text>
-            </>
-          );
-        })()}
+            </TouchableOpacity>
+          </View>
+        </View>
       </View>
-
-      <View style={styles.row}>
-        <TouchableOpacity
-          style={[styles.secondary, styles.rowButton]}
-          onPress={() => navigation.navigate('BookingDetail', { bookingId: booking.id })}
-        >
-          <Text style={styles.secondaryText}>Booking detail</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.secondary, styles.rowButton]}
-          onPress={() => navigation.navigate('Payment', { bookingId: booking.id })}
-        >
-          <Text style={styles.secondaryText}>Payments</Text>
-        </TouchableOpacity>
-      </View>
-
-      <TouchableOpacity
-        style={styles.secondary}
-        onPress={openChatThread}
-      >
-        <Text style={styles.secondaryText}>Open chat</Text>
-      </TouchableOpacity>
-    </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    padding: 16,
-    backgroundColor: '#f7f7fb',
+    flex: 1,
   },
   centered: {
     flex: 1,
@@ -275,65 +446,155 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   muted: {
-    color: '#475569',
+    fontSize: 14,
+    fontWeight: '600',
   },
-  title: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#0f172a',
-  },
-  subtitle: {
-    marginTop: 4,
-    marginBottom: 12,
-    color: '#475569',
-  },
-  card: {
-    marginTop: 14,
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#e5e7eb',
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 4 },
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#0f172a',
-  },
-  cardValue: {
-    marginTop: 4,
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#0f172a',
-  },
-  cardMeta: {
-    marginTop: 4,
-    color: '#475569',
-  },
-  row: {
-    flexDirection: 'row',
-    marginTop: 12,
-  },
-  rowButton: {
+  webFallback: {
     flex: 1,
-    marginRight: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    gap: 8,
   },
-  secondary: {
-    marginTop: 10,
-    padding: 12,
-    borderRadius: 12,
-    backgroundColor: '#e2e8f0',
+  webFallbackTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  webFallbackText: {
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  overlayTop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
     alignItems: 'center',
   },
-  secondaryText: {
-    color: '#0f172a',
+  statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  liveDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#22c55e',
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  clientPinWrap: {
+    width: 30,
+    height: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  clientPinPulse: {
+    position: 'absolute',
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#3b82f6',
+  },
+  clientPinDot: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#2563eb',
+    borderWidth: 3,
+    borderColor: '#ffffff',
+  },
+  providerPin: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: '#ffffff',
+    borderWidth: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  providerAvatar: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+  },
+  bottomPanelWrap: {
+    position: 'absolute',
+    left: 14,
+    right: 14,
+    bottom: 0,
+  },
+  bottomPanel: {
+    borderRadius: 26,
+    borderWidth: 1,
+    paddingTop: 40,
+    paddingHorizontal: 18,
+    paddingBottom: 14,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.16,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 10,
+  },
+  avatarFloat: {
+    position: 'absolute',
+    top: -28,
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    borderWidth: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  avatarFloatImage: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+  },
+  timerText: {
+    fontSize: 40,
+    fontWeight: '900',
+    letterSpacing: 1,
+  },
+  timerSub: {
+    marginTop: 2,
+    marginBottom: 14,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  actionRow: {
+    width: '100%',
+    flexDirection: 'row',
+    gap: 12,
+  },
+  actionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 22,
+    borderWidth: 1,
+    paddingVertical: 12,
+    gap: 8,
+  },
+  actionBtnText: {
+    fontSize: 20,
     fontWeight: '700',
   },
 });
 
 export default BookingTrackingScreen;
-

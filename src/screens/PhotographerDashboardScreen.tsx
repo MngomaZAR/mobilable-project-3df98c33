@@ -42,6 +42,7 @@ const PhotographerDashboardScreen: React.FC = () => {
   const pendingBookings = useMemo(() => bookings.filter(b => b.status === 'pending'), [bookings]);
   const acceptedBookings = useMemo(() => bookings.filter(b => b.status === 'accepted'), [bookings]);
   const completedBookings = useMemo(() => bookings.filter(b => b.status === 'completed'), [bookings]);
+  const kycApproved = (currentUser?.kyc_status ?? state.currentUser?.kyc_status) === 'approved';
 
   const earnings = useMemo(() => {
     const earningsRows = state.earnings ?? [];
@@ -112,11 +113,33 @@ const PhotographerDashboardScreen: React.FC = () => {
     return () => { mounted = false; subscription?.remove(); };
   }, [activeBooking?.status, currentUser, isOnline, updatePhotographerLocation]);
 
+  useEffect(() => {
+    if (!kycApproved) {
+      setIsOnline(false);
+    }
+  }, [kycApproved]);
+
+  const handleOnlineToggle = async (nextValue: boolean) => {
+    if (!kycApproved) {
+      Alert.alert('Verification required', 'Complete KYC to go online and accept jobs.');
+      return;
+    }
+    setIsOnline(nextValue);
+    try {
+      await supabase
+        .from('profiles')
+        .update({ availability_status: nextValue ? 'online' : 'offline' })
+        .eq('id', currentUser?.id);
+    } catch {
+      // soft-fail
+    }
+  };
+
   const handleAcceptBooking = async (bookingId: string) => {
     setAcceptingId(bookingId);
     try {
       await acceptBooking(bookingId);
-      Alert.alert('✅ Booking Accepted', 'The client has been notified. Navigate to their location.');
+      Alert.alert('Booking Accepted', 'The client has been notified. Navigate to their location.');
     } catch (err: any) {
       Alert.alert('Error', err?.message ?? 'Could not accept booking.');
     } finally {
@@ -153,11 +176,11 @@ const PhotographerDashboardScreen: React.FC = () => {
             });
             if (escrowError) {
               console.error('Escrow release failed:', escrowError);
-              // Non-blocking — escrow can be retried manually from admin dashboard
+              // Non-blocking - escrow can be retried manually from admin dashboard
             }
 
             await refreshBookings();
-            Alert.alert('✅ Session Complete', 'Your earnings have been recorded.');
+            Alert.alert('Session Complete', 'Your earnings have been recorded.');
           } catch (err: any) {
             Alert.alert('Error', err?.message ?? 'Could not mark as complete.');
           }
@@ -224,7 +247,8 @@ const PhotographerDashboardScreen: React.FC = () => {
             </Text>
             <Switch
               value={isOnline}
-              onValueChange={setIsOnline}
+              onValueChange={handleOnlineToggle}
+              disabled={!kycApproved}
               trackColor={{ false: '#334155', true: '#10b981' }}
               thumbColor="#fff"
             />
@@ -243,7 +267,7 @@ const PhotographerDashboardScreen: React.FC = () => {
             <Text style={[s.statValue, { color: pendingBookings.length > 0 ? '#f59e0b' : '#fff' }]}>
               {pendingBookings.length}
             </Text>
-            <Text style={s.statMeta}>{acceptedBookings.length} active · {completedBookings.length} done</Text>
+            <Text style={s.statMeta}>{acceptedBookings.length} active | {completedBookings.length} done</Text>
           </View>
         </View>
 
@@ -283,7 +307,7 @@ const PhotographerDashboardScreen: React.FC = () => {
         {pendingBookings.length > 0 && (
           <View style={s.card}>
             <View style={s.cardHeader}>
-              <Text style={s.cardTitle}>🔔 New Requests</Text>
+              <Text style={s.cardTitle}>New Requests</Text>
               <Text style={s.cardMeta}>{pendingBookings.length} waiting</Text>
             </View>
             {pendingBookings.map(booking => (
@@ -324,7 +348,7 @@ const PhotographerDashboardScreen: React.FC = () => {
         {/* Active accepted bookings */}
         {acceptedBookings.length > 0 && (
           <View style={s.card}>
-            <Text style={s.cardTitle}>📍 Active Bookings</Text>
+            <Text style={s.cardTitle}>Active Bookings</Text>
             {acceptedBookings.map(booking => (
               <View key={booking.id} style={s.activeCard}>
                 <View style={{ flex: 1 }}>
@@ -358,7 +382,7 @@ const PhotographerDashboardScreen: React.FC = () => {
         {/* Live map */}
         <View style={s.mapCard}>
           <View style={s.cardHeader}>
-            <Text style={s.cardTitle}>📍 Live Route</Text>
+            <Text style={s.cardTitle}>Live Route</Text>
             {activeBooking && (
               <Text style={[s.cardMeta, { color: activeBooking.status === 'accepted' ? '#10b981' : '#f59e0b' }]}>
                 {activeBooking.status.toUpperCase()}
@@ -450,7 +474,7 @@ const PhotographerDashboardScreen: React.FC = () => {
             <View style={s.earningsRow}><Text style={s.earningsLabel}>Gross Revenue</Text><Text style={s.earningsValue}>R{earnings.total.toLocaleString('en-ZA')}</Text></View>
             <View style={s.earningsRow}><Text style={s.earningsLabel}>Platform Fee (30%)</Text><Text style={[s.earningsValue, { color: '#ef4444' }]}>-R{earnings.commission.toLocaleString('en-ZA')}</Text></View>
             <View style={[s.earningsRow, s.earningsTotalRow]}><Text style={s.earningsTotalLabel}>Your Net Pay</Text><Text style={s.earningsTotalValue}>R{earnings.net.toLocaleString('en-ZA')}</Text></View>
-            <Text style={s.earningsMeta}>{earnings.count} completed session{earnings.count !== 1 ? 's' : ''} · Payout within 5 business days</Text>
+            <Text style={s.earningsMeta}>{earnings.count} completed session{earnings.count !== 1 ? 's' : ''} | Payout within 5 business days</Text>
             <TouchableOpacity style={s.earningsCTA} onPress={() => { setShowEarningsDetail(false); navigation.navigate('EarningsDashboard'); }}>
               <Text style={s.earningsCTAText}>Full Earnings Report</Text>
             </TouchableOpacity>

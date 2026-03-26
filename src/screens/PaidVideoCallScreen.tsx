@@ -15,6 +15,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Alert,
   Dimensions,
+  Linking,
   Modal,
   Platform,
   StatusBar,
@@ -28,9 +29,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { sendTip } from '../services/monetisationService';
+import { createTipCheckoutLink } from '../services/monetisationService';
 import { trackEvent } from '../services/analyticsService';
 import { supabase } from '../config/supabaseClient';
+import { getDefaultPayfastNotifyUrl } from '../config/commercePolicy';
 
 const { width, height } = Dimensions.get('window');
 
@@ -56,7 +58,8 @@ try {
 // Sub-component: active room video views (rendered inside LiveKitRoom context)
 // ─────────────────────────────────────────────────────────────────────────────
 const RoomParticipants: React.FC<{ creatorId: string }> = ({ creatorId }) => {
-  const tracks = useTracks ? useTracks() : [];
+  const useTracksSafe = useTracks ?? (() => []);
+  const tracks = useTracksSafe();
   const remoteTracks = tracks.filter((t: any) => !t.participant?.isLocal && t.source === Track?.Source?.Camera);
   const localTrack = tracks.find((t: any) => t.participant?.isLocal && t.source === Track?.Source?.Camera);
 
@@ -183,17 +186,30 @@ const PaidVideoCallScreen: React.FC = () => {
     setIsTipping(true);
     try {
       const amountNum = Number(tipAmount);
-      const result = await sendTip(resolvedCreatorId, amountNum, 'Great video call!');
-      if (result.success) {
-        setTipModalVisible(false);
-        trackEvent('tip_sent', { creator_id: resolvedCreatorId, amount: amountNum, source: 'video_call' });
-        Platform.OS === 'web'
-          ? alert('Tip sent!')
-          : Alert.alert('Success', `R${amountNum} tip sent!`);
-      } else {
-        const msg = (result as any).error?.message || 'Unable to send tip.';
-        Platform.OS === 'web' ? alert(msg) : Alert.alert('Error', msg);
+      if (amountNum < 5) {
+        Alert.alert('Minimum tip', 'Minimum tip is R5.');
+        return;
       }
+
+      const { paymentUrl } = await createTipCheckoutLink({
+        receiverId: resolvedCreatorId,
+        amount: amountNum,
+        message: 'Great video call!',
+        returnUrl: 'papzi://tips/success',
+        cancelUrl: 'papzi://tips/cancel',
+        notifyUrl: getDefaultPayfastNotifyUrl(),
+      });
+
+      setTipModalVisible(false);
+      trackEvent('tip_sent', {
+        creator_id: resolvedCreatorId,
+        amount: amountNum,
+        source: 'video_call',
+      });
+      await Linking.openURL(paymentUrl);
+      Platform.OS === 'web'
+        ? alert('Checkout opened. Complete payment to send your tip.')
+        : Alert.alert('Checkout opened', 'Complete payment to send your tip.');
     } catch (e: any) {
       const friendly = e.message || 'Something went wrong.';
       Platform.OS === 'web' ? alert(friendly) : Alert.alert('Error', friendly);

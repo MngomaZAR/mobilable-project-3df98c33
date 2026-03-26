@@ -1,7 +1,10 @@
 ﻿import { createClient } from '@supabase/supabase-js';
+import { loadLocalEnv } from './lib/load-env-file.mjs';
 
-const SUPABASE_URL = 'https://mizdvqhvspkjayffaqqd.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1pemR2cWh2c3BramF5ZmZhcXFkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjczNjg0NzksImV4cCI6MjA4Mjk0NDQ3OX0.WBEcxhd0WFpay_J9l2_A1wpfkbpcIUiAQnp1VeMvNjY';
+loadLocalEnv();
+
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.EXPO_PUBLIC_SUPABASE_URL || '';
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
 
 const results = [];
 const push = (name, ok, details = '') => results.push({ name, ok, details });
@@ -23,6 +26,15 @@ const tokenClient = TEST_ACCESS_TOKEN
 
 const run = async () => {
   try {
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+      push(
+        'Config',
+        false,
+        'Missing SUPABASE_URL/EXPO_PUBLIC_SUPABASE_URL or SUPABASE_ANON_KEY/EXPO_PUBLIC_SUPABASE_ANON_KEY',
+      );
+      return;
+    }
+
     // Public endpoint smoke (no auth required by current function logic)
     const publicBoard = await publicClient.functions.invoke('status-leaderboard', { body: { city: 'Cape Town', limit: 20 } });
     push('Public status-leaderboard', !publicBoard.error, publicBoard.error?.message || 'ok');
@@ -155,3 +167,4 @@ const run = async () => {
 };
 
 run();
+

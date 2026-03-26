@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import {
+  Alert,
   Image,
   Pressable,
   RefreshControl,
@@ -85,8 +86,30 @@ const HomeScreen: React.FC = () => {
   const role = state.currentUser?.role ?? 'client';
   const showGetStarted = !loading && !!state.currentUser && state.bookings.length === 0;
 
+  const profileById = useMemo(() => {
+    const map = new Map<string, any>();
+    (state.profiles ?? []).forEach((p: any) => {
+      if (p?.id) map.set(p.id, p);
+    });
+    return map;
+  }, [state.profiles]);
+
+  const hasProfileData = profileById.size > 0;
+  const isTalentEligible = (item: any) => {
+    if (!hasProfileData) return true;
+    const profile = profileById.get(item.id);
+    const kycApproved = profile?.kyc_status === 'approved' || profile?.verified === true;
+    const ageVerified = Boolean(profile?.age_verified);
+    const hasTier = String(item?.tier_id ?? item?.price_range ?? '').trim().length > 0;
+    const hasEquipment = Array.isArray(item?.equipment?.camera)
+      ? item.equipment.camera.length > 0
+      : Array.isArray(item?.tags) && item.tags.length > 0;
+    return kycApproved && ageVerified && hasTier && hasEquipment;
+  };
+
   const filteredTalent = useMemo(() => {
     let list = discoveryMode === 'photographers' ? [...state.photographers] : [...state.models];
+    list = list.filter(isTalentEligible);
 
     if (category !== 'All Categories') {
       const categoryLower = toSafeLower(category);
@@ -140,13 +163,45 @@ const HomeScreen: React.FC = () => {
     parentNavigation?.navigate('BookingForm', { photographerId: photographer.id });
   };
 
+  const hasBookingWithTalent = (talentId: string) => {
+    const userId = state.currentUser?.id;
+    if (!userId) return false;
+    return state.bookings.some((booking) => {
+      const isTalentMatch = booking.photographer_id === talentId || booking.model_id === talentId;
+      const isClientMatch = booking.client_id === userId;
+      return isTalentMatch && isClientMatch;
+    });
+  };
+
+  const ensureBookingFirst = (talent: any) => {
+    if (hasBookingWithTalent(talent.id)) return true;
+    Alert.alert(
+      'Booking required',
+      'To keep things safe, start a booking before messaging.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Book now', onPress: () => (discoveryMode === 'models' ? startModelBooking(talent) : startBooking(talent)) },
+      ]
+    );
+    return false;
+  };
+
   const handleMessage = async (item: any) => {
+    if (!ensureBookingFirst(item)) return;
     try {
       const convo = await startConversationWithUser(item.id, item.name);
       parentNavigation?.navigate('ChatThread', { conversationId: convo.id, title: convo.title });
     } catch (e) {
       console.warn('Failed to start chat:', e);
     }
+  };
+
+  const handlePrimaryCTA = (mode: 'photographers' | 'models') => {
+    setDiscoveryMode(mode);
+    if (!location.trim()) {
+      setLocation(state.currentUser?.city ?? '');
+    }
+    handleSmartSearch();
   };
 
   const renderCard = (item: any) => (
@@ -239,22 +294,8 @@ const HomeScreen: React.FC = () => {
           <Text style={[styles.brandName, { color: colors.text }]}>Papzi</Text>
         </View>
         <View style={styles.navActions}>
-          <View style={[styles.modeToggle, { backgroundColor: colors.bg }]}>
-            <TouchableOpacity 
-              style={[styles.modeBtn, discoveryMode === 'photographers' && [styles.modeBtnActive, { backgroundColor: colors.card }]]} 
-              onPress={() => setDiscoveryMode('photographers')}
-            >
-              <Text style={[styles.modeBtnText, { color: colors.textMuted }, discoveryMode === 'photographers' && [styles.modeBtnTextActive, { color: colors.text }]]}>Photographers</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={[styles.modeBtn, discoveryMode === 'models' && [styles.modeBtnActive, { backgroundColor: colors.card }]]} 
-              onPress={() => setDiscoveryMode('models')}
-            >
-              <Text style={[styles.modeBtnText, { color: colors.textMuted }, discoveryMode === 'models' && [styles.modeBtnTextActive, { color: colors.text }]]}>Models</Text>
-            </TouchableOpacity>
-          </View>
           <TouchableOpacity 
-            style={[styles.linkPill, styles.navActionSpacer, { backgroundColor: colors.card }]}
+            style={[styles.linkPill, { backgroundColor: colors.card }]}
             onPress={() => parentNavigation?.navigate('Notifications')}
           >
             <Ionicons name="notifications-outline" size={20} color={colors.text} />
@@ -265,6 +306,30 @@ const HomeScreen: React.FC = () => {
       <View style={[styles.livePill, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <View style={styles.liveDot} />
         <Text style={[styles.livePillText, { color: colors.text }]}>Live | {onlineNearbyCount} online nearby</Text>
+      </View>
+
+      <View style={[styles.entryCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <Text style={[styles.entryTitle, { color: colors.text }]}>What do you want to book?</Text>
+        <Text style={[styles.entrySubtitle, { color: colors.textSecondary }]}>Start with a single request. Everything else flows from there.</Text>
+        <View style={styles.entryActions}>
+          <TouchableOpacity
+            style={[styles.entryPrimary, { backgroundColor: colors.accent }]}
+            onPress={() => handlePrimaryCTA('photographers')}
+          >
+            <Ionicons name="camera-outline" size={18} color={isDark ? colors.bg : colors.card} />
+            <Text style={[styles.entryPrimaryText, { color: isDark ? colors.bg : colors.card }]}>Book Photographer</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.entrySecondary, { borderColor: colors.border }]}
+            onPress={() => handlePrimaryCTA('models')}
+          >
+            <Ionicons name="sparkles-outline" size={18} color={colors.text} />
+            <Text style={[styles.entrySecondaryText, { color: colors.text }]}>Book Model</Text>
+          </TouchableOpacity>
+        </View>
+        <TouchableOpacity style={[styles.entryGhost, { backgroundColor: colors.bg }]} onPress={() => navigation.navigate('Feed')}>
+          <Text style={[styles.entryGhostText, { color: colors.text }]}>Explore</Text>
+        </TouchableOpacity>
       </View>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickActionsRail}>
@@ -597,6 +662,67 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     letterSpacing: 0.2,
+  },
+  entryCard: {
+    borderRadius: 22,
+    borderWidth: 1,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#1f2937',
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
+  },
+  entryTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  entrySubtitle: {
+    fontSize: 13,
+    marginTop: 4,
+    marginBottom: 12,
+  },
+  entryActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  entryPrimary: {
+    flex: 1,
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 14,
+  },
+  entryPrimaryText: {
+    fontWeight: '800',
+    fontSize: 14,
+  },
+  entrySecondary: {
+    flex: 1,
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    backgroundColor: 'transparent',
+  },
+  entrySecondaryText: {
+    fontWeight: '800',
+    fontSize: 14,
+  },
+  entryGhost: {
+    marginTop: 10,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  entryGhostText: {
+    fontWeight: '700',
   },
   quickActionBtn: {
     flexDirection: 'row',

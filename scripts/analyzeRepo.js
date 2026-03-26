@@ -4,7 +4,7 @@
  *
  * Generates a consolidated report covering:
  * 1. Recursive file listings for key source directories.
- * 2. ESLint-powered unused export detection.
+ * 2. Static unused export detection.
  * 3. Duplicate function/constant name checks.
  * 4. React useEffect dependency array validation.
  * 5. Supabase real-time subscription coverage.
@@ -12,17 +12,19 @@
 
 const fs = require('fs/promises');
 const path = require('path');
-const { ESLint } = require('eslint');
 const ts = require('typescript');
 
 const ROOT_DIR = process.cwd();
 const TARGET_DIRECTORIES = [
   'src/components',
   'src/screens',
-  'src/hooks',
-  'src/context',
+  'src/navigation',
+  'src/services',
+  'src/store',
+  'src/config',
+  'src/constants',
+  'src/types',
   'src/utils',
-  'src/integrations',
 ];
 const ANALYZED_EXTENSIONS = new Set(['.js', '.jsx', '.ts', '.tsx']);
 const SUPABASE_COMPONENT_DIRS = new Set(['src/components', 'src/screens']);
@@ -35,8 +37,7 @@ async function main() {
     );
 
     const fileLoader = createSourceFileLoader();
-
-    const lintReport = await detectUnusedExports(analyzableRecords.map((record) => record.absolute));
+    const unusedExportReport = await detectUnusedExports(analyzableRecords, fileLoader);
     const duplicateSymbols = await findDuplicateNames(analyzableRecords, fileLoader.getSourceFile);
     const missingEffectDeps = await findMissingEffectDependencies(analyzableRecords, fileLoader.getSourceFile);
     const supabaseReport = await evaluateSupabaseSubscriptions(analyzableRecords, fileLoader.readText);
@@ -47,11 +48,11 @@ async function main() {
       duplicateSymbols,
       missingUseEffectDependencies: missingEffectDeps,
       supabaseSubscriptions: supabaseReport,
-      unusedExportFindings: lintReport.issues,
+      unusedExportFindings: unusedExportReport.issues,
     };
 
-    if (lintReport.error) {
-      report.unusedExportError = lintReport.error;
+    if (unusedExportReport.error) {
+      report.unusedExportError = unusedExportReport.error;
     }
 
     printReport(report);
@@ -70,12 +71,7 @@ async function gatherDirectoryInfo() {
     const exists = await pathExists(absoluteDir);
 
     if (!exists) {
-      directoryReports.push({
-        directory,
-        exists: false,
-        files: [],
-        fileCount: 0,
-      });
+      directoryReports.push({ directory, exists: false, files: [], fileCount: 0 });
       continue;
     }
 
@@ -102,57 +98,95 @@ async function gatherDirectoryInfo() {
   return { directoryReports, fileRecords };
 }
 
-async function detectUnusedExports(absoluteFiles) {
-  if (!absoluteFiles.length) {
+async function detectUnusedExports(records, fileLoader) {
+  if (!records.length) {
     return { issues: [], note: 'No analyzable files found.' };
   }
 
   try {
-    const eslint = new ESLint({
-      useEslintrc: false,
-      errorOnUnmatchedPattern: false,
-      baseConfig: {
-        parser: '@typescript-eslint/parser',
-        parserOptions: {
-          ecmaVersion: 'latest',
-          sourceType: 'module',
-          ecmaFeatures: { jsx: true },
-        },
-        env: { es2021: true, browser: true, node: true },
-        plugins: ['import'],
-        settings: {
-          'import/resolver': {
-            node: {
-              extensions: ['.js', '.jsx', '.ts', '.tsx'],
-            },
-          },
-        },
-        rules: {
-          'import/no-unused-modules': ['error', { unusedExports: true }],
-        },
-      },
+    const files = [];
+    for (const record of records) {
+      const text = await fileLoader.readText(record.absolute);
+      const sourceFile = await fileLoader.getSourceFile(record.absolute);
+      files.push({ ...record, text, sourceFile });
+    }
+
+    const exports = [];
+    files.forEach((file) => {
+      exports.push(...collectNamedExports(file.sourceFile));
     });
 
-    const lintResults = await eslint.lintFiles(absoluteFiles);
     const issues = [];
+    for (const exported of exports) {
+      const matcher = new RegExp(`\\b${escapeRegExp(exported.name)}\\b`);
+      const usedOutsideDeclaringFile = files.some(
+        (file) => file.absolute !== exported.file && matcher.test(file.text)
+      );
 
-    lintResults.forEach((result) => {
-      result.messages
-        .filter((message) => message.ruleId === 'import/no-unused-modules')
-        .forEach((message) => {
-          issues.push({
-            file: toPosixPath(path.relative(ROOT_DIR, result.filePath)),
-            line: message.line,
-            column: message.column,
-            message: message.message,
-          });
+      if (!usedOutsideDeclaringFile) {
+        issues.push({
+          file: toPosixPath(path.relative(ROOT_DIR, exported.file)),
+          line: exported.line,
+          column: exported.column,
+          message: `Export '${exported.name}' appears unused outside its declaring module.`,
         });
-    });
+      }
+    }
 
     return { issues };
   } catch (error) {
     return { issues: [], error: error.message };
   }
+}
+
+function collectNamedExports(sourceFile) {
+  const exported = [];
+  const push = (name, node) => {
+    const location = getNodeLocation(sourceFile, node);
+    exported.push({
+      name,
+      file: sourceFile.fileName,
+      line: location.line,
+      column: location.column,
+    });
+  };
+
+  sourceFile.forEachChild((node) => {
+    if (ts.isVariableStatement(node) && hasExportKeyword(node)) {
+      node.declarationList.declarations.forEach((declaration) => {
+        if (ts.isIdentifier(declaration.name)) {
+          push(declaration.name.text, declaration.name);
+        }
+      });
+      return;
+    }
+
+    if (ts.isFunctionDeclaration(node) && node.name && hasExportKeyword(node) && !hasDefaultKeyword(node)) {
+      push(node.name.text, node.name);
+      return;
+    }
+
+    if (ts.isClassDeclaration(node) && node.name && hasExportKeyword(node) && !hasDefaultKeyword(node)) {
+      push(node.name.text, node.name);
+      return;
+    }
+
+    if (ts.isTypeAliasDeclaration(node) && hasExportKeyword(node)) {
+      push(node.name.text, node.name);
+      return;
+    }
+
+    if (ts.isInterfaceDeclaration(node) && hasExportKeyword(node)) {
+      push(node.name.text, node.name);
+      return;
+    }
+
+    if (ts.isEnumDeclaration(node) && hasExportKeyword(node)) {
+      push(node.name.text, node.name);
+    }
+  });
+
+  return exported;
 }
 
 async function findDuplicateNames(records, getSourceFile) {
@@ -215,10 +249,7 @@ async function findMissingEffectDependencies(records, getSourceFile) {
     visit(sourceFile);
 
     if (fileIssues.length) {
-      issues.push({
-        file: record.relative,
-        hooks: fileIssues,
-      });
+      issues.push({ file: record.relative, hooks: fileIssues });
     }
   }
 
@@ -257,7 +288,6 @@ function createSourceFileLoader() {
       const text = await fs.readFile(filePath, 'utf8');
       textCache.set(filePath, text);
     }
-
     return textCache.get(filePath);
   };
 
@@ -267,7 +297,6 @@ function createSourceFileLoader() {
       const sourceFile = ts.createSourceFile(filePath, text, ts.ScriptTarget.Latest, true, getScriptKind(filePath));
       sourceFileCache.set(filePath, sourceFile);
     }
-
     return sourceFileCache.get(filePath);
   };
 
@@ -311,17 +340,15 @@ function extractTopLevelSymbols(sourceFile) {
 
   sourceFile.forEachChild((node) => {
     if (ts.isFunctionDeclaration(node) && node.name) {
-      recordSymbol(node.name.text, 'function', hasExportModifier(node), node.name);
+      recordSymbol(node.name.text, 'function', hasExportKeyword(node), node.name);
       return;
     }
 
     if (ts.isVariableStatement(node)) {
       const isConst = (node.declarationList.flags & ts.NodeFlags.Const) === ts.NodeFlags.Const;
-      if (!isConst) {
-        return;
-      }
+      if (!isConst) return;
 
-      const exported = hasExportModifier(node);
+      const exported = hasExportKeyword(node);
       node.declarationList.declarations.forEach((declaration) => {
         if (ts.isIdentifier(declaration.name)) {
           recordSymbol(declaration.name.text, 'const', exported, declaration.name);
@@ -333,13 +360,12 @@ function extractTopLevelSymbols(sourceFile) {
   return symbols;
 }
 
-function hasExportModifier(node) {
-  return Boolean(
-    node.modifiers?.some(
-      (modifier) =>
-        modifier.kind === ts.SyntaxKind.ExportKeyword || modifier.kind === ts.SyntaxKind.DefaultKeyword
-    )
-  );
+function hasExportKeyword(node) {
+  return Boolean(node.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword));
+}
+
+function hasDefaultKeyword(node) {
+  return Boolean(node.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword));
 }
 
 function findNearestComponentName(node) {
@@ -380,16 +406,18 @@ function getNodeLocation(sourceFile, node) {
 
 function getScriptKind(filePath) {
   const ext = path.extname(filePath).toLowerCase();
-
   if (ext === '.tsx') return ts.ScriptKind.TSX;
   if (ext === '.ts') return ts.ScriptKind.TS;
   if (ext === '.jsx') return ts.ScriptKind.JSX;
-
   return ts.ScriptKind.JS;
 }
 
 function toPosixPath(filePath) {
   return filePath.split(path.sep).join('/');
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function printReport(report) {
@@ -405,18 +433,18 @@ function printReport(report) {
     }
 
     console.log(`- ${dir.directory}: ${dir.fileCount} file(s)`);
-    dir.files.forEach((filePath) => console.log(`    • ${filePath}`));
+    dir.files.forEach((filePath) => console.log(`    - ${filePath}`));
   });
 
   console.log('');
-  console.log('2) Unused Exports (ESLint import/no-unused-modules)');
+  console.log('2) Unused Exports (Static scan)');
   if (report.unusedExportError) {
-    console.log(`- ESLint error: ${report.unusedExportError}`);
+    console.log(`- Analyzer error: ${report.unusedExportError}`);
   } else if (!report.unusedExportFindings.length) {
     console.log('- No unused exports detected.');
   } else {
     report.unusedExportFindings.forEach((issue) => {
-      console.log(`- ${issue.file}:${issue.line}:${issue.column} — ${issue.message}`);
+      console.log(`- ${issue.file}:${issue.line}:${issue.column} - ${issue.message}`);
     });
   }
 
@@ -430,7 +458,7 @@ function printReport(report) {
       item.occurrences.forEach((occurrence) => {
         const exportLabel = occurrence.exported ? 'exported' : 'local';
         console.log(
-          `    • ${occurrence.file}:${occurrence.line}:${occurrence.column} (${occurrence.kind}, ${exportLabel})`
+          `    - ${occurrence.file}:${occurrence.line}:${occurrence.column} (${occurrence.kind}, ${exportLabel})`
         );
       });
     });
@@ -445,7 +473,7 @@ function printReport(report) {
       console.log(`- ${fileIssue.file}`);
       fileIssue.hooks.forEach((hook) => {
         const componentLabel = hook.component ? ` in ${hook.component}` : '';
-        console.log(`    • Line ${hook.line}, Col ${hook.column}${componentLabel}`);
+        console.log(`    - Line ${hook.line}, Col ${hook.column}${componentLabel}`);
       });
     });
   }
@@ -457,7 +485,7 @@ function printReport(report) {
   console.log(`- Without subscriptions: ${report.supabaseSubscriptions.withoutSubscriptions.length}`);
   if (report.supabaseSubscriptions.withoutSubscriptions.length) {
     report.supabaseSubscriptions.withoutSubscriptions.forEach((filePath) => {
-      console.log(`    • ${filePath}`);
+      console.log(`    - ${filePath}`);
     });
   }
 

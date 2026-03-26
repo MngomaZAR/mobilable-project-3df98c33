@@ -17,8 +17,9 @@ const CreatorAnalyticsScreen: React.FC = () => {
   const { state } = useAppData();
   const { bookings } = useBooking();
   const [period, setPeriod] = useState<'7d' | '30d' | 'all'>('30d');
+  const [nowMs] = useState(() => Date.now());
   const rangeDays = period === '7d' ? 7 : period === '30d' ? 30 : 90;
-  const cutoffMs = Date.now() - (rangeDays * 24 * 60 * 60 * 1000);
+  const cutoffMs = nowMs - (rangeDays * 24 * 60 * 60 * 1000);
 
   const earnings = useMemo(() => {
     const earningRows = (state.earnings ?? []).filter((e: any) => {

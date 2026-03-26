@@ -16,7 +16,6 @@ import { ThemeProvider, useTheme } from './src/store/ThemeContext';
 import { AuthProvider } from './src/store/AuthContext';
 import { MessagingProvider } from './src/store/MessagingContext';
 import { BookingProvider } from './src/store/BookingContext';
-import { SocialProvider } from './src/store/SocialContext';
 import { logo } from './src/assets/images';
 import { Ionicons } from '@expo/vector-icons';
 import { Animated, Text, StyleSheet, View } from 'react-native';
@@ -212,16 +211,14 @@ export default function App() {
           <AppDataProvider>
             <AuthProvider>
               <BookingProvider>
-                <SocialProvider>
-                  <BootGuard>
-                    <ErrorBoundary>
-                      {/* MessagingProvider is INSIDE AppDataProvider so it has auth context */}
-                      <MessagingProvider>
-                        <AppContent />
-                      </MessagingProvider>
-                    </ErrorBoundary>
-                  </BootGuard>
-                </SocialProvider>
+                <BootGuard>
+                  <ErrorBoundary>
+                    {/* MessagingProvider is INSIDE AppDataProvider so it has auth context */}
+                    <MessagingProvider>
+                      <AppContent />
+                    </MessagingProvider>
+                  </ErrorBoundary>
+                </BootGuard>
               </BookingProvider>
             </AuthProvider>
           </AppDataProvider>

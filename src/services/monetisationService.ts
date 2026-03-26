@@ -1,4 +1,5 @@
 import { supabase } from '../config/supabaseClient';
+import { assertDigitalPurchasesAllowed } from '../config/commercePolicy';
 import { Earning, Subscription, Tip } from '../types';
 import { Result, success, failure } from '../utils/result';
 
@@ -27,6 +28,12 @@ export const sendTip = async (
   amount: number,
   message: string = ''
 ): Promise<Result<Tip>> => {
+  try {
+    assertDigitalPurchasesAllowed();
+  } catch (policyError: any) {
+    return failure(new Error(policyError?.message || 'Digital purchases are unavailable in this build.'));
+  }
+
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return failure(new Error('Not authenticated'));
   if (amount <= 0) return failure(new Error('Tip amount must be positive'));
@@ -64,6 +71,8 @@ export const createTipCheckoutLink = async (params: {
   cancelUrl: string;
   notifyUrl: string;
 }): Promise<{ paymentUrl: string; tipId: string }> => {
+  assertDigitalPurchasesAllowed();
+
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
 
@@ -104,6 +113,12 @@ export const subscribeToCreator = async (
   creatorId: string,
   tierId: string
 ): Promise<Result<Subscription>> => {
+  try {
+    assertDigitalPurchasesAllowed();
+  } catch (policyError: any) {
+    return failure(new Error(policyError?.message || 'Subscriptions are unavailable in this build.'));
+  }
+
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return failure(new Error('Not authenticated'));
 

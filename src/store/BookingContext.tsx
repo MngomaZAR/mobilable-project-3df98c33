@@ -1,19 +1,24 @@
-import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { supabase, hasSupabase } from '../config/supabaseClient';
-import { Booking, BookingStatus, AppUser } from '../types';
-import { logError, formatErrorMessage } from '../utils/errors';
-import { useAuth } from './AuthContext';
-import { trackEvent } from '../services/analyticsService';
-import { uid } from '../utils/id';
+import React, { createContext, useCallback, useContext, useMemo } from 'react';
+import { Booking, BookingStatus } from '../types';
+import { useAppData } from './AppDataContext';
 
 type CreateBookingInput = {
-  talent_id: string; // Unified talent ID (Model or Photographer)
+  talent_id: string;
   talent_type?: 'photographer' | 'model';
   booking_date: string;
   package_type: string;
   notes?: string;
   base_amount?: number;
   travel_amount?: number;
+  start_datetime?: string;
+  end_datetime?: string;
+  latitude?: number;
+  longitude?: number;
+  fanout_count?: number;
+  intensity_level?: number;
+  quote_token?: string | null;
+  assignment_state?: 'queued' | 'offered' | 'accepted' | 'expired' | 'cancelled';
+  dispatch_request_id?: string | null;
 };
 
 type BookingContextValue = {
@@ -30,190 +35,67 @@ type BookingContextValue = {
 const BookingContext = createContext<BookingContextValue | undefined>(undefined);
 
 export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { currentUser } = useAuth();
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  const sendBookingStatusEmail = useCallback(
-    async (booking: Booking, status: BookingStatus) => {
-      if (!currentUser?.id) return;
-      if (!['accepted', 'completed'].includes(status)) return;
-
-      const providerId = booking.model_id ?? booking.photographer_id;
-      const targetUserId = currentUser.id === booking.client_id ? providerId : booking.client_id;
-      if (!targetUserId || targetUserId === currentUser.id) return;
-
-      const { error } = await supabase.functions.invoke('send-app-email', {
-        body: {
-          action: 'booking_status',
-          booking_id: booking.id,
-          status,
-          user_id: targetUserId,
-          booking_date: booking.booking_date ?? null,
-        },
-      });
-      if (error) throw error;
-    },
-    [currentUser?.id],
-  );
+  const {
+    state,
+    loading,
+    refresh,
+    createBooking: createBookingAppData,
+    updateBookingStatus: updateBookingStatusAppData,
+  } = useAppData();
 
   const fetchBookings = useCallback(async () => {
-    if (!hasSupabase || !currentUser) return;
-    setLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('bookings')
-        .select(`*, model_id, photographer:profiles!photographer_id(id, full_name, avatar_url), client:profiles!client_id(id, full_name, avatar_url)`)
-        .or(`client_id.eq.${currentUser.id},photographer_id.eq.${currentUser.id},model_id.eq.${currentUser.id}`)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setBookings(data.map((row: any) => ({
-        id: row.id,
-        photographer_id: row.photographer_id,
-        model_id: row.model_id ?? null,
-        client_id: row.client_id,
-        booking_date: row.booking_date,
-        package_type: row.package_type,
-        notes: row.notes,
-        status: row.status,
-        created_at: row.created_at,
-        total_amount: row.price_total,
-        commission_amount: row.commission_amount,
-        payout_amount: row.photographer_payout,
-        photographer: row.photographer ? { id: row.photographer.id, name: row.photographer.full_name, avatar_url: row.photographer.avatar_url, city: row.photographer.city || null } : undefined,
-        client: row.client ? { id: row.client.id, name: row.client.full_name, avatar_url: row.client.avatar_url, city: row.client.city || null } : undefined
-      })));
-    } catch (err) {
-      logError('Booking:fetch', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [currentUser]);
-
-  const createBooking = async (payload: CreateBookingInput) => {
-    if (!currentUser) throw new Error('Auth required');
-    
-    // Mission Critical: Behavioral Science - Haptics on start would go here
-    const total = (payload.base_amount || 1200) + (payload.travel_amount || 0);
-    const commission = Math.round(total * 0.30);
-    const payout = total - commission;
-    trackEvent('booking_initiated', { talent_id: payload.talent_id, amount: total });
-
-    try {
-      const isModel = payload.talent_type === 'model';
-      const { data, error } = await supabase
-        .from('bookings')
-        .insert({
-          client_id: currentUser.id,
-          photographer_id: payload.talent_id, // Talent ID (kept for compatibility)
-          model_id: isModel ? payload.talent_id : null,
-          booking_date: payload.booking_date.split('|')[0]?.trim(),
-          package_type: payload.package_type,
-          notes: payload.notes,
-          status: 'pending',
-          price_total: total,
-          commission_amount: commission,
-          photographer_payout: payout
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-      const newBooking: Booking = {
-        id: data.id,
-        photographer_id: data.photographer_id,
-        model_id: data.model_id ?? null,
-        client_id: data.client_id,
-        booking_date: data.booking_date,
-        package_type: data.package_type,
-        notes: data.notes,
-        status: data.status,
-        created_at: data.created_at,
-        total_amount: data.price_total,
-        commission_amount: data.commission_amount,
-        payout_amount: data.photographer_payout,
-        user_latitude: null,
-        user_longitude: null
-      };
-      setBookings(prev => [newBooking, ...prev]);
-      trackEvent('booking_completed', { booking_id: data.id, talent_id: data.photographer_id });
-      return newBooking;
-    } catch (err) {
-      logError('Booking:create', err);
-      throw err;
-    }
-  };
-
-  const updateBookingStatus = async (bookingId: string, status: BookingStatus) => {
-    try {
-      const currentBooking = bookings.find((b) => b.id === bookingId);
-      const { error } = await supabase.from('bookings').update({ status }).eq('id', bookingId);
-      if (error) throw error;
-      setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status } : b));
-
-      if (currentBooking) {
-        try {
-          await sendBookingStatusEmail({ ...currentBooking, status }, status);
-        } catch (mailErr) {
-          logError('Booking:statusEmail', mailErr);
-        }
-      }
-    } catch (err) {
-      logError('Booking:updateStatus', err);
-      throw err;
-    }
-  };
-
-  const acceptBooking = async (bookingId: string) => {
-    await updateBookingStatus(bookingId, 'accepted');
-    trackEvent('booking_accepted', { booking_id: bookingId });
-  };
-
-  const declineBooking = async (bookingId: string) => {
-    await updateBookingStatus(bookingId, 'declined');
-    trackEvent('booking_declined', { booking_id: bookingId });
-  };
+    await refresh();
+  }, [refresh]);
 
   const refreshBookings = fetchBookings;
 
-  useEffect(() => {
-    if (!hasSupabase || !currentUser?.id) {
-      setBookings([]);
-      return;
-    }
+  const createBooking = useCallback(
+    async (payload: CreateBookingInput) =>
+      createBookingAppData({
+        talent_id: payload.talent_id,
+        talent_type: payload.talent_type,
+        booking_date: payload.booking_date,
+        package_type: payload.package_type,
+        notes: payload.notes,
+        base_amount: payload.base_amount,
+        travel_amount: payload.travel_amount,
+        start_datetime: payload.start_datetime,
+        end_datetime: payload.end_datetime,
+        latitude: payload.latitude,
+        longitude: payload.longitude,
+        fanout_count: payload.fanout_count,
+        intensity_level: payload.intensity_level,
+        quote_token: payload.quote_token ?? undefined,
+        assignment_state: payload.assignment_state,
+        dispatch_request_id: payload.dispatch_request_id,
+      }),
+    [createBookingAppData]
+  );
 
-    let active = true;
-    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+  const updateBookingStatus = useCallback(
+    async (bookingId: string, status: BookingStatus) => {
+      await updateBookingStatusAppData(bookingId, status);
+    },
+    [updateBookingStatusAppData]
+  );
 
-    const refreshNow = () => {
-      if (!active) return;
-      fetchBookings().catch((err) => logError('Booking:liveRefresh', err));
-    };
+  const acceptBooking = useCallback(
+    async (bookingId: string) => {
+      await updateBookingStatusAppData(bookingId, 'accepted');
+    },
+    [updateBookingStatusAppData]
+  );
 
-    refreshNow();
+  const declineBooking = useCallback(
+    async (bookingId: string) => {
+      await updateBookingStatusAppData(bookingId, 'declined');
+    },
+    [updateBookingStatusAppData]
+  );
 
-    const channel = supabase
-      .channel(`bookings-live-${currentUser.id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, async (payload) => {
-        const row = (payload.new || payload.old) as any;
-        if (!row) return;
-        if (row.client_id !== currentUser.id && row.photographer_id !== currentUser.id && row.model_id !== currentUser.id) return;
-        if (refreshTimer) clearTimeout(refreshTimer);
-        refreshTimer = setTimeout(refreshNow, 200);
-      })
-      .subscribe();
-
-    return () => {
-      active = false;
-      if (refreshTimer) clearTimeout(refreshTimer);
-      supabase.removeChannel(channel);
-    };
-  }, [currentUser?.id, fetchBookings]);
-
-  return (
-    <BookingContext.Provider value={{
-      bookings,
+  const value = useMemo<BookingContextValue>(
+    () => ({
+      bookings: state.bookings,
       loading,
       fetchBookings,
       refreshBookings,
@@ -221,10 +103,20 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       updateBookingStatus,
       acceptBooking,
       declineBooking,
-    }}>
-      {children}
-    </BookingContext.Provider>
+    }),
+    [
+      state.bookings,
+      loading,
+      fetchBookings,
+      refreshBookings,
+      createBooking,
+      updateBookingStatus,
+      acceptBooking,
+      declineBooking,
+    ]
   );
+
+  return <BookingContext.Provider value={value}>{children}</BookingContext.Provider>;
 };
 
 export const useBooking = () => {

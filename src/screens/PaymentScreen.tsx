@@ -6,6 +6,8 @@ import { PaymentWebView } from '../components/PaymentWebView';
 import { RootStackParamList } from '../navigation/types';
 import { useAppData } from '../store/AppDataContext';
 import { createPayfastCheckoutLink } from '../services/paymentService';
+import { createDispatch } from '../services/dispatchService';
+import { updateBookingDispatchInDb } from '../services/bookingService';
 import HowItWorksCard from '../components/HowItWorksCard';
 
 type Route = RouteProp<RootStackParamList, 'Payment'>;
@@ -22,14 +24,51 @@ const PaymentScreen: React.FC = () => {
   const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState('Create a signed link to start PayFast checkout.');
   const [loadingLink, setLoadingLink] = useState(false);
+  const [dispatching, setDispatching] = useState(false);
+  const [dispatchStarted, setDispatchStarted] = useState(false);
 
   const bookingId = params?.bookingId;
+  const dispatchIntent = params?.dispatchIntent;
   const checkoutItemName = booking?.package_type ?? 'Photography booking';
   const checkoutAmount = booking?.total_amount ? `R${booking.total_amount.toLocaleString()}` : 'R1,200';
 
-  const handleSuccess = () => {
+  const handleSuccess = async () => {
     setStatusMessage('Payment completed. Waiting for secure confirmation...');
     Alert.alert('Payment received', 'Checkout completed. Your booking status will update after confirmation.');
+
+    if (!dispatchIntent || dispatchStarted || !bookingId || !booking) return;
+    if (booking.dispatch_request_id) return;
+
+    try {
+      setDispatching(true);
+      setStatusMessage('Starting dispatch now that payment is complete...');
+      const dispatch = await createDispatch({
+        booking_id: bookingId,
+        service_type: dispatchIntent.serviceType,
+        fanout_count: dispatchIntent.fanoutCount,
+        intensity_level: dispatchIntent.intensityLevel,
+        sla_timeout_seconds: 90,
+        requested_lat: dispatchIntent.requestedLat,
+        requested_lng: dispatchIntent.requestedLng,
+        base_amount: dispatchIntent.baseAmount,
+        required_tier: dispatchIntent.tierId,
+        required_equipment: dispatchIntent.equipment,
+      });
+
+      await updateBookingDispatchInDb(bookingId, {
+        dispatch_request_id: dispatch.dispatch_request?.id ?? null,
+        assignment_state: (dispatch.assignment_state as any) ?? 'offered',
+        quote_token: dispatch.quote?.quote_token ?? null,
+        eta_confidence: dispatch.eta_confidence ?? null,
+      });
+
+      setDispatchStarted(true);
+      setStatusMessage('Dispatch started. Waiting for the first accepted offer.');
+    } catch (error: any) {
+      setStatusMessage(error?.message || 'Dispatch failed to start.');
+    } finally {
+      setDispatching(false);
+    }
   };
 
   const handleError = (message: string) => {
@@ -107,6 +146,26 @@ const PaymentScreen: React.FC = () => {
           <Text style={styles.summaryValue}>{checkoutAmount}</Text>
         </View>
       </View>
+      {dispatchIntent ? (
+        <View style={styles.summaryCard}>
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Dispatch</Text>
+            <Text style={styles.summaryValue}>Queued after payment</Text>
+          </View>
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Fanout</Text>
+            <Text style={styles.summaryValue}>{dispatchIntent.fanoutCount}</Text>
+          </View>
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Intensity</Text>
+            <Text style={styles.summaryValue}>{dispatchIntent.intensityLevel}</Text>
+          </View>
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Location</Text>
+            <Text style={styles.summaryValue}>{dispatchIntent.locationLabel ?? 'Current location'}</Text>
+          </View>
+        </View>
+      ) : null}
 
       <TouchableOpacity style={styles.primary} onPress={generatePaymentLink} disabled={loadingLink}>
         <Text style={styles.primaryText}>{loadingLink ? 'Signing request...' : 'Generate PayFast link'}</Text>
@@ -161,7 +220,7 @@ const PaymentScreen: React.FC = () => {
 
       <View style={styles.status}>
         <Text style={styles.statusLabel}>Status</Text>
-        <Text style={styles.statusValue}>{statusMessage}</Text>
+        <Text style={styles.statusValue}>{dispatching ? 'Dispatching...' : statusMessage}</Text>
       </View>
     </ScrollView>
   );

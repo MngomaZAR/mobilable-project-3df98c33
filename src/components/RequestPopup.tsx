@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useCallback, useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Animated, Dimensions, Vibration } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../store/ThemeContext';
@@ -17,6 +17,24 @@ export const RequestPopup: React.FC<RequestPopupProps> = ({ visible, requestData
   const [progress, setProgress] = useState(new Animated.Value(100));
   const slideAnim = useRef(new Animated.Value(-200)).current;
   const timeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
+
+  const handleDecline = useCallback(() => {
+    clearTimeout(timeoutRef.current);
+    Animated.timing(slideAnim, {
+      toValue: -200,
+      duration: 300,
+      useNativeDriver: true,
+    }).start(() => onDecline());
+  }, [onDecline, slideAnim]);
+
+  const handleAccept = useCallback(() => {
+    clearTimeout(timeoutRef.current);
+    Animated.timing(slideAnim, {
+      toValue: -200,
+      duration: 300,
+      useNativeDriver: true,
+    }).start(() => onAccept());
+  }, [onAccept, slideAnim]);
 
   useEffect(() => {
     if (visible && requestData) {
@@ -54,25 +72,7 @@ export const RequestPopup: React.FC<RequestPopupProps> = ({ visible, requestData
     }
     
     return () => clearTimeout(timeoutRef.current);
-  }, [visible, requestData]);
-
-  const handleDecline = () => {
-    clearTimeout(timeoutRef.current);
-    Animated.timing(slideAnim, {
-      toValue: -200,
-      duration: 300,
-      useNativeDriver: true,
-    }).start(() => onDecline());
-  };
-
-  const handleAccept = () => {
-    clearTimeout(timeoutRef.current);
-    Animated.timing(slideAnim, {
-      toValue: -200,
-      duration: 300,
-      useNativeDriver: true,
-    }).start(() => onAccept());
-  };
+  }, [visible, requestData, handleDecline, progress, slideAnim]);
 
   if (!requestData) return null;
 

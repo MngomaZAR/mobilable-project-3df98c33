@@ -6,6 +6,11 @@ import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../store/ThemeContext';
 import { useAppData } from '../store/AppDataContext';
 import { supabase } from '../config/supabaseClient';
+import {
+  assertDigitalPurchasesAllowed,
+  getDefaultPayfastNotifyUrl,
+  getDigitalPurchaseRestrictionMessage,
+} from '../config/commercePolicy';
 
 const CreditsWalletScreen: React.FC = () => {
   const { colors, isDark } = useTheme();
@@ -42,6 +47,13 @@ const CreditsWalletScreen: React.FC = () => {
   const handleBuyCredits = async (priceZAR: number, credits: number) => {
     setBuyingAmount(priceZAR);
     try {
+      try {
+        assertDigitalPurchasesAllowed();
+      } catch (policyError: any) {
+        Alert.alert('Unavailable', policyError?.message || getDigitalPurchaseRestrictionMessage());
+        return;
+      }
+
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { Alert.alert('Sign in required'); return; }
       const { data, error } = await supabase.functions.invoke('payfast-handler', {
@@ -50,10 +62,10 @@ const CreditsWalletScreen: React.FC = () => {
           amount: priceZAR,
           credits,
           user_id: user.id,
-          item_name: `Papzi Credits – ${credits} credits`,
+          item_name: `Papzi Credits - ${credits} credits`,
           return_url: 'papzi://credits/success',
           cancel_url: 'papzi://credits/cancel',
-          notify_url: 'https://mizdvqhvspkjayffaqqd.supabase.co/functions/v1/payfast-itn',
+          notify_url: getDefaultPayfastNotifyUrl(),
         },
       });
       if (error || !data?.paymentUrl) {
@@ -140,7 +152,7 @@ const CreditsWalletScreen: React.FC = () => {
 
       <View style={styles.sectionHeader}>
         <Text style={[styles.sectionTitle, { color: colors.text }]}>Recent activity</Text>
-        {loading ? <Text style={{ color: colors.textMuted }}>Updating…</Text> : null}
+        {loading ? <Text style={{ color: colors.textMuted }}>Updating...</Text> : null}
       </View>
 
       <FlatList

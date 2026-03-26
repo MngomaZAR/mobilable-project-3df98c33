@@ -91,14 +91,7 @@ const TabsNavigator = () => {
   const unreadNotifications = state.notifications.filter(n => n.status === 'queued').length;
 
   const role = currentUser?.role ?? 'client';
-  const homeComponent =
-    role === 'photographer'
-      ? PhotographerDashboardScreen
-      : role === 'model'
-        ? ModelPremiumDashboard
-        : role === 'admin'
-          ? AdminDashboardScreen
-          : HomeScreen;
+  const homeComponent = HomeScreen;
 
   return (
     <Tab.Navigator

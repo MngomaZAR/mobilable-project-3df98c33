@@ -137,7 +137,7 @@ const ModelPremiumDashboard: React.FC = () => {
     setAcceptingId(bookingId);
     try {
       await acceptBooking(bookingId);
-      Alert.alert('✅ Booking Accepted', 'The client has been notified. Navigate to their location.');
+      Alert.alert('Booking Accepted', 'The client has been notified. Navigate to their location.');
     } catch (err: any) {
       Alert.alert('Error', err?.message ?? 'Could not accept booking.');
     } finally {
@@ -173,7 +173,7 @@ const ModelPremiumDashboard: React.FC = () => {
           <View style={{ flex: 1 }}>
             <Text style={s.greeting}>Elite Creator Dashboard</Text>
             <Text style={s.title}>
-              Welcome, {currentUser?.full_name?.split(' ')[0] ?? 'Creator'} ✨
+              Welcome, {currentUser?.full_name?.split(' ')[0] ?? 'Creator'}
             </Text>
           </View>
           <View style={s.headerActions}>
@@ -310,7 +310,7 @@ const ModelPremiumDashboard: React.FC = () => {
             <View style={s.goalTrack}>
               <View style={[s.goalFill, { width: '24%' }]} />
             </View>
-            <Text style={s.goalSub}>24% completed • 12 contributors</Text>
+            <Text style={s.goalSub}>24% completed | 12 contributors</Text>
           </View>
         </View>
 
@@ -336,9 +336,9 @@ const ModelPremiumDashboard: React.FC = () => {
                    </View>
                    <Text style={s.tierPrice}>R{tier.price ?? 0} <Text style={{ fontSize: 13, color: '#64748b' }}>/ mo</Text></Text>
                    <View style={s.tierPerks}>
-                     <Text style={s.tierPerk}>✓ Exclusive feed access</Text>
-                     <Text style={s.tierPerk}>✓ Direct messaging</Text>
-                     <Text style={s.tierPerk}>✓ Priority booking</Text>
+                     <Text style={s.tierPerk}>- Exclusive feed access</Text>
+                     <Text style={s.tierPerk}>- Direct messaging</Text>
+                     <Text style={s.tierPerk}>- Priority booking</Text>
                    </View>
                 </View>
               ))}

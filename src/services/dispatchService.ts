@@ -10,6 +10,8 @@ export const createDispatch = async (payload: {
   requested_lat?: number;
   requested_lng?: number;
   base_amount?: number;
+  required_tier?: string;
+  required_equipment?: Record<string, string[]>;
 }) => {
   const { data, error } = await supabase.functions.invoke('dispatch-create', { body: payload });
   if (error) throw new Error(error.message || 'Unable to create dispatch.');

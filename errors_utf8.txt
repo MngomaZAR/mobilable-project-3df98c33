@@ -1,6 +1,0 @@
-﻿src/screens/CreditsWalletScreen.tsx(171,7): error TS1003: Identifier expected.
-src/screens/CreditsWalletScreen.tsx(171,9): error TS17002: Expected corresponding JSX closing tag for 'SafeAreaView'.
-src/screens/CreditsWalletScreen.tsx(173,7): error TS1005: ')' expected.
-src/screens/CreditsWalletScreen.tsx(226,5): error TS1128: Declaration or statement expected.
-src/screens/CreditsWalletScreen.tsx(227,3): error TS1109: Expression expected.
-src/screens/CreditsWalletScreen.tsx(228,1): error TS1128: Declaration or statement expected.

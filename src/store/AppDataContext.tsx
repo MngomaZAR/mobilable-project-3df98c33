@@ -84,7 +84,14 @@ type AppDataContextValue = {
   fetchPosts: (options?: FetchPostsOptions) => Promise<{ hasMore: boolean }>;
   fetchProfiles: () => Promise<void>;
   fetchSubscriptions: (userId?: string | null) => Promise<void>;
-  signUp: (email: string, password: string, role?: AppUser['role'], fullName?: string, dob?: string) => Promise<AppUser | null>;
+  signUp: (
+    email: string,
+    password: string,
+    role?: AppUser['role'],
+    fullName?: string,
+    dob?: string,
+    extras?: { gender?: AppUser['gender']; city?: string; phone?: string }
+  ) => Promise<AppUser | null>;
   signIn: (email: string, password: string) => Promise<AppUser | null>;
   signInWithOAuth: (provider: 'google' | 'apple') => Promise<void>;
   signOut: () => Promise<void>;
@@ -93,6 +100,7 @@ type AppDataContextValue = {
   resetState: () => Promise<void>;
   updateProfilePicture: (uri: string) => Promise<void>;
   updateProfile: (changes: Partial<AppUser>) => Promise<void>;
+  updateProviderSettings: (payload: { tier_id?: string | null; equipment?: any | null }) => Promise<void>;
   fetchEarnings: (userId: string) => Promise<void>;
   fetchCredits: (userId?: string | null) => Promise<void>;
   fetchNotifications: (userId?: string | null) => Promise<void>;
@@ -224,6 +232,8 @@ const PHOTOGRAPHER_SELECT = `
   style,
   bio,
   tags,
+  tier_id,
+  equipment,
   is_available,
   hourly_rate,
   experience_years,
@@ -393,7 +403,9 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           style,
           bio,
           tags,
-          portfolio_urls
+          portfolio_urls,
+          tier_id,
+          equipment
         `)
         .limit(MAX_PHOTOGRAPHERS)
         .order('rating', { ascending: false });
@@ -422,6 +434,8 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         price_range: row.price_range ?? '$$',
         tags: row.tags ?? [],
         portfolio_urls: row.portfolio_urls ?? [],
+        tier_id: row.tier_id ?? null,
+        equipment: row.equipment ?? null,
       };
       });
 
@@ -1835,7 +1849,14 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, []);
 
   const signUp = useCallback(
-    async (email: string, password: string, role: UserRole = 'client', fullName?: string, dob?: string) => {
+    async (
+      email: string,
+      password: string,
+      role: UserRole = 'client',
+      fullName?: string,
+      dob?: string,
+      extras?: { gender?: AppUser['gender']; city?: string; phone?: string }
+    ) => {
       setAuthenticating(true);
       setError(null);
       try {
@@ -1853,14 +1874,24 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (data.user) {
           // Save full_name and role to profiles on signup
           const ageVerified = Boolean(dob);
+          const trimmedCity = extras?.city?.trim() || null;
+          const trimmedPhone = extras?.phone?.trim() || null;
+          const normalizedGender = extras?.gender ?? null;
+          const requiresKyc = role === 'photographer' || role === 'model';
           await supabase.from('profiles').upsert({
             id: data.user.id,
             role,
             verified: false,
+            kyc_status: requiresKyc ? 'pending' : null,
             full_name: fullName ?? null,
+            city: trimmedCity,
+            phone: trimmedPhone,
             date_of_birth: dob ?? null,
             age_verified: ageVerified,
             age_verified_at: ageVerified ? new Date().toISOString() : null,
+            contact_details: {
+              gender: normalizedGender,
+            },
           });
 
           // Auto-create photographer row if user signs up as photographer
@@ -1894,9 +1925,15 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const user: AppUser | null = data.user ? mapSupabaseUser(data.user, role, {
           role,
           verified: false,
+          kyc_status: role === 'photographer' || role === 'model' ? 'pending' : null,
+          city: extras?.city?.trim() || null,
+          phone: extras?.phone?.trim() || null,
           date_of_birth: dob ?? null,
           age_verified: Boolean(dob),
           age_verified_at: dob ? new Date().toISOString() : null,
+          contact_details: {
+            gender: extras?.gender ?? null,
+          },
         }) : null;
         if (data.session) {
           setState({ currentUser: user });
@@ -1927,7 +1964,12 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (__DEV__) console.log('SignIn Successful, fetching profile for:', data.user?.id);
       const profile = data.user ? await fetchProfile(data.user.id) : null;
       if (__DEV__) console.log('Profile fetched:', profile);
-      const user: AppUser | null = data.user ? mapSupabaseUser(data.user, 'client', profile) : null;
+      const metadataRole = data.user?.user_metadata?.role as AppUser['role'] | undefined;
+      const safeFallbackRole: AppUser['role'] =
+        metadataRole && ['client', 'photographer', 'model', 'admin', 'guest'].includes(metadataRole)
+          ? metadataRole
+          : 'client';
+      const user: AppUser | null = data.user ? mapSupabaseUser(data.user, safeFallbackRole, profile) : null;
       setState({ currentUser: user });
       return user;
     } catch (err: any) {
@@ -2361,6 +2403,39 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   }, []);
 
+  const updateProviderSettings = useCallback(async (payload: { tier_id?: string | null; equipment?: any | null }) => {
+    const current = stateRef.current.currentUser;
+    if (!current) throw new Error('Not signed in.');
+    const role = current.role;
+    if (role !== 'photographer' && role !== 'model') return;
+    if (!hasSupabase) return;
+
+    const table = role === 'model' ? 'models' : 'photographers';
+    const { data, error } = await supabase
+      .from(table)
+      .update({
+        tier_id: payload.tier_id ?? null,
+        equipment: payload.equipment ?? null,
+      })
+      .eq('id', current.id)
+      .select('*')
+      .maybeSingle();
+
+    if (error) throw error;
+
+    if (role === 'model') {
+      const updated = stateRef.current.models.map((m) =>
+        m.id === current.id ? { ...m, tier_id: data?.tier_id ?? payload.tier_id ?? null, equipment: data?.equipment ?? payload.equipment ?? null } : m
+      );
+      setState({ models: updated });
+    } else {
+      const updated = stateRef.current.photographers.map((p) =>
+        p.id === current.id ? { ...p, tier_id: data?.tier_id ?? payload.tier_id ?? null, equipment: data?.equipment ?? payload.equipment ?? null } : p
+      );
+      setState({ photographers: updated });
+    }
+  }, []);
+
 
   const value = useMemo<AppDataContextValue>(() => ({
       state,
@@ -2396,6 +2471,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       resetState,
       updateProfilePicture,
       updateProfile,
+      updateProviderSettings,
       fetchEarnings,
       fetchSubscriptions,
       fetchCredits,
@@ -2403,7 +2479,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       adjustCredits,
       redeemCreditsCode,
     }),
-    [state, createBooking, updateBookingStatus, sendMessage, sendLockedMediaMessage, fetchMessages, fetchMessagesForChat, fetchComments, updateBookingClientLocation, updatePhotographerLocation, startConversationWithUser, addPost, toggleLike, addComment, setState, signUp, signIn, signOut, updatePrivacy, requestDataDeletion, refresh, revalidateSession, resetState, updateProfilePicture, updateProfile, fetchEarnings, fetchSubscriptions, fetchCredits, fetchNotifications, adjustCredits, redeemCreditsCode]
+    [state, createBooking, updateBookingStatus, sendMessage, sendLockedMediaMessage, fetchMessages, fetchMessagesForChat, fetchComments, updateBookingClientLocation, updatePhotographerLocation, startConversationWithUser, addPost, toggleLike, addComment, setState, signUp, signIn, signOut, updatePrivacy, requestDataDeletion, refresh, revalidateSession, resetState, updateProfilePicture, updateProfile, updateProviderSettings, fetchEarnings, fetchSubscriptions, fetchCredits, fetchNotifications, adjustCredits, redeemCreditsCode]
   );
 
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>;

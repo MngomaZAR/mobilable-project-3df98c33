@@ -8,13 +8,20 @@ const supabaseAnonKey =
   process.env.EXPO_PUBLIC_SUPABASE_KEY || 
   Constants.expoConfig?.extra?.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
-export const hasSupabase = Boolean(supabaseUrl && supabaseAnonKey);
+const resolvedSupabaseUrl = String(supabaseUrl ?? '').trim();
+const resolvedSupabaseAnonKey = String(supabaseAnonKey ?? '').trim();
+
+export const hasSupabase = Boolean(resolvedSupabaseUrl && resolvedSupabaseAnonKey);
 
 if (!hasSupabase) {
   console.warn('Supabase environment variables are missing. Check your .env configuration. The app will fall back to local demo data.');
 }
 
-export const supabase = createClient(supabaseUrl ?? '', supabaseAnonKey ?? '', {
+// Keep app boot stable when env is missing (web smoke/dev flows) without pretending backend is configured.
+const safeSupabaseUrl = resolvedSupabaseUrl || 'https://placeholder.supabase.co';
+const safeSupabaseAnonKey = resolvedSupabaseAnonKey || 'public-anon-key';
+
+export const supabase = createClient(safeSupabaseUrl, safeSupabaseAnonKey, {
   auth: {
     storage: AsyncStorage,
     autoRefreshToken: true,
@@ -27,4 +34,3 @@ export const supabase = createClient(supabaseUrl ?? '', supabaseAnonKey ?? '', {
     },
   },
 });
-

@@ -16,7 +16,17 @@ export type RootStackParamList = {
   BookingForm: { photographerId?: string; modelId?: string };
   BookingDetail: { bookingId: string };
   BookingTracking: { bookingId: string };
-  Payment: { bookingId: string };
+  Payment: { bookingId: string; dispatchIntent?: {
+    serviceType: 'photography' | 'modeling' | 'combined' | 'video_call';
+    fanoutCount: number;
+    intensityLevel: number;
+    baseAmount: number;
+    requestedLat?: number;
+    requestedLng?: number;
+    tierId?: string;
+    locationLabel?: string;
+    equipment?: Record<string, string[]>;
+  } };
   PostDetail: { postId: string };
   CreatePost: undefined;
   UserProfile: { userId: string; photographer?: Photographer };

@@ -55,3 +55,25 @@ export const updateBookingStatusInDb = async (bookingId: string, status: Booking
   if (error) throw error;
   return data;
 };
+
+export const updateBookingDispatchInDb = async (bookingId: string, payload: {
+  dispatch_request_id?: string | null;
+  assignment_state?: 'queued' | 'offered' | 'accepted' | 'expired' | 'cancelled';
+  quote_token?: string | null;
+  eta_confidence?: number | null;
+}) => {
+  const { data, error } = await supabase
+    .from('bookings')
+    .update({
+      dispatch_request_id: payload.dispatch_request_id ?? null,
+      assignment_state: payload.assignment_state ?? 'queued',
+      quote_token: payload.quote_token ?? null,
+      eta_confidence: payload.eta_confidence ?? null,
+    })
+    .eq('id', bookingId)
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return data;
+};

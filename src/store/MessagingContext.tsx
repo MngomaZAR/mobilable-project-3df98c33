@@ -36,12 +36,15 @@ type MessagingContextValue = {
 
 const MessagingContext = createContext<MessagingContextValue | undefined>(undefined);
 
+const TIMEOUT_ERROR_MESSAGE = 'Request timed out.';
 const withTimeout = async <T,>(promiseLike: PromiseLike<T>, timeoutMs = 12000): Promise<T> => {
   return await Promise.race<T>([
     Promise.resolve(promiseLike),
-    new Promise<T>((_, reject) => setTimeout(() => reject(new Error('Request timed out.')), timeoutMs)),
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error(TIMEOUT_ERROR_MESSAGE)), timeoutMs)),
   ]);
 };
+const isTimeoutError = (err: unknown) => String((err as any)?.message ?? '').includes(TIMEOUT_ERROR_MESSAGE);
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { currentUser } = useAuth();
@@ -52,7 +55,7 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [loading, setLoading] = useState(false);
   const typingTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
-  const fetchConversations = useCallback(async () => {
+  const fetchConversations = useCallback(async (attempt = 0) => {
     if (!hasSupabase || !currentUser) {
       setLoading(false);
       return;
@@ -148,6 +151,10 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       );
       setConversations(deduped);
     } catch (err) {
+      if (isTimeoutError(err) && attempt < 1) {
+        await sleep(600);
+        return fetchConversations(attempt + 1);
+      }
       logError('Messaging:fetchConversations', err);
     } finally {
       setLoading(false);

@@ -128,12 +128,14 @@ const isRecoverableAbort = (err: unknown) => {
 };
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+const TIMEOUT_ERROR_MESSAGE = 'Request timed out.';
 const withTimeout = async <T,>(promiseLike: PromiseLike<T>, timeoutMs = 12000): Promise<T> => {
   return await Promise.race<T>([
     Promise.resolve(promiseLike),
-    new Promise<T>((_, reject) => setTimeout(() => reject(new Error('Request timed out.')), timeoutMs)),
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error(TIMEOUT_ERROR_MESSAGE)), timeoutMs)),
   ]);
 };
+const isTimeoutError = (err: unknown) => String((err as any)?.message ?? '').includes(TIMEOUT_ERROR_MESSAGE);
 
 const parseAuthCallbackParams = (url: string) => {
   try {
@@ -565,15 +567,16 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         setState({ posts: combined });
       }
       return { hasMore: rawPosts ? rawPosts.length >= 12 : false };
-    } catch (err: any) {
-      if (isRecoverableAbort(err) && attempt + 1 < MAX_FETCH_POSTS_ATTEMPTS) {
-        console.warn(`fetch_posts retrying (attempt ${attempt + 1}) after abort`);
-        return fetchPosts({ reset, attempt: attempt + 1 });
+      } catch (err: any) {
+        if ((isRecoverableAbort(err) || isTimeoutError(err)) && attempt + 1 < MAX_FETCH_POSTS_ATTEMPTS) {
+          console.warn(`fetch_posts retrying (attempt ${attempt + 1}) after abort`);
+          await sleep(600);
+          return fetchPosts({ reset, attempt: attempt + 1 });
+        }
+        logError('fetch_posts', err);
+        setError(formatErrorMessage(err, `Error loading feed: ${err?.message || 'Unknown error'}`));
+        return { hasMore: false };
       }
-      logError('fetch_posts', err);
-      setError(formatErrorMessage(err, `Error loading feed: ${err?.message || 'Unknown error'}`));
-      return { hasMore: false };
-    }
   }, []);
 
   const fetchProfiles = useCallback(async () => {

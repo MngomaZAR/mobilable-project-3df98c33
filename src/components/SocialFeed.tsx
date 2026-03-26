@@ -51,7 +51,7 @@ const STORIES_ENABLED = true;
 
 export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost, onViewProfile }) => {
   const isWeb = Platform.OS === 'web';
-  const { state: appState, toggleLike, fetchPosts, fetchProfiles } = useAppData();
+  const { state: appState, toggleLike, fetchPosts, fetchProfiles, error: appError } = useAppData();
   const { startConversationWithUser } = useMessaging();
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
@@ -698,6 +698,17 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
 
   return (
     <View style={[styles.container, { backgroundColor: colors.bg }]}>
+      {appError ? (
+        <View style={[styles.inlineError, { backgroundColor: isDark ? '#27121b' : '#fde8e8', borderColor: isDark ? '#5f2638' : '#f5b7b7' }]}>
+          <Ionicons name="alert-circle" size={16} color={isDark ? '#fda4af' : '#b91c1c'} />
+          <Text style={[styles.inlineErrorText, { color: isDark ? '#fecdd3' : '#7f1d1d' }]}>
+            {appError}
+          </Text>
+          <TouchableOpacity style={styles.inlineRetry} onPress={onRefresh}>
+            <Text style={[styles.inlineRetryText, { color: isDark ? '#fecdd3' : '#7f1d1d' }]}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
       {lightboxUri && (
         <View style={styles.lightboxOverlay}>
           <TouchableOpacity style={styles.lightboxClose} onPress={() => setLightboxUri(null)}><Text style={styles.lightboxCloseText}>Close</Text></TouchableOpacity>
@@ -738,6 +749,21 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  inlineError: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 4,
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  inlineErrorText: { flex: 1, fontSize: 12, fontWeight: '600' },
+  inlineRetry: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
+  inlineRetryText: { fontWeight: '700', fontSize: 12 },
   listContent: { padding: 16, paddingBottom: 108 },
   headerContainer: { paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth },
   headerInner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 16, paddingBottom: 10 },

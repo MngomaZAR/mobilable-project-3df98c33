@@ -107,10 +107,11 @@ const TabsNavigator = () => {
           : role === 'admin'
             ? AdminDashboardScreen
             : HomeScreen;
-  const homeLabel = role === 'client' ? 'Home' : 'Dashboard';
+  const homeLabel = role === 'client' ? 'Map' : 'Dashboard';
   const homeIcon = role === 'client'
     ? { active: 'map', inactive: 'map-outline' }
     : { active: 'home', inactive: 'home-outline' };
+  const showMapTab = role !== 'client';
 
   return (
     <Tab.Navigator
@@ -143,7 +144,7 @@ const TabsNavigator = () => {
         headerShown: false,
       })}
     >
-      <Tab.Screen name="Map" component={MapScreen} options={{ tabBarLabel: 'Map' }} />
+      {showMapTab && <Tab.Screen name="Map" component={MapScreen} options={{ tabBarLabel: 'Map' }} />}
       <Tab.Screen
         name="Home"
         component={homeComponent}

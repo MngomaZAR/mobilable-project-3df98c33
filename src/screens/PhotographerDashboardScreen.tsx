@@ -24,10 +24,11 @@ type Navigation = StackNavigationProp<RootStackParamList, 'Root'>;
 
 const PhotographerDashboardScreen: React.FC = () => {
   const navigation = useNavigation<Navigation>();
-  const { currentUser } = useAuth();
+  const { currentUser: authUser } = useAuth();
   const { bookings, acceptBooking, declineBooking, refreshBookings, updateBookingStatus } = useBooking();
   const { startConversationWithUser } = useMessaging();
   const { state, refresh, updatePhotographerLocation } = useAppData();
+  const currentUser = authUser ?? state.currentUser;
   const insets = useSafeAreaInsets();
   const [isOnline, setIsOnline] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -43,6 +44,13 @@ const PhotographerDashboardScreen: React.FC = () => {
   const acceptedBookings = useMemo(() => bookings.filter(b => b.status === 'accepted'), [bookings]);
   const completedBookings = useMemo(() => bookings.filter(b => b.status === 'completed'), [bookings]);
   const kycApproved = (currentUser?.kyc_status ?? state.currentUser?.kyc_status) === 'approved';
+
+  useEffect(() => {
+    const profile = state.profiles.find((p: any) => p.id === currentUser?.id) as any;
+    if (profile?.availability_status) {
+      setIsOnline(profile.availability_status === 'online');
+    }
+  }, [currentUser?.id, state.profiles]);
 
   const earnings = useMemo(() => {
     const earningsRows = state.earnings ?? [];
@@ -126,10 +134,16 @@ const PhotographerDashboardScreen: React.FC = () => {
     }
     setIsOnline(nextValue);
     try {
+      const providerTable = currentUser?.role === 'model' ? 'models' : 'photographers';
       await supabase
         .from('profiles')
         .update({ availability_status: nextValue ? 'online' : 'offline' })
         .eq('id', currentUser?.id);
+      await supabase
+        .from(providerTable)
+        .update({ is_online: nextValue })
+        .eq('id', currentUser?.id);
+      refresh();
     } catch {
       // soft-fail
     }

@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import {
   Alert, RefreshControl, ScrollView, StyleSheet, Text,
-  TouchableOpacity, View, Image, Dimensions, Modal, TextInput,
+  TouchableOpacity, View, Image, Dimensions, Modal, TextInput, Switch,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -24,7 +24,7 @@ type Navigation = StackNavigationProp<RootStackParamList, 'Root'>;
 
 const ModelPremiumDashboard: React.FC = () => {
   const navigation = useNavigation<Navigation>();
-  const { currentUser } = useAuth();
+  const { currentUser: authUser } = useAuth();
   const { bookings, refreshBookings, acceptBooking, declineBooking } = useBooking();
   const { state, refresh } = useAppData();
   const { startConversationWithUser } = useMessaging();
@@ -47,6 +47,9 @@ const ModelPremiumDashboard: React.FC = () => {
   const [tierPerksInput, setTierPerksInput] = useState('');
   const [savingTier, setSavingTier] = useState(false);
   const [showNewMessage, setShowNewMessage] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
+  const currentUser = authUser ?? state.currentUser;
+  const kycApproved = (currentUser?.kyc_status ?? state.currentUser?.kyc_status) === 'approved';
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
 
   const tierMap = useMemo(() => {
@@ -92,6 +95,13 @@ const ModelPremiumDashboard: React.FC = () => {
     loadTiers();
     loadTipGoal();
   }, [loadTiers, loadTipGoal]);
+
+  useEffect(() => {
+    const profile = state.profiles.find((p: any) => p.id === currentUser?.id) as any;
+    if (profile?.availability_status) {
+      setIsOnline(profile.availability_status === 'online');
+    }
+  }, [currentUser?.id, state.profiles]);
 
   const fetchSubscribers = useCallback(async () => {
     if (!currentUser?.id) return;
@@ -139,6 +149,27 @@ const ModelPremiumDashboard: React.FC = () => {
     }
     // Navigate to paid video call as creator
     navigation.navigate('PaidVideoCall', { creatorId: currentUser.id, role: 'creator' });
+  };
+
+  const handleOnlineToggle = async (nextValue: boolean) => {
+    if (!kycApproved) {
+      Alert.alert('Verification required', 'Complete KYC to go online and accept jobs.');
+      return;
+    }
+    setIsOnline(nextValue);
+    try {
+      await supabase
+        .from('profiles')
+        .update({ availability_status: nextValue ? 'online' : 'offline' })
+        .eq('id', currentUser?.id);
+      await supabase
+        .from('models')
+        .update({ is_online: nextValue })
+        .eq('id', currentUser?.id);
+      refresh();
+    } catch {
+      // soft-fail
+    }
   };
 
   const pendingBookings = useMemo(() => bookings.filter(b => b.status === 'pending'), [bookings]);
@@ -319,6 +350,18 @@ const ModelPremiumDashboard: React.FC = () => {
             </Text>
           </View>
           <View style={s.headerActions}>
+            <View style={s.onlineRow}>
+              <Text style={[s.onlineLabel, { color: isOnline ? '#10b981' : '#64748b' }]}>
+                {isOnline ? 'LIVE' : 'OFFLINE'}
+              </Text>
+              <Switch
+                value={isOnline}
+                onValueChange={handleOnlineToggle}
+                disabled={!kycApproved}
+                trackColor={{ false: '#334155', true: '#10b981' }}
+                thumbColor="#fff"
+              />
+            </View>
             <TouchableOpacity style={s.iconBtn} onPress={() => setShowNewMessage(true)}>
               <Ionicons name="chatbubble-ellipses-outline" size={20} color="#fff" />
             </TouchableOpacity>
@@ -775,6 +818,8 @@ const s = StyleSheet.create({
   container: { padding: 20, paddingBottom: 100 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  onlineRow: { alignItems: 'center', justifyContent: 'center' },
+  onlineLabel: { fontWeight: '800', fontSize: 10, marginBottom: 4, letterSpacing: 0.8 },
   iconBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' },
   greeting: { color: '#ec4899', fontWeight: '800', fontSize: 11, textTransform: 'uppercase', letterSpacing: 1.5 },
   title: { color: '#fff', fontSize: 22, fontWeight: '900', marginTop: 2 },

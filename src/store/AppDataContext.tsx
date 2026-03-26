@@ -336,6 +336,8 @@ const appReducer = (state: AppState, action: Action): AppState => {
 export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(appReducer, initialState);
   const stateRef = useRef(state);
+  const profileFetchInFlightRef = useRef<Map<string, Promise<ProfileRow | null>>>(new Map());
+  const profileFetchLastRef = useRef<Map<string, number>>(new Map());
 
   useEffect(() => {
     stateRef.current = state;
@@ -350,15 +352,32 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const fetchProfile = useCallback(async (userId: string): Promise<ProfileRow> => {
     if (!hasSupabase) return null;
     if (__DEV__) console.log('Fetching profile for:', userId);
-    try {
-      const { data, error } = await supabase.from('profiles').select(PROFILE_SELECT).eq('id', userId).maybeSingle();
-      if (error) throw error;
-      if (__DEV__) console.log('Profile fetch result:', data);
-      return (data as any) ?? null;
-    } catch (err) {
-      logError('fetchProfile', err);
-      return null;
+    const now = Date.now();
+    const lastFetchedAt = profileFetchLastRef.current.get(userId) ?? 0;
+    if (now - lastFetchedAt < 1500) {
+      const cached = stateRef.current.profiles.find((p: any) => p.id === userId) as any;
+      if (cached) return cached as ProfileRow;
     }
+
+    const inFlight = profileFetchInFlightRef.current.get(userId);
+    if (inFlight) return inFlight;
+
+    const promise = (async () => {
+      try {
+        const { data, error } = await supabase.from('profiles').select(PROFILE_SELECT).eq('id', userId).maybeSingle();
+        if (error) throw error;
+        if (__DEV__) console.log('Profile fetch result:', data);
+        return (data as any) ?? null;
+      } catch (err) {
+        logError('fetchProfile', err);
+        return null;
+      } finally {
+        profileFetchInFlightRef.current.delete(userId);
+        profileFetchLastRef.current.set(userId, Date.now());
+      }
+    })();
+    profileFetchInFlightRef.current.set(userId, promise);
+    return promise;
   }, []);
 
   const fetchPhotographers = useCallback(async () => {

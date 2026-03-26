@@ -26,7 +26,7 @@ const ModelPremiumDashboard: React.FC = () => {
   const navigation = useNavigation<Navigation>();
   const { currentUser: authUser } = useAuth();
   const { bookings, refreshBookings, acceptBooking, declineBooking } = useBooking();
-  const { state, refresh } = useAppData();
+  const { state, fetchEarnings, fetchSubscriptions, fetchCredits } = useAppData();
   const { startConversationWithUser } = useMessaging();
   const insets = useSafeAreaInsets();
   const [showPremiumBox, setShowPremiumBox] = useState(false);
@@ -138,7 +138,15 @@ const ModelPremiumDashboard: React.FC = () => {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([refresh(), refreshBookings(), loadTiers(), loadTipGoal()]);
+    const userId = currentUser?.id;
+    await Promise.all([
+      refreshBookings(),
+      loadTiers(),
+      loadTipGoal(),
+      userId ? fetchEarnings(userId) : Promise.resolve(),
+      userId ? fetchSubscriptions(userId) : Promise.resolve(),
+      userId ? fetchCredits(userId) : Promise.resolve(),
+    ]);
     setRefreshing(false);
   };
 
@@ -182,15 +190,23 @@ const ModelPremiumDashboard: React.FC = () => {
       let active = true;
       const run = async () => {
         if (!active) return;
-        await Promise.all([refresh(), refreshBookings(), loadTiers(), loadTipGoal()]);
+        const userId = currentUser?.id;
+        await Promise.all([
+          refreshBookings(),
+          loadTiers(),
+          loadTipGoal(),
+          userId ? fetchEarnings(userId) : Promise.resolve(),
+          userId ? fetchSubscriptions(userId) : Promise.resolve(),
+          userId ? fetchCredits(userId) : Promise.resolve(),
+        ]);
       };
       run();
-      const timer = setInterval(run, 20000);
+      const timer = setInterval(run, 60000);
       return () => {
         active = false;
         clearInterval(timer);
       };
-    }, [refresh, refreshBookings]),
+    }, [currentUser?.id, fetchCredits, fetchEarnings, fetchSubscriptions, loadTipGoal, loadTiers, refreshBookings]),
   );
 
   const openChatWithClient = async (clientId?: string | null, clientName?: string) => {

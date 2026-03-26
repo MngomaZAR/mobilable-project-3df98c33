@@ -27,7 +27,7 @@ const PhotographerDashboardScreen: React.FC = () => {
   const { currentUser: authUser } = useAuth();
   const { bookings, acceptBooking, declineBooking, refreshBookings, updateBookingStatus } = useBooking();
   const { startConversationWithUser } = useMessaging();
-  const { state, refresh, updatePhotographerLocation } = useAppData();
+  const { state, updatePhotographerLocation, fetchEarnings, fetchSubscriptions, fetchCredits } = useAppData();
   const currentUser = authUser ?? state.currentUser;
   const insets = useSafeAreaInsets();
   const [isOnline, setIsOnline] = useState(true);
@@ -218,7 +218,13 @@ const PhotographerDashboardScreen: React.FC = () => {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([refresh(), refreshBookings()]);
+    const userId = currentUser?.id;
+    await Promise.all([
+      refreshBookings(),
+      userId ? fetchEarnings(userId) : Promise.resolve(),
+      userId ? fetchSubscriptions(userId) : Promise.resolve(),
+      userId ? fetchCredits(userId) : Promise.resolve(),
+    ]);
     setRefreshing(false);
   };
 
@@ -227,15 +233,21 @@ const PhotographerDashboardScreen: React.FC = () => {
       let active = true;
       const run = async () => {
         if (!active) return;
-        await Promise.all([refresh(), refreshBookings()]);
+        const userId = currentUser?.id;
+        await Promise.all([
+          refreshBookings(),
+          userId ? fetchEarnings(userId) : Promise.resolve(),
+          userId ? fetchSubscriptions(userId) : Promise.resolve(),
+          userId ? fetchCredits(userId) : Promise.resolve(),
+        ]);
       };
       run();
-      const timer = setInterval(run, 20000);
+      const timer = setInterval(run, 60000);
       return () => {
         active = false;
         clearInterval(timer);
       };
-    }, [refresh, refreshBookings]),
+    }, [currentUser?.id, fetchCredits, fetchEarnings, fetchSubscriptions, refreshBookings]),
   );
 
   return (

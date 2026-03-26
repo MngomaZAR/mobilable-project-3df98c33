@@ -72,7 +72,7 @@ const AdminDashboardScreen: React.FC = () => {
         await Promise.all([refresh(), fetchRevenue(), fetchOpsMetrics()]);
       };
       run();
-      const timer = setInterval(run, 20000);
+      const timer = setInterval(run, 60000);
       return () => {
         active = false;
         clearInterval(timer);

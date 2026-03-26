@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useRef } from 'react';
 import {
   Alert,
   Image,
@@ -15,7 +15,7 @@ import {
   FlatList,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -49,6 +49,7 @@ const HomeScreen: React.FC = () => {
   const { startConversationWithUser } = useMessaging();
   const { colors, isDark } = useTheme();
   const navigation = useNavigation<Navigation>();
+  const route = useRoute<RouteProp<TabParamList, 'Home'>>();
   const parentNavigation = navigation.getParent<StackNavigationProp<RootStackParamList>>();
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -61,11 +62,28 @@ const HomeScreen: React.FC = () => {
   
   const [recommended, setRecommended] = useState<Photographer[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const lastSearchTagRef = useRef<string | null>(null);
 
   React.useEffect(() => {
      // Initial generic recommendations
      fetchRecommendedMatches('Cape Town', '', 0).then(setRecommended);
   }, []);
+
+  React.useEffect(() => {
+    const rawTag = route.params?.searchTag?.trim();
+    if (!rawTag) return;
+    if (lastSearchTagRef.current === rawTag) return;
+    lastSearchTagRef.current = rawTag;
+    const nextLocation = location.trim() || state.currentUser?.city || '';
+    const budget = priceRange.includes('$$') ? 1000 : 2000;
+    setDiscoveryMode('photographers');
+    setCategory(rawTag);
+    if (!location.trim()) setLocation(nextLocation);
+    setIsSearching(true);
+    fetchRecommendedMatches(nextLocation, rawTag, budget)
+      .then(setRecommended)
+      .finally(() => setIsSearching(false));
+  }, [route.params?.searchTag, location, priceRange, state.currentUser?.city]);
 
   const handleSmartSearch = async () => {
       setIsSearching(true);

@@ -180,6 +180,12 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
     }
   };
 
+  const handleHashtagPress = useCallback((tag: string) => {
+    const cleaned = String(tag || '').replace(/^#/, '').trim();
+    if (!cleaned) return;
+    navigation.navigate('Root', { screen: 'Home', params: { searchTag: cleaned } });
+  }, [navigation]);
+
   const flushRecommendationQueue = useCallback(async () => {
     if (!recommendationQueueRef.current.length) return;
     const payload = recommendationQueueRef.current.splice(0, recommendationQueueRef.current.length);
@@ -662,7 +668,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
           <HashtagText 
             text={` ${item.caption}`} 
             style={[styles.captionText, { color: colors.textSecondary }]}
-            onHashtagPress={(tag) => Alert.alert('Hashtag', `Discovery for ${tag} coming soon!`)}
+            onHashtagPress={handleHashtagPress}
           />
         </View>
         <Text style={[styles.timestampBottom, { color: colors.textMuted }]}>{new Date(item.created_at).toLocaleDateString()}</Text>

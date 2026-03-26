@@ -231,15 +231,20 @@ const PaidVideoCallScreen: React.FC = () => {
         <StatusBar barStyle="light-content" />
         <View style={styles.notInstalledBanner}>
           <Ionicons name="videocam-outline" size={64} color="rgba(255,255,255,0.5)" />
-          <Text style={styles.notInstalledTitle}>Video Call — LiveKit Setup Required</Text>
+          <Text style={styles.notInstalledTitle}>Video calls are not available yet</Text>
           <Text style={styles.notInstalledBody}>
-            Run the following in your project to enable video calls:
-            {'\n\n'}npx expo install @livekit/react-native livekit-client
-            {'\n\n'}Then deploy the `livekit-token` Supabase Edge Function.
+            This build does not include live video. You can still message the creator
+            or return to your bookings and reschedule.
           </Text>
-          <TouchableOpacity style={styles.endCallBtn} onPress={endCall}>
-            <Text style={{ color: '#fff', fontWeight: '700' }}>Go Back</Text>
-          </TouchableOpacity>
+          <View style={styles.fallbackActions}>
+            <TouchableOpacity style={styles.fallbackBtn} onPress={() => navigation.navigate('Root', { screen: 'Chat' })}>
+              <Ionicons name="chatbubbles-outline" size={18} color="#fff" />
+              <Text style={styles.fallbackBtnText}>Open Chat</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.endCallBtn} onPress={endCall}>
+              <Text style={{ color: '#fff', fontWeight: '700' }}>Go Back</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </SafeAreaView>
     );
@@ -256,6 +261,9 @@ const PaidVideoCallScreen: React.FC = () => {
           <Text style={styles.notInstalledBody}>{tokenError}</Text>
           <TouchableOpacity style={[styles.endCallBtn, { marginTop: 20 }]} onPress={fetchToken}>
             <Text style={{ color: '#fff', fontWeight: '700' }}>Retry</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.fallbackBtnGhost} onPress={() => navigation.navigate('Root', { screen: 'Chat' })}>
+            <Text style={styles.fallbackBtnGhostText}>Open Chat</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={endCall} style={{ marginTop: 12 }}>
             <Text style={{ color: 'rgba(255,255,255,0.6)', fontWeight: '600' }}>Go Back</Text>
@@ -479,6 +487,11 @@ const styles = StyleSheet.create({
   notInstalledBanner: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   notInstalledTitle: { color: '#fff', fontSize: 22, fontWeight: '800', marginTop: 20, textAlign: 'center' },
   notInstalledBody: { color: 'rgba(255,255,255,0.6)', fontSize: 14, marginTop: 12, textAlign: 'center', lineHeight: 22, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
+  fallbackActions: { marginTop: 24, width: '100%', alignItems: 'center', gap: 12 },
+  fallbackBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#0ea5e9', paddingHorizontal: 18, paddingVertical: 12, borderRadius: 14 },
+  fallbackBtnText: { color: '#fff', fontWeight: '800' },
+  fallbackBtnGhost: { marginTop: 12, paddingHorizontal: 18, paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' },
+  fallbackBtnGhostText: { color: '#fff', fontWeight: '700' },
   endCallBtn: { backgroundColor: '#ef4444', paddingHorizontal: 24, paddingVertical: 14, borderRadius: 14, marginTop: 32 },
   // Tip modal
   modalBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },

@@ -34,25 +34,64 @@ const ModelPremiumDashboard: React.FC = () => {
   const [tierPayoutRate, setTierPayoutRate] = useState(0.70);
   const [showSubscribers, setShowSubscribers] = useState(false);
   const [subscribers, setSubscribers] = useState<any[]>([]);
-  const [tierMap, setTierMap] = useState<Record<string, { name: string; price?: number }>>({});
+  const [tiers, setTiers] = useState<any[]>([]);
+  const [tipGoal, setTipGoal] = useState<any | null>(null);
+  const [goalModalVisible, setGoalModalVisible] = useState(false);
+  const [goalTitleInput, setGoalTitleInput] = useState('');
+  const [goalTargetInput, setGoalTargetInput] = useState('');
+  const [savingGoal, setSavingGoal] = useState(false);
+  const [tierModalVisible, setTierModalVisible] = useState(false);
+  const [editingTier, setEditingTier] = useState<any | null>(null);
+  const [tierNameInput, setTierNameInput] = useState('');
+  const [tierPriceInput, setTierPriceInput] = useState('');
+  const [tierPerksInput, setTierPerksInput] = useState('');
+  const [savingTier, setSavingTier] = useState(false);
   const [showNewMessage, setShowNewMessage] = useState(false);
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
 
+  const tierMap = useMemo(() => {
+    const map: Record<string, { name: string; price?: number }> = {};
+    (tiers ?? []).forEach((tier: any) => {
+      map[tier.id] = { name: tier.name ?? 'Tier', price: tier.price };
+    });
+    return map;
+  }, [tiers]);
+
+  const loadTiers = useCallback(async () => {
+    if (!currentUser?.id) return;
+    try {
+      const { data } = await supabase
+        .from('subscription_tiers')
+        .select('id, name, price, perks, is_active, color, max_subscribers, description')
+        .eq('creator_id', currentUser.id)
+        .order('created_at', { ascending: true });
+      setTiers(data ?? []);
+    } catch {
+      setTiers([]);
+    }
+  }, [currentUser?.id]);
+
+  const loadTipGoal = useCallback(async () => {
+    if (!currentUser?.id) return;
+    try {
+      const { data } = await supabase
+        .from('tip_goals')
+        .select('*')
+        .eq('creator_id', currentUser.id)
+        .eq('is_active', true)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      setTipGoal(data ?? null);
+    } catch {
+      setTipGoal(null);
+    }
+  }, [currentUser?.id]);
+
   useEffect(() => {
-    const load = async () => {
-      try {
-        const { data } = await supabase
-          .from('subscription_tiers')
-          .select('id, name, price');
-        const map: Record<string, { name: string; price?: number }> = {};
-        (data ?? []).forEach((tier: any) => {
-          map[tier.id] = { name: tier.name ?? 'Tier', price: tier.price };
-        });
-        setTierMap(map);
-      } catch { /* silent */ }
-    };
-    load();
-  }, []);
+    loadTiers();
+    loadTipGoal();
+  }, [loadTiers, loadTipGoal]);
 
   const fetchSubscribers = useCallback(async () => {
     if (!currentUser?.id) return;
@@ -89,7 +128,7 @@ const ModelPremiumDashboard: React.FC = () => {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([refresh(), refreshBookings()]);
+    await Promise.all([refresh(), refreshBookings(), loadTiers(), loadTipGoal()]);
     setRefreshing(false);
   };
 
@@ -103,13 +142,16 @@ const ModelPremiumDashboard: React.FC = () => {
   };
 
   const pendingBookings = useMemo(() => bookings.filter(b => b.status === 'pending'), [bookings]);
+  const goalCurrentAmount = Number(tipGoal?.current_amount ?? 0);
+  const goalTargetAmount = Number(tipGoal?.target_amount ?? 0);
+  const goalPercent = goalTargetAmount > 0 ? Math.min(100, Math.round((goalCurrentAmount / goalTargetAmount) * 100)) : 0;
 
   useFocusEffect(
     useCallback(() => {
       let active = true;
       const run = async () => {
         if (!active) return;
-        await Promise.all([refresh(), refreshBookings()]);
+        await Promise.all([refresh(), refreshBookings(), loadTiers(), loadTipGoal()]);
       };
       run();
       const timer = setInterval(run, 20000);
@@ -160,6 +202,106 @@ const ModelPremiumDashboard: React.FC = () => {
         },
       },
     ]);
+  };
+
+  const parseMoneyInput = (value: string) => Number(String(value).replace(/[^0-9.]/g, ''));
+
+  const openGoalModal = () => {
+    setGoalTitleInput(tipGoal?.title ?? '');
+    setGoalTargetInput(tipGoal?.target_amount ? String(tipGoal.target_amount) : '');
+    setGoalModalVisible(true);
+  };
+
+  const saveGoal = async () => {
+    if (!currentUser?.id) {
+      Alert.alert('Profile Required', 'Sign in to manage your tip goal.');
+      return;
+    }
+    const title = goalTitleInput.trim();
+    const targetAmount = parseMoneyInput(goalTargetInput);
+    if (!title) {
+      Alert.alert('Goal title required', 'Add a short name for your tip goal.');
+      return;
+    }
+    if (!targetAmount || targetAmount <= 0) {
+      Alert.alert('Target amount required', 'Enter a valid target amount.');
+      return;
+    }
+    setSavingGoal(true);
+    try {
+      if (tipGoal?.id) {
+        const { error } = await supabase
+          .from('tip_goals')
+          .update({ title, target_amount: targetAmount })
+          .eq('id', tipGoal.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('tip_goals')
+          .insert({ creator_id: currentUser.id, title, target_amount: targetAmount, is_active: true });
+        if (error) throw error;
+      }
+      await loadTipGoal();
+      setGoalModalVisible(false);
+    } catch (err: any) {
+      Alert.alert('Save failed', err?.message ?? 'Could not update your tip goal.');
+    } finally {
+      setSavingGoal(false);
+    }
+  };
+
+  const openTierModal = (tier?: any) => {
+    setEditingTier(tier ?? null);
+    setTierNameInput(tier?.name ?? '');
+    setTierPriceInput(tier?.price != null ? String(tier.price) : '');
+    setTierPerksInput(Array.isArray(tier?.perks) ? tier.perks.join('\n') : '');
+    setTierModalVisible(true);
+  };
+
+  const parsePerksInput = (value: string) =>
+    value
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+  const saveTier = async () => {
+    if (!currentUser?.id) {
+      Alert.alert('Profile Required', 'Sign in to manage your tiers.');
+      return;
+    }
+    const name = tierNameInput.trim();
+    const price = parseMoneyInput(tierPriceInput);
+    if (!name) {
+      Alert.alert('Tier name required', 'Give this tier a name.');
+      return;
+    }
+    if (!price || price <= 0) {
+      Alert.alert('Tier price required', 'Enter a valid monthly price.');
+      return;
+    }
+    setSavingTier(true);
+    try {
+      const perks = parsePerksInput(tierPerksInput);
+      if (editingTier?.id) {
+        const { error } = await supabase
+          .from('subscription_tiers')
+          .update({ name, price, perks })
+          .eq('id', editingTier.id)
+          .eq('creator_id', currentUser.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('subscription_tiers')
+          .insert({ creator_id: currentUser.id, name, price, perks, is_active: true });
+        if (error) throw error;
+      }
+      await loadTiers();
+      setTierModalVisible(false);
+    } catch (err: any) {
+      Alert.alert('Save failed', err?.message ?? 'Could not update this tier.');
+    } finally {
+      setSavingTier(false);
+    }
   };
 
   return (
@@ -298,47 +440,63 @@ const ModelPremiumDashboard: React.FC = () => {
         <View style={s.section}>
           <View style={s.sectionHeader}>
             <Text style={s.sectionTitle}>Tip Goal</Text>
-            <TouchableOpacity onPress={() => Alert.alert('Edit Goal', 'Feature coming soon.')}>
-              <Text style={s.viewAll}>Edit</Text>
+            <TouchableOpacity onPress={openGoalModal}>
+              <Text style={s.viewAll}>{tipGoal ? 'Edit' : 'Set goal'}</Text>
             </TouchableOpacity>
           </View>
-          <View style={s.goalCard}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-              <Text style={s.goalTitle}>New Camera Kit</Text>
-              <Text style={s.goalAmount}>R1,200 / R5,000</Text>
+          {tipGoal ? (
+            <View style={s.goalCard}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                <Text style={s.goalTitle}>{tipGoal.title}</Text>
+                <Text style={s.goalAmount}>
+                  R{goalCurrentAmount.toLocaleString('en-ZA')} / R{goalTargetAmount.toLocaleString('en-ZA')}
+                </Text>
+              </View>
+              <View style={s.goalTrack}>
+                <View style={[s.goalFill, { width: `${goalPercent}%` }]} />
+              </View>
+              <Text style={s.goalSub}>{goalPercent}% completed</Text>
             </View>
-            <View style={s.goalTrack}>
-              <View style={[s.goalFill, { width: '24%' }]} />
+          ) : (
+            <View style={s.goalCard}>
+              <Text style={s.goalTitle}>No active goal yet</Text>
+              <Text style={s.goalSub}>Set a tip goal so fans know what you're working toward.</Text>
+              <TouchableOpacity style={s.goalCta} onPress={openGoalModal}>
+                <Text style={s.goalCtaText}>Create goal</Text>
+              </TouchableOpacity>
             </View>
-            <Text style={s.goalSub}>24% completed | 12 contributors</Text>
-          </View>
+          )}
         </View>
 
         {/* Subscription Tiers */}
         <View style={s.section}>
           <View style={s.sectionHeader}>
             <Text style={s.sectionTitle}>Subscription Tiers</Text>
-            <TouchableOpacity onPress={() => Alert.alert('Add Tier', 'Feature coming soon.')}>
+            <TouchableOpacity onPress={() => openTierModal()}>
               <Text style={s.viewAll}>+ Add New</Text>
             </TouchableOpacity>
           </View>
-          {Object.entries(tierMap).length === 0 ? (
+          {tiers.length === 0 ? (
             <Text style={s.empty}>You haven't set up any subscription tiers yet.</Text>
           ) : (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ paddingBottom: 8 }}>
-              {Object.entries(tierMap).map(([id, tier]) => (
-                <View key={id} style={s.tierCard}>
+              {tiers.map((tier) => (
+                <View key={tier.id} style={s.tierCard}>
                    <View style={s.tierHeader}>
                      <Text style={s.tierName}>{tier.name}</Text>
-                     <TouchableOpacity onPress={() => Alert.alert('Edit Tier', 'Feature coming soon.')}>
+                     <TouchableOpacity onPress={() => openTierModal(tier)}>
                        <Ionicons name="ellipsis-horizontal" size={18} color="#94a3b8" />
                      </TouchableOpacity>
                    </View>
-                   <Text style={s.tierPrice}>R{tier.price ?? 0} <Text style={{ fontSize: 13, color: '#64748b' }}>/ mo</Text></Text>
+                   <Text style={s.tierPrice}>R{Number(tier.price ?? 0).toLocaleString('en-ZA')} <Text style={{ fontSize: 13, color: '#64748b' }}>/ mo</Text></Text>
                    <View style={s.tierPerks}>
-                     <Text style={s.tierPerk}>- Exclusive feed access</Text>
-                     <Text style={s.tierPerk}>- Direct messaging</Text>
-                     <Text style={s.tierPerk}>- Priority booking</Text>
+                     {(Array.isArray(tier.perks) && tier.perks.length > 0) ? (
+                       tier.perks.map((perk: string, idx: number) => (
+                         <Text key={`${tier.id}-perk-${idx}`} style={s.tierPerk}>- {perk}</Text>
+                       ))
+                     ) : (
+                       <Text style={s.tierPerk}>- No perks listed yet</Text>
+                     )}
                    </View>
                 </View>
               ))}
@@ -499,6 +657,83 @@ const ModelPremiumDashboard: React.FC = () => {
         }}
       />
 
+      {/* Tip goal modal */}
+      <Modal visible={goalModalVisible} transparent animationType="slide" onRequestClose={() => setGoalModalVisible(false)}>
+        <View style={s.modalBg}>
+          <View style={s.modalContent}>
+            <View style={s.modalHeader}>
+              <Text style={s.modalTitle}>Tip Goal</Text>
+              <TouchableOpacity onPress={() => setGoalModalVisible(false)}>
+                <Ionicons name="close" size={24} color="#fff" />
+              </TouchableOpacity>
+            </View>
+            <Text style={s.modalLabel}>Goal title</Text>
+            <TextInput
+              style={s.modalInput}
+              placeholder="New Camera Kit"
+              placeholderTextColor="rgba(255,255,255,0.45)"
+              value={goalTitleInput}
+              onChangeText={setGoalTitleInput}
+            />
+            <Text style={[s.modalLabel, { marginTop: 12 }]}>Target amount (ZAR)</Text>
+            <TextInput
+              style={s.modalInput}
+              placeholder="5000"
+              placeholderTextColor="rgba(255,255,255,0.45)"
+              keyboardType="numeric"
+              value={goalTargetInput}
+              onChangeText={setGoalTargetInput}
+            />
+            <TouchableOpacity style={s.modalPrimaryBtn} onPress={saveGoal} disabled={savingGoal}>
+              <Text style={s.modalPrimaryText}>{savingGoal ? 'Saving...' : 'Save Goal'}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Tier modal */}
+      <Modal visible={tierModalVisible} transparent animationType="slide" onRequestClose={() => setTierModalVisible(false)}>
+        <View style={s.modalBg}>
+          <View style={s.modalContent}>
+            <View style={s.modalHeader}>
+              <Text style={s.modalTitle}>{editingTier ? 'Edit Tier' : 'Create Tier'}</Text>
+              <TouchableOpacity onPress={() => setTierModalVisible(false)}>
+                <Ionicons name="close" size={24} color="#fff" />
+              </TouchableOpacity>
+            </View>
+            <Text style={s.modalLabel}>Tier name</Text>
+            <TextInput
+              style={s.modalInput}
+              placeholder="Gold VIP"
+              placeholderTextColor="rgba(255,255,255,0.45)"
+              value={tierNameInput}
+              onChangeText={setTierNameInput}
+            />
+            <Text style={[s.modalLabel, { marginTop: 12 }]}>Price per month (ZAR)</Text>
+            <TextInput
+              style={s.modalInput}
+              placeholder="249"
+              placeholderTextColor="rgba(255,255,255,0.45)"
+              keyboardType="numeric"
+              value={tierPriceInput}
+              onChangeText={setTierPriceInput}
+            />
+            <Text style={[s.modalLabel, { marginTop: 12 }]}>Perks (one per line)</Text>
+            <TextInput
+              style={[s.modalInput, s.modalTextArea]}
+              placeholder="Exclusive feed access"
+              placeholderTextColor="rgba(255,255,255,0.45)"
+              value={tierPerksInput}
+              onChangeText={setTierPerksInput}
+              multiline
+            />
+            <TouchableOpacity style={s.modalPrimaryBtn} onPress={saveTier} disabled={savingTier}>
+              <Text style={s.modalPrimaryText}>{savingTier ? 'Saving...' : 'Save Tier'}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* Subscribers modal */}
       <Modal visible={showSubscribers} transparent animationType="slide" onRequestClose={() => setShowSubscribers(false)}>
         <View style={s.modalBg}>
@@ -597,6 +832,8 @@ const s = StyleSheet.create({
   goalTrack: { height: 8, backgroundColor: '#0f172a', borderRadius: 4, overflow: 'hidden', marginBottom: 8 },
   goalFill: { height: '100%', backgroundColor: '#ec4899', borderRadius: 4 },
   goalSub: { color: '#94a3b8', fontSize: 12 },
+  goalCta: { marginTop: 12, alignSelf: 'flex-start', backgroundColor: '#ec4899', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 },
+  goalCtaText: { color: '#fff', fontWeight: '800', fontSize: 12 },
   tierCard: { backgroundColor: '#1e293b', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#334155', width: 220, marginRight: 12 },
   tierHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   tierName: { color: '#a855f7', fontWeight: '800', fontSize: 15, textTransform: 'uppercase' },
@@ -619,6 +856,27 @@ const s = StyleSheet.create({
   modalContent: { backgroundColor: '#1e293b', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40, maxHeight: '80%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   modalTitle: { color: '#fff', fontSize: 18, fontWeight: '800' },
+  modalLabel: { color: '#94a3b8', fontWeight: '700', fontSize: 12 },
+  modalInput: {
+    backgroundColor: '#0f172a',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    color: '#fff',
+    borderWidth: 1,
+    borderColor: '#334155',
+    fontWeight: '700',
+    marginTop: 8,
+  },
+  modalTextArea: { minHeight: 100, textAlignVertical: 'top' },
+  modalPrimaryBtn: {
+    marginTop: 18,
+    backgroundColor: '#ec4899',
+    paddingVertical: 14,
+    borderRadius: 14,
+    alignItems: 'center',
+  },
+  modalPrimaryText: { color: '#fff', fontWeight: '800', fontSize: 14 },
   subRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#334155', gap: 12 },
   subAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#334155' },
   subName: { color: '#fff', fontWeight: '700' },

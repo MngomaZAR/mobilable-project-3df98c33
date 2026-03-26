@@ -210,6 +210,11 @@ const UserProfileScreen: React.FC = () => {
     ]);
   };
 
+  const openPortfolio = () => {
+    const title = `${talent?.name ?? profileFallback?.full_name ?? 'Creator'} Portfolio`;
+    navigation.navigate('MediaLibrary', { creatorId: params.userId, title });
+  };
+
   const renderHeader = () => (
     <View style={s.profileInfo}>
       <View style={s.avatarWrapper}>
@@ -366,7 +371,13 @@ const UserProfileScreen: React.FC = () => {
         <TouchableOpacity style={[s.tab, activeTab === 'grid' && s.activeTab]} onPress={() => setActiveTab('grid')}>
           <Ionicons name="grid" size={22} color={activeTab === 'grid' ? colors.accent : colors.textMuted} />
         </TouchableOpacity>
-        <TouchableOpacity style={[s.tab, activeTab === 'portfolio' && s.activeTab]} onPress={() => setActiveTab('portfolio')}>
+        <TouchableOpacity
+          style={[s.tab, activeTab === 'portfolio' && s.activeTab]}
+          onPress={() => {
+            setActiveTab('portfolio');
+            openPortfolio();
+          }}
+        >
           <Ionicons name="images" size={22} color={activeTab === 'portfolio' ? colors.accent : colors.textMuted} />
         </TouchableOpacity>
         <TouchableOpacity style={[s.tab, activeTab === 'tagged' && s.activeTab]} onPress={() => setActiveTab('tagged')}>
@@ -402,9 +413,18 @@ const UserProfileScreen: React.FC = () => {
         ListEmptyComponent={
           <View style={s.emptyContainer}>
             <Ionicons name={activeTab === 'grid' ? "images-outline" : "albums-outline"} size={48} color={colors.textMuted} />
-            <Text style={[s.empty, { color: colors.textMuted }]}>
-              {activeTab === 'grid' ? 'No posts yet.' : 'Portfolio gallery coming soon.'}
-            </Text>
+            {activeTab === 'portfolio' ? (
+              <>
+                <Text style={[s.empty, { color: colors.textMuted }]}>Open this creator's portfolio gallery.</Text>
+                <TouchableOpacity style={s.portfolioCta} onPress={openPortfolio}>
+                  <Text style={s.portfolioCtaText}>View Portfolio</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <Text style={[s.empty, { color: colors.textMuted }]}>
+                {activeTab === 'grid' ? 'No posts yet.' : 'Tagged content coming soon.'}
+              </Text>
+            )}
           </View>
         }
       />
@@ -497,6 +517,8 @@ const makeStyles = (colors: any) => StyleSheet.create({
   image: { width: '100%', height: '100%' },
   emptyContainer: { alignItems: 'center', paddingVertical: 60, width: '100%' },
   empty: { textAlign: 'center', marginTop: 12, fontWeight: '600' },
+  portfolioCta: { marginTop: 12, backgroundColor: colors.accent, paddingHorizontal: 18, paddingVertical: 10, borderRadius: 12 },
+  portfolioCtaText: { color: colors.bg, fontWeight: '800', fontSize: 13 },
   modalBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContent: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 40 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },

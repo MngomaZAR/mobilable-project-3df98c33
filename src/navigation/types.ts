@@ -2,7 +2,7 @@ import { NavigatorScreenParams } from '@react-navigation/native';
 import { Booking, Photographer, Post } from '../types';
 
 export type TabParamList = {
-  Home: undefined;
+  Home: { searchTag?: string } | undefined;
   Bookings: undefined;
   Feed: undefined;
   Chat: undefined;

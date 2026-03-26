@@ -77,8 +77,6 @@ const bookingInsert = await client
     package_type: 'Payment QA booking',
     booking_date: new Date().toISOString(),
     price_total: 3600,
-    base_amount: 3600,
-    travel_amount: 0,
     notes: 'QA payment flow verification',
   })
   .select('id')

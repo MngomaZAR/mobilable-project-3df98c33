@@ -72,9 +72,15 @@ const VerificationRejectedScreen: React.FC = () => {
   );
 };
 
-const tabBarIcon = (routeName: keyof TabParamList, focused: boolean, color: string, size: number) => {
+const tabBarIcon = (
+  routeName: keyof TabParamList,
+  focused: boolean,
+  color: string,
+  size: number,
+  homeIcon?: { active: string; inactive: string }
+) => {
   const icons: Record<keyof TabParamList, { active: string; inactive: string }> = {
-    Home: { active: 'home', inactive: 'home-outline' },
+    Home: homeIcon ?? { active: 'home', inactive: 'home-outline' },
     Bookings: { active: 'calendar', inactive: 'calendar-outline' },
     Feed: { active: 'images', inactive: 'images-outline' },
     Chat: { active: 'chatbubble', inactive: 'chatbubble-outline' },
@@ -91,13 +97,26 @@ const TabsNavigator = () => {
   const unreadNotifications = state.notifications.filter(n => n.status === 'queued').length;
 
   const role = currentUser?.role ?? 'client';
-  const homeComponent = HomeScreen;
+  const homeComponent =
+    role === 'client'
+      ? MapScreen
+      : role === 'photographer'
+        ? PhotographerDashboardScreen
+        : role === 'model'
+          ? ModelPremiumDashboard
+          : role === 'admin'
+            ? AdminDashboardScreen
+            : HomeScreen;
+  const homeLabel = role === 'client' ? 'Home' : 'Dashboard';
+  const homeIcon = role === 'client'
+    ? { active: 'map', inactive: 'map-outline' }
+    : { active: 'home', inactive: 'home-outline' };
 
   return (
     <Tab.Navigator
       initialRouteName="Home"
       screenOptions={({ route }) => ({
-        tabBarIcon: ({ focused, color, size }) => tabBarIcon(route.name, focused, color, size),
+        tabBarIcon: ({ focused, color, size }) => tabBarIcon(route.name, focused, color, size, homeIcon),
         tabBarActiveTintColor: colors.accent,
         tabBarInactiveTintColor: isDark ? '#7f8ba5' : '#9b8a72',
         tabBarStyle: {
@@ -124,11 +143,11 @@ const TabsNavigator = () => {
         headerShown: false,
       })}
     >
-      <Tab.Screen name="Map" component={MapScreen} />
+      <Tab.Screen name="Map" component={MapScreen} options={{ tabBarLabel: 'Map' }} />
       <Tab.Screen
         name="Home"
         component={homeComponent}
-        options={{ tabBarLabel: role === 'client' ? 'Home' : 'Dashboard' }}
+        options={{ tabBarLabel: homeLabel }}
       />
       <Tab.Screen name="Bookings" component={BookingsScreen} options={{ tabBarLabel: 'Book' }} />
       <Tab.Screen name="Feed" component={FeedScreen} />

@@ -43,6 +43,7 @@ const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
 const DEFAULT_PASSWORD = 'Papzi!12345';
 
 const REFERENCE_CLIENT = {
+  id: '5b2f56b4-1a3b-4c9c-a9c3-7c9b8b1c2a10',
   email: 'sam.mngoma.reference@papzi.test',
   full_name: 'Sam Mngoma Test',
   avatar_url: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=300&q=80',
@@ -52,6 +53,7 @@ const REFERENCE_CLIENT = {
 
 const PHOTOGRAPHERS = [
   {
+    id: '9a04e8f2-2f3e-4e61-9cb7-97c4f9c39210',
     email: 'michael.scott.reference@papzi.test',
     full_name: 'Michael Scott',
     avatar_url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=300&q=80',
@@ -65,6 +67,7 @@ const PHOTOGRAPHERS = [
     longitude: 31.0218,
   },
   {
+    id: '0f1bfa5b-9b7d-49a4-8a8c-0b8447d1a4c2',
     email: 'anna.gomez.reference@papzi.test',
     full_name: 'Anna Gomez',
     avatar_url: 'https://images.unsplash.com/photo-1503341455253-b2e723bb3dbb?auto=format&fit=crop&w=300&q=80',
@@ -78,6 +81,7 @@ const PHOTOGRAPHERS = [
     longitude: 31.028,
   },
   {
+    id: 'a2a8b1a8-8f14-49ac-8f04-4c7d8cc5b1f3',
     email: 'jason.lee.reference@papzi.test',
     full_name: 'Jason Lee',
     avatar_url: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=300&q=80',
@@ -91,6 +95,7 @@ const PHOTOGRAPHERS = [
     longitude: 31.019,
   },
   {
+    id: '4b2f7a43-bbd1-41c2-bd08-0cb723cff93d',
     email: 'olivia.harris.reference@papzi.test',
     full_name: 'Olivia Harris',
     avatar_url: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=300&q=80',
@@ -104,6 +109,7 @@ const PHOTOGRAPHERS = [
     longitude: 31.015,
   },
   {
+    id: '6d3c94d1-2a93-4a48-8f7c-5cb8b2467f88',
     email: 'lerato.sithole.reference@papzi.test',
     full_name: 'Lerato Sithole',
     avatar_url: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=300&q=80',
@@ -117,6 +123,7 @@ const PHOTOGRAPHERS = [
     longitude: 31.033,
   },
   {
+    id: 'e02e3d63-27bc-4d5b-9b0f-bb7a04db4e33',
     email: 'sipho.dlamini.reference@papzi.test',
     full_name: 'Sipho Dlamini',
     avatar_url: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=300&q=80',
@@ -192,37 +199,28 @@ const buildBookings = (idMap) => {
   }));
 };
 
-const listAllUsers = async () => {
-  const { data, error } = await supabase.auth.admin.listUsers({ page: 1, perPage: 200 });
-  if (error) throw error;
-  return data?.users ?? [];
-};
-
 const ensureUsers = async () => {
   const userSpecs = [
     { ...REFERENCE_CLIENT },
     ...PHOTOGRAPHERS.map((p) => ({ ...p })),
   ];
-  const existing = await listAllUsers();
-  const byEmail = new Map(existing.map((u) => [u.email, u]));
   const idMap = new Map();
 
   for (const spec of userSpecs) {
     const email = spec.email;
+    const id = spec.id;
     if (!email) continue;
-    const existingUser = byEmail.get(email);
-    if (existingUser) {
-      idMap.set(email, existingUser.id);
-      continue;
-    }
     const created = await supabase.auth.admin.createUser({
+      id,
       email,
       password: DEFAULT_PASSWORD,
       email_confirm: true,
       user_metadata: { full_name: spec.full_name },
     });
-    if (created.error) throw created.error;
-    idMap.set(email, created.data.user.id);
+    if (created.error && !/already registered|duplicate/i.test(created.error.message)) {
+      throw created.error;
+    }
+    idMap.set(email, id);
   }
   return idMap;
 };

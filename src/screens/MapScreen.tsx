@@ -193,13 +193,13 @@ const MapScreen: React.FC = () => {
     const role = currentUser?.role || 'client';
     let result: MapMarker[] = [];
     if (role === 'photographer') {
-      result = state.models.map(m => ({ id: `model-${m.id}`, sourceId: m.id, title: m.name, description: 'Model', latitude: m.latitude, longitude: m.longitude, type: 'model' as const, avatarUrl: m.avatar_url }));
+      result = state.models.map(m => ({ id: `model-${m.id}`, sourceId: m.id, title: m.name, description: 'Model', latitude: m.latitude, longitude: m.longitude, type: 'model' as const, avatarUrl: m.avatar_url, rating: m.rating }));
     } else if (role === 'model') {
-      result = state.photographers.map(p => ({ id: `photo-${p.id}`, sourceId: p.id, title: p.name, description: 'Photographer', latitude: p.latitude, longitude: p.longitude, type: 'photographer' as const, avatarUrl: p.avatar_url }));
+      result = state.photographers.map(p => ({ id: `photo-${p.id}`, sourceId: p.id, title: p.name, description: 'Photographer', latitude: p.latitude, longitude: p.longitude, type: 'photographer' as const, avatarUrl: p.avatar_url, rating: p.rating }));
     } else {
       result = [
-        ...state.photographers.map(p => ({ id: `photo-${p.id}`, sourceId: p.id, title: p.name, description: 'Photographer', latitude: p.latitude, longitude: p.longitude, type: 'photographer' as const, avatarUrl: p.avatar_url })),
-        ...state.models.map(m => ({ id: `model-${m.id}`, sourceId: m.id, title: m.name, description: 'Model', latitude: m.latitude, longitude: m.longitude, type: 'model' as const, avatarUrl: m.avatar_url })),
+        ...state.photographers.map(p => ({ id: `photo-${p.id}`, sourceId: p.id, title: p.name, description: 'Photographer', latitude: p.latitude, longitude: p.longitude, type: 'photographer' as const, avatarUrl: p.avatar_url, rating: p.rating })),
+        ...state.models.map(m => ({ id: `model-${m.id}`, sourceId: m.id, title: m.name, description: 'Model', latitude: m.latitude, longitude: m.longitude, type: 'model' as const, avatarUrl: m.avatar_url, rating: m.rating })),
       ];
     }
     const seen = new Set<string>();
@@ -441,7 +441,11 @@ const MapScreen: React.FC = () => {
                 snapTo(SCREEN_HEIGHT - SHEET_HALF);
               }}
             >
-              <MapAvatarPin uri={marker.avatarUrl} online={onlineProfiles.has(marker.sourceId ?? '')} />
+              <MapAvatarPin
+                uri={marker.avatarUrl}
+                online={onlineProfiles.has(marker.sourceId ?? '')}
+                rating={marker.rating}
+              />
             </MapLibreGL.PointAnnotation>
           ))}
 

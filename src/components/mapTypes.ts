@@ -7,6 +7,7 @@ export type MapMarker = {
   title?: string;
   description?: string;
   avatarUrl?: string;
+  rating?: number | null;
 };
 
 export type MapPreviewProps = {

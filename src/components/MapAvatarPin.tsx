@@ -1,13 +1,15 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Image, StyleSheet, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 type Props = {
   uri?: string | null;
   size?: number;
   online?: boolean;
+  rating?: number | null;
 };
 
-export const MapAvatarPin: React.FC<Props> = ({ uri, size = 52, online = false }) => {
+export const MapAvatarPin: React.FC<Props> = ({ uri, size = 52, online = false, rating }) => {
   const pulse = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -59,6 +61,14 @@ export const MapAvatarPin: React.FC<Props> = ({ uri, size = 52, online = false }
           style={styles.avatar}
         />
       </View>
+      {Number.isFinite(rating) && (
+        <View style={[styles.ratingBadge, { right: -2, bottom: -4 }]}>
+          <Ionicons name="star" size={10} color="#fbbf24" />
+          <View style={styles.ratingTextWrap}>
+            <Animated.Text style={styles.ratingText}>{Number(rating).toFixed(1)}</Animated.Text>
+          </View>
+        </View>
+      )}
     </View>
   );
 };
@@ -90,5 +100,25 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
+  ratingBadge: {
+    position: 'absolute',
+    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(241, 214, 164, 0.6)',
+  },
+  ratingTextWrap: {
+    minWidth: 24,
+    alignItems: 'center',
+  },
+  ratingText: {
+    color: '#f5e7cc',
+    fontWeight: '800',
+    fontSize: 10,
+  },
 });
-

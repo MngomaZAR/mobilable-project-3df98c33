@@ -101,7 +101,13 @@ export const MapTracker: React.FC<Props> = ({ client, photographer, status }) =>
           />
           <MapLibreGL.LineLayer
             id="route-line"
-            style={{ lineColor: '#b88944', lineWidth: 4, lineCap: 'round', lineJoin: 'round' }}
+            style={{
+              lineColor: '#d4a862',
+              lineWidth: 4,
+              lineCap: 'round',
+              lineJoin: 'round',
+              lineDasharray: [2, 6],
+            }}
           />
         </MapLibreGL.ShapeSource>
         {/* Photographer pin */}

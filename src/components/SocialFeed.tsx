@@ -79,6 +79,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [autoRetryCount, setAutoRetryCount] = useState(0);
   const [likedAnimPostId, setLikedAnimPostId] = useState<string | null>(null);
   const [lightboxUri, setLightboxUri] = useState<string | null>(null);
   const [followingOnly, setFollowingOnly] = useState(false);
@@ -352,6 +353,19 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
     setRefreshing(true);
     await loadFeed();
   };
+
+  useEffect(() => {
+    if (!appError) {
+      setAutoRetryCount(0);
+      return;
+    }
+    if (autoRetryCount >= 2) return;
+    const timer = setTimeout(() => {
+      setAutoRetryCount((count) => count + 1);
+      onRefresh();
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, [appError, autoRetryCount, onRefresh]);
 
   const loadMore = async () => {
     if (isWeb || !hasMore || loadingMore || loadMoreInFlightRef.current) return;

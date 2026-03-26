@@ -41,6 +41,7 @@ const ConversationsListScreen: React.FC = () => {
   const { state, currentUser } = useAppData();
   const [showNewMessage, setShowNewMessage] = useState(false);
   const [inlineError, setInlineError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
 
   // Load on focus so new conversations appear when returning from chat
   useFocusEffect(
@@ -57,6 +58,19 @@ const ConversationsListScreen: React.FC = () => {
       setInlineError(err?.message || 'Unable to load conversations right now.');
     });
   }, [fetchConversations]);
+
+  useEffect(() => {
+    if (!inlineError) {
+      setRetryCount(0);
+      return;
+    }
+    if (retryCount >= 2) return;
+    const timer = setTimeout(() => {
+      setRetryCount((count) => count + 1);
+      handleRefresh();
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, [handleRefresh, inlineError, retryCount]);
 
   const listHeader = useMemo(
     () => (

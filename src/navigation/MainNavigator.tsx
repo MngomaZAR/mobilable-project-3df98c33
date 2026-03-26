@@ -97,25 +97,23 @@ const TabsNavigator = () => {
   const unreadNotifications = state.notifications.filter(n => n.status === 'queued').length;
 
   const role = currentUser?.role ?? 'client';
+  const isClient = role === 'client';
   const homeComponent =
-    role === 'client'
-      ? MapScreen
-      : role === 'photographer'
-        ? PhotographerDashboardScreen
-        : role === 'model'
-          ? ModelPremiumDashboard
-          : role === 'admin'
-            ? AdminDashboardScreen
-            : HomeScreen;
-  const homeLabel = role === 'client' ? 'Map' : 'Dashboard';
-  const homeIcon = role === 'client'
-    ? { active: 'map', inactive: 'map-outline' }
-    : { active: 'home', inactive: 'home-outline' };
-  const showMapTab = role !== 'client';
+    role === 'photographer'
+      ? PhotographerDashboardScreen
+      : role === 'model'
+        ? ModelPremiumDashboard
+        : role === 'admin'
+          ? AdminDashboardScreen
+          : HomeScreen;
+  const homeLabel = isClient ? 'Home' : 'Dashboard';
+  const homeIcon = { active: 'home', inactive: 'home-outline' };
+
+  const showChatTab = !isClient;
 
   return (
     <Tab.Navigator
-      initialRouteName="Home"
+      initialRouteName={isClient ? 'Map' : 'Home'}
       screenOptions={({ route }) => ({
         tabBarIcon: ({ focused, color, size }) => tabBarIcon(route.name, focused, color, size, homeIcon),
         tabBarActiveTintColor: colors.accent,
@@ -144,15 +142,15 @@ const TabsNavigator = () => {
         headerShown: false,
       })}
     >
-      {showMapTab && <Tab.Screen name="Map" component={MapScreen} options={{ tabBarLabel: 'Map' }} />}
+      <Tab.Screen name="Map" component={MapScreen} options={{ tabBarLabel: 'Map' }} />
       <Tab.Screen
         name="Home"
         component={homeComponent}
         options={{ tabBarLabel: homeLabel }}
       />
-      <Tab.Screen name="Bookings" component={BookingsScreen} options={{ tabBarLabel: 'Book' }} />
+      <Tab.Screen name="Bookings" component={BookingsScreen} options={{ tabBarLabel: 'Bookings' }} />
       <Tab.Screen name="Feed" component={FeedScreen} />
-      <Tab.Screen name="Chat" component={ConversationsListScreen} />
+      {showChatTab && <Tab.Screen name="Chat" component={ConversationsListScreen} />}
       <Tab.Screen 
         name="Settings" 
         component={SettingsScreen} 

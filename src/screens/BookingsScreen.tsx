@@ -247,10 +247,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   title: {
-    fontSize: 62,
-    lineHeight: 66,
+    fontSize: 30,
+    lineHeight: 34,
     fontWeight: '900',
-    marginBottom: 16,
+    marginBottom: 18,
     marginTop: 2,
   },
   listContent: {

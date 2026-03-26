@@ -32,6 +32,12 @@ import { fetchRecommendedMatches } from '../services/matchService';
 type Navigation = BottomTabNavigationProp<TabParamList, 'Home'>;
 const MAX_HOME_CARDS = 120;
 const randPerTier = 600;
+const REFERENCE_SHOWCASE: Record<string, { category: string; reviews: number; bookings: number }> = {
+  'Olivia Harris': { category: 'Portrait', reviews: 721, bookings: 324 },
+  'Michael Scott': { category: 'Wedding', reviews: 287, bookings: 206 },
+  'Anna Gomez': { category: 'Fashion', reviews: 319, bookings: 319 },
+  'Jason Lee': { category: 'Family', reviews: 728, bookings: 203 },
+};
 
 const toHourlyRateRand = (price_range: string) => {
   const tiers = ((price_range || '').match(/\$/g) || []).length || 2;
@@ -103,6 +109,7 @@ const HomeScreen: React.FC = () => {
   const isWideHero = width > 820;
   const role = state.currentUser?.role ?? 'client';
   const showGetStarted = !loading && !!state.currentUser && state.bookings.length === 0;
+  const showEntryCard = role !== 'client';
 
   const profileById = useMemo(() => {
     const map = new Map<string, any>();
@@ -166,6 +173,28 @@ const HomeScreen: React.FC = () => {
     () => (state.profiles ?? []).filter((p: any) => isOnlineStatus(p?.availability_status)).length,
     [state.profiles]
   );
+  const showcaseItems = useMemo(() => {
+    const picks = Object.keys(REFERENCE_SHOWCASE);
+    const byName = new Map((state.photographers ?? []).map((p) => [p.name, p]));
+    return picks
+      .map((name) => {
+        const item = byName.get(name);
+        if (!item) return null;
+        const meta = REFERENCE_SHOWCASE[name];
+        return {
+          ...item,
+          showcaseCategory: meta.category,
+          showcaseReviews: meta.reviews,
+          showcaseBookings: meta.bookings,
+        };
+      })
+      .filter(Boolean) as Array<any>;
+  }, [state.photographers]);
+
+  const recommendedPhotographers = useMemo(() => {
+    const list = (recommended?.length ? recommended : filteredTalent).filter((item: any) => item?.avatar_url);
+    return list.slice(0, 8);
+  }, [recommended, filteredTalent]);
 
   const startModelBooking = (model: Model) => {
     // Placeholder navigation - routes to BookingForm with photographer field re-used
@@ -222,30 +251,38 @@ const HomeScreen: React.FC = () => {
     handleSmartSearch();
   };
 
-  const renderCard = (item: any) => (
-    <View
-      key={item.id}
-      style={[
-        styles.card,
-        {
-          width: columns === 1 ? '100%' : `${100 / columns - 3}%`,
-          marginRight: columns === 1 ? 0 : 12,
-          marginBottom: 14,
-          backgroundColor: colors.card,
-          borderColor: colors.border
-        },
-      ]}
-    >
-      <View style={styles.imageWrap}>
-        <Image source={{ uri: item.avatar_url || 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=300&q=80' }} style={styles.avatar} />
-        <View style={[styles.ratingBadge, { backgroundColor: isDark ? 'rgba(0,0,0,0.6)' : '#111827cc' }]}>
-          <Ionicons name="star" size={14} color="#fbbf24" />
-          <Text style={styles.ratingText}>{toSafeRating(item?.rating).toFixed(1)}</Text>
+  const renderCard = (item: any) => {
+    const profile = profileById.get(item.id);
+    const isOnline = isOnlineStatus(profile?.availability_status);
+    const rate = Number(item?.hourly_rate ?? 0);
+    const priceLabel = rate > 0 ? `R${rate.toLocaleString('en-ZA')}/hr` : toHourlyRateRand(String(item?.price_range ?? '$$'));
+
+    return (
+      <View
+        key={item.id}
+        style={[
+          styles.card,
+          {
+            width: columns === 1 ? '100%' : `${100 / columns - 3}%`,
+            marginRight: columns === 1 ? 0 : 12,
+            marginBottom: 14,
+            backgroundColor: colors.card,
+            borderColor: colors.border
+          },
+        ]}
+      >
+        <View style={styles.imageWrap}>
+          <Image source={{ uri: item.avatar_url || 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=300&q=80' }} style={styles.avatar} />
+          <View style={[styles.ratingBadge, { backgroundColor: isDark ? 'rgba(0,0,0,0.6)' : '#111827cc' }]}>
+            <Ionicons name="star" size={14} color="#fbbf24" />
+            <Text style={styles.ratingText}>{toSafeRating(item?.rating).toFixed(1)}</Text>
+          </View>
+          {isOnline && (
+            <View style={styles.availabilityBadge}>
+              <Text style={styles.availabilityText}>{discoveryMode === 'models' ? 'Ready to Shoot' : 'Available Today'}</Text>
+            </View>
+          )}
         </View>
-        <View style={styles.availabilityBadge}>
-          <Text style={styles.availabilityText}>{discoveryMode === 'models' ? 'Ready to Shoot' : 'Available Today'}</Text>
-        </View>
-      </View>
       <View style={styles.cardContent}>
         <Text style={[styles.name, { color: colors.text }]}>{String(item?.name ?? 'Creator')}</Text>
         <Text style={[styles.meta, { color: colors.textMuted }]}>{String(item?.location ?? 'South Africa')}</Text>
@@ -257,7 +294,7 @@ const HomeScreen: React.FC = () => {
           ))}
         </View>
         <View style={styles.metaRow}>
-          <Text style={[styles.price, { color: colors.text }]}>{toHourlyRateRand(String(item?.price_range ?? '$$'))}</Text>
+          <Text style={[styles.price, { color: colors.text }]}>{priceLabel}</Text>
           <Text style={[styles.dot, { color: colors.textMuted }]}>|</Text>
           <Text style={[styles.duration, { color: colors.textMuted }]}>{discoveryMode === 'models' ? 'Min 2 hours' : '~1 hour'}</Text>
         </View>
@@ -288,8 +325,9 @@ const HomeScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
       </View>
-    </View>
-  );
+      </View>
+    );
+  };
 
   return (
     <ScrollView
@@ -326,48 +364,89 @@ const HomeScreen: React.FC = () => {
         <Text style={[styles.livePillText, { color: colors.text }]}>Live | {onlineNearbyCount} online nearby</Text>
       </View>
 
-      <View style={[styles.entryCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <Text style={[styles.entryTitle, { color: colors.text }]}>What do you want to book?</Text>
-        <Text style={[styles.entrySubtitle, { color: colors.textSecondary }]}>Start with a single request. Everything else flows from there.</Text>
-        <View style={styles.entryActions}>
-          <TouchableOpacity
-            style={[styles.entryPrimary, { backgroundColor: colors.accent }]}
-            onPress={() => handlePrimaryCTA('photographers')}
+      <View style={[styles.modeToggle, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <TouchableOpacity
+          style={[
+            styles.modeToggleBtn,
+            discoveryMode === 'photographers' && { backgroundColor: colors.accent },
+          ]}
+          onPress={() => setDiscoveryMode('photographers')}
+        >
+          <Ionicons name="camera" size={14} color={discoveryMode === 'photographers' ? colors.card : colors.text} />
+          <Text
+            style={[
+              styles.modeToggleText,
+              { color: discoveryMode === 'photographers' ? colors.card : colors.text },
+            ]}
           >
-            <Ionicons name="camera-outline" size={18} color={isDark ? colors.bg : colors.card} />
-            <Text style={[styles.entryPrimaryText, { color: isDark ? colors.bg : colors.card }]}>Book Photographer</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.entrySecondary, { borderColor: colors.border }]}
-            onPress={() => handlePrimaryCTA('models')}
+            Photographers
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.modeToggleBtn,
+            discoveryMode === 'models' && { backgroundColor: colors.accent },
+          ]}
+          onPress={() => setDiscoveryMode('models')}
+        >
+          <Ionicons name="sparkles" size={14} color={discoveryMode === 'models' ? colors.card : colors.text} />
+          <Text
+            style={[
+              styles.modeToggleText,
+              { color: discoveryMode === 'models' ? colors.card : colors.text },
+            ]}
           >
-            <Ionicons name="sparkles-outline" size={18} color={colors.text} />
-            <Text style={[styles.entrySecondaryText, { color: colors.text }]}>Book Model</Text>
-          </TouchableOpacity>
-        </View>
-        <TouchableOpacity style={[styles.entryGhost, { backgroundColor: colors.bg }]} onPress={() => navigation.navigate('Feed')}>
-          <Text style={[styles.entryGhostText, { color: colors.text }]}>Explore</Text>
+            Models
+          </Text>
         </TouchableOpacity>
       </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickActionsRail}>
-        {[
-          { icon: 'map-outline', label: 'Live Map', onPress: () => navigation.navigate('Map') },
-          { icon: 'calendar-outline', label: 'Bookings', onPress: () => navigation.navigate('Bookings') },
-          { icon: 'chatbubble-ellipses-outline', label: 'Messages', onPress: () => navigation.navigate('Chat') },
-          { icon: 'help-buoy-outline', label: 'Support', onPress: () => parentNavigation?.navigate('Support') },
-        ].map((item) => (
-          <TouchableOpacity
-            key={item.label}
-            style={[styles.quickActionBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
-            onPress={item.onPress}
-            activeOpacity={0.85}
-          >
-            <Ionicons name={item.icon as any} size={16} color={colors.accent} />
-            <Text style={[styles.quickActionText, { color: colors.text }]}>{item.label}</Text>
+      {showEntryCard && (
+        <View style={[styles.entryCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[styles.entryTitle, { color: colors.text }]}>What do you want to book?</Text>
+          <Text style={[styles.entrySubtitle, { color: colors.textSecondary }]}>Start with a single request. Everything else flows from there.</Text>
+          <View style={styles.entryActions}>
+            <TouchableOpacity
+              style={[styles.entryPrimary, { backgroundColor: colors.accent }]}
+              onPress={() => handlePrimaryCTA('photographers')}
+            >
+              <Ionicons name="camera-outline" size={18} color={isDark ? colors.bg : colors.card} />
+              <Text style={[styles.entryPrimaryText, { color: isDark ? colors.bg : colors.card }]}>Book Photographer</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.entrySecondary, { borderColor: colors.border }]}
+              onPress={() => handlePrimaryCTA('models')}
+            >
+              <Ionicons name="sparkles-outline" size={18} color={colors.text} />
+              <Text style={[styles.entrySecondaryText, { color: colors.text }]}>Book Model</Text>
+            </TouchableOpacity>
+          </View>
+          <TouchableOpacity style={[styles.entryGhost, { backgroundColor: colors.bg }]} onPress={() => navigation.navigate('Feed')}>
+            <Text style={[styles.entryGhostText, { color: colors.text }]}>Explore</Text>
           </TouchableOpacity>
-        ))}
-      </ScrollView>
+        </View>
+      )}
+
+      {showEntryCard && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickActionsRail}>
+          {[
+            { icon: 'map-outline', label: 'Live Map', onPress: () => navigation.navigate('Map') },
+            { icon: 'calendar-outline', label: 'Bookings', onPress: () => navigation.navigate('Bookings') },
+            { icon: 'chatbubble-ellipses-outline', label: 'Messages', onPress: () => navigation.navigate('Chat') },
+            { icon: 'help-buoy-outline', label: 'Support', onPress: () => parentNavigation?.navigate('Support') },
+          ].map((item) => (
+            <TouchableOpacity
+              key={item.label}
+              style={[styles.quickActionBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+              onPress={item.onPress}
+              activeOpacity={0.85}
+            >
+              <Ionicons name={item.icon as any} size={16} color={colors.accent} />
+              <Text style={[styles.quickActionText, { color: colors.text }]}>{item.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      )}
 
       <LinearGradient colors={isDark ? ['#121a2b', '#0a1222', '#060b14'] : ['#f7f1e7', '#f1e8da', '#eadfca']} style={[styles.hero, !isWideHero && styles.heroStacked, { borderColor: colors.border }]}>
         <View style={[styles.heroText, !isWideHero && styles.heroTextCentered]}>
@@ -449,6 +528,57 @@ const HomeScreen: React.FC = () => {
           )}
         </View>
       </LinearGradient>
+
+      {showcaseItems.length > 0 && (
+        <View style={styles.sectionBlock}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Explore Categories</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryRail}>
+            {showcaseItems.map((item) => (
+              <TouchableOpacity
+                key={item.id}
+                style={[styles.categoryCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+                onPress={() => openProfile(item)}
+                activeOpacity={0.85}
+              >
+                <Image source={{ uri: item.avatar_url }} style={styles.categoryImage} />
+                <View style={styles.categoryInfo}>
+                  <Text style={[styles.categoryName, { color: colors.text }]} numberOfLines={1}>{item.name}</Text>
+                  <View style={styles.categoryMetaRow}>
+                    <Ionicons name="star" size={12} color="#fbbf24" />
+                    <Text style={[styles.categoryMetaText, { color: colors.textSecondary }]}>
+                      {toSafeRating(item.rating).toFixed(1)} ({item.showcaseReviews}) {item.showcaseBookings}
+                    </Text>
+                  </View>
+                  <Text style={[styles.categoryLabel, { color: colors.textMuted }]}>{item.showcaseCategory}</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      )}
+
+      {recommendedPhotographers.length > 0 && (
+        <View style={styles.sectionBlock}>
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Recommended Photographers</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('Feed')}>
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+            </TouchableOpacity>
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recommendedRail}>
+            {recommendedPhotographers.map((item) => (
+              <TouchableOpacity
+                key={item.id}
+                style={[styles.recommendedCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+                onPress={() => openProfile(item)}
+                activeOpacity={0.85}
+              >
+                <Image source={{ uri: item.avatar_url }} style={styles.recommendedImage} />
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      )}
 
       <View style={[styles.filtersCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <View style={styles.sectionHeader}>
@@ -680,6 +810,26 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     letterSpacing: 0.2,
+  },
+  modeToggle: {
+    alignSelf: 'stretch',
+    marginBottom: 16,
+    borderRadius: 999,
+    flexDirection: 'row',
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  modeToggleBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  modeToggleText: {
+    fontWeight: '700',
+    fontSize: 13,
   },
   entryCard: {
     borderRadius: 22,
@@ -1170,6 +1320,59 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '800',
     color: '#0f172a',
+  },
+  sectionBlock: {
+    marginBottom: 22,
+  },
+  categoryRail: {
+    paddingRight: 12,
+    gap: 14,
+  },
+  categoryCard: {
+    width: 150,
+    borderRadius: 18,
+    overflow: 'hidden',
+    borderWidth: 1,
+  },
+  categoryImage: {
+    width: '100%',
+    height: 110,
+  },
+  categoryInfo: {
+    padding: 10,
+    gap: 4,
+  },
+  categoryName: {
+    fontWeight: '800',
+    fontSize: 14,
+  },
+  categoryMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  categoryMetaText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  categoryLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  recommendedRail: {
+    paddingRight: 12,
+    gap: 12,
+  },
+  recommendedCard: {
+    width: 140,
+    height: 110,
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+  },
+  recommendedImage: {
+    width: '100%',
+    height: '100%',
   },
   sectionSubtitle: {
     color: '#475569',

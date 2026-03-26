@@ -59,7 +59,7 @@ const PHOTOGRAPHERS = [
     avatar_url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=300&q=80',
     city: 'Durban',
     role: 'photographer',
-    rating: 4.8,
+    rating: 4.5,
     tags: ['Wedding', 'Portrait'],
     specialties: ['Wedding', 'Portrait'],
     style: 'Wedding',
@@ -168,17 +168,24 @@ const buildBookings = (idMap) => {
       package_type: 'Your bookings',
       booking_date: '2026-03-24T02:00:00+02:00',
       photographer_id: leratoId,
-      status: 'pending',
+      status: 'paid_out',
     },
     {
       id: '7bdfe9f7-6cf5-49a4-8c21-1a3cf982f8d2',
       package_type: 'Half-day coverage',
       booking_date: '2026-04-15T02:00:00+02:00',
       photographer_id: siphoId,
-      status: 'pending',
+      status: 'accepted',
     },
     {
       id: 'a93e6a85-c2b4-4d3a-b55a-5cf0681aa2f3',
+      package_type: 'Half-day coverage',
+      booking_date: '2026-03-10T02:00:00+02:00',
+      photographer_id: siphoId,
+      status: 'pending',
+    },
+    {
+      id: 'b3b1c6a4-1d3c-4ed8-a1b0-3b4b5d6e7f80',
       package_type: 'Half-day coverage',
       booking_date: '2026-03-19T02:00:00+02:00',
       photographer_id: siphoId,
@@ -192,6 +199,8 @@ const buildBookings = (idMap) => {
     photographer_id: b.photographer_id,
     model_id: null,
     booking_date: b.booking_date,
+    start_datetime: b.booking_date,
+    end_datetime: new Date(new Date(b.booking_date).getTime() + 4 * 60 * 60 * 1000).toISOString(),
     package_type: b.package_type,
     status: b.status,
     created_at: nowIso,
@@ -251,11 +260,20 @@ const seedProfiles = async (idMap) => {
     kyc_status: 'approved',
     age_verified: true,
     age_verified_at: nowIso,
-    availability_status: 'online',
+    availability_status: p.role === 'photographer' ? 'online' : 'offline',
+    is_online: p.role === 'photographer',
   })).filter((row) => Boolean(row.id));
 
   const { error } = await supabase.from('profiles').upsert(payload, { onConflict: 'id' });
-  if (error) throw new Error(`seedProfiles failed: ${error.message}`);
+  if (error) {
+    if (String(error.message || '').includes('is_online')) {
+      const fallbackPayload = payload.map(({ is_online, ...rest }) => rest);
+      const retry = await supabase.from('profiles').upsert(fallbackPayload, { onConflict: 'id' });
+      if (retry.error) throw new Error(`seedProfiles failed: ${retry.error.message}`);
+      return;
+    }
+    throw new Error(`seedProfiles failed: ${error.message}`);
+  }
 };
 
 const seedPhotographers = async (idMap) => {
@@ -284,13 +302,66 @@ const seedBookings = async (idMap) => {
   const payload = buildBookings(idMap);
   const { error } = await supabase.from('bookings').upsert(payload, { onConflict: 'id' });
   if (error) throw new Error(`seedBookings failed: ${error.message}`);
+  return payload;
+};
+
+const seedTrackingArtifacts = async (bookings, idMap) => {
+  if (!Array.isArray(bookings) || bookings.length === 0) return;
+  const activeBooking = bookings.find((b) => b.status === 'accepted') ?? bookings[0];
+  if (!activeBooking) return;
+
+  const clientId = idMap.get(REFERENCE_CLIENT.email);
+  const providerId = activeBooking.photographer_id;
+  if (!clientId || !providerId) return;
+
+  const clientLat = Number(activeBooking.user_latitude ?? -29.8587);
+  const clientLng = Number(activeBooking.user_longitude ?? 31.0218);
+  const providerLat = -29.861;
+  const providerLng = 31.011;
+
+  await supabase.from('location_tracks').delete().eq('booking_id', activeBooking.id);
+  const { error: trackError } = await supabase.from('location_tracks').insert([
+    {
+      booking_id: activeBooking.id,
+      user_id: providerId,
+      role: 'provider',
+      latitude: providerLat,
+      longitude: providerLng,
+      accuracy_m: 15,
+      source: 'seed',
+      created_at: nowIso,
+    },
+    {
+      booking_id: activeBooking.id,
+      user_id: clientId,
+      role: 'client',
+      latitude: clientLat,
+      longitude: clientLng,
+      accuracy_m: 15,
+      source: 'seed',
+      created_at: nowIso,
+    },
+  ]);
+  if (trackError) throw new Error(`seed location_tracks failed: ${trackError.message}`);
+
+  await supabase.from('eta_snapshots').delete().eq('booking_id', activeBooking.id);
+  const { error: etaError } = await supabase.from('eta_snapshots').insert({
+    booking_id: activeBooking.id,
+    eta_seconds: 900,
+    eta_confidence: 0.78,
+    distance_km: 4.2,
+    source: 'seed',
+    created_at: nowIso,
+  });
+  if (etaError) throw new Error(`seed eta_snapshots failed: ${etaError.message}`);
 };
 
 const main = async () => {
   const idMap = await ensureUsers();
   await seedProfiles(idMap);
   await seedPhotographers(idMap);
-  await seedBookings(idMap);
+  const bookings = await seedBookings(idMap);
+  await seedTrackingArtifacts(bookings, idMap);
   console.log('Reference data seeded.');
 };
 

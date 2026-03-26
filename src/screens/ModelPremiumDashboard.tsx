@@ -26,7 +26,7 @@ const ModelPremiumDashboard: React.FC = () => {
   const navigation = useNavigation<Navigation>();
   const { currentUser: authUser } = useAuth();
   const { bookings, refreshBookings, acceptBooking, declineBooking } = useBooking();
-  const { state, fetchEarnings, fetchSubscriptions, fetchCredits } = useAppData();
+  const { state, fetchEarnings, fetchSubscriptions, fetchCredits, fetchBookings } = useAppData();
   const { startConversationWithUser } = useMessaging();
   const insets = useSafeAreaInsets();
   const [showPremiumBox, setShowPremiumBox] = useState(false);
@@ -139,15 +139,19 @@ const ModelPremiumDashboard: React.FC = () => {
   const onRefresh = async () => {
     setRefreshing(true);
     const userId = currentUser?.id;
-    await Promise.all([
-      refreshBookings(),
-      loadTiers(),
-      loadTipGoal(),
-      userId ? fetchEarnings(userId) : Promise.resolve(),
-      userId ? fetchSubscriptions(userId) : Promise.resolve(),
-      userId ? fetchCredits(userId) : Promise.resolve(),
-    ]);
-    setRefreshing(false);
+    try {
+      await Promise.allSettled([
+        refreshBookings(),
+        fetchBookings(userId),
+        loadTiers(),
+        loadTipGoal(),
+        userId ? fetchEarnings(userId) : Promise.resolve(),
+        userId ? fetchSubscriptions(userId) : Promise.resolve(),
+        userId ? fetchCredits(userId) : Promise.resolve(),
+      ]);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const handleGoLive = () => {
@@ -174,7 +178,14 @@ const ModelPremiumDashboard: React.FC = () => {
         .from('models')
         .update({ is_online: nextValue })
         .eq('id', currentUser?.id);
-      refresh();
+      const userId = currentUser?.id;
+      await Promise.allSettled([
+        refreshBookings(),
+        fetchBookings(userId),
+        userId ? fetchEarnings(userId) : Promise.resolve(),
+        userId ? fetchSubscriptions(userId) : Promise.resolve(),
+        userId ? fetchCredits(userId) : Promise.resolve(),
+      ]);
     } catch {
       // soft-fail
     }
@@ -191,8 +202,9 @@ const ModelPremiumDashboard: React.FC = () => {
       const run = async () => {
         if (!active) return;
         const userId = currentUser?.id;
-        await Promise.all([
+        await Promise.allSettled([
           refreshBookings(),
+          fetchBookings(userId),
           loadTiers(),
           loadTipGoal(),
           userId ? fetchEarnings(userId) : Promise.resolve(),
@@ -206,7 +218,7 @@ const ModelPremiumDashboard: React.FC = () => {
         active = false;
         clearInterval(timer);
       };
-    }, [currentUser?.id, fetchCredits, fetchEarnings, fetchSubscriptions, loadTipGoal, loadTiers, refreshBookings]),
+    }, [currentUser?.id, fetchBookings, fetchCredits, fetchEarnings, fetchSubscriptions, loadTipGoal, loadTiers, refreshBookings]),
   );
 
   const openChatWithClient = async (clientId?: string | null, clientName?: string) => {

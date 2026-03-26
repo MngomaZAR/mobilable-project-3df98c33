@@ -27,7 +27,7 @@ const PhotographerDashboardScreen: React.FC = () => {
   const { currentUser: authUser } = useAuth();
   const { bookings, acceptBooking, declineBooking, refreshBookings, updateBookingStatus } = useBooking();
   const { startConversationWithUser } = useMessaging();
-  const { state, updatePhotographerLocation, fetchEarnings, fetchSubscriptions, fetchCredits } = useAppData();
+  const { state, updatePhotographerLocation, fetchEarnings, fetchSubscriptions, fetchCredits, fetchBookings } = useAppData();
   const currentUser = authUser ?? state.currentUser;
   const insets = useSafeAreaInsets();
   const [isOnline, setIsOnline] = useState(true);
@@ -143,7 +143,13 @@ const PhotographerDashboardScreen: React.FC = () => {
         .from(providerTable)
         .update({ is_online: nextValue })
         .eq('id', currentUser?.id);
-      refresh();
+      const userId = currentUser?.id;
+      await Promise.allSettled([
+        fetchBookings(userId),
+        userId ? fetchEarnings(userId) : Promise.resolve(),
+        userId ? fetchSubscriptions(userId) : Promise.resolve(),
+        userId ? fetchCredits(userId) : Promise.resolve(),
+      ]);
     } catch {
       // soft-fail
     }
@@ -219,13 +225,17 @@ const PhotographerDashboardScreen: React.FC = () => {
   const onRefresh = async () => {
     setRefreshing(true);
     const userId = currentUser?.id;
-    await Promise.all([
-      refreshBookings(),
-      userId ? fetchEarnings(userId) : Promise.resolve(),
-      userId ? fetchSubscriptions(userId) : Promise.resolve(),
-      userId ? fetchCredits(userId) : Promise.resolve(),
-    ]);
-    setRefreshing(false);
+    try {
+      await Promise.allSettled([
+        refreshBookings(),
+        fetchBookings(userId),
+        userId ? fetchEarnings(userId) : Promise.resolve(),
+        userId ? fetchSubscriptions(userId) : Promise.resolve(),
+        userId ? fetchCredits(userId) : Promise.resolve(),
+      ]);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   useFocusEffect(
@@ -234,8 +244,9 @@ const PhotographerDashboardScreen: React.FC = () => {
       const run = async () => {
         if (!active) return;
         const userId = currentUser?.id;
-        await Promise.all([
+        await Promise.allSettled([
           refreshBookings(),
+          fetchBookings(userId),
           userId ? fetchEarnings(userId) : Promise.resolve(),
           userId ? fetchSubscriptions(userId) : Promise.resolve(),
           userId ? fetchCredits(userId) : Promise.resolve(),

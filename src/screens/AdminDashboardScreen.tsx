@@ -15,7 +15,7 @@ type Navigation = StackNavigationProp<RootStackParamList>;
 
 const AdminDashboardScreen: React.FC = () => {
   const navigation = useNavigation<Navigation>();
-  const { state, refresh } = useAppData();
+  const { state, fetchBookings } = useAppData();
   const { startConversationWithUser } = useMessaging();
   const [showNewMessage, setShowNewMessage] = React.useState(false);
   const [liveRevenue, setLiveRevenue] = useState<number | null>(null);
@@ -69,7 +69,12 @@ const AdminDashboardScreen: React.FC = () => {
       let active = true;
       const run = async () => {
         if (!active) return;
-        await Promise.all([refresh(), fetchRevenue(), fetchOpsMetrics()]);
+        const userId = state.currentUser?.id;
+        await Promise.allSettled([
+          fetchBookings(userId),
+          fetchRevenue(),
+          fetchOpsMetrics(),
+        ]);
       };
       run();
       const timer = setInterval(run, 60000);
@@ -77,7 +82,7 @@ const AdminDashboardScreen: React.FC = () => {
         active = false;
         clearInterval(timer);
       };
-    }, [fetchOpsMetrics, fetchRevenue, refresh]),
+    }, [fetchBookings, fetchOpsMetrics, fetchRevenue, state.currentUser?.id]),
   );
 
   const pendingBookings = useMemo(

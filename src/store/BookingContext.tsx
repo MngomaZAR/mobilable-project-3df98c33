@@ -38,14 +38,14 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const {
     state,
     loading,
-    refresh,
+    fetchBookings: fetchBookingsAppData,
     createBooking: createBookingAppData,
     updateBookingStatus: updateBookingStatusAppData,
   } = useAppData();
 
   const fetchBookings = useCallback(async () => {
-    await refresh();
-  }, [refresh]);
+    await fetchBookingsAppData();
+  }, [fetchBookingsAppData]);
 
   const refreshBookings = fetchBookings;
 

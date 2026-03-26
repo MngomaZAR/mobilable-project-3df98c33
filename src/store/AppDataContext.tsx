@@ -104,6 +104,7 @@ type AppDataContextValue = {
   fetchEarnings: (userId: string) => Promise<void>;
   fetchCredits: (userId?: string | null) => Promise<void>;
   fetchNotifications: (userId?: string | null) => Promise<void>;
+  fetchBookings: (userId?: string | null) => Promise<void>;
   adjustCredits: (amount: number, reason?: string, refType?: string, refId?: string) => Promise<number>;
   redeemCreditsCode: (code: string) => Promise<number>;
   setState: (payload: Partial<AppState>) => void;
@@ -2535,13 +2536,14 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       updateProfile,
       updateProviderSettings,
       fetchEarnings,
+      fetchBookings,
       fetchSubscriptions,
       fetchCredits,
       fetchNotifications,
       adjustCredits,
       redeemCreditsCode,
     }),
-    [state, createBooking, updateBookingStatus, sendMessage, sendLockedMediaMessage, fetchMessages, fetchMessagesForChat, fetchComments, updateBookingClientLocation, updatePhotographerLocation, startConversationWithUser, addPost, toggleLike, addComment, setState, signUp, signIn, signOut, updatePrivacy, requestDataDeletion, refresh, revalidateSession, resetState, updateProfilePicture, updateProfile, updateProviderSettings, fetchEarnings, fetchSubscriptions, fetchCredits, fetchNotifications, adjustCredits, redeemCreditsCode]
+    [state, createBooking, updateBookingStatus, sendMessage, sendLockedMediaMessage, fetchMessages, fetchMessagesForChat, fetchComments, updateBookingClientLocation, updatePhotographerLocation, startConversationWithUser, addPost, toggleLike, addComment, setState, signUp, signIn, signOut, updatePrivacy, requestDataDeletion, refresh, revalidateSession, resetState, updateProfilePicture, updateProfile, updateProviderSettings, fetchEarnings, fetchBookings, fetchSubscriptions, fetchCredits, fetchNotifications, adjustCredits, redeemCreditsCode]
   );
 
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>;

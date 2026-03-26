@@ -38,7 +38,7 @@ export type RootStackParamList = {
   ChatThread: { conversationId: string; title?: string; avatarUrl?: string };
   AccountConfig: undefined;
   ModelPremiumDashboard: undefined;
-  PaidVideoCall: { creatorId?: string; role?: 'creator' | 'viewer' } | undefined;
+  PaidVideoCall: { creatorId?: string; role?: 'creator' | 'viewer'; testRoom?: boolean } | undefined;
   Notifications: undefined;
   PaymentHistory: undefined;
   Support: undefined;

@@ -33,6 +33,7 @@ import { createTipCheckoutLink } from '../services/monetisationService';
 import { trackEvent } from '../services/analyticsService';
 import { supabase } from '../config/supabaseClient';
 import { getDefaultPayfastNotifyUrl } from '../config/commercePolicy';
+import { useAppData } from '../store/AppDataContext';
 
 const { width, height } = Dimensions.get('window');
 
@@ -96,10 +97,15 @@ const RoomParticipants: React.FC<{ creatorId: string }> = ({ creatorId }) => {
 const PaidVideoCallScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
+  const { currentUser } = useAppData();
 
   const creatorId: string | undefined = route.params?.creatorId;
   const requestedRole: 'creator' | 'viewer' = route.params?.role === 'creator' ? 'creator' : 'viewer';
+  const isTestRoom = Boolean(route.params?.testRoom);
   const [resolvedCreatorId, setResolvedCreatorId] = useState<string | undefined>(creatorId);
+  const [roleChoice, setRoleChoice] = useState<'creator' | 'viewer'>(requestedRole);
+  const [creatorIdInput, setCreatorIdInput] = useState('');
+  const [testReady, setTestReady] = useState(!isTestRoom);
 
   const [seconds, setSeconds] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
@@ -114,26 +120,30 @@ const PaidVideoCallScreen: React.FC = () => {
   const [tokenError, setTokenError] = useState<string | null>(null);
 
   useEffect(() => {
-    setResolvedCreatorId(creatorId);
-  }, [creatorId]);
+    if (!isTestRoom) {
+      setResolvedCreatorId(creatorId);
+    }
+  }, [creatorId, isTestRoom]);
 
   // For creator mode, fallback to the signed-in user id when creatorId is missing.
   useEffect(() => {
-    if (resolvedCreatorId || requestedRole !== 'creator') return;
+    const activeRole = isTestRoom ? roleChoice : requestedRole;
+    if (resolvedCreatorId || activeRole !== 'creator') return;
     (async () => {
       const { data } = await supabase.auth.getUser();
       if (data?.user?.id) setResolvedCreatorId(data.user.id);
     })();
-  }, [requestedRole, resolvedCreatorId]);
+  }, [requestedRole, resolvedCreatorId, isTestRoom, roleChoice]);
 
   // ── Guard: creatorId is required ──────────────────────────────────────────
   useEffect(() => {
-    if (requestedRole === 'viewer' && !resolvedCreatorId) {
+    const activeRole = isTestRoom ? roleChoice : requestedRole;
+    if (activeRole === 'viewer' && !resolvedCreatorId && !isTestRoom) {
       Alert.alert('Error', 'No creator specified for this call.', [
         { text: 'Go back', onPress: () => navigation.goBack() },
       ]);
     }
-  }, [requestedRole, resolvedCreatorId, navigation]);
+  }, [requestedRole, resolvedCreatorId, navigation, isTestRoom, roleChoice]);
 
   // ── Call timer ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -143,12 +153,13 @@ const PaidVideoCallScreen: React.FC = () => {
 
   // ── Fetch LiveKit token from Supabase Edge Function ───────────────────────
   const fetchToken = useCallback(async () => {
+    const activeRole = isTestRoom ? roleChoice : requestedRole;
     if (!resolvedCreatorId) return;
     setTokenLoading(true);
     setTokenError(null);
     try {
       const { data, error } = await supabase.functions.invoke('livekit-token', {
-        body: { creator_id: resolvedCreatorId, role: requestedRole },
+        body: { creator_id: resolvedCreatorId, role: activeRole },
       });
       if (error) throw error;
       if (!data?.token || !data?.url) throw new Error('Invalid token response from server.');
@@ -160,11 +171,12 @@ const PaidVideoCallScreen: React.FC = () => {
     } finally {
       setTokenLoading(false);
     }
-  }, [requestedRole, resolvedCreatorId]);
+  }, [requestedRole, resolvedCreatorId, isTestRoom, roleChoice]);
 
   useEffect(() => {
+    if (!testReady) return;
     fetchToken();
-  }, [fetchToken]);
+  }, [fetchToken, testReady]);
 
   // ── End call — bills the session via edge function ────────────────────────
   const endCall = useCallback(async () => {
@@ -229,6 +241,10 @@ const PaidVideoCallScreen: React.FC = () => {
     return (
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle="light-content" />
+        <View style={styles.inlineErrorBanner}>
+          <Ionicons name="alert-circle" size={18} color="#f87171" />
+          <Text style={styles.inlineErrorText}>Live video is unavailable in this build. Install a dev build with LiveKit.</Text>
+        </View>
         <View style={styles.notInstalledBanner}>
           <Ionicons name="videocam-outline" size={64} color="rgba(255,255,255,0.5)" />
           <Text style={styles.notInstalledTitle}>Video calls are not available yet</Text>
@@ -251,22 +267,76 @@ const PaidVideoCallScreen: React.FC = () => {
   }
 
   // ── Token error state ─────────────────────────────────────────────────────
-  if (!tokenLoading && tokenError) {
+  const inlineError = !tokenLoading && tokenError ? tokenError : null;
+
+  if (isTestRoom && !testReady) {
     return (
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle="light-content" />
-        <View style={styles.notInstalledBanner}>
-          <Ionicons name="alert-circle-outline" size={64} color="#ef4444" />
-          <Text style={styles.notInstalledTitle}>Could not start call</Text>
-          <Text style={styles.notInstalledBody}>{tokenError}</Text>
-          <TouchableOpacity style={[styles.endCallBtn, { marginTop: 20 }]} onPress={fetchToken}>
-            <Text style={{ color: '#fff', fontWeight: '700' }}>Retry</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.fallbackBtnGhost} onPress={() => navigation.navigate('Root', { screen: 'Chat' })}>
-            <Text style={styles.fallbackBtnGhostText}>Open Chat</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={endCall} style={{ marginTop: 12 }}>
-            <Text style={{ color: 'rgba(255,255,255,0.6)', fontWeight: '600' }}>Go Back</Text>
+        <View style={styles.testRoomWrap}>
+          <Text style={styles.testRoomTitle}>LiveKit Test Room</Text>
+          <Text style={styles.testRoomBody}>
+            Use two devices. Join as Model on one device and Client on the other using the same model ID.
+          </Text>
+
+          <View style={styles.testRoleRow}>
+            <TouchableOpacity
+              style={[styles.testRoleBtn, roleChoice === 'creator' && styles.testRoleBtnActive]}
+              onPress={() => setRoleChoice('creator')}
+            >
+              <Text style={[styles.testRoleText, roleChoice === 'creator' && styles.testRoleTextActive]}>Join as Model</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.testRoleBtn, roleChoice === 'viewer' && styles.testRoleBtnActive]}
+              onPress={() => setRoleChoice('viewer')}
+            >
+              <Text style={[styles.testRoleText, roleChoice === 'viewer' && styles.testRoleTextActive]}>Join as Client</Text>
+            </TouchableOpacity>
+          </View>
+
+          {roleChoice === 'creator' ? (
+            <View style={styles.testRoomCard}>
+              <Text style={styles.testRoomLabel}>Model ID (share this)</Text>
+              <Text selectable style={styles.testRoomCode}>{currentUser?.id ?? 'Sign in to host'}</Text>
+              {!currentUser?.id && (
+                <Text style={styles.testRoomHint}>You must be signed in as a model to host the test room.</Text>
+              )}
+            </View>
+          ) : (
+            <View style={styles.testRoomCard}>
+              <Text style={styles.testRoomLabel}>Enter Model ID</Text>
+              <TextInput
+                style={styles.testRoomInput}
+                placeholder="Paste model ID"
+                placeholderTextColor="rgba(255,255,255,0.5)"
+                value={creatorIdInput}
+                onChangeText={setCreatorIdInput}
+                autoCapitalize="none"
+              />
+              <Text style={styles.testRoomHint}>Ask the model to open the test room and share their ID.</Text>
+            </View>
+          )}
+
+          <TouchableOpacity
+            style={styles.testRoomStart}
+            onPress={() => {
+              if (roleChoice === 'creator') {
+                if (!currentUser?.id) {
+                  Alert.alert('Sign in required', 'Please sign in as a model to host a test room.');
+                  return;
+                }
+                setResolvedCreatorId(currentUser.id);
+              } else {
+                if (!creatorIdInput.trim()) {
+                  Alert.alert('Missing ID', 'Enter the model ID to join as a client.');
+                  return;
+                }
+                setResolvedCreatorId(creatorIdInput.trim());
+              }
+              setTestReady(true);
+            }}
+          >
+            <Text style={styles.testRoomStartText}>Start Test Room</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -290,6 +360,15 @@ const PaidVideoCallScreen: React.FC = () => {
     return (
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle="light-content" />
+        {inlineError ? (
+          <View style={styles.inlineErrorBanner}>
+            <Ionicons name="alert-circle" size={18} color="#f87171" />
+            <Text style={styles.inlineErrorText}>{inlineError}</Text>
+            <TouchableOpacity style={styles.inlineErrorAction} onPress={fetchToken}>
+              <Text style={styles.inlineErrorActionText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
         <View style={styles.notInstalledBanner}>
           <Ionicons name="sync-outline" size={56} color="rgba(255,255,255,0.5)" />
           <Text style={styles.notInstalledTitle}>Connecting to call...</Text>
@@ -302,6 +381,16 @@ const PaidVideoCallScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
+
+      {inlineError ? (
+        <View style={styles.inlineErrorBanner}>
+          <Ionicons name="alert-circle" size={18} color="#f87171" />
+          <Text style={styles.inlineErrorText}>{inlineError}</Text>
+          <TouchableOpacity style={styles.inlineErrorAction} onPress={fetchToken}>
+            <Text style={styles.inlineErrorActionText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
 
       <LiveKitRoom
         token={livekitToken}
@@ -322,7 +411,7 @@ const PaidVideoCallScreen: React.FC = () => {
         />
 
         {/* Top HUD */}
-        <SafeAreaView edges={['top']} style={styles.hudTop}>
+        <SafeAreaView edges={['top']} style={[styles.hudTop, inlineError ? { marginTop: 56 } : null]}>
           <TouchableOpacity style={styles.backBtn} onPress={endCall}>
             <Ionicons name="chevron-back" size={28} color="#fff" />
           </TouchableOpacity>
@@ -424,6 +513,40 @@ const PaidVideoCallScreen: React.FC = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
+  inlineErrorBanner: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    right: 12,
+    zIndex: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(15,23,42,0.92)',
+    borderWidth: 1,
+    borderColor: 'rgba(248,113,113,0.6)',
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 8,
+  },
+  inlineErrorText: { color: '#f8fafc', fontWeight: '600', flex: 1, fontSize: 13 },
+  inlineErrorAction: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, backgroundColor: '#ef4444' },
+  inlineErrorActionText: { color: '#fff', fontWeight: '700', fontSize: 12 },
+  testRoomWrap: { flex: 1, padding: 24, justifyContent: 'center' },
+  testRoomTitle: { color: '#fff', fontSize: 26, fontWeight: '800', textAlign: 'center' },
+  testRoomBody: { color: 'rgba(255,255,255,0.65)', textAlign: 'center', marginTop: 10, lineHeight: 20 },
+  testRoleRow: { flexDirection: 'row', marginTop: 24, gap: 12 },
+  testRoleBtn: { flex: 1, paddingVertical: 12, borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', alignItems: 'center' },
+  testRoleBtnActive: { backgroundColor: '#ec4899', borderColor: '#ec4899' },
+  testRoleText: { color: 'rgba(255,255,255,0.7)', fontWeight: '700' },
+  testRoleTextActive: { color: '#fff' },
+  testRoomCard: { marginTop: 20, backgroundColor: '#0f172a', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+  testRoomLabel: { color: 'rgba(255,255,255,0.6)', fontWeight: '700', marginBottom: 8 },
+  testRoomCode: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  testRoomInput: { borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', borderRadius: 12, padding: 12, color: '#fff', fontSize: 14 },
+  testRoomHint: { color: 'rgba(255,255,255,0.6)', marginTop: 10, fontSize: 12 },
+  testRoomStart: { marginTop: 24, backgroundColor: '#0ea5e9', paddingVertical: 14, borderRadius: 14, alignItems: 'center' },
+  testRoomStartText: { color: '#fff', fontWeight: '800', fontSize: 16 },
   // HUD
   hudTop: {
     position: 'absolute',

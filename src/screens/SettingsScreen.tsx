@@ -46,6 +46,7 @@ const SettingsScreen: React.FC = () => {
   const [biometricsEnabled, setBiometricsEnabled] = useState(false);
   const [language, setLanguage] = useState('English');
   const [avatarPreviewUri, setAvatarPreviewUri] = useState<string | null>(null);
+  const showDevVideoTools = __DEV__ || environment.env !== 'production';
 
   useEffect(() => {
     const checkStatus = async () => {
@@ -201,6 +202,10 @@ const SettingsScreen: React.FC = () => {
       return;
     }
     navigation.navigate('PaidVideoCall', { creatorId: currentUser.id, role: 'creator' });
+  };
+
+  const handleOpenTestRoom = () => {
+    navigation.navigate('PaidVideoCall', { testRoom: true, role: 'viewer' });
   };
 
   const handleUpdateAvatar = async () => {
@@ -531,16 +536,27 @@ const SettingsScreen: React.FC = () => {
         </View>
       </View>
 
-      {currentUser?.role === 'model' && (
+      {showDevVideoTools && (
         <View style={s.section}>
           <Text style={s.sectionHeader}>VIDEO CALL</Text>
           <View style={s.group}>
-            <TouchableOpacity style={s.groupItem} onPress={handleTestVideoCall}>
-              <View style={s.itemLeft}>
-                <View style={[s.iconContainer, { backgroundColor: '#3b82f6' }]}>
-                  <Ionicons name="videocam" size={16} color="#fff" />
+            {currentUser?.role === 'model' && (
+              <TouchableOpacity style={[s.groupItem, s.groupItemBorder]} onPress={handleTestVideoCall}>
+                <View style={s.itemLeft}>
+                  <View style={[s.iconContainer, { backgroundColor: '#3b82f6' }]}>
+                    <Ionicons name="videocam" size={16} color="#fff" />
+                  </View>
+                  <Text style={s.itemText}>Start Test Call (Model Host)</Text>
                 </View>
-                <Text style={s.itemText}>Start Test Call</Text>
+                <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity style={s.groupItem} onPress={handleOpenTestRoom}>
+              <View style={s.itemLeft}>
+                <View style={[s.iconContainer, { backgroundColor: '#ec4899' }]}>
+                  <Ionicons name="people" size={16} color="#fff" />
+                </View>
+                <Text style={s.itemText}>LiveKit Test Room (2-User)</Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
             </TouchableOpacity>

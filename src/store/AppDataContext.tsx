@@ -226,7 +226,8 @@ const PROFILE_SELECT = `
   username,
   instagram,
   website,
-  availability_status
+  availability_status,
+  is_test_account
 `;
 
 const PHOTOGRAPHER_SELECT = `
@@ -399,10 +400,16 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         (profilesData ?? []).forEach((p: any) => { profilesMap[p.id] = p; });
       }
 
-      const photographers = (rawPhotographers ?? []).map((row: any) => {
-        row.profiles = profilesMap[row.id];
-        return mapPhotographerRow(row);
-      }).slice(0, MAX_PHOTOGRAPHERS);
+      const photographers = (rawPhotographers ?? [])
+        .map((row: any) => {
+          row.profiles = profilesMap[row.id];
+          return mapPhotographerRow(row);
+        })
+        .filter((p: any) => {
+          const profile = profilesMap[p.id];
+          return !profile?.is_test_account && profile?.role !== 'test_account';
+        })
+        .slice(0, MAX_PHOTOGRAPHERS);
 
       setState({ photographers });
     } catch (err: any) {
@@ -447,25 +454,30 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         (profilesData ?? []).forEach((p: any) => { profilesMap[p.id] = p; });
       }
       
-      const mapped = (rawModels ?? []).map((row: any) => {
-        row.profiles = profilesMap[row.id];
-        return {
-        id: row.id,
-        name: row.profiles?.full_name ?? 'Model',
-        style: row.style ?? 'Generic',
-        location: row.location ?? row.profiles?.city ?? 'Unknown',
-        latitude: row.latitude ?? 0,
-        longitude: row.longitude ?? 0,
-        avatar_url: row.profiles?.avatar_url ?? '',
-        bio: row.bio ?? '',
-        rating: row.rating ?? 5.0,
-        price_range: row.price_range ?? '$$',
-        tags: row.tags ?? [],
-        portfolio_urls: row.portfolio_urls ?? [],
-        tier_id: row.tier_id ?? null,
-        equipment: row.equipment ?? null,
-      };
-      });
+      const mapped = (rawModels ?? [])
+        .map((row: any) => {
+          row.profiles = profilesMap[row.id];
+          return {
+            id: row.id,
+            name: row.profiles?.full_name ?? 'Model',
+            style: row.style ?? 'Generic',
+            location: row.location ?? row.profiles?.city ?? 'Unknown',
+            latitude: row.latitude ?? 0,
+            longitude: row.longitude ?? 0,
+            avatar_url: row.profiles?.avatar_url ?? '',
+            bio: row.bio ?? '',
+            rating: row.rating ?? 5.0,
+            price_range: row.price_range ?? '$$',
+            tags: row.tags ?? [],
+            portfolio_urls: row.portfolio_urls ?? [],
+            tier_id: row.tier_id ?? null,
+            equipment: row.equipment ?? null,
+          };
+        })
+        .filter((m: any) => {
+          const profile = profilesMap[m.id];
+          return !profile?.is_test_account && profile?.role !== 'test_account';
+        });
 
       setState({ models: mapped });
     } catch (err: any) {

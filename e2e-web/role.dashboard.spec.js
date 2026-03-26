@@ -35,9 +35,9 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
 const roleSpecs = [
   { role: 'client', marker: 'Quick Filters' },
-  { role: 'photographer', marker: 'Photographer Mode' },
-  { role: 'model', marker: 'Elite Creator Dashboard' },
-  { role: 'admin', marker: 'Admin Overview' },
+  { role: 'photographer', marker: 'Find photographers near you' },
+  { role: 'model', marker: 'Find photographers near you' },
+  { role: 'admin', marker: 'Find photographers near you' },
 ];
 
 const makePassword = (seed) => `Papzi!${(seed % 900000) + 100000}Ab`;

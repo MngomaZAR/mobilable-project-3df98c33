@@ -53,14 +53,16 @@ Deno.serve(async (req) => {
 
     const admin = createClient(supabaseUrl, serviceRole);
     const auth = req.headers.get('Authorization');
-    if (!auth) return json(401, { error: 'Missing Authorization header' });
+    const body = await req.json().catch(() => null) as any;
+    const tokenFromHeader = auth ? auth.replace(/^Bearer\s+/i, '').trim() : null;
+    const tokenFromBody = typeof body?.auth_token === 'string' ? body.auth_token.trim() : null;
+    const token = tokenFromHeader || tokenFromBody;
+    if (!token) return json(401, { error: 'Missing Authorization header' });
 
-    const token = auth.replace(/^Bearer\s+/i, '').trim();
     const { data: authData, error: authErr } = await admin.auth.getUser(token);
     if (authErr || !authData.user) return json(401, { error: 'Invalid auth token' });
     const user = authData.user;
 
-    const body = await req.json().catch(() => null) as any;
     const bookingId = typeof body?.booking_id === 'string' ? body.booking_id : null;
     const serviceType = ['photography', 'modeling', 'combined', 'video_call'].includes(body?.service_type) ? body.service_type : 'photography';
     const fanoutCount = Math.min(5, Math.max(1, asInt(body?.fanout_count, 1)));

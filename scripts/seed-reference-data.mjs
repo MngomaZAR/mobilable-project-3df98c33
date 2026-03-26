@@ -58,6 +58,7 @@ const PHOTOGRAPHERS = [
     full_name: 'Michael Scott',
     avatar_url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=300&q=80',
     city: 'Durban',
+    role: 'photographer',
     rating: 4.8,
     tags: ['Wedding', 'Portrait'],
     specialties: ['Wedding', 'Portrait'],
@@ -72,6 +73,7 @@ const PHOTOGRAPHERS = [
     full_name: 'Anna Gomez',
     avatar_url: 'https://images.unsplash.com/photo-1503341455253-b2e723bb3dbb?auto=format&fit=crop&w=300&q=80',
     city: 'Durban',
+    role: 'photographer',
     rating: 4.9,
     tags: ['Fashion', 'Editorial'],
     specialties: ['Fashion'],
@@ -86,6 +88,7 @@ const PHOTOGRAPHERS = [
     full_name: 'Jason Lee',
     avatar_url: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=300&q=80',
     city: 'Durban',
+    role: 'photographer',
     rating: 4.7,
     tags: ['Portrait', 'Lifestyle'],
     specialties: ['Portrait'],
@@ -100,6 +103,7 @@ const PHOTOGRAPHERS = [
     full_name: 'Olivia Harris',
     avatar_url: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=300&q=80',
     city: 'Durban',
+    role: 'photographer',
     rating: 4.9,
     tags: ['Family', 'Lifestyle'],
     specialties: ['Family'],
@@ -114,6 +118,7 @@ const PHOTOGRAPHERS = [
     full_name: 'Lerato Sithole',
     avatar_url: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=300&q=80',
     city: 'Durban',
+    role: 'photographer',
     rating: 4.8,
     tags: ['Wedding', 'Lifestyle'],
     specialties: ['Wedding', 'Lifestyle'],
@@ -128,6 +133,7 @@ const PHOTOGRAPHERS = [
     full_name: 'Sipho Dlamini',
     avatar_url: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=300&q=80',
     city: 'Durban',
+    role: 'photographer',
     rating: 4.8,
     tags: ['Portrait', 'Event'],
     specialties: ['Event'],
@@ -215,7 +221,7 @@ const ensureUsers = async () => {
       email,
       password: DEFAULT_PASSWORD,
       email_confirm: true,
-      user_metadata: { full_name: spec.full_name },
+      user_metadata: { full_name: spec.full_name, role: spec.role },
     });
     if (created.error) {
       const msg = String(created.error.message || '');
@@ -223,6 +229,9 @@ const ensureUsers = async () => {
         throw new Error(`createUser(${email}) failed: ${msg}`);
       }
     }
+    await supabase.auth.admin.updateUserById(id, {
+      user_metadata: { full_name: spec.full_name, role: spec.role },
+    });
     idMap.set(email, id);
   }
   return idMap;

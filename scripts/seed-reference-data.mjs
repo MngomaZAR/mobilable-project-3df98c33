@@ -230,8 +230,8 @@ const ensureUsers = async () => {
 
 const seedProfiles = async (idMap) => {
   const profiles = [
-    { ...REFERENCE_CLIENT, role: 'client' },
-    ...PHOTOGRAPHERS.map((p) => ({ ...p, role: 'photographer' })),
+    { ...REFERENCE_CLIENT },
+    ...PHOTOGRAPHERS.map((p) => ({ ...p })),
   ];
 
   const payload = profiles.map((p) => ({
@@ -239,7 +239,6 @@ const seedProfiles = async (idMap) => {
     full_name: p.full_name,
     avatar_url: p.avatar_url,
     city: p.city,
-    role: p.role,
     kyc_status: 'approved',
     age_verified: true,
     age_verified_at: nowIso,

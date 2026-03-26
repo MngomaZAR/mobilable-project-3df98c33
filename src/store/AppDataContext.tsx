@@ -943,6 +943,16 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 ? { ...post, profile: { ...(post.profile ?? {}), avatar_url: updatedProfile.avatar_url, full_name: updatedProfile.full_name ?? post.profile?.full_name } }
                 : post
             ),
+            bookings: stateRef.current.bookings.map((booking) => {
+              const isClient = booking.client?.id === updatedProfile.id;
+              const isPhotographer = booking.photographer?.id === updatedProfile.id;
+              if (!isClient && !isPhotographer) return booking;
+              return {
+                ...booking,
+                client: isClient ? { ...booking.client, avatar_url: updatedProfile.avatar_url, name: updatedProfile.full_name ?? booking.client?.name } : booking.client,
+                photographer: isPhotographer ? { ...booking.photographer, avatar_url: updatedProfile.avatar_url, name: updatedProfile.full_name ?? booking.photographer?.name } : booking.photographer,
+              };
+            }),
           });
 
         // Update list views if the profile belongs to a photographer or model

@@ -92,9 +92,9 @@ export const uploadImage = async (
 
 /**
  * Uploads an avatar image for a specific user.
- * Uses uid-scoped path ({userId}/avatar.jpg) with upsert so it always replaces
- * the existing avatar rather than creating duplicate files.
- * Returns the public URL (avatars bucket is public — no signed URL needed).
+ * Uses a timestamped uploads path to avoid CDN caching issues and
+ * ensure the latest avatar is always visible.
+ * Returns the public URL (avatars bucket is public - no signed URL needed).
  */
 export const uploadAvatar = async (uri: string, userId: string): Promise<string> => {
   const manipulated = await ImageManipulator.manipulateAsync(
@@ -109,11 +109,12 @@ export const uploadAvatar = async (uri: string, userId: string): Promise<string>
 
   const arrayBuffer = decode(manipulated.base64);
 
+  const filePath = `uploads/${userId}-${Date.now()}.jpg`;
   const { error } = await supabase.storage
     .from(BUCKETS.avatars)
-    .upload(`${userId}/avatar.jpg`, arrayBuffer, { contentType: 'image/jpeg', upsert: true });
+    .upload(filePath, arrayBuffer, { contentType: 'image/jpeg', upsert: false });
   if (error) throw new Error(error.message || 'Avatar upload failed');
-  return supabase.storage.from(BUCKETS.avatars).getPublicUrl(`${userId}/avatar.jpg`).data.publicUrl;
+  return supabase.storage.from(BUCKETS.avatars).getPublicUrl(filePath).data.publicUrl;
 };
 
 /**
@@ -190,3 +191,4 @@ export const uploadMediaAsset = async (uri: string, ownerId: string, bookingId: 
     return failure(error);
   }
 };
+

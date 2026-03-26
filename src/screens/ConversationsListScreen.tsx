@@ -40,16 +40,22 @@ const ConversationsListScreen: React.FC = () => {
   const { conversations, loading, fetchConversations, startConversationWithUser } = useMessaging();
   const { state, currentUser } = useAppData();
   const [showNewMessage, setShowNewMessage] = useState(false);
+  const [inlineError, setInlineError] = useState<string | null>(null);
 
   // Load on focus so new conversations appear when returning from chat
   useFocusEffect(
     useCallback(() => {
-      fetchConversations();
+      fetchConversations().catch((err: any) => {
+        setInlineError(err?.message || 'Unable to load conversations right now.');
+      });
     }, [fetchConversations])
   );
 
   const handleRefresh = useCallback(() => {
-    fetchConversations();
+    setInlineError(null);
+    fetchConversations().catch((err: any) => {
+      setInlineError(err?.message || 'Unable to load conversations right now.');
+    });
   }, [fetchConversations]);
 
   const listHeader = useMemo(
@@ -130,6 +136,17 @@ const ConversationsListScreen: React.FC = () => {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      {inlineError ? (
+        <View style={[styles.inlineError, { backgroundColor: isDark ? '#27121b' : '#fde8e8', borderColor: isDark ? '#5f2638' : '#f5b7b7' }]}>
+          <Ionicons name="alert-circle" size={16} color={isDark ? '#fda4af' : '#b91c1c'} />
+          <Text style={[styles.inlineErrorText, { color: isDark ? '#fecdd3' : '#7f1d1d' }]}>
+            {inlineError}
+          </Text>
+          <TouchableOpacity style={styles.inlineRetry} onPress={handleRefresh}>
+            <Text style={[styles.inlineRetryText, { color: isDark ? '#fecdd3' : '#7f1d1d' }]}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
       <FlatList
         data={conversations}
         keyExtractor={(item, index) => `${item.id}-${index}`}
@@ -209,6 +226,21 @@ const styles = StyleSheet.create({
   loadingText: { marginTop: 10, fontWeight: '600' },
   separator: { height: 12 },
   empty: { textAlign: 'center', marginTop: 40, fontWeight: '600' },
+  inlineError: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 4,
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  inlineErrorText: { flex: 1, fontSize: 12, fontWeight: '600' },
+  inlineRetry: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
+  inlineRetryText: { fontWeight: '700', fontSize: 12 },
 });
 
 export default ConversationsListScreen;

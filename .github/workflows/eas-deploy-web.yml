@@ -6,8 +6,7 @@ name: EAS Deploy Web
 # Optional secrets (for Supabase): EXPO_PUBLIC_SUPABASE_URL, EXPO_PUBLIC_SUPABASE_ANON_KEY
 
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 jobs:
   deploy:

@@ -1,9 +1,7 @@
 name: iOS TestFlight (No EAS)
 
 on:
-  workflow_dispatch: {}
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 jobs:
   build_and_upload:

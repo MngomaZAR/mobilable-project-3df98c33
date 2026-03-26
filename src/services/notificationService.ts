@@ -1,21 +1,36 @@
 import * as Device from 'expo-device';
-import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { supabase } from '../config/supabaseClient';
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
+let notificationsModule: typeof import('expo-notifications') | null = null;
+
+const shouldUseNotifications = () => (Constants.appOwnership ?? 'expo') !== 'expo';
+
+const getNotifications = async () => {
+  if (!shouldUseNotifications()) return null;
+  if (!notificationsModule) {
+    notificationsModule = await import('expo-notifications');
+    notificationsModule.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: false,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      }),
+    });
+  }
+  return notificationsModule;
+};
 
 export async function registerForPushNotificationsAsync() {
+  if (!shouldUseNotifications()) {
+    return null;
+  }
   let token;
+  const Notifications = await getNotifications();
+  if (!Notifications) return null;
 
   if (Platform.OS === 'android') {
     await Notifications.setNotificationChannelAsync('default', {

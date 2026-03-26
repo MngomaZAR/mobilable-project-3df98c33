@@ -9,7 +9,6 @@ import {
   TouchableOpacity,
   View,
   Image,
-  Platform,
   Linking,
 } from 'react-native';
 import * as LocalAuthentication from 'expo-local-authentication';
@@ -28,9 +27,7 @@ import { LEGAL_CONTENT } from '../constants/LegalContent';
 import { requestAccountDeletion } from '../services/accountService';
 import { PLACEHOLDER_AVATAR } from '../utils/constants';
 import { supabase } from '../config/supabaseClient';
-import * as Notifications from 'expo-notifications';
-import * as Device from 'expo-device';
-import Constants from 'expo-constants';
+import { registerForPushNotificationsAsync, savePushTokenAsync } from '../services/notificationService';
 
 type Navigation = StackNavigationProp<RootStackParamList, 'Root'>;
 
@@ -80,19 +77,9 @@ const SettingsScreen: React.FC = () => {
           .eq('user_id', currentUser.id);
       } else {
         // Re-enable: request permission and save fresh token
-        if (!Device.isDevice) return;
-        const { status } = await Notifications.getPermissionsAsync();
-        if (status !== 'granted') {
-          const { status: newStatus } = await Notifications.requestPermissionsAsync();
-          if (newStatus !== 'granted') { setNotificationsEnabled(false); return; }
-        }
-        const projectId = Constants?.expoConfig?.extra?.eas?.projectId ?? Constants?.easConfig?.projectId;
-        const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
-        const platform = (Platform.OS === 'ios' ? 'ios' : Platform.OS === 'android' ? 'android' : 'web') as 'ios' | 'android' | 'web';
-        await supabase.from('push_tokens').upsert(
-          { user_id: currentUser.id, expo_push_token: tokenData.data, platform, enabled: true, last_seen_at: new Date().toISOString() },
-          { onConflict: 'user_id,expo_push_token' }
-        );
+        const token = await registerForPushNotificationsAsync();
+        if (!token) { setNotificationsEnabled(false); return; }
+        await savePushTokenAsync(currentUser.id, token);
       }
     } catch (e) {
       console.warn('Notification toggle failed:', e);

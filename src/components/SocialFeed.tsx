@@ -14,7 +14,7 @@ import {
   View,
   Share,
 } from 'react-native';
-import { Video, ResizeMode } from 'expo-av';
+import { VideoView, useVideoPlayer } from 'expo-video';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { AnimatedHeart } from './AnimatedHeart';
@@ -48,6 +48,24 @@ const WEB_VISIBLE_FEED_ITEMS = 40;
 
 /** Enable stories feature - stories table and StoryViewer component are production-ready */
 const STORIES_ENABLED = true;
+
+const FeedVideo: React.FC<{ uri: string; paused?: boolean }> = ({ uri, paused = false }) => {
+  const player = useVideoPlayer(uri, (videoPlayer) => {
+    videoPlayer.loop = true;
+    videoPlayer.muted = true;
+    if (!paused) videoPlayer.play();
+  });
+
+  useEffect(() => {
+    if (paused) {
+      player.pause();
+    } else {
+      player.play();
+    }
+  }, [paused, player]);
+
+  return <VideoView style={styles.image} player={player} contentFit="cover" />;
+};
 
 export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost, onViewProfile }) => {
   const isWeb = Platform.OS === 'web';
@@ -589,14 +607,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
       }}>
         <View style={styles.imageWrapper}>
           {hasRenderableMedia && isVideoMedia ? (
-            <Video
-              source={{ uri: mediaUri }}
-              style={styles.image}
-              resizeMode={ResizeMode.COVER}
-              shouldPlay={!isActuallyLocked}
-              isMuted={true}
-              isLooping={true}
-            />
+            <FeedVideo uri={mediaUri} paused={isActuallyLocked} />
           ) : hasRenderableMedia ? (
             <Image
               source={{ uri: mediaUri || PLACEHOLDER_IMAGE }}

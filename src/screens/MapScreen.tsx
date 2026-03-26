@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { MapPreview } from '../components/MapPreview';
 import { MapMarker } from '../components/mapTypes';
 import { RequestPopup } from '../components/RequestPopup';
+import { MapAvatarPin } from '../components/MapAvatarPin';
 import { useAppData } from '../store/AppDataContext';
 import { useTheme } from '../store/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
@@ -214,21 +215,10 @@ const MapScreen: React.FC = () => {
   const markers = useMemo(() => userMarker ? [userMarker, ...filteredMarkers] : filteredMarkers, [filteredMarkers, userMarker]);
 
   // GeoJSON for clustering (MapLibre handles cluster rendering natively)
-  const markersGeoJson = useMemo(() => ({
-    type: 'FeatureCollection' as const,
-    features: filteredMarkers.map(m => ({
-      type: 'Feature' as const,
-      id: m.id,
-      properties: {
-        id: m.id,
-        sourceId: m.sourceId,
-        title: m.title,
-        type: m.type,
-        isOnline: onlineProfiles.has(m.sourceId ?? ''),
-      },
-      geometry: { type: 'Point' as const, coordinates: [m.longitude, m.latitude] },
-    })),
-  }), [filteredMarkers, onlineProfiles]);
+  const avatarMarkers = useMemo(
+    () => filteredMarkers.filter((m) => Number.isFinite(m.latitude) && Number.isFinite(m.longitude)),
+    [filteredMarkers]
+  );
 
   const mapCenter = useMemo(() => {
     if (userCoords) return [userCoords.lng, userCoords.lat];
@@ -441,72 +431,19 @@ const MapScreen: React.FC = () => {
             </MapLibreGL.ShapeSource>
           )}
 
-          {/* Clustered talent markers using GeoJSON ShapeSource */}
-          <MapLibreGL.ShapeSource
-            id="talent-cluster"
-            shape={markersGeoJson}
-            cluster
-            clusterMaxZoomLevel={14}
-            clusterRadius={50}
-            onPress={(e: any) => {
-              const feature = e.features?.[0];
-              if (!feature) return;
-              if (feature.properties?.cluster) {
-                // Zoom into cluster
-                cameraRef.current?.setCamera({
-                  centerCoordinate: (feature.geometry as any).coordinates,
-                  zoomLevel: 13,
-                  animationMode: 'flyTo',
-                  animationDuration: 500,
-                });
-              } else {
-                const {id, sourceId, title, description, type} = feature.properties ?? {};
-                const coord = (feature.geometry as any).coordinates;
-                setSelectedMarker({ id, sourceId, title, description, latitude: coord[1], longitude: coord[0], type });
+          {avatarMarkers.map((marker) => (
+            <MapLibreGL.PointAnnotation
+              key={marker.id}
+              id={`pin-${marker.id}`}
+              coordinate={[marker.longitude, marker.latitude]}
+              onSelected={() => {
+                setSelectedMarker(marker);
                 snapTo(SCREEN_HEIGHT - SHEET_HALF);
-              }
-            }}
-          >
-            {/* Cluster circle */}
-            <MapLibreGL.CircleLayer
-              id="clusters"
-              belowLayerID="cluster-count"
-              filter={['has', 'point_count']}
-              style={{
-                circleColor: ['step', ['get', 'point_count'], '#b08957', 10, '#9b774a', 30, '#7f6039'],
-                circleRadius: ['step', ['get', 'point_count'], 20, 10, 28, 30, 36],
-                circleStrokeWidth: 3,
-                circleStrokeColor: isDark ? '#0f172a' : '#fffef8',
-                circleOpacity: 0.92,
               }}
-            />
-            {/* Cluster count label */}
-            <MapLibreGL.SymbolLayer
-              id="cluster-count"
-              filter={['has', 'point_count']}
-              style={{
-                textField: ['get', 'point_count_abbreviated'],
-                textFont: ['Open Sans Bold', 'Arial Unicode MS Bold'],
-                textSize: 13,
-                textColor: '#ffffff',
-              }}
-            />
-            {/* Individual talent pins */}
-            <MapLibreGL.CircleLayer
-              id="unclustered-point"
-              filter={['!', ['has', 'point_count']]}
-              style={{
-                circleColor: ['case',
-                  ['get', 'isOnline'], ['case', ['==', ['get', 'type'], 'model'], '#24b67f', '#2dc98b'],
-                  ['case', ['==', ['get', 'type'], 'model'], '#a99578', '#8c7a60'],
-                ],
-                circleRadius: 14,
-                circleStrokeWidth: ['case', ['get', 'isOnline'], 3, 2],
-                circleStrokeColor: ['case', ['get', 'isOnline'], '#fffef7', '#e5d7c2'],
-                circleOpacity: 0.95,
-              }}
-            />
-          </MapLibreGL.ShapeSource>
+            >
+              <MapAvatarPin uri={marker.avatarUrl} online={onlineProfiles.has(marker.sourceId ?? '')} />
+            </MapLibreGL.PointAnnotation>
+          ))}
 
           {/* User location pin */}
           {userMarker && (

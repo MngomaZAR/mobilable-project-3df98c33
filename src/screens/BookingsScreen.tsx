@@ -71,10 +71,30 @@ const BookingsScreen: React.FC = () => {
     if (seeding) return false;
     if (state.bookings.length > 0) return true;
 
-    const providers = [
-      ...state.photographers.slice(0, 3).map((p) => ({ id: p.id, type: 'photographer' as const, name: p.name })),
-      ...state.models.slice(0, 1).map((m) => ({ id: m.id, type: 'model' as const, name: m.name })),
+    const providerByName = new Map<string, { id: string; type: 'photographer' | 'model'; name: string }>();
+    state.photographers.forEach((p) => providerByName.set(p.name, { id: p.id, type: 'photographer', name: p.name }));
+    state.models.forEach((m) => providerByName.set(m.name, { id: m.id, type: 'model', name: m.name }));
+
+    const referenceBookings = [
+      { name: 'Lerato Sithole', type: 'photographer' as const, package_type: 'Your bookings', date: '2026-03-24T02:00:00+02:00' },
+      { name: 'Sipho Dlamini', type: 'photographer' as const, package_type: 'Half-day coverage', date: '2026-04-15T02:00:00+02:00' },
+      { name: 'Sipho Dlamini', type: 'photographer' as const, package_type: 'Half-day coverage', date: '2026-03-10T02:00:00+02:00' },
+      { name: 'Sipho Dlamini', type: 'photographer' as const, package_type: 'Half-day coverage', date: '2026-03-19T02:00:00+02:00' },
     ];
+
+    const referenceProviders = referenceBookings
+      .map((entry) => {
+        const provider = providerByName.get(entry.name);
+        return provider ? { ...provider, package_type: entry.package_type, date: entry.date } : null;
+      })
+      .filter(Boolean) as Array<{ id: string; type: 'photographer' | 'model'; name: string; package_type: string; date: string }>;
+
+    const fallbackProviders = [
+      ...state.photographers.slice(0, 3).map((p) => ({ id: p.id, type: 'photographer' as const, name: p.name, package_type: 'Half-day coverage', date: null })),
+      ...state.models.slice(0, 1).map((m) => ({ id: m.id, type: 'model' as const, name: m.name, package_type: 'Half-day coverage', date: null })),
+    ];
+
+    const providers = referenceProviders.length > 0 ? referenceProviders : fallbackProviders;
 
     if (providers.length === 0) {
       if (!silent) {
@@ -88,7 +108,7 @@ const BookingsScreen: React.FC = () => {
       const now = new Date();
       for (let i = 0; i < providers.length; i += 1) {
         const provider = providers[i];
-        const start = new Date(now.getTime() + (24 + i * 3) * 60 * 60 * 1000);
+        const start = provider.date ? new Date(provider.date) : new Date(now.getTime() + (24 + i * 3) * 60 * 60 * 1000);
         const end = new Date(start.getTime() + 60 * 60 * 1000);
         await createBooking({
           talent_id: provider.id,
@@ -96,7 +116,7 @@ const BookingsScreen: React.FC = () => {
           booking_date: start.toISOString(),
           start_datetime: start.toISOString(),
           end_datetime: end.toISOString(),
-          package_type: i === 0 ? 'Your bookings' : 'Half-day coverage',
+          package_type: provider.package_type,
           notes: `Sample booking with ${provider.name}`,
           base_amount: 1200 + i * 250,
           travel_amount: 100 + i * 50,

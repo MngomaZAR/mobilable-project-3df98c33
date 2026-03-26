@@ -16,6 +16,7 @@
     "audit:src": "node scripts/audit-src-connectivity.mjs",
     "audit:dashboards": "node scripts/audit-dashboard-role-flows.mjs",
     "verify:livekit:prod": "node scripts/verify-livekit-production.mjs",
+    "seed:reference": "node scripts/seed-reference-data.mjs",
     "check:launch": "npm run typecheck && npm run lint && npm test -- --runInBand --passWithNoTests && npm run audit:src && npm run audit:dashboards && npm run build:web",
     "check:dashboards:live": "node scripts/e2e-full-app-sweep.mjs",
     "report": "node scripts/analyzeRepo.js",

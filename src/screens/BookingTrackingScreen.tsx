@@ -319,6 +319,17 @@ const BookingTrackingScreen: React.FC = () => {
 
           <MapLibreGL.ShapeSource id="track-route" shape={routeGeoJson as any}>
             <MapLibreGL.LineLayer
+              id="track-route-glow"
+              style={{
+                lineColor: isDark ? '#f7d7a2' : '#e5c28b',
+                lineWidth: 12,
+                lineOpacity: 0.35,
+                lineBlur: 2.2,
+                lineCap: 'round',
+                lineJoin: 'round',
+              }}
+            />
+            <MapLibreGL.LineLayer
               id="track-route-line"
               style={{
                 lineColor: isDark ? '#f3d7a7' : '#d5b069',

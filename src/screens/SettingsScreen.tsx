@@ -475,6 +475,48 @@ const SettingsScreen: React.FC = () => {
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </TouchableOpacity>
           {(currentUser?.role === 'model' || currentUser?.role === 'photographer') && (
+            <TouchableOpacity style={[s.groupItem, s.groupItemBorder]} onPress={() => (navigation as any).navigate('KYC')}>
+              <View style={s.itemLeft}>
+                <View style={[s.iconContainer, { backgroundColor: currentUser?.kyc_status === 'approved' ? '#22c55e' : '#f59e0b' }]}>
+                  <Ionicons name={currentUser?.kyc_status === 'approved' ? 'shield-checkmark' : 'shield-outline'} size={16} color="#fff" />
+                </View>
+                <Text style={s.itemText}>Identity Verification (KYC)</Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                {currentUser?.kyc_status !== 'approved' && (
+                  <View style={{ backgroundColor: '#f59e0b22', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2, borderWidth: 1, borderColor: '#f59e0b' }}>
+                    <Text style={{ color: '#f59e0b', fontSize: 10, fontWeight: '800' }}>
+                      {currentUser?.kyc_status === 'submitted' ? 'PENDING' : 'REQUIRED'}
+                    </Text>
+                  </View>
+                )}
+                <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+              </View>
+            </TouchableOpacity>
+          )}
+          {currentUser?.role === 'photographer' && (
+            <TouchableOpacity style={[s.groupItem, s.groupItemBorder]} onPress={() => (navigation as any).navigate('EquipmentSetup')}>
+              <View style={s.itemLeft}>
+                <View style={[s.iconContainer, { backgroundColor: '#c9a44a' }]}>
+                  <Ionicons name="camera" size={16} color="#fff" />
+                </View>
+                <Text style={s.itemText}>Equipment & Tier</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+            </TouchableOpacity>
+          )}
+          {currentUser?.role === 'model' && (
+            <TouchableOpacity style={[s.groupItem, s.groupItemBorder]} onPress={() => (navigation as any).navigate('ModelServices')}>
+              <View style={s.itemLeft}>
+                <View style={[s.iconContainer, { backgroundColor: '#ec4899' }]}>
+                  <Ionicons name="list" size={16} color="#fff" />
+                </View>
+                <Text style={s.itemText}>My Services & Rates</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+            </TouchableOpacity>
+          )}
+          {(currentUser?.role === 'model' || currentUser?.role === 'photographer') && (
             <TouchableOpacity style={[s.groupItem, s.groupItemBorder]} onPress={() => navigation.navigate('PayoutMethods')}>
               <View style={s.itemLeft}>
                 <View style={[s.iconContainer, { backgroundColor: '#0ea5e9' }]}>

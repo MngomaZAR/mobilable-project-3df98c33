@@ -178,7 +178,7 @@ const MapScreen: React.FC = () => {
   // Active booking detection
   const activeBooking = useMemo(() =>
     state.bookings.find(b =>
-      (b.status === 'accepted' || b.status === 'in_progress') &&
+      (b.status === 'accepted' || b.status === 'in_progress' || b.status === 'paid_out') &&
       (b.client_id === currentUser?.id || b.photographer_id === currentUser?.id || b.model_id === currentUser?.id)
     ), [state.bookings, currentUser]);
 

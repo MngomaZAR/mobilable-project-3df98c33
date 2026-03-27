@@ -47,6 +47,9 @@ import AvailabilityScreen from '../screens/AvailabilityScreen';
 import ModelReleaseScreen from '../screens/ModelReleaseScreen';
 import CreditsWalletScreen from '../screens/CreditsWalletScreen';
 import PayoutMethodsScreen from '../screens/PayoutMethodsScreen';
+import KYCScreen from '../screens/KYCScreen';
+import EquipmentSetupScreen from '../screens/EquipmentSetupScreen';
+import ModelServicesScreen from '../screens/ModelServicesScreen';
 import { RootStackParamList, TabParamList } from './types';
 import { useAppData } from '../store/AppDataContext';
 import { useTheme } from '../store/ThemeContext';
@@ -296,6 +299,9 @@ export const MainNavigator: React.FC<MainNavigatorProps> = ({ logoSource }) => {
             <Stack.Screen name="AccountConfig" component={AccountConfigScreen} options={{ title: 'Account Settings' }} />
             <Stack.Screen name="ModelRelease" component={ModelReleaseScreen} options={{ title: 'Legal Documents' }} />
             <Stack.Screen name="PayoutMethods" component={PayoutMethodsScreen} options={{ title: 'Payout Methods' }} />
+            <Stack.Screen name="KYC" component={KYCScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="EquipmentSetup" component={EquipmentSetupScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="ModelServices" component={ModelServicesScreen} options={{ headerShown: false }} />
           </>
         )}
       </Stack.Navigator>

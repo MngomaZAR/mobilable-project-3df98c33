@@ -25,6 +25,7 @@ const toStatusLabel = (status: Booking['status']) => {
   if (status === 'in_progress') return 'In Progress';
   if (status === 'pending') return 'Pending';
   if (status === 'completed') return 'Complete';
+  if (status === 'paid_out') return 'Paid Out';
   if (status === 'cancelled') return 'Cancelled';
   if (status === 'declined') return 'Declined';
   return String(status ?? 'Unknown');

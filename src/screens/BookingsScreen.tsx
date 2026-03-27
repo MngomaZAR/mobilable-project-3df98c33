@@ -21,6 +21,7 @@ const statusColors: Record<Booking['status'], string> = {
   reviewed: '#8b5cf6',
   cancelled: '#94a3b8',
   declined: '#ef4444',
+  paid_out: '#10b981',
 };
 
 const bookingDateFormatter = new Intl.DateTimeFormat('en-ZA', {

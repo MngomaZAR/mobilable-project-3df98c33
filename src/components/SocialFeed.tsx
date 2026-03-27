@@ -109,37 +109,60 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
   // --- STORIES ---
   const [storiesVisible, setStoriesVisible] = useState(false);
   const [storyIndex, setStoryIndex] = useState(0);
+  const [liveStories, setLiveStories] = useState<Story[]>([]);
 
-  // Mocked stories for MVP presentation
-  const mockStories: Story[] = useMemo(() => {
-     if (appState.photographers.length < 2) return [];
-     
-     return [
-        {
-          id: 'story-1',
-          author_id: appState.photographers[0].id,
-          media_url: 'https://images.unsplash.com/photo-1542038784456-1ea8e935640e?auto=format&fit=crop&w=800&q=80',
-          media_type: 'image',
-          created_at: new Date().toISOString(),
-          duration: 5,
-          profile: {
-             full_name: appState.photographers[0].name,
-             avatar_url: appState.photographers[0].avatar_url
-          }
-        },
-        {
-          id: 'story-2',
-          author_id: appState.photographers[1].id,
-          media_url: 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=800&q=80',
-          media_type: 'image',
-          created_at: new Date().toISOString(),
-          duration: 5,
-          profile: {
-             full_name: appState.photographers[1].name,
-             avatar_url: appState.photographers[1].avatar_url
-          }
+  useEffect(() => {
+    let mounted = true;
+    const loadStories = async () => {
+      try {
+        const { data } = await supabase
+          .from('stories')
+          .select('id, author_id, media_url, media_type, duration, created_at, profiles:author_id(full_name, avatar_url)')
+          .gt('expires_at', new Date().toISOString())
+          .order('created_at', { ascending: false })
+          .limit(20);
+        if (!mounted || !data) return;
+        const mapped: Story[] = data.map((s: any) => ({
+          id: s.id,
+          author_id: s.author_id,
+          media_url: s.media_url,
+          media_type: s.media_type ?? 'image',
+          created_at: s.created_at,
+          duration: s.duration ?? 5,
+          profile: s.profiles
+            ? { full_name: s.profiles.full_name, avatar_url: s.profiles.avatar_url }
+            : undefined,
+        }));
+        if (mapped.length === 0 && appState.photographers.length >= 2) {
+          setLiveStories([
+            {
+              id: 'ph-story-1',
+              author_id: appState.photographers[0].id,
+              media_url: appState.photographers[0].avatar_url || PLACEHOLDER_IMAGE,
+              media_type: 'image',
+              created_at: new Date().toISOString(),
+              duration: 5,
+              profile: { full_name: appState.photographers[0].name, avatar_url: appState.photographers[0].avatar_url },
+            },
+            {
+              id: 'ph-story-2',
+              author_id: appState.photographers[1].id,
+              media_url: appState.photographers[1].avatar_url || PLACEHOLDER_IMAGE,
+              media_type: 'image',
+              created_at: new Date().toISOString(),
+              duration: 5,
+              profile: { full_name: appState.photographers[1].name, avatar_url: appState.photographers[1].avatar_url },
+            },
+          ]);
+        } else {
+          setLiveStories(mapped);
         }
-     ]
+      } catch {
+        // Stories are non-critical — silently skip on error
+      }
+    };
+    loadStories();
+    return () => { mounted = false; };
   }, [appState.photographers]);
 
   const navigation = useNavigation<StackNavigationProp<RootStackParamList, 'Root'>>();
@@ -546,7 +569,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
         />
       </View>
       
-      {STORIES_ENABLED && mockStories.length > 0 && (
+      {STORIES_ENABLED && liveStories.length > 0 && (
          <View style={{ marginTop: 16 }}>
            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 12 }}>
              {appState.currentUser && (
@@ -558,8 +581,8 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
                 </TouchableOpacity>
              )}
              
-             {Object.values(
-                mockStories.reduce((acc, story) => {
+              {Object.values(
+                liveStories.reduce((acc, story) => {
                    if (!acc[story.author_id]) acc[story.author_id] = story;
                    return acc;
                 }, {} as Record<string, Story>)
@@ -568,7 +591,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
                    key={`story-thumb-${story.id}`} 
                    style={[styles.storyAvatarWrap, styles.storyAvatarWrapActive]}
                    onPress={() => {
-                        const idx = mockStories.findIndex(s => s.author_id === story.author_id);
+                        const idx = liveStories.findIndex(s => s.author_id === story.author_id);
                         setStoryIndex(idx);
                         setStoriesVisible(true);
                    }}
@@ -763,7 +786,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
       )}
       
       <StoryViewer 
-        stories={mockStories} 
+        stories={liveStories} 
         visible={storiesVisible} 
         onClose={() => setStoriesVisible(false)} 
         initialIndex={storyIndex} 

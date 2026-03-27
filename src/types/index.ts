@@ -1,4 +1,14 @@
-export type BookingStatus = 'pending' | 'accepted' | 'in_progress' | 'completed' | 'reviewed' | 'cancelled' | 'declined';
+// Mirrors the bookings.status check constraint in Supabase exactly.
+// 'in_progress' and 'reviewed' are client-side display aliases only.
+export type BookingStatus =
+  | 'pending'
+  | 'accepted'
+  | 'in_progress'  // client-side alias — not stored in DB
+  | 'completed'
+  | 'reviewed'     // client-side alias — not stored in DB
+  | 'cancelled'
+  | 'declined'
+  | 'paid_out';    // terminal state after escrow payout
 export type AssignmentState = 'queued' | 'offered' | 'accepted' | 'expired' | 'cancelled';
 export type UserGender = 'female' | 'male' | 'non_binary' | 'prefer_not_to_say' | null;
 

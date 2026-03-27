@@ -53,6 +53,9 @@ export type RootStackParamList = {
   CreditsWallet: undefined;
   CreatorAnalytics: undefined;
   PayoutMethods: undefined;
+  KYC: undefined;
+  EquipmentSetup: undefined;
+  ModelServices: undefined;
 };
 
 declare global {

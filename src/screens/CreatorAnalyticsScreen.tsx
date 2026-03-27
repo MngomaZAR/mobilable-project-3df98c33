@@ -28,7 +28,7 @@ const CreatorAnalyticsScreen: React.FC = () => {
     });
     const scopedBookings = bookings.filter((b) => {
       const ts = new Date(b.created_at ?? 0).getTime();
-      return Number.isFinite(ts) && ts >= cutoffMs && (b.status === 'accepted' || b.status === 'completed');
+      return Number.isFinite(ts) && ts >= cutoffMs && (b.status === 'accepted' || b.status === 'completed' || b.status === 'paid_out');
     });
     
     const tipTotal = earningRows
@@ -72,7 +72,7 @@ const CreatorAnalyticsScreen: React.FC = () => {
     bookings.forEach((b) => {
       const ts = new Date(b.created_at ?? 0);
       if (!Number.isFinite(ts.getTime()) || ts.getTime() < cutoffMs) return;
-      if (b.status !== 'accepted' && b.status !== 'completed') return;
+      if (b.status !== 'accepted' && b.status !== 'completed' && b.status !== 'paid_out') return;
       const key = ts.toISOString().slice(0, 10);
       if (!daily.has(key)) return;
       daily.set(key, (daily.get(key) ?? 0) + Number(b.payout_amount || 0));
@@ -102,8 +102,8 @@ const CreatorAnalyticsScreen: React.FC = () => {
       return Number.isFinite(ts) && ts >= cutoffMs;
     });
     const requested = scoped.length;
-    const engaged = scoped.filter((b) => ['accepted', 'completed'].includes(b.status)).length;
-    const converted = scoped.filter((b) => b.status === 'completed').length;
+    const engaged = scoped.filter((b) => ['accepted', 'completed', 'paid_out'].includes(b.status)).length;
+    const converted = scoped.filter((b) => b.status === 'completed' || b.status === 'paid_out').length;
     return { requested, engaged, converted };
   }, [bookings, cutoffMs]);
 

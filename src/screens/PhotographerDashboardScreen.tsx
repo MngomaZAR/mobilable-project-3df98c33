@@ -42,7 +42,7 @@ const PhotographerDashboardScreen: React.FC = () => {
   );
   const pendingBookings = useMemo(() => bookings.filter(b => b.status === 'pending'), [bookings]);
   const acceptedBookings = useMemo(() => bookings.filter(b => b.status === 'accepted'), [bookings]);
-  const completedBookings = useMemo(() => bookings.filter(b => b.status === 'completed'), [bookings]);
+  const completedBookings = useMemo(() => bookings.filter(b => b.status === 'completed' || b.status === 'paid_out'), [bookings]);
   const kycApproved = (currentUser?.kyc_status ?? state.currentUser?.kyc_status) === 'approved';
 
   useEffect(() => {
@@ -67,7 +67,7 @@ const PhotographerDashboardScreen: React.FC = () => {
       }, { total: 0, net: 0, commission: 0, count: 0 });
     }
     return bookings
-      .filter(b => b.status === 'completed' || b.status === 'accepted')
+      .filter(b => b.status === 'completed' || b.status === 'paid_out' || b.status === 'accepted')
       .reduce((acc, b) => ({
         total: acc.total + (b.total_amount || 0),
         net: acc.net + (b.payout_amount || 0),
@@ -449,6 +449,8 @@ const PhotographerDashboardScreen: React.FC = () => {
               { icon: 'card', label: 'Payments', color: '#ec4899', action: () => navigation.navigate('PaymentHistory') },
               { icon: 'wallet', label: 'Payouts', color: '#14b8a6', action: () => navigation.navigate('PayoutMethods') },
               { icon: 'stats-chart', label: 'Earnings', color: '#06b6d4', action: () => navigation.navigate('EarningsDashboard') },
+              { icon: 'camera', label: 'Equipment', color: '#c9a44a', action: () => (navigation as any).navigate('EquipmentSetup') },
+              { icon: kycApproved ? 'shield-checkmark' : 'shield-outline', label: kycApproved ? 'Verified' : 'Verify ID', color: kycApproved ? '#22c55e' : '#f59e0b', action: () => (navigation as any).navigate('KYC') },
             ].map(tool => (
               <TouchableOpacity key={tool.label} style={s.toolBtn} onPress={tool.action}>
                 <View style={[s.toolIcon, { backgroundColor: tool.color + '20' }]}>

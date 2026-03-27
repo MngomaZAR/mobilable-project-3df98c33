@@ -64,7 +64,7 @@ const ModelPremiumDashboard: React.FC = () => {
     if (!currentUser?.id) return;
     try {
       const { data } = await supabase
-        .from('subscription_tiers')
+        .from('creator_subscription_tiers')
         .select('id, name, price, perks, is_active, color, max_subscribers, description')
         .eq('creator_id', currentUser.id)
         .order('created_at', { ascending: true });
@@ -124,7 +124,7 @@ const ModelPremiumDashboard: React.FC = () => {
       .filter((e: any) => e.source_type === 'subscription')
       .reduce((s: number, e: any) => s + Number(e.amount || 0), 0);
     const bookingEarnings = bookings
-      .filter(b => b.status === 'completed' || b.status === 'accepted')
+      .filter(b => b.status === 'completed' || b.status === 'paid_out' || b.status === 'accepted')
       .reduce((s, b) => s + (b.payout_amount || 0), 0);
     const activeSubs = (state.subscriptions ?? []).filter((s: any) => s.status === 'active').length;
 
@@ -132,7 +132,7 @@ const ModelPremiumDashboard: React.FC = () => {
       net: bookingEarnings + tipEarnings + subEarnings,
       activeSubscribers: activeSubs,
       tipsTotal: tipEarnings,
-      bookingCount: bookings.filter(b => b.status === 'completed').length,
+      bookingCount: bookings.filter(b => b.status === 'completed' || b.status === 'paid_out').length,
     };
   }, [bookings, state.earnings, state.subscriptions, tierPayoutRate]);
 
@@ -343,14 +343,14 @@ const ModelPremiumDashboard: React.FC = () => {
       const perks = parsePerksInput(tierPerksInput);
       if (editingTier?.id) {
         const { error } = await supabase
-          .from('subscription_tiers')
+          .from('creator_subscription_tiers')
           .update({ name, price, perks })
           .eq('id', editingTier.id)
           .eq('creator_id', currentUser.id);
         if (error) throw error;
       } else {
         const { error } = await supabase
-          .from('subscription_tiers')
+          .from('creator_subscription_tiers')
           .insert({ creator_id: currentUser.id, name, price, perks, is_active: true });
         if (error) throw error;
       }

@@ -37,7 +37,7 @@ const ReviewsScreen: React.FC = () => {
 
   // We check if current user has any completed bookings with this photographer
   const canReview = state.bookings.some(
-    (b) => b.photographer_id === photographerId && b.status === 'completed'
+    (b) => b.photographer_id === photographerId && (b.status === 'completed' || b.status === 'paid_out')
   );
 
   const loadReviews = useCallback(async () => {
@@ -56,7 +56,7 @@ const ReviewsScreen: React.FC = () => {
     setSubmitting(true);
     try {
       // Find the booking ID
-      const booking = state.bookings.find(b => b.photographer_id === photographerId && b.status === 'completed');
+      const booking = state.bookings.find(b => b.photographer_id === photographerId && (b.status === 'completed' || b.status === 'paid_out'));
       if (!booking) return;
 
       const newReview = await createReview({

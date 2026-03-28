@@ -34,6 +34,31 @@ const UserProfileScreen: React.FC = () => {
   const [seenScore, setSeenScore] = useState<number>(0);
   const [sceneRank, setSceneRank] = useState<number>(0);
   const [localTrendRank, setLocalTrendRank] = useState<number | null>(null);
+  const [taggedPosts, setTaggedPosts] = useState<any[]>([]);
+  const [taggedLoading, setTaggedLoading] = useState(false);
+
+  React.useEffect(() => {
+    if (activeTab !== 'tagged' || !params.userId) return;
+    let active = true;
+    const loadTagged = async () => {
+      setTaggedLoading(true);
+      try {
+        const { data } = await supabase
+          .from('posts')
+          .select('id, image_url, caption, created_at, likes_count, author_id')
+          .ilike('caption', `%@${params.userId}%`)
+          .order('created_at', { ascending: false })
+          .limit(30);
+        if (active) setTaggedPosts(data ?? []);
+      } catch {
+        if (active) setTaggedPosts([]);
+      } finally {
+        if (active) setTaggedLoading(false);
+      }
+    };
+    loadTagged();
+    return () => { active = false; };
+  }, [activeTab, params.userId]);
   
   const s = makeStyles(colors);
 
@@ -401,7 +426,7 @@ const UserProfileScreen: React.FC = () => {
 
       <FlatList
         ListHeaderComponent={renderHeader}
-        data={activeTab === 'grid' ? posts : []}
+        data={activeTab === 'grid' ? posts : activeTab === 'tagged' ? taggedPosts : []}
         keyExtractor={(item) => item.id}
         numColumns={3}
         contentContainerStyle={s.listContent}
@@ -412,7 +437,7 @@ const UserProfileScreen: React.FC = () => {
         )}
         ListEmptyComponent={
           <View style={s.emptyContainer}>
-            <Ionicons name={activeTab === 'grid' ? "images-outline" : "albums-outline"} size={48} color={colors.textMuted} />
+            <Ionicons name={activeTab === 'tagged' ? 'person-circle-outline' : activeTab === 'grid' ? 'images-outline' : 'albums-outline'} size={48} color={colors.textMuted} />
             {activeTab === 'portfolio' ? (
               <>
                 <Text style={[s.empty, { color: colors.textMuted }]}>Open this creator's portfolio gallery.</Text>
@@ -420,6 +445,10 @@ const UserProfileScreen: React.FC = () => {
                   <Text style={s.portfolioCtaText}>View Portfolio</Text>
                 </TouchableOpacity>
               </>
+            ) : activeTab === 'tagged' ? (
+              <Text style={[s.empty, { color: colors.textMuted }]}>
+                {taggedLoading ? 'Loading tagged posts…' : 'No tagged posts yet.'}
+              </Text>
             ) : (
               <Text style={[s.empty, { color: colors.textMuted }]}>
                 {activeTab === 'grid' ? 'No posts yet.' : 'Tagged content coming soon.'}

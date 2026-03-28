@@ -1281,8 +1281,12 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const updateBookingStatus = useCallback(async (bookingId: string, targetStatus?: BookingStatus) => {
     const nextStatus = (current: BookingStatus): BookingStatus => {
       if (targetStatus) return targetStatus;
+      const normalised: BookingStatus =
+        current === 'paid_out' ? 'completed' :
+        current === 'in_progress' ? 'accepted' :
+        current;
       const order: BookingStatus[] = ['pending', 'accepted', 'completed'];
-      const index = order.indexOf(current);
+      const index = order.indexOf(normalised);
       if (index < 0) return current;
       return order[Math.min(index + 1, order.length - 1)];
     };

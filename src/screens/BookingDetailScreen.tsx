@@ -15,6 +15,13 @@ type Navigation = StackNavigationProp<RootStackParamList, 'BookingDetail'>;
 
 const steps: BookingStatus[] = ['pending', 'accepted', 'completed', 'reviewed'];
 
+// Map DB-only statuses to the nearest display step
+const normaliseForStepper = (status: BookingStatus): BookingStatus => {
+  if (status === 'paid_out') return 'completed';
+  if (status === 'in_progress') return 'accepted';
+  return status;
+};
+
 const bookingDateFormatter = new Intl.DateTimeFormat('en-ZA', {
   year: 'numeric',
   month: '2-digit',
@@ -63,7 +70,7 @@ const BookingDetailScreen: React.FC = () => {
     );
   }
 
-  const currentIndex = steps.indexOf(booking.status);
+  const currentIndex = steps.indexOf(normaliseForStepper(booking.status));
   const requiresPayment = !booking.dispatch_request_id;
 
   // Chat with the most relevant person: model > photographer > general chat
@@ -200,7 +207,7 @@ const BookingDetailScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
 
-        {booking.status === 'completed' || booking.status === 'reviewed' ? (
+        {(booking.status === 'completed' || booking.status === 'reviewed' || booking.status === 'paid_out') ? (
            <TouchableOpacity
              style={[styles.secondary, { backgroundColor: colors.accent, marginTop: 16 }]}
              onPress={handleBookAgain}
@@ -209,7 +216,7 @@ const BookingDetailScreen: React.FC = () => {
            </TouchableOpacity>
         ) : null}
 
-        {booking.status === 'completed' ? (
+        {(booking.status === 'completed' || booking.status === 'paid_out') ? (
           <TouchableOpacity
             style={[styles.secondary, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}
             onPress={() => {
@@ -248,7 +255,7 @@ const BookingDetailScreen: React.FC = () => {
            </>
         ) : null}
 
-        {booking.status === 'completed' ? (
+        {(booking.status === 'completed' || booking.status === 'paid_out') ? (
            <TouchableOpacity
              style={[styles.secondary, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}
              onPress={handleDispute}

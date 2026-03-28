@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Alert,
   Platform,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -67,6 +68,18 @@ type PayoutReviewMethod = {
   created_at: string;
 };
 
+type KycDocumentReview = {
+  id: string;
+  user_id: string;
+  user_name: string | null;
+  user_role: string | null;
+  doc_type: string | null;
+  status: 'pending' | 'approved' | 'rejected' | string | null;
+  storage_path: string | null;
+  signed_url: string | null;
+  created_at: string | null;
+};
+
 const AdminModerationScreen: React.FC = () => {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
@@ -78,6 +91,7 @@ const AdminModerationScreen: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [verifications, setVerifications] = useState<VerificationCandidate[]>([]);
   const [payoutMethods, setPayoutMethods] = useState<PayoutReviewMethod[]>([]);
+  const [kycDocuments, setKycDocuments] = useState<KycDocumentReview[]>([]);
   const [tab, setTab] = useState<'queue' | 'violations'>('queue');
   const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'in_review' | 'escalated'>('all');
 
@@ -106,6 +120,7 @@ const AdminModerationScreen: React.FC = () => {
       setViolations((violationRows ?? []) as PolicyViolation[]);
       setVerifications((pendingData?.verifications ?? []) as VerificationCandidate[]);
       setPayoutMethods((pendingData?.payout_methods ?? []) as PayoutReviewMethod[]);
+      setKycDocuments((pendingData?.kyc_documents ?? []) as KycDocumentReview[]);
     } catch (err: any) {
       console.warn('Moderation fetch error:', err.message);
       Alert.alert('Error', err.message || 'Unable to load moderation queue.');
@@ -154,6 +169,30 @@ const AdminModerationScreen: React.FC = () => {
       Alert.alert('Payout review updated', `Method ${decision}.`);
     } catch (e: any) {
       Alert.alert('Error', e.message || 'Failed to update payout method.');
+    }
+  };
+
+  const reviewKycDocument = async (documentId: string, decision: 'approved' | 'rejected') => {
+    try {
+      const { error } = await supabase.functions.invoke('admin-review', {
+        body: { action: 'decide_kyc_document', document_id: documentId, decision },
+      });
+      if (error) throw error;
+      setKycDocuments((prev) => prev.filter((doc) => doc.id !== documentId));
+      Alert.alert('KYC updated', `Document ${decision}.`);
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to update KYC document.');
+    }
+  };
+
+  const kycLabel = (value?: string | null) => {
+    switch (value) {
+      case 'id_book': return 'ID Book / Passport';
+      case 'passport': return 'Passport';
+      case 'drivers_license': return 'Driver License';
+      case 'selfie': return 'Selfie';
+      case 'proof_of_address': return 'Proof of Address';
+      default: return value ? value.replace(/_/g, ' ') : 'Document';
     }
   };
 
@@ -286,14 +325,50 @@ const AdminModerationScreen: React.FC = () => {
           <Text style={[styles.kpiValue, { color: '#ef4444' }]}>{slaBreached}</Text>
         </View>
         <View style={[styles.kpiCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.kpiLabel, { color: colors.textMuted }]}>KYC Pending</Text>
-          <Text style={[styles.kpiValue, { color: colors.text }]}>{verifications.length}</Text>
+          <Text style={[styles.kpiLabel, { color: colors.textMuted }]}>KYC Docs</Text>
+          <Text style={[styles.kpiValue, { color: colors.text }]}>{kycDocuments.length}</Text>
         </View>
         <View style={[styles.kpiCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Text style={[styles.kpiLabel, { color: colors.textMuted }]}>Payout Pending</Text>
           <Text style={[styles.kpiValue, { color: colors.text }]}>{payoutMethods.length}</Text>
         </View>
       </View>
+
+      {kycDocuments.length > 0 && (
+        <View style={styles.verificationWrap}>
+          <Text style={[styles.blockTitle, { color: colors.text }]}>Pending KYC Documents</Text>
+          {kycDocuments.slice(0, 8).map((doc) => (
+            <View key={doc.id} style={[styles.kycCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={styles.kycHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.verificationName, { color: colors.text }]}>{doc.user_name || 'Unknown creator'}</Text>
+                  <Text style={[styles.verificationMeta, { color: colors.textMuted }]}>
+                    {kycLabel(doc.doc_type)} · {String(doc.user_role ?? 'creator').toUpperCase()} · {doc.user_id.slice(0, 8)}
+                  </Text>
+                </View>
+                <View style={[styles.badge, { backgroundColor: '#f59e0b22' }]}>
+                  <Text style={[styles.badgeText, { color: '#f59e0b' }]}>PENDING</Text>
+                </View>
+              </View>
+              {doc.signed_url ? (
+                <Image source={{ uri: doc.signed_url }} style={styles.kycPreview} resizeMode="cover" />
+              ) : (
+                <View style={[styles.kycPreview, { backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' }]}>
+                  <Text style={{ color: colors.textMuted, fontSize: 12 }}>No preview</Text>
+                </View>
+              )}
+              <View style={styles.actions}>
+                <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#16a34a' }]} onPress={() => reviewKycDocument(doc.id, 'approved')}>
+                  <Text style={styles.actionText}>Approve</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#dc2626' }]} onPress={() => reviewKycDocument(doc.id, 'rejected')}>
+                  <Text style={styles.actionText}>Reject</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))}
+        </View>
+      )}
 
       {verifications.length > 0 && (
         <View style={styles.verificationWrap}>
@@ -418,6 +493,9 @@ const styles = StyleSheet.create({
   actions: { flexDirection: 'row', gap: 8, marginTop: 10 },
   actionBtn: { flex: 1, borderRadius: 10, paddingVertical: 9, alignItems: 'center' },
   actionText: { color: '#fff', fontSize: 12, fontWeight: '800' },
+  kycCard: { borderWidth: 1, borderRadius: 14, padding: 12, gap: 10 },
+  kycHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  kycPreview: { width: '100%', height: 160, borderRadius: 12 },
   center: { alignItems: 'center', justifyContent: 'center', paddingVertical: 40 },
 });
 

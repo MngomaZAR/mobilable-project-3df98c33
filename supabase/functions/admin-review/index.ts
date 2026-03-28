@@ -71,7 +71,7 @@ serve(async (req) => {
     const action = body?.action ?? 'list_pending';
 
     if (action === 'list_pending') {
-      const [{ data: pendingProfiles, error: pErr }, { data: payoutRows, error: payoutErr }] = await Promise.all([
+      const [{ data: pendingProfiles, error: pErr }, { data: payoutRows, error: payoutErr }, { data: kycRows, error: kycErr }] = await Promise.all([
         admin
           .from('profiles')
           .select('id, full_name, role, kyc_status, created_at')
@@ -83,13 +83,21 @@ serve(async (req) => {
           .select('id, user_id, bank_name, account_holder, account_number, account_type, branch_code, is_default, verified, created_at')
           .eq('verified', false)
           .order('created_at', { ascending: true }),
+        admin
+          .from('kyc_documents')
+          .select('id, user_id, doc_type, status, storage_path, created_at')
+          .eq('status', 'pending')
+          .order('created_at', { ascending: true }),
       ]);
       if (pErr) throw pErr;
       if (payoutErr) throw payoutErr;
+      if (kycErr) throw kycErr;
 
       const uniqueUserIds = [...new Set((payoutRows ?? []).map((r: any) => r.user_id).filter(Boolean))];
-      const { data: profileRows } = uniqueUserIds.length
-        ? await admin.from('profiles').select('id, full_name, role').in('id', uniqueUserIds)
+      const uniqueKycIds = [...new Set((kycRows ?? []).map((r: any) => r.user_id).filter(Boolean))];
+      const combinedIds = [...new Set([...uniqueUserIds, ...uniqueKycIds])];
+      const { data: profileRows } = combinedIds.length
+        ? await admin.from('profiles').select('id, full_name, role').in('id', combinedIds)
         : { data: [] as any[] };
       const profileMap: Record<string, any> = {};
       (profileRows ?? []).forEach((p: any) => { profileMap[p.id] = p; });
@@ -109,9 +117,33 @@ serve(async (req) => {
         created_at: r.created_at,
       }));
 
+      const kycDocuments = await Promise.all((kycRows ?? []).map(async (r: any) => {
+        let signedUrl: string | null = null;
+        if (r.storage_path) {
+          const { data: signed, error: signedErr } = await admin.storage
+            .from('kyc-docs')
+            .createSignedUrl(r.storage_path, 60 * 60);
+          if (!signedErr) signedUrl = signed?.signedUrl ?? null;
+        }
+        const profile = profileMap[r.user_id] ?? {};
+        return {
+          id: r.id,
+          user_id: r.user_id,
+          user_name: profile.full_name ?? null,
+          user_role: profile.role ?? null,
+          doc_type: r.doc_type,
+          document_type: r.doc_type,
+          status: r.status,
+          storage_path: r.storage_path,
+          signed_url: signedUrl,
+          created_at: r.created_at,
+        };
+      }));
+
       return jsonResponse(200, {
         verifications: pendingProfiles ?? [],
         payout_methods: payoutMethods,
+        kyc_documents: kycDocuments,
       });
     }
 
@@ -187,10 +219,49 @@ serve(async (req) => {
       return jsonResponse(200, { success: true, email: emailResult });
     }
 
+    if (action === 'decide_kyc_document') {
+      const documentId = body?.document_id;
+      const decision = body?.decision; // approved | rejected
+      if (!documentId || !['approved', 'rejected'].includes(decision)) {
+        return jsonResponse(400, { error: 'document_id and decision (approved|rejected) are required.' });
+      }
+
+      const { data: docRow, error: docErr } = await admin
+        .from('kyc_documents')
+        .select('id, user_id, doc_type')
+        .eq('id', documentId)
+        .maybeSingle();
+      if (docErr) throw docErr;
+      if (!docRow) return jsonResponse(404, { error: 'KYC document not found.' });
+
+      const { error: updateErr } = await admin
+        .from('kyc_documents')
+        .update({ status: decision })
+        .eq('id', documentId);
+      if (updateErr) throw updateErr;
+
+      if (decision === 'rejected') {
+        const { error } = await admin.from('profiles').update({ kyc_status: 'rejected' }).eq('id', docRow.user_id);
+        if (error) throw error;
+      } else {
+        const { data: remaining } = await admin
+          .from('kyc_documents')
+          .select('id')
+          .eq('user_id', docRow.user_id)
+          .eq('status', 'pending')
+          .limit(1);
+        if (!remaining || remaining.length === 0) {
+          const { error } = await admin.from('profiles').update({ kyc_status: 'approved' }).eq('id', docRow.user_id);
+          if (error) throw error;
+        }
+      }
+
+      return jsonResponse(200, { success: true, document_id: documentId, decision });
+    }
+
     return jsonResponse(400, { error: `Unknown action: ${action}` });
   } catch (err: any) {
     console.error('admin-review error:', err);
     return jsonResponse(500, { error: err?.message || 'Internal Server Error' });
   }
 });
-

@@ -450,9 +450,7 @@ const UserProfileScreen: React.FC = () => {
                 {taggedLoading ? 'Loading tagged posts…' : 'No tagged posts yet.'}
               </Text>
             ) : (
-              <Text style={[s.empty, { color: colors.textMuted }]}>
-                {activeTab === 'grid' ? 'No posts yet.' : 'Tagged content coming soon.'}
-              </Text>
+              <Text style={[s.empty, { color: colors.textMuted }]}>No posts yet.</Text>
             )}
           </View>
         }

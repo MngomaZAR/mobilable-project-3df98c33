@@ -220,7 +220,7 @@ serve(async (req) => {
     }
 
     if (action === 'decide_kyc_document') {
-      const documentId = body?.document_id;
+      const documentId = body?.document_id ?? body?.doc_id;
       const decision = body?.decision; // approved | rejected
       if (!documentId || !['approved', 'rejected'].includes(decision)) {
         return jsonResponse(400, { error: 'document_id and decision (approved|rejected) are required.' });

@@ -418,7 +418,14 @@ const SettingsScreen: React.FC = () => {
       <View style={s.section}>
         <Text style={s.sectionHeader}>ADVANCED</Text>
         <View style={s.group}>
-          <TouchableOpacity style={[s.groupItem, s.groupItemBorder]} onPress={() => Alert.alert('Select Language', 'Zulu, Afrikaans and English support coming in next update.')}>
+          <TouchableOpacity style={[s.groupItem, s.groupItemBorder]} onPress={() => {
+            Alert.alert('Select Language', 'Choose your preferred language', [
+              { text: 'English', onPress: () => setLanguage('English') },
+              { text: 'Zulu (isiZulu)', onPress: () => setLanguage('Zulu (isiZulu)') },
+              { text: 'Afrikaans', onPress: () => setLanguage('Afrikaans') },
+              { text: 'Cancel', style: 'cancel' },
+            ]);
+          }}>
             <View style={s.itemLeft}>
               <View style={[s.iconContainer, { backgroundColor: '#94a3b8' }]}>
                 <Ionicons name="language" size={16} color="#fff" />

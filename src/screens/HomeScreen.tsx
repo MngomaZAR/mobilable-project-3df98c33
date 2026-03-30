@@ -71,9 +71,11 @@ const HomeScreen: React.FC = () => {
   const lastSearchTagRef = useRef<string | null>(null);
 
   React.useEffect(() => {
-     // Initial generic recommendations
-     fetchRecommendedMatches('Cape Town', '', 0).then(setRecommended);
-  }, []);
+     // Use logged-in user's city for initial recommendations
+     const userCity = state.currentUser?.city ?? '';
+     fetchRecommendedMatches(userCity, '', 0).then(setRecommended);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.currentUser?.city]);
 
   React.useEffect(() => {
     const rawTag = route.params?.searchTag?.trim();

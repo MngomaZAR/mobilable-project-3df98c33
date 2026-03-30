@@ -9,6 +9,7 @@ import {
   Alert,
   Platform,
   Image,
+  Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -326,7 +327,7 @@ const AdminModerationScreen: React.FC = () => {
         </View>
         <View style={[styles.kpiCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Text style={[styles.kpiLabel, { color: colors.textMuted }]}>KYC Docs</Text>
-          <Text style={[styles.kpiValue, { color: colors.text }]}>{kycDocuments.length}</Text>
+          <Text style={[styles.kpiValue, { color: kycDocuments.length > 0 ? '#f59e0b' : colors.text }]}>{kycDocuments.length}</Text>
         </View>
         <View style={[styles.kpiCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Text style={[styles.kpiLabel, { color: colors.textMuted }]}>Payout Pending</Text>
@@ -343,15 +344,25 @@ const AdminModerationScreen: React.FC = () => {
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.verificationName, { color: colors.text }]}>{doc.user_name || 'Unknown creator'}</Text>
                   <Text style={[styles.verificationMeta, { color: colors.textMuted }]}>
-                    {kycLabel(doc.doc_type)} · {String(doc.user_role ?? 'creator').toUpperCase()} · {doc.user_id.slice(0, 8)}
+                    {String(doc.user_role ?? 'creator').toUpperCase()} · {doc.user_id.slice(0, 8)}
                   </Text>
                 </View>
-                <View style={[styles.badge, { backgroundColor: '#f59e0b22' }]}>
-                  <Text style={[styles.badgeText, { color: '#f59e0b' }]}>PENDING</Text>
+                <View style={[styles.docTypeBadge, { borderColor: '#f59e0b', backgroundColor: '#f59e0b22' }]}>
+                  <Text style={{ color: '#f59e0b', fontSize: 10, fontWeight: '800', textTransform: 'uppercase' }}>
+                    {kycLabel(doc.doc_type)}
+                  </Text>
                 </View>
               </View>
               {doc.signed_url ? (
-                <Image source={{ uri: doc.signed_url }} style={styles.kycPreview} resizeMode="cover" />
+                <View style={{ gap: 8 }}>
+                  <Image source={{ uri: doc.signed_url }} style={styles.kycPreview} resizeMode="cover" />
+                  <TouchableOpacity
+                    style={[styles.smallAction, { backgroundColor: '#3b82f6', alignSelf: 'flex-start' }]}
+                    onPress={() => Linking.openURL(doc.signed_url!)}
+                  >
+                    <Text style={styles.smallActionText}>View Full Image</Text>
+                  </TouchableOpacity>
+                </View>
               ) : (
                 <View style={[styles.kycPreview, { backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' }]}>
                   <Text style={{ color: colors.textMuted, fontSize: 12 }}>No preview</Text>
@@ -493,6 +504,7 @@ const styles = StyleSheet.create({
   actions: { flexDirection: 'row', gap: 8, marginTop: 10 },
   actionBtn: { flex: 1, borderRadius: 10, paddingVertical: 9, alignItems: 'center' },
   actionText: { color: '#fff', fontSize: 12, fontWeight: '800' },
+  docTypeBadge: { borderWidth: 1, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 },
   kycCard: { borderWidth: 1, borderRadius: 14, padding: 12, gap: 10 },
   kycHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   kycPreview: { width: '100%', height: 160, borderRadius: 12 },

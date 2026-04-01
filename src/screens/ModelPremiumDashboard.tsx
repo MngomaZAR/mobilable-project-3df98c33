@@ -495,7 +495,8 @@ const ModelPremiumDashboard: React.FC = () => {
             { icon: 'chatbubbles', label: 'Messages', color: '#ea580c', bg: '#fff7ed', onPress: () => navigation.navigate('Root', { screen: 'Chat' }) },
             { icon: 'images', label: 'Media', color: '#0284c7', bg: '#eff6ff', onPress: () => currentUser?.id && navigation.navigate('MediaLibrary', { creatorId: currentUser.id }) },
             { icon: 'calendar', label: 'Bookings', color: '#d97706', bg: '#fffbeb', onPress: () => navigation.navigate('Root', { screen: 'Bookings' }) },
-            { icon: 'diamond', label: 'Upgrade', color: '#f59e0b', bg: '#fefce8', onPress: () => navigation.navigate('Support') },
+            { icon: 'list', label: 'Services', color: '#ec4899', bg: '#fdf2f8', onPress: () => (navigation as any).navigate('ModelServices') },
+            { icon: kycApproved ? 'shield-checkmark' : 'shield-outline', label: kycApproved ? 'Verified' : 'Verify ID', color: kycApproved ? '#22c55e' : '#f59e0b', bg: '#fffbeb', onPress: () => (navigation as any).navigate('KYC') },
             { icon: 'settings', label: 'Profile', color: '#6366f1', bg: '#eef2ff', onPress: () => navigation.navigate('AccountConfig') },
           ].map(a => (
             <TouchableOpacity key={a.label} style={s.actionBtn} onPress={a.onPress}>

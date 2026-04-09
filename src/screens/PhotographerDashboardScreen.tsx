@@ -19,6 +19,7 @@ import { supabase } from '../config/supabaseClient';
 import { DEFAULT_CAPE_TOWN_COORDINATES, ensureSouthAfricanCoordinates } from '../utils/geo';
 import { NewMessageModal } from '../components/NewMessageModal';
 import HowItWorksCard from '../components/HowItWorksCard';
+import { isModelUser } from '../utils/userRole';
 
 type Navigation = StackNavigationProp<RootStackParamList, 'Root'>;
 
@@ -29,6 +30,7 @@ const PhotographerDashboardScreen: React.FC = () => {
   const { startConversationWithUser } = useMessaging();
   const { state, updatePhotographerLocation, fetchEarnings, fetchSubscriptions, fetchCredits, fetchBookings } = useAppData();
   const currentUser = authUser ?? state.currentUser;
+  const isModelAccount = isModelUser(currentUser);
   const insets = useSafeAreaInsets();
   const [isOnline, setIsOnline] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -77,11 +79,11 @@ const PhotographerDashboardScreen: React.FC = () => {
   }, [bookings, state.earnings]);
 
   const talentProfile = useMemo(() => {
-    if (currentUser?.role === 'model') {
+    if (isModelAccount) {
       return state.models.find((m) => m.id === currentUser?.id);
     }
     return state.photographers.find((p) => p.id === currentUser?.id);
-  }, [currentUser, state.photographers, state.models]);
+  }, [currentUser, isModelAccount, state.photographers, state.models]);
 
   const talentLocation = useMemo(
     () =>
@@ -112,7 +114,7 @@ const PhotographerDashboardScreen: React.FC = () => {
           if (!mounted) return;
           const { latitude, longitude } = coords;
           if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
-          try { await updatePhotographerLocation(latitude, longitude, undefined, position.coords.accuracy); } catch { /* soft fail */ }
+          try { await updatePhotographerLocation(latitude, longitude, undefined, coords.accuracy ?? undefined); } catch { /* soft fail */ }
         }
       );
     };
@@ -134,7 +136,7 @@ const PhotographerDashboardScreen: React.FC = () => {
     }
     setIsOnline(nextValue);
     try {
-      const providerTable = currentUser?.role === 'model' ? 'models' : 'photographers';
+      const providerTable = isModelAccount ? 'models' : 'photographers';
       await supabase
         .from('profiles')
         .update({ availability_status: nextValue ? 'online' : 'offline' })
@@ -270,9 +272,9 @@ const PhotographerDashboardScreen: React.FC = () => {
         {/* Header */}
         <View style={s.headerRow}>
           <View style={{ flex: 1 }}>
-            <Text style={s.eyebrow}>{currentUser?.role === 'model' ? 'Model Mode' : 'Photographer Mode'}</Text>
+            <Text style={s.eyebrow}>{isModelAccount ? 'Model Mode' : 'Photographer Mode'}</Text>
             <Text style={s.title} numberOfLines={1}>
-              {currentUser?.full_name?.split(' ')[0] ?? (currentUser?.role === 'model' ? 'Model' : 'Photographer')}'s Dashboard
+              {currentUser?.full_name?.split(' ')[0] ?? (isModelAccount ? 'Model' : 'Photographer')}'s Dashboard
             </Text>
           </View>
           <TouchableOpacity style={s.newMsgBtn} onPress={() => setShowNewMessage(true)}>
@@ -449,7 +451,9 @@ const PhotographerDashboardScreen: React.FC = () => {
               { icon: 'card', label: 'Payments', color: '#ec4899', action: () => navigation.navigate('PaymentHistory') },
               { icon: 'wallet', label: 'Payouts', color: '#14b8a6', action: () => navigation.navigate('PayoutMethods') },
               { icon: 'stats-chart', label: 'Earnings', color: '#06b6d4', action: () => navigation.navigate('EarningsDashboard') },
-              { icon: 'camera', label: 'Equipment', color: '#c9a44a', action: () => (navigation as any).navigate('EquipmentSetup') },
+              ...(isModelAccount
+                ? [{ icon: 'list', label: 'Services', color: '#ec4899', action: () => (navigation as any).navigate('ModelServices') }]
+                : [{ icon: 'camera', label: 'Equipment', color: '#c9a44a', action: () => (navigation as any).navigate('EquipmentSetup') }]),
               { icon: kycApproved ? 'shield-checkmark' : 'shield-outline', label: kycApproved ? 'Verified' : 'Verify ID', color: kycApproved ? '#22c55e' : '#f59e0b', action: () => (navigation as any).navigate('KYC') },
             ].map(tool => (
               <TouchableOpacity key={tool.label} style={s.toolBtn} onPress={tool.action}>

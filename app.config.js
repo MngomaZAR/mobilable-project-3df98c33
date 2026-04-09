@@ -1,9 +1,18 @@
+const BRAND = require('./src/constants/brand.json');
+
+const APP_IDS = {
+  slug: 'papzshipped',
+  scheme: 'papzi',
+  bundleIdentifier: 'com.saicts.papzi',
+  androidPackage: 'com.saicts.papzi',
+};
+
 export default {
   expo: {
-    name: "Papzi",
-    slug: "papzshipped",
+    name: BRAND.name,
+    slug: APP_IDS.slug,
     owner: "mavuso",
-    scheme: "papzi",
+    scheme: APP_IDS.scheme,
     version: "1.0.0",
     orientation: "portrait",
     icon: "./assets/icon.png",
@@ -16,12 +25,12 @@ export default {
     assetBundlePatterns: ["**/*"],
     ios: {
       supportsTablet: true,
-      bundleIdentifier: "com.saicts.papzi",
+      bundleIdentifier: APP_IDS.bundleIdentifier,
       infoPlist: {
-        NSCameraUsageDescription: "Papzi needs access to your camera to let you take and share photos directly in chat.",
-        NSPhotoLibraryUsageDescription: "Papzi needs access to your photos to let you upload your portfolio and share media in chat.",
-        NSLocationWhenInUseUsageDescription: "Papzi uses your location to show available talent near you and track bookings.",
-        NSLocationAlwaysAndWhenInUseUsageDescription: "Papzi needs your location to track you during a live booking session.",
+        NSCameraUsageDescription: `${BRAND.name} needs access to your camera to let you take and share photos directly in chat.`,
+        NSPhotoLibraryUsageDescription: `${BRAND.name} needs access to your photos to let you upload your portfolio and share media in chat.`,
+        NSLocationWhenInUseUsageDescription: `${BRAND.name} uses your location to show available talent near you and track bookings.`,
+        NSLocationAlwaysAndWhenInUseUsageDescription: `${BRAND.name} needs your location to track you during a live booking session.`,
         ITSAppUsesNonExemptEncryption: false
       }
     },
@@ -30,13 +39,13 @@ export default {
         foregroundImage: "./assets/adaptive-icon.png",
         backgroundColor: "#ffffff"
       },
-      package: "com.saicts.papzi",
+      package: APP_IDS.androidPackage,
       // Deep link intent filter so Android re-opens the app after OAuth redirect
       intentFilters: [
         {
           action: "VIEW",
           autoVerify: true,
-          data: [{ scheme: "papzi", host: "auth" }],
+          data: [{ scheme: APP_IDS.scheme, host: "auth" }],
           category: ["BROWSABLE", "DEFAULT"]
         }
       ]
@@ -61,7 +70,7 @@ export default {
       [
         "expo-location",
         {
-          locationAlwaysAndWhenInUsePermission: "Allow Papzi to use your location."
+          locationAlwaysAndWhenInUsePermission: `Allow ${BRAND.name} to use your location.`
         }
       ],
       "@maplibre/maplibre-react-native"

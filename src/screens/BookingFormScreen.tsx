@@ -15,6 +15,7 @@ import HowItWorksCard from '../components/HowItWorksCard';
 
 type Route = RouteProp<RootStackParamList, 'BookingForm'>;
 type Navigation = StackNavigationProp<RootStackParamList, 'BookingForm'>;
+type PaymentDispatchIntent = NonNullable<RootStackParamList['Payment']['dispatchIntent']>;
 
 
 const BookingFormScreen: React.FC = () => {
@@ -24,7 +25,7 @@ const BookingFormScreen: React.FC = () => {
   const { startConversationWithUser } = useMessaging();
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [timeSlot, setTimeSlot] = useState('Golden hour (4-7)');
-  const [serviceType, setServiceType] = useState<string | null>(null);
+  const [selectedServiceType, setSelectedServiceType] = useState<string | null>(null);
   const [selectedTierId, setSelectedTierId] = useState(TIER_OPTIONS[1]?.id ?? 'standard');
   const [bookingTimeMode, setBookingTimeMode] = useState<'now' | 'schedule'>('schedule');
   const [locationLabel, setLocationLabel] = useState(state.currentUser?.city ?? '');
@@ -47,14 +48,15 @@ const BookingFormScreen: React.FC = () => {
     setter(next);
   };
 
+  const bookingServiceType = params.serviceType ?? (params.modelId ? 'modeling' : 'photography');
+  const talentId = bookingServiceType === 'modeling' ? params.modelId : params.photographerId;
+  const isModelTalent = bookingServiceType === 'modeling';
+
   const talent = useMemo(
-    () => state.photographers.find((item) => item.id === params.photographerId) || 
-          state.models.find((item) => item.id === params.photographerId),
-    [params.photographerId, state.photographers, state.models]
-  );
-  const isModelTalent = useMemo(
-    () => state.models.some((item) => item.id === params.photographerId),
-    [params.photographerId, state.models]
+    () =>
+      (isModelTalent ? state.models : state.photographers).find((item) => item.id === talentId) ||
+      (isModelTalent ? state.photographers : state.models).find((item) => item.id === talentId),
+    [isModelTalent, state.models, state.photographers, talentId]
   );
 
   const talentProfile = useMemo(
@@ -66,7 +68,7 @@ const BookingFormScreen: React.FC = () => {
   const canBookTalent = talentKycApproved && talentAgeVerified;
 
   const validationError = useMemo(() => {
-    if (!serviceType) return 'Select a service type to continue.';
+    if (!selectedServiceType) return 'Select a service type to continue.';
     if (!selectedTierId) return 'Select a tier to continue.';
     if (selectedCamera.size === 0) return 'Select a camera requirement.';
     if (selectedLenses.size === 0) return 'Select a lens requirement.';
@@ -76,7 +78,7 @@ const BookingFormScreen: React.FC = () => {
     if (!canBookTalent) return 'This provider is not verified for bookings yet.';
     return null;
   }, [
-    serviceType,
+    selectedServiceType,
     selectedTierId,
     selectedCamera,
     selectedLenses,
@@ -128,15 +130,15 @@ const BookingFormScreen: React.FC = () => {
   }, [talent?.price_range, selectedTier.basePrice]);
 
   const serviceMultiplier = useMemo(() => {
-    if (serviceType === 'paparazzi') return 1.15;
-    if (serviceType === 'event') return 1.2;
-    if (serviceType === 'video') return 1.3;
+    if (selectedServiceType === 'paparazzi') return 1.15;
+    if (selectedServiceType === 'event') return 1.2;
+    if (selectedServiceType === 'video') return 1.3;
     return 1;
-  }, [serviceType]);
+  }, [selectedServiceType]);
 
   const serviceTypeLabel = useMemo(
-    () => SERVICE_TYPES.find((service) => service.id === serviceType)?.label ?? 'Service',
-    [serviceType]
+    () => SERVICE_TYPES.find((service) => service.id === selectedServiceType)?.label ?? 'Service',
+    [selectedServiceType]
   );
 
   const timeMultiplier = bookingTimeMode === 'now' ? 1.15 : 1;
@@ -212,9 +214,9 @@ const BookingFormScreen: React.FC = () => {
         end_datetime: new Date(bookingDateSource.getTime() + 60 * 60 * 1000).toISOString(),
       });
 
-      const dispatchIntent = bookingTimeMode === 'now'
+      const dispatchIntent: RootStackParamList['Payment']['dispatchIntent'] = bookingTimeMode === 'now'
         ? {
-            serviceType: isModelTalent ? 'modeling' : serviceType === 'video' ? 'combined' : 'photography',
+            serviceType: (isModelTalent ? 'modeling' : selectedServiceType === 'video' ? 'combined' : 'photography') as PaymentDispatchIntent['serviceType'],
             fanoutCount,
             intensityLevel,
             baseAmount: estimatedTotalAmount,
@@ -280,12 +282,12 @@ const BookingFormScreen: React.FC = () => {
       <Text style={styles.label}>Service type</Text>
       <View style={styles.choiceGrid}>
         {SERVICE_TYPES.map((service) => {
-          const active = serviceType === service.id;
+          const active = selectedServiceType === service.id;
           return (
             <TouchableOpacity
               key={service.id}
               style={[styles.choicePill, active && styles.choicePillActive]}
-              onPress={() => { Haptics.selectionAsync(); setServiceType(service.id); }}
+              onPress={() => { Haptics.selectionAsync(); setSelectedServiceType(service.id); }}
             >
               <Text style={[styles.choiceTitle, active && styles.choiceTitleActive]}>{service.label}</Text>
               <Text style={[styles.choiceSubtitle, active && styles.choiceSubtitleActive]}>{service.detail}</Text>

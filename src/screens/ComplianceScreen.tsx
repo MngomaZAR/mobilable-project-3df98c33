@@ -4,10 +4,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAppData } from '../store/AppDataContext';
 import { useTheme } from '../store/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BRAND } from '../utils/constants';
 
 const ComplianceScreen: React.FC = () => {
   const { state, updatePrivacy, requestDataDeletion } = useAppData();
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const [notes, setNotes] = useState('');
 
@@ -78,7 +79,7 @@ const ComplianceScreen: React.FC = () => {
         <View style={[styles.row, { borderBottomWidth: 0 }]}>
           <View style={styles.rowText}>
             <Text style={[styles.label, { color: colors.text }]}>Personalized Experience</Text>
-            <Text style={[styles.meta, { color: colors.textMuted }]}>Help us improve Papzi by allowing anonymous analytics.</Text>
+            <Text style={[styles.meta, { color: colors.textMuted }]}>Help us improve {BRAND.name} by allowing anonymous analytics.</Text>
           </View>
           <Switch 
             value={state.privacy.personalizedAds} 
@@ -126,8 +127,8 @@ const ComplianceScreen: React.FC = () => {
       
       <View style={styles.footer}>
         <Text style={[styles.footerText, { color: colors.textMuted }]}>
-          Papzi remains committed to your data security. 
-          View our full Privacy Policy at papzi.com/legal
+          {BRAND.name} remains committed to your data security.
+          {' '}View our full Privacy Policy at {BRAND.urls.legal}
         </Text>
       </View>
     </ScrollView>

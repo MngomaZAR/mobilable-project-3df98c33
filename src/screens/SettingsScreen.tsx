@@ -28,6 +28,7 @@ import { requestAccountDeletion } from '../services/accountService';
 import { PLACEHOLDER_AVATAR } from '../utils/constants';
 import { supabase } from '../config/supabaseClient';
 import { registerForPushNotificationsAsync, savePushTokenAsync } from '../services/notificationService';
+import { isModelUser, isPhotographerUser, isProviderUser } from '../utils/userRole';
 
 type Navigation = StackNavigationProp<RootStackParamList, 'Root'>;
 
@@ -47,6 +48,9 @@ const SettingsScreen: React.FC = () => {
   const [language, setLanguage] = useState('English');
   const [avatarPreviewUri, setAvatarPreviewUri] = useState<string | null>(null);
   const showDevVideoTools = __DEV__ || environment.env !== 'production';
+  const isModelAccount = isModelUser(currentUser);
+  const isPhotographerAccount = isPhotographerUser(currentUser);
+  const isProviderAccount = isProviderUser(currentUser);
 
   useEffect(() => {
     const checkStatus = async () => {
@@ -197,7 +201,7 @@ const SettingsScreen: React.FC = () => {
       Alert.alert('Not ready', 'Please sign in before starting a test call.');
       return;
     }
-    if (currentUser.role !== 'model') {
+    if (!isModelAccount) {
       Alert.alert('Unavailable', 'Video hosting is currently available for model accounts only.');
       return;
     }
@@ -481,7 +485,7 @@ const SettingsScreen: React.FC = () => {
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </TouchableOpacity>
-          {(currentUser?.role === 'model' || currentUser?.role === 'photographer') && (
+          {isProviderAccount && (
             <TouchableOpacity style={[s.groupItem, s.groupItemBorder]} onPress={() => (navigation as any).navigate('KYC')}>
               <View style={s.itemLeft}>
                 <View style={[s.iconContainer, { backgroundColor: currentUser?.kyc_status === 'approved' ? '#22c55e' : '#f59e0b' }]}>
@@ -501,7 +505,7 @@ const SettingsScreen: React.FC = () => {
               </View>
             </TouchableOpacity>
           )}
-          {currentUser?.role === 'photographer' && (
+          {isPhotographerAccount && (
             <TouchableOpacity style={[s.groupItem, s.groupItemBorder]} onPress={() => (navigation as any).navigate('EquipmentSetup')}>
               <View style={s.itemLeft}>
                 <View style={[s.iconContainer, { backgroundColor: '#c9a44a' }]}>
@@ -512,7 +516,7 @@ const SettingsScreen: React.FC = () => {
               <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
             </TouchableOpacity>
           )}
-          {currentUser?.role === 'model' && (
+          {isModelAccount && (
             <TouchableOpacity style={[s.groupItem, s.groupItemBorder]} onPress={() => (navigation as any).navigate('ModelServices')}>
               <View style={s.itemLeft}>
                 <View style={[s.iconContainer, { backgroundColor: '#ec4899' }]}>
@@ -523,7 +527,7 @@ const SettingsScreen: React.FC = () => {
               <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
             </TouchableOpacity>
           )}
-          {(currentUser?.role === 'model' || currentUser?.role === 'photographer') && (
+          {isProviderAccount && (
             <TouchableOpacity style={[s.groupItem, s.groupItemBorder]} onPress={() => navigation.navigate('PayoutMethods')}>
               <View style={s.itemLeft}>
                 <View style={[s.iconContainer, { backgroundColor: '#0ea5e9' }]}>
@@ -589,7 +593,7 @@ const SettingsScreen: React.FC = () => {
         <View style={s.section}>
           <Text style={s.sectionHeader}>VIDEO CALL</Text>
           <View style={s.group}>
-            {currentUser?.role === 'model' && (
+            {isModelAccount && (
               <TouchableOpacity style={[s.groupItem, s.groupItemBorder]} onPress={handleTestVideoCall}>
                 <View style={s.itemLeft}>
                   <View style={[s.iconContainer, { backgroundColor: '#3b82f6' }]}>

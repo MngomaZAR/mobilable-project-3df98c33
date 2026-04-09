@@ -71,6 +71,11 @@ const UserProfileScreen: React.FC = () => {
     () => state.profiles.find((p) => p.id === params.userId),
     [state.profiles, params.userId]
   );
+
+  const isModelProfile = useMemo(
+    () => state.models.some((model) => model.id === (talent?.id ?? params.userId)),
+    [params.userId, state.models, talent?.id]
+  );
   
   const isFollowing = useMemo(
     () => state.follows?.some(f => f.following_id === talent?.id) ?? false,
@@ -128,7 +133,16 @@ const UserProfileScreen: React.FC = () => {
         'Start a booking before messaging this creator.',
         [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Book now', onPress: () => navigation.navigate('BookingForm', { photographerId: targetId }) },
+          {
+            text: 'Book now',
+            onPress: () =>
+              navigation.navigate(
+                'BookingForm',
+                isModelProfile
+                  ? { modelId: targetId, serviceType: 'modeling' }
+                  : { photographerId: targetId, serviceType: 'photography' }
+              ),
+          },
         ]
       );
       return;
@@ -351,9 +365,9 @@ const UserProfileScreen: React.FC = () => {
             style={[s.bookBtn, { backgroundColor: colors.text }]}
             onPress={() => {
               if (state.photographers.some(p => p.id === talent.id)) {
-                navigation.navigate('BookingForm', { photographerId: talent.id });
+                navigation.navigate('BookingForm', { photographerId: talent.id, serviceType: 'photography' });
               } else {
-                navigation.navigate('BookingForm', { modelId: talent.id });
+                navigation.navigate('BookingForm', { modelId: talent.id, serviceType: 'modeling' });
               }
             }}
           >

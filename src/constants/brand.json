@@ -1,0 +1,23 @@
+{
+  "name": "Papzii",
+  "legalName": "Papzii (Pty) Ltd",
+  "tagline": "Book photographers & models instantly",
+  "domain": "papzii.co.za",
+  "email": {
+    "support": "support@papzii.co.za",
+    "legal": "legal@papzii.co.za",
+    "privacy": "privacy@papzii.co.za",
+    "trust": "trust@papzii.co.za"
+  },
+  "urls": {
+    "home": "https://papzii.co.za",
+    "terms": "https://papzii.co.za/terms",
+    "privacy": "https://papzii.co.za/privacy",
+    "support": "https://papzii.co.za/support",
+    "legal": "https://papzii.co.za/legal"
+  },
+  "social": {
+    "instagram": "@papzii",
+    "instagramUrl": "https://instagram.com/papzii"
+  }
+}

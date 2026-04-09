@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert, Animated, Easing, Platform, StyleSheet, Text,
-  TextInput, TouchableOpacity, View, PanResponder, Dimensions,
+  TextInput, TouchableOpacity, View, PanResponder, Dimensions, Keyboard, ScrollView, Image,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
@@ -11,7 +11,6 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
 import { MapPreview } from '../components/MapPreview';
 import { MapMarker } from '../components/mapTypes';
-import { RequestPopup } from '../components/RequestPopup';
 import { MapAvatarPin } from '../components/MapAvatarPin';
 import { useAppData } from '../store/AppDataContext';
 import { useTheme } from '../store/ThemeContext';
@@ -23,6 +22,7 @@ import { routingService } from '../services/routingService';
 import * as Haptics from 'expo-haptics';
 import { Analytics } from '../utils/analytics';
 import { getHeatmap } from '../services/dispatchService';
+import { resolveUserRole } from '../utils/userRole';
 
 // Carto Open Basemaps: free and no API key required.
 const MAP_STYLES = {
@@ -59,6 +59,8 @@ const MapScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<StackNavigationProp<RootStackParamList, 'Root'>>();
   const currentUser = state.currentUser;
+  const role = resolveUserRole(currentUser);
+  const isClientFacing = role === 'client';
 
   const [userMarker, setUserMarker] = useState<MapMarker | null>(null);
   const [userCoords, setUserCoords] = useState<{ lat: number; lng: number; timestamp: number } | null>(null);
@@ -190,7 +192,6 @@ const MapScreen: React.FC = () => {
 
   // Build map markers
   const baseMarkers: MapMarker[] = useMemo(() => {
-    const role = currentUser?.role || 'client';
     let result: MapMarker[] = [];
     if (role === 'photographer') {
       result = state.models.map(m => ({ id: `model-${m.id}`, sourceId: m.id, title: m.name, description: 'Model', latitude: m.latitude, longitude: m.longitude, type: 'model' as const, avatarUrl: m.avatar_url, rating: m.rating }));
@@ -204,13 +205,33 @@ const MapScreen: React.FC = () => {
     }
     const seen = new Set<string>();
     return result.filter(m => { if (seen.has(m.id)) return false; seen.add(m.id); return true; });
-  }, [state.photographers, state.models, currentUser]);
+  }, [role, state.photographers, state.models]);
 
   const filteredMarkers = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
     if (!q) return baseMarkers;
     return baseMarkers.filter(m => (m.title ?? '').toLowerCase().includes(q) || (m.description ?? '').toLowerCase().includes(q));
   }, [baseMarkers, searchQuery]);
+
+  const nearbyTalent = useMemo(() => {
+    return [...filteredMarkers].sort((a, b) => {
+      const aOnline = onlineProfiles.has(a.sourceId ?? '') ? 1 : 0;
+      const bOnline = onlineProfiles.has(b.sourceId ?? '') ? 1 : 0;
+      if (aOnline !== bOnline) return bOnline - aOnline;
+      if (userCoords) {
+        const aDistance = haversineDistanceKm(
+          { latitude: userCoords.lat, longitude: userCoords.lng },
+          { latitude: a.latitude, longitude: a.longitude }
+        );
+        const bDistance = haversineDistanceKm(
+          { latitude: userCoords.lat, longitude: userCoords.lng },
+          { latitude: b.latitude, longitude: b.longitude }
+        );
+        return aDistance - bDistance;
+      }
+      return String(a.title ?? '').localeCompare(String(b.title ?? ''));
+    });
+  }, [filteredMarkers, onlineProfiles, userCoords]);
 
   const markers = useMemo(() => userMarker ? [userMarker, ...filteredMarkers] : filteredMarkers, [filteredMarkers, userMarker]);
 
@@ -281,7 +302,7 @@ const MapScreen: React.FC = () => {
   useEffect(() => { fetchRoutes(); }, [fetchRoutes]);
 
   useEffect(() => {
-    if (currentUser?.role !== 'admin') {
+    if (role !== 'admin') {
       setHeatmapSummary(null);
       return;
     }
@@ -300,7 +321,7 @@ const MapScreen: React.FC = () => {
     };
     hydrateHeatmap();
     return () => { active = false; };
-  }, [currentUser?.city, currentUser?.role]);
+  }, [currentUser?.city, role]);
 
   // Route draw animation
   useEffect(() => {
@@ -341,8 +362,31 @@ const MapScreen: React.FC = () => {
     return isNaN(km) ? null : `${Math.max(6, Math.round(km * 3.4))} min`;
   }, [selectedDistance, routeDurationSec]);
 
+  const activeBookingDistance = useMemo(() => {
+    if (!activeBooking || activeTalent?.latitude == null || activeTalent?.longitude == null) return null;
+    const clientLat = userCoords?.lat ?? activeBooking.user_latitude;
+    const clientLng = userCoords?.lng ?? activeBooking.user_longitude;
+    if (clientLat == null || clientLng == null) return null;
+    const km = haversineDistanceKm(
+      { latitude: clientLat, longitude: clientLng },
+      { latitude: activeTalent.latitude, longitude: activeTalent.longitude }
+    );
+    return `${km.toFixed(1)} km`;
+  }, [activeBooking, activeTalent, userCoords]);
+
+  const activeBookingEtaLabel = useMemo(() => {
+    if (!activeBookingDistance) return '~15 min';
+    const km = parseFloat(activeBookingDistance);
+    return Number.isNaN(km) ? '~15 min' : `${Math.max(6, Math.round(km * 3.4))} min`;
+  }, [activeBookingDistance]);
+
   const handleRequestBooking = async (marker: MapMarker) => {
     if (!userCoords) { Alert.alert('Location required', 'Enable GPS first.'); return; }
+    if (!onlineProfiles.has(marker.sourceId ?? '')) {
+      Alert.alert('Offline', `${marker.title} is currently offline. You can request them once they are live.`);
+      return;
+    }
+    Keyboard.dismiss();
     setIsRequesting(true);
     try {
       const pkg = BOOKING_PACKAGES.find(p => p.id === 'instant') ?? BOOKING_PACKAGES[0];
@@ -388,8 +432,8 @@ const MapScreen: React.FC = () => {
   const panelCard = isDark ? '#1a2741' : '#f7eee2';
   const panelBorder = isDark ? '#2f3d5f' : '#e7d8c0';
   const overlaySurface = isDark ? 'rgba(16,26,47,0.9)' : 'rgba(255,249,240,0.95)';
-  const primaryButtonColor = isDark ? '#dfbf85' : '#b08957';
-  const primaryButtonText = isDark ? '#0f172a' : '#fffdf8';
+  const primaryButtonColor = isDark ? '#0b1220' : '#e2c189';
+  const primaryButtonText = isDark ? '#fffaf2' : '#1f1a12';
 
   if (Platform.OS === 'web') {
     return (
@@ -445,6 +489,7 @@ const MapScreen: React.FC = () => {
                 uri={marker.avatarUrl}
                 online={onlineProfiles.has(marker.sourceId ?? '')}
                 rating={marker.rating}
+                label={isClientFacing ? marker.title : undefined}
               />
             </MapLibreGL.PointAnnotation>
           ))}
@@ -485,6 +530,9 @@ const MapScreen: React.FC = () => {
               placeholderTextColor={colors.textMuted}
               value={searchQuery}
               onChangeText={setSearchQuery}
+              onSubmitEditing={() => Keyboard.dismiss()}
+              returnKeyType="search"
+              blurOnSubmit
               style={[s.searchInput, { color: colors.text }]}
             />
             {searchQuery.length > 0 && (
@@ -500,11 +548,11 @@ const MapScreen: React.FC = () => {
           <View style={[s.statusPill, { backgroundColor: overlaySurface, borderColor: panelBorder }]}>
             <View style={s.liveDot} />
             <Text style={[s.liveText, { color: colors.text }]}>
-              Live | {filteredMarkers.filter(m => onlineProfiles.has(m.sourceId ?? '')).length} online nearby
+              Live • {filteredMarkers.filter(m => onlineProfiles.has(m.sourceId ?? '')).length} online nearby
             </Text>
           </View>
         )}
-        {currentUser?.role === 'admin' && heatmapSummary && (
+        {role === 'admin' && heatmapSummary && (
           <View style={[s.statusPill, { marginTop: 8, backgroundColor: overlaySurface, borderColor: panelBorder }]}>
             <Ionicons name="flame-outline" size={13} color={isDark ? '#fbbf24' : '#b45309'} />
             <Text style={[s.liveText, { color: colors.text }]}>
@@ -526,12 +574,16 @@ const MapScreen: React.FC = () => {
         <TouchableOpacity style={[s.fab, { backgroundColor: panelBackground, borderColor: panelBorder }]} onPress={requestLocation} disabled={requesting}>
           <Ionicons name={requesting ? 'hourglass' : 'locate'} size={22} color={colors.accent} />
         </TouchableOpacity>
-        <TouchableOpacity style={[s.fab, { backgroundColor: panelBackground, borderColor: panelBorder }]} onPress={cycleMapStyle}>
-          <Ionicons name="layers" size={22} color={colors.text} />
-        </TouchableOpacity>
-        <TouchableOpacity style={[s.fab, { backgroundColor: panelBackground, borderColor: panelBorder }]} onPress={() => navigation.navigate('Notifications')}>
-          <Ionicons name="notifications-outline" size={22} color={colors.text} />
-        </TouchableOpacity>
+        {!isClientFacing ? (
+          <>
+            <TouchableOpacity style={[s.fab, { backgroundColor: panelBackground, borderColor: panelBorder }]} onPress={cycleMapStyle}>
+              <Ionicons name="layers" size={22} color={colors.text} />
+            </TouchableOpacity>
+            <TouchableOpacity style={[s.fab, { backgroundColor: panelBackground, borderColor: panelBorder }]} onPress={() => navigation.navigate('Notifications')}>
+              <Ionicons name="notifications-outline" size={22} color={colors.text} />
+            </TouchableOpacity>
+          </>
+        ) : null}
       </View>
 
       {/* Gesture-driven bottom sheet */}
@@ -543,56 +595,7 @@ const MapScreen: React.FC = () => {
         <View style={s.dragHandle} />
 
         <View style={[s.sheetInner, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-          {activeBooking ? (
-            /* ACTIVE BOOKING VIEW */
-            <>
-              <View style={s.sheetHeader}>
-                <View style={[s.sheetAvatar, { backgroundColor: '#10b98120' }]}>
-                  <Ionicons name="car" size={24} color="#10b981" />
-                </View>
-                <View style={s.sheetInfo}>
-                  <Text style={[s.sheetTitle, { color: colors.text }]}>
-                    {activeBooking.status === 'accepted' ? 'En Route to You' : 'Shoot in Progress'}
-                  </Text>
-                  <Text style={[s.sheetSub, { color: colors.textSecondary }]}>
-                    {activeTalent?.name ?? 'Talent'} - ETA {etaLabel ?? '~15 min'}
-                  </Text>
-                </View>
-                <TouchableOpacity onPress={() => navigation.navigate('BookingTracking', { bookingId: activeBooking.id })} style={[s.trackBtn, { backgroundColor: isDark ? '#273454' : '#ecdfcc' }]}>
-                  <Ionicons name="navigate" size={20} color="#2563eb" />
-                </TouchableOpacity>
-              </View>
-              <View style={s.metricsRow}>
-                {[
-                  { label: 'Distance', value: selectedDistance ?? '--' },
-                  { label: 'ETA', value: etaLabel ?? '--' },
-                  {
-                    label: 'Status',
-                    value: activeBooking.status === 'accepted'
-                      ? 'Accepted'
-                      : activeBooking.status === 'in_progress'
-                        ? 'In progress'
-                        : String(activeBooking.status),
-                    color: '#10b981',
-                  },
-                ].map(m => (
-                  <View key={m.label} style={[s.metricItem, { backgroundColor: panelCard, borderColor: panelBorder }]}>
-                    <Text style={[s.metricLabel, { color: colors.textMuted }]}>{m.label}</Text>
-                    <Text numberOfLines={1} style={[s.metricValue, { color: m.color ?? colors.text }]}>
-                      {m.value}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-              <TouchableOpacity
-                style={[s.primaryBtn, { backgroundColor: primaryButtonColor }]}
-                onPress={() => navigation.navigate('ChatThread', { conversationId: `chat-${activeBooking.id}`, title: activeTalent?.name })}
-              >
-                <Ionicons name="chatbubble" size={18} color={primaryButtonText} style={{ marginRight: 8 }} />
-                <Text style={[s.primaryBtnText, { color: primaryButtonText }]}>Message {activeTalent?.name?.split(' ')[0] ?? 'Talent'}</Text>
-              </TouchableOpacity>
-            </>
-          ) : selectedMarker ? (
+          {selectedMarker ? (
             /* SELECTED TALENT VIEW */
             <>
               <View style={s.sheetHeader}>
@@ -636,31 +639,159 @@ const MapScreen: React.FC = () => {
                   <Ionicons name="person-circle-outline" size={18} color={colors.text} />
                   <Text style={[s.ghostBtnText, { color: colors.text }]}>Profile</Text>
                 </TouchableOpacity>
-                {currentUser?.role === 'client' && (
+                {role === 'client' && (
                   <TouchableOpacity
-                    style={[s.primaryBtn, { flex: 2, backgroundColor: primaryButtonColor }]}
+                    style={[s.primaryBtn, { flex: 2, backgroundColor: primaryButtonColor }, !onlineProfiles.has(selectedMarker.sourceId ?? '') && s.disabledBtn]}
                     onPress={() => handleRequestBooking(selectedMarker)}
-                    disabled={isRequesting}
+                    disabled={isRequesting || !onlineProfiles.has(selectedMarker.sourceId ?? '')}
                   >
                     <Ionicons name="flash" size={18} color={primaryButtonText} style={{ marginRight: 6 }} />
-                    <Text style={[s.primaryBtnText, { color: primaryButtonText }]}>{isRequesting ? 'Requesting...' : 'Instant Book'}</Text>
+                    <Text style={[s.primaryBtnText, { color: primaryButtonText }]}>
+                      {onlineProfiles.has(selectedMarker.sourceId ?? '') ? (isRequesting ? 'Requesting...' : 'Request') : 'Offline'}
+                    </Text>
                   </TouchableOpacity>
                 )}
               </View>
+            </>
+          ) : activeBooking ? (
+            /* ACTIVE BOOKING VIEW */
+            <>
+              <View style={s.sheetHeader}>
+                <View style={[s.sheetAvatar, { backgroundColor: '#10b98120' }]}>
+                  <Ionicons name="car" size={24} color="#10b981" />
+                </View>
+                <View style={s.sheetInfo}>
+                  <Text style={[s.sheetTitle, { color: colors.text }]}>
+                    {activeBooking.status === 'accepted' ? 'En Route to You' : 'Shoot in Progress'}
+                  </Text>
+                  <Text style={[s.sheetSub, { color: colors.textSecondary }]}>
+                    {activeTalent?.name ?? 'Talent'} • ETA {activeBookingEtaLabel}
+                  </Text>
+                </View>
+                <TouchableOpacity onPress={() => navigation.navigate('BookingTracking', { bookingId: activeBooking.id })} style={[s.trackBtn, { backgroundColor: isDark ? '#273454' : '#ecdfcc' }]}>
+                  <Ionicons name="navigate" size={20} color="#2563eb" />
+                </TouchableOpacity>
+              </View>
+              <View style={s.metricsRow}>
+                {[
+                  { label: 'Distance', value: activeBookingDistance ?? '--' },
+                  { label: 'ETA', value: activeBookingEtaLabel ?? '--' },
+                  {
+                    label: 'Status',
+                    value: activeBooking.status === 'accepted'
+                      ? 'Accepted'
+                      : activeBooking.status === 'in_progress'
+                        ? 'In progress'
+                        : String(activeBooking.status),
+                    color: '#10b981',
+                  },
+                ].map(m => (
+                  <View key={m.label} style={[s.metricItem, { backgroundColor: panelCard, borderColor: panelBorder }]}>
+                    <Text style={[s.metricLabel, { color: colors.textMuted }]}>{m.label}</Text>
+                    <Text numberOfLines={1} style={[s.metricValue, { color: m.color ?? colors.text }]}>
+                      {m.value}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+              <TouchableOpacity
+                style={[s.primaryBtn, { backgroundColor: primaryButtonColor }]}
+                onPress={() => navigation.navigate('ChatThread', { conversationId: `chat-${activeBooking.id}`, title: activeTalent?.name })}
+              >
+                <Ionicons name="chatbubble" size={18} color={primaryButtonText} style={{ marginRight: 8 }} />
+                <Text style={[s.primaryBtnText, { color: primaryButtonText }]}>Message {activeTalent?.name?.split(' ')[0] ?? 'Talent'}</Text>
+              </TouchableOpacity>
             </>
           ) : (
             /* DEFAULT VIEW */
             <>
               <Text style={[s.sheetTitle, { color: colors.text }]}>
-                {filteredMarkers.length} Talents Nearby
+                Nearby {isClientFacing ? 'Talent' : 'Availability'}
               </Text>
               <Text style={[s.sheetSub, { color: colors.textSecondary }]}>
-                {onlineProfiles.size} available now | Tap a pin to book instantly
+                {onlineProfiles.size} available now • Tap a card or map pin to view details
               </Text>
               <TouchableOpacity style={[s.primaryBtn, { marginTop: 12, backgroundColor: primaryButtonColor }]} onPress={requestLocation} disabled={requesting}>
                 <Ionicons name="navigate" size={18} color={primaryButtonText} style={{ marginRight: 8 }} />
                 <Text style={[s.primaryBtnText, { color: primaryButtonText }]}>{requesting ? 'Finding location...' : 'Find Talent Near Me'}</Text>
               </TouchableOpacity>
+              {nearbyTalent.length > 0 ? (
+                <ScrollView
+                  style={s.nearbyList}
+                  contentContainerStyle={s.nearbyListContent}
+                  showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                >
+                  {nearbyTalent.slice(0, 6).map((marker) => {
+                    const isOnline = onlineProfiles.has(marker.sourceId ?? '');
+                    const distanceLabel = userCoords
+                      ? `${haversineDistanceKm(
+                          { latitude: userCoords.lat, longitude: userCoords.lng },
+                          { latitude: marker.latitude, longitude: marker.longitude }
+                        ).toFixed(1)} km`
+                      : 'Nearby';
+                    return (
+                      <View key={marker.id} style={[s.nearbyCard, { backgroundColor: panelCard, borderColor: panelBorder }]}>
+                        <TouchableOpacity
+                          style={s.nearbyPressArea}
+                          onPress={() => {
+                            Keyboard.dismiss();
+                            setSelectedMarker(marker);
+                            snapTo(SCREEN_HEIGHT - SHEET_HALF);
+                          }}
+                          activeOpacity={0.85}
+                        >
+                          <View style={s.nearbyAvatarWrap}>
+                            <Image
+                              source={{ uri: marker.avatarUrl || 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=300&q=80' }}
+                              style={s.nearbyAvatar}
+                            />
+                            <View style={[s.nearbyPresenceDot, !isOnline && s.nearbyPresenceDotOffline]} />
+                          </View>
+                          <View style={s.nearbyInfo}>
+                            <Text style={[s.nearbyName, { color: colors.text }]} numberOfLines={1}>{marker.title}</Text>
+                            <View style={s.nearbyMetaRow}>
+                              <Ionicons name="star" size={13} color="#fbbf24" />
+                              <Text style={[s.nearbyMetaText, { color: colors.textSecondary }]}>{Number(marker.rating ?? 0).toFixed(1)}</Text>
+                              <Text style={[s.nearbyMetaDivider, { color: colors.textMuted }]}>•</Text>
+                              <Text style={[s.nearbyMetaText, { color: colors.textSecondary }]}>{distanceLabel}</Text>
+                              <Text style={[s.nearbyMetaDivider, { color: colors.textMuted }]}>•</Text>
+                              <Text style={[s.nearbyMetaText, { color: isOnline ? '#10b981' : colors.textMuted }]}>{isOnline ? 'Online' : 'Offline'}</Text>
+                            </View>
+                          </View>
+                        </TouchableOpacity>
+                        {isClientFacing ? (
+                          <TouchableOpacity
+                            style={[s.listRequestBtn, { backgroundColor: isOnline ? '#e2c189' : '#0f172a' }, !isOnline && s.disabledBtn]}
+                            onPress={() => handleRequestBooking(marker)}
+                            disabled={isRequesting || !isOnline}
+                          >
+                            <Text style={[s.listRequestBtnText, { color: isOnline ? '#1f1a12' : '#fffaf2' }]}>
+                              {isOnline ? (isRequesting ? '...' : 'Request') : 'Offline'}
+                            </Text>
+                          </TouchableOpacity>
+                        ) : (
+                          <TouchableOpacity
+                            style={s.nearbyChevronBtn}
+                            onPress={() => {
+                              Keyboard.dismiss();
+                              setSelectedMarker(marker);
+                              snapTo(SCREEN_HEIGHT - SHEET_HALF);
+                            }}
+                          >
+                            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    );
+                  })}
+                </ScrollView>
+              ) : (
+                <View style={[s.emptyNearbyState, { backgroundColor: panelCard, borderColor: panelBorder }]}>
+                  <Ionicons name="search" size={18} color={colors.textMuted} />
+                  <Text style={[s.emptyNearbyText, { color: colors.textSecondary }]}>No nearby talent matches that search yet.</Text>
+                </View>
+              )}
             </>
           )}
         </View>
@@ -672,40 +803,59 @@ const MapScreen: React.FC = () => {
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0f172a' },
   safeOverlay: { position: 'absolute', top: 0, left: 0, right: 0, pointerEvents: 'box-none' },
-  topBar: { marginHorizontal: 16, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 18, flexDirection: 'row', alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 6 },
+  topBar: { marginHorizontal: 16, paddingHorizontal: 16, paddingVertical: 11, borderRadius: 18, flexDirection: 'row', alignItems: 'center', borderWidth: 1, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: { width: 0, height: 5 }, elevation: 5 },
   searchBox: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
-  searchInput: { flex: 1, fontSize: 15, paddingVertical: 4 },
-  statusPill: { marginTop: 10, marginHorizontal: 16, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 6, elevation: 3 },
+  searchInput: { flex: 1, fontSize: 15, fontWeight: '600', paddingVertical: 2 },
+  statusPill: { marginTop: 10, marginHorizontal: 16, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 16, borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 8, elevation: 4 },
   liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#10b981' },
-  liveText: { fontSize: 13, fontWeight: '700' },
+  liveText: { fontSize: 13, fontWeight: '800' },
   errorBanner: { marginTop: 8, marginHorizontal: 16, flexDirection: 'row', gap: 6, alignItems: 'center', backgroundColor: 'rgba(253,224,71,0.1)', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: 'rgba(251,191,36,0.3)' },
   errorBannerText: { color: '#fbbf24', fontSize: 12, fontWeight: '600', flex: 1 },
   fabColumn: { position: 'absolute', right: 16, gap: 10 },
-  fab: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 5 },
+  fab: { width: 50, height: 50, borderRadius: 25, borderWidth: 1, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 5 },
   userPinWrapper: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
   userPulse: { position: 'absolute', width: 32, height: 32, borderRadius: 16, backgroundColor: '#3b82f6' },
   userPinCore: { width: 16, height: 16, borderRadius: 8, backgroundColor: '#2563eb', borderWidth: 3, borderColor: '#fff' },
   userPinRing: { position: 'absolute', width: 26, height: 26, borderRadius: 13, borderWidth: 2, borderColor: '#3b82f6' },
-  bottomSheet: { position: 'absolute', left: 0, right: 0, height: SCREEN_HEIGHT, borderTopLeftRadius: 28, borderTopRightRadius: 28, shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 20, shadowOffset: { width: 0, height: -8 }, elevation: 16 },
-  dragHandle: { width: 48, height: 5, borderRadius: 4, backgroundColor: '#94a3b8', alignSelf: 'center', marginTop: 10, marginBottom: 4 },
-  sheetInner: { paddingHorizontal: 20, paddingTop: 8 },
+  bottomSheet: { position: 'absolute', left: 0, right: 0, height: SCREEN_HEIGHT, borderTopLeftRadius: 28, borderTopRightRadius: 28, borderTopWidth: 1, shadowColor: '#000', shadowOpacity: 0.22, shadowRadius: 20, shadowOffset: { width: 0, height: -8 }, elevation: 16 },
+  dragHandle: { width: 52, height: 5, borderRadius: 4, backgroundColor: '#b3a48d', alignSelf: 'center', marginTop: 12, marginBottom: 6 },
+  sheetInner: { paddingHorizontal: 22, paddingTop: 10 },
   sheetHeader: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 16 },
-  sheetAvatar: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center' },
+  sheetAvatar: { width: 54, height: 54, borderRadius: 27, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(223, 196, 150, 0.35)' },
   sheetInfo: { flex: 1 },
-  sheetTitle: { fontSize: 18, fontWeight: '800' },
-  sheetSub: { fontSize: 14, marginTop: 2 },
+  sheetTitle: { fontSize: 18, fontWeight: '800', letterSpacing: -0.2 },
+  sheetSub: { fontSize: 14, marginTop: 2, fontWeight: '500' },
   onlineBadge: { backgroundColor: '#10b981', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
   onlineBadgeText: { color: '#fff', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
   metricsRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
-  metricItem: { flex: 1, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 14, alignItems: 'center', borderWidth: 1, minHeight: 92 },
-  metricLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 },
+  metricItem: { flex: 1, borderRadius: 16, paddingHorizontal: 10, paddingVertical: 13, alignItems: 'center', borderWidth: 1, minHeight: 82 },
+  metricLabel: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 6 },
   metricValue: { fontSize: 14, fontWeight: '800', textAlign: 'center', textTransform: 'capitalize' },
   sheetActions: { flexDirection: 'row', gap: 12 },
-  primaryBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#2563eb', borderRadius: 16, paddingVertical: 16, shadowColor: '#2563eb', shadowOpacity: 0.4, shadowRadius: 10, shadowOffset: { width: 0, height: 6 }, elevation: 6 },
+  primaryBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#d7b46a', borderRadius: 16, paddingVertical: 16, shadowColor: '#d7b46a', shadowOpacity: 0.26, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 6 },
   primaryBtnText: { color: '#fff', fontWeight: '800', fontSize: 16 },
-  ghostBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderRadius: 16, paddingVertical: 14, gap: 6 },
+  ghostBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderRadius: 16, paddingVertical: 14, gap: 6, backgroundColor: 'rgba(255,255,255,0.06)' },
   ghostBtnText: { fontWeight: '700', fontSize: 14 },
-  trackBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#2563eb20', alignItems: 'center', justifyContent: 'center' },
+  trackBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#efe2c6', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#e4c98b' },
+  disabledBtn: { opacity: 0.62 },
+  nearbyList: { marginTop: 14, maxHeight: SCREEN_HEIGHT * 0.42 },
+  nearbyListContent: { gap: 10, paddingBottom: 8 },
+  nearbyCard: { borderRadius: 20, borderWidth: 1, flexDirection: 'row', alignItems: 'center', padding: 10, gap: 10 },
+  nearbyPressArea: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  nearbyAvatarWrap: { position: 'relative' },
+  nearbyAvatar: { width: 58, height: 58, borderRadius: 18, backgroundColor: '#d6d3d1' },
+  nearbyPresenceDot: { position: 'absolute', right: 2, bottom: 2, width: 14, height: 14, borderRadius: 7, backgroundColor: '#34d399', borderWidth: 2, borderColor: '#fffaf3' },
+  nearbyPresenceDotOffline: { backgroundColor: '#64748b' },
+  nearbyInfo: { flex: 1 },
+  nearbyName: { fontSize: 16, fontWeight: '800', marginBottom: 4 },
+  nearbyMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, flexWrap: 'wrap' },
+  nearbyMetaText: { fontSize: 13, fontWeight: '600' },
+  nearbyMetaDivider: { fontSize: 12, fontWeight: '700' },
+  listRequestBtn: { minWidth: 94, paddingHorizontal: 14, paddingVertical: 13, borderRadius: 16, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 2 },
+  listRequestBtnText: { fontSize: 15, fontWeight: '800' },
+  nearbyChevronBtn: { width: 36, alignItems: 'center', justifyContent: 'center' },
+  emptyNearbyState: { marginTop: 14, borderWidth: 1, borderRadius: 18, paddingVertical: 18, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  emptyNearbyText: { flex: 1, fontSize: 14, fontWeight: '600' },
 });
 
 export default MapScreen;

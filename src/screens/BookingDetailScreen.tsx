@@ -127,9 +127,9 @@ const BookingDetailScreen: React.FC = () => {
 
   const handleBookAgain = () => {
     if (photographer) {
-       navigation.navigate('BookingForm', { photographerId: photographer.id });
+       navigation.navigate('BookingForm', { photographerId: photographer.id, serviceType: 'photography' });
     } else if (model) {
-       navigation.navigate('BookingForm', { photographerId: model.id });
+       navigation.navigate('BookingForm', { modelId: model.id, serviceType: 'modeling' });
     }
   };
 

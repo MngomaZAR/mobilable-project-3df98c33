@@ -2,6 +2,7 @@ import React, { useMemo, useState, useRef } from 'react';
 import {
   Alert,
   Image,
+  Keyboard,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -28,6 +29,7 @@ import { AppLogo } from '../components/AppLogo';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { fetchRecommendedMatches } from '../services/matchService';
+import { resolveUserRole } from '../utils/userRole';
 
 type Navigation = BottomTabNavigationProp<TabParamList, 'Home'>;
 const MAX_HOME_CARDS = 120;
@@ -74,7 +76,6 @@ const HomeScreen: React.FC = () => {
      // Use logged-in user's city for initial recommendations
      const userCity = state.currentUser?.city ?? '';
      fetchRecommendedMatches(userCity, '', 0).then(setRecommended);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.currentUser?.city]);
 
   React.useEffect(() => {
@@ -94,6 +95,7 @@ const HomeScreen: React.FC = () => {
   }, [route.params?.searchTag, location, priceRange, state.currentUser?.city]);
 
   const handleSmartSearch = async () => {
+      Keyboard.dismiss();
       setIsSearching(true);
       try {
           // In a real app we'd parse budget from string, but here we just pass simple params
@@ -109,9 +111,11 @@ const HomeScreen: React.FC = () => {
 
   const columns = width > 900 ? 3 : width > 700 ? 2 : 1;
   const isWideHero = width > 820;
-  const role = state.currentUser?.role ?? 'client';
+  const role = resolveUserRole(state.currentUser);
+  const useReferenceClientLayout = role === 'client';
   const showGetStarted = !loading && !!state.currentUser && state.bookings.length === 0;
   const showEntryCard = role !== 'client';
+  const accentButtonTextColor = '#1f1a12';
 
   const profileById = useMemo(() => {
     const map = new Map<string, any>();
@@ -199,9 +203,7 @@ const HomeScreen: React.FC = () => {
   }, [recommended, filteredTalent]);
 
   const startModelBooking = (model: Model) => {
-    // Placeholder navigation - routes to BookingForm with photographer field re-used
-    // until a dedicated model booking screen is built
-    parentNavigation?.navigate('BookingForm', { photographerId: model.id });
+    parentNavigation?.navigate('BookingForm', { modelId: model.id, serviceType: 'modeling' });
   };
 
   const openProfile = (photographer: Photographer) => {
@@ -209,7 +211,7 @@ const HomeScreen: React.FC = () => {
   };
 
   const startBooking = (photographer: Photographer) => {
-    parentNavigation?.navigate('BookingForm', { photographerId: photographer.id });
+    parentNavigation?.navigate('BookingForm', { photographerId: photographer.id, serviceType: 'photography' });
   };
 
   const hasBookingWithTalent = (talentId: string) => {
@@ -258,6 +260,8 @@ const HomeScreen: React.FC = () => {
     const isOnline = isOnlineStatus(profile?.availability_status);
     const rate = Number(item?.hourly_rate ?? 0);
     const priceLabel = rate > 0 ? `R${rate.toLocaleString('en-ZA')}/hr` : toHourlyRateRand(String(item?.price_range ?? '$$'));
+    const requestButtonBackground = isOnline ? colors.accent : (isDark ? '#0f172a' : '#1f2937');
+    const requestButtonTextColor = isOnline ? accentButtonTextColor : '#fffaf2';
 
     return (
       <View
@@ -322,8 +326,12 @@ const HomeScreen: React.FC = () => {
               {(discoveryMode === 'models' && role === 'client') ? 'Video' : 'Profile'}
             </Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.buttonPrimary, { backgroundColor: colors.accent }]} onPress={() => (discoveryMode === 'models' ? startModelBooking(item) : startBooking(item))}>
-            <Text style={[styles.buttonPrimaryText, { color: colors.card }]}>Book</Text>
+          <TouchableOpacity
+            style={[styles.buttonPrimary, { backgroundColor: requestButtonBackground }, !isOnline && { opacity: 0.82 }]}
+            onPress={() => (discoveryMode === 'models' ? startModelBooking(item) : startBooking(item))}
+            disabled={!isOnline}
+          >
+            <Text style={[styles.buttonPrimaryText, { color: requestButtonTextColor }]}>{isOnline ? 'Request' : 'Offline'}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -336,49 +344,61 @@ const HomeScreen: React.FC = () => {
       style={[styles.container, { backgroundColor: colors.bg }]}
       refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} tintColor={colors.accent} />}
       contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(120, insets.bottom + 96) }]}
+      keyboardShouldPersistTaps="handled"
     >
-      <View
-        style={[
-          styles.topBar,
-          {
-            paddingTop: Math.max(insets.top + 8, 30),
-            backgroundColor: isDark ? 'rgba(17, 26, 45, 0.68)' : '#fff8ef',
-            borderColor: colors.border,
-          },
-        ]}
-      >
-        <View style={styles.brandRow}>
-          <AppLogo size={48} />
-          <Text style={[styles.brandName, { color: colors.text }]}>Papzi</Text>
+      {!useReferenceClientLayout ? (
+        <View
+          style={[
+            styles.topBar,
+            {
+              paddingTop: Math.max(insets.top + 8, 30),
+              backgroundColor: isDark ? 'rgba(17, 26, 45, 0.68)' : '#fff8ef',
+              borderColor: colors.border,
+            },
+          ]}
+        >
+          <View style={styles.brandRow}>
+            <AppLogo size={48} />
+            <Text style={[styles.brandName, { color: colors.text }]}>Papzi</Text>
+          </View>
+          <View style={styles.navActions}>
+            <TouchableOpacity 
+              style={[styles.linkPill, { backgroundColor: colors.card }]}
+              onPress={() => parentNavigation?.navigate('Notifications')}
+            >
+              <Ionicons name="notifications-outline" size={20} color={colors.text} />
+            </TouchableOpacity>
+          </View>
         </View>
-        <View style={styles.navActions}>
-          <TouchableOpacity 
-            style={[styles.linkPill, { backgroundColor: colors.card }]}
-            onPress={() => parentNavigation?.navigate('Notifications')}
-          >
-            <Ionicons name="notifications-outline" size={20} color={colors.text} />
-          </TouchableOpacity>
+      ) : (
+        <View style={{ height: Math.max(insets.top, 10) }} />
+      )}
+
+      <View style={[styles.logoShowcase, { backgroundColor: isDark ? 'rgba(16, 24, 39, 0.68)' : 'rgba(255, 248, 239, 0.96)', borderColor: colors.border }]}>
+        <View style={[styles.logoHalo, { backgroundColor: isDark ? 'rgba(217, 166, 74, 0.16)' : 'rgba(216, 172, 92, 0.14)' }]} />
+        <View style={[styles.logoBadge, { backgroundColor: isDark ? '#131c30' : '#fffaf3', borderColor: isDark ? '#3a4866' : '#ead7b6' }]}>
+          <AppLogo size={92} />
         </View>
       </View>
 
       <View style={[styles.livePill, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <View style={styles.liveDot} />
-        <Text style={[styles.livePillText, { color: colors.text }]}>Live | {onlineNearbyCount} online nearby</Text>
+        <Text style={[styles.livePillText, { color: colors.text }]}>Live • {onlineNearbyCount} online nearby</Text>
       </View>
 
-      <View style={[styles.modeToggle, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <View style={[styles.discoverySwitch, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <TouchableOpacity
           style={[
-            styles.modeToggleBtn,
+            styles.discoverySwitchBtn,
             discoveryMode === 'photographers' && { backgroundColor: colors.accent },
           ]}
           onPress={() => setDiscoveryMode('photographers')}
         >
-          <Ionicons name="camera" size={14} color={discoveryMode === 'photographers' ? colors.card : colors.text} />
+          <Ionicons name="camera" size={14} color={discoveryMode === 'photographers' ? accentButtonTextColor : colors.text} />
           <Text
             style={[
-              styles.modeToggleText,
-              { color: discoveryMode === 'photographers' ? colors.card : colors.text },
+              styles.discoverySwitchText,
+              { color: discoveryMode === 'photographers' ? accentButtonTextColor : colors.text },
             ]}
           >
             Photographers
@@ -386,16 +406,16 @@ const HomeScreen: React.FC = () => {
         </TouchableOpacity>
         <TouchableOpacity
           style={[
-            styles.modeToggleBtn,
+            styles.discoverySwitchBtn,
             discoveryMode === 'models' && { backgroundColor: colors.accent },
           ]}
           onPress={() => setDiscoveryMode('models')}
         >
-          <Ionicons name="sparkles" size={14} color={discoveryMode === 'models' ? colors.card : colors.text} />
+          <Ionicons name="sparkles" size={14} color={discoveryMode === 'models' ? accentButtonTextColor : colors.text} />
           <Text
             style={[
-              styles.modeToggleText,
-              { color: discoveryMode === 'models' ? colors.card : colors.text },
+              styles.discoverySwitchText,
+              { color: discoveryMode === 'models' ? accentButtonTextColor : colors.text },
             ]}
           >
             Models
@@ -412,8 +432,8 @@ const HomeScreen: React.FC = () => {
               style={[styles.entryPrimary, { backgroundColor: colors.accent }]}
               onPress={() => handlePrimaryCTA('photographers')}
             >
-              <Ionicons name="camera-outline" size={18} color={isDark ? colors.bg : colors.card} />
-              <Text style={[styles.entryPrimaryText, { color: isDark ? colors.bg : colors.card }]}>Book Photographer</Text>
+              <Ionicons name="camera-outline" size={18} color={accentButtonTextColor} />
+              <Text style={[styles.entryPrimaryText, { color: accentButtonTextColor }]}>Book Photographer</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.entrySecondary, { borderColor: colors.border }]}
@@ -450,15 +470,19 @@ const HomeScreen: React.FC = () => {
         </ScrollView>
       )}
 
-      <LinearGradient colors={isDark ? ['#121a2b', '#0a1222', '#060b14'] : ['#f7f1e7', '#f1e8da', '#eadfca']} style={[styles.hero, !isWideHero && styles.heroStacked, { borderColor: colors.border }]}>
-        <View style={[styles.heroText, !isWideHero && styles.heroTextCentered]}>
-          <Text style={[styles.title, !isWideHero && styles.titleCentered, { color: colors.text }]}>
-            {discoveryMode === 'photographers' ? 'Find photographers near you' : 'Find models near you'}
-          </Text>
-          <Text style={[styles.subtitle, !isWideHero && styles.subtitleCentered, { color: colors.textSecondary }]}>
-            Browse profiles, compare ratings, and book in minutes.
-          </Text>
-          <BlurView intensity={70} tint={isDark ? 'dark' : 'light'} style={[styles.searchCard, !isWideHero && styles.searchCardFull, { backgroundColor: isDark ? 'rgba(30,41,59,0.5)' : 'rgba(255, 255, 255, 0.45)', borderColor: colors.border }]}>
+      <LinearGradient colors={isDark ? ['#121a2b', '#0a1222', '#060b14'] : ['#f7f1e7', '#f1e8da', '#eadfca']} style={[styles.hero, !isWideHero && styles.heroStacked, useReferenceClientLayout && styles.heroReference, { borderColor: colors.border }]}>
+        <View style={[styles.heroText, !isWideHero && styles.heroTextCentered, useReferenceClientLayout && styles.heroTextCompact]}>
+          {!useReferenceClientLayout ? (
+            <>
+              <Text style={[styles.title, !isWideHero && styles.titleCentered, { color: colors.text }]}>
+                {discoveryMode === 'photographers' ? 'Find photographers near you' : 'Find models near you'}
+              </Text>
+              <Text style={[styles.subtitle, !isWideHero && styles.subtitleCentered, { color: colors.textSecondary }]}>
+                Browse profiles, compare ratings, and book in minutes.
+              </Text>
+            </>
+          ) : null}
+          <BlurView intensity={70} tint={isDark ? 'dark' : 'light'} style={[styles.searchCard, !isWideHero && styles.searchCardFull, useReferenceClientLayout && styles.searchCardReference, { backgroundColor: isDark ? 'rgba(30,41,59,0.5)' : 'rgba(255, 255, 255, 0.45)', borderColor: colors.border }]}>
             <View style={[styles.searchRow, !isWideHero && styles.searchRowStacked]}>
               <View style={[styles.inputGroup, styles.inputSpacer, !isWideHero && styles.inputGroupBlock, { backgroundColor: colors.bg, borderColor: colors.border }]}>
                 <Ionicons name="location-outline" size={18} color={colors.text} />
@@ -468,6 +492,9 @@ const HomeScreen: React.FC = () => {
                     placeholder="Durban"
                     value={location}
                     onChangeText={setLocation}
+                    onSubmitEditing={handleSmartSearch}
+                    returnKeyType="search"
+                    blurOnSubmit
                     style={[styles.input, { color: colors.text }]}
                     placeholderTextColor={colors.textMuted}
                   />
@@ -488,27 +515,30 @@ const HomeScreen: React.FC = () => {
               style={({ pressed }) => [styles.ctaButton, { backgroundColor: colors.accent }, pressed && styles.ctaButtonPressed]}
               onPress={handleSmartSearch}
             >
-              <Ionicons name="search" size={18} color={isDark ? colors.bg : colors.card} />
-              <Text style={[styles.ctaText, { color: isDark ? colors.bg : colors.card }]}>
+              <Ionicons name="search" size={18} color={accentButtonTextColor} />
+              <Text style={[styles.ctaText, { color: accentButtonTextColor }]}>
                 {isSearching ? 'Matching...' : discoveryMode === 'photographers' ? 'Find Photographers' : 'Find Models'}
               </Text>
             </Pressable>
           </BlurView>
-          <View style={[styles.metricsRow, !isWideHero && styles.metricsRowStacked]}>
-            <View style={[styles.metric, styles.metricPrimary, { backgroundColor: isDark ? '#1f2d49' : '#efe5d6', borderColor: isDark ? '#334a71' : '#dcc8ab' }]}>
-              <Text style={[styles.metricValue, { color: colors.text }]}>500+</Text>
-              <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>Photographers</Text>
+          {!useReferenceClientLayout ? (
+            <View style={[styles.metricsRow, !isWideHero && styles.metricsRowStacked]}>
+              <View style={[styles.metric, styles.metricPrimary, { backgroundColor: isDark ? '#1f2d49' : '#efe5d6', borderColor: isDark ? '#334a71' : '#dcc8ab' }]}>
+                <Text style={[styles.metricValue, { color: colors.text }]}>500+</Text>
+                <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>Photographers</Text>
+              </View>
+              <View style={[styles.metric, styles.metricSecondary, { backgroundColor: isDark ? '#182338' : '#e9ddca', borderColor: isDark ? '#2a3a58' : '#d6c2a1' }]}>
+                <Text style={[styles.metricValue, { color: colors.text }]}>10k+</Text>
+                <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>Happy Customers</Text>
+              </View>
+              <View style={[styles.metric, styles.metricTertiary, { backgroundColor: isDark ? '#173428' : '#deefdf', borderColor: isDark ? '#1f4f3a' : '#b8d9bd' }]}>
+                <Text style={[styles.metricValue, { color: colors.text }]}>4.9</Text>
+                <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>Average Rating</Text>
+              </View>
             </View>
-            <View style={[styles.metric, styles.metricSecondary, { backgroundColor: isDark ? '#182338' : '#e9ddca', borderColor: isDark ? '#2a3a58' : '#d6c2a1' }]}>
-              <Text style={[styles.metricValue, { color: colors.text }]}>10k+</Text>
-              <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>Happy Customers</Text>
-            </View>
-            <View style={[styles.metric, styles.metricTertiary, { backgroundColor: isDark ? '#173428' : '#deefdf', borderColor: isDark ? '#1f4f3a' : '#b8d9bd' }]}>
-              <Text style={[styles.metricValue, { color: colors.text }]}>4.9</Text>
-              <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>Average Rating</Text>
-            </View>
-          </View>
+          ) : null}
         </View>
+        {!useReferenceClientLayout ? (
         <View style={[styles.heroCard, !isWideHero && styles.heroCardWide, { backgroundColor: colors.card, borderColor: colors.border }]}>
           {featuredPhotographer ? (
             <>
@@ -529,6 +559,7 @@ const HomeScreen: React.FC = () => {
             </>
           )}
         </View>
+        ) : null}
       </LinearGradient>
 
       {showcaseItems.length > 0 && (
@@ -596,7 +627,7 @@ const HomeScreen: React.FC = () => {
               style={[styles.filterPill, { backgroundColor: colors.bg }, category === item && [styles.filterPillActive, { backgroundColor: colors.accent }]]}
               onPress={() => setCategory(item)}
             >
-              <Text style={[styles.filterText, { color: colors.text }, category === item && [styles.filterTextActive, { color: colors.card }]]}>{item}</Text>
+              <Text style={[styles.filterText, { color: colors.text }, category === item && [styles.filterTextActive, { color: accentButtonTextColor }]]}>{item}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -633,7 +664,7 @@ const HomeScreen: React.FC = () => {
                   style={[styles.buttonPrimary, { backgroundColor: colors.accent }]}
                   onPress={() => navigation.navigate('Feed')}
                 >
-                  <Text style={[styles.buttonPrimaryText, { color: colors.card }]}>Browse creators</Text>
+                  <Text style={[styles.buttonPrimaryText, { color: accentButtonTextColor }]}>Browse creators</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.buttonGhost, { borderColor: colors.border }]}
@@ -648,7 +679,7 @@ const HomeScreen: React.FC = () => {
                   style={[styles.buttonPrimary, { backgroundColor: colors.accent }]}
                   onPress={() => parentNavigation?.navigate('CreatePost')}
                 >
-                  <Text style={[styles.buttonPrimaryText, { color: colors.card }]}>Post your work</Text>
+                  <Text style={[styles.buttonPrimaryText, { color: accentButtonTextColor }]}>Post your work</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.buttonGhost, { borderColor: colors.border }]}
@@ -730,7 +761,7 @@ const HomeScreen: React.FC = () => {
                             style={[styles.filterBox, { backgroundColor: priceRange === item ? colors.accent : colors.card, borderColor: colors.border }]}
                             onPress={() => setPriceRange(item)}
                         >
-                            <Text style={[{ color: priceRange === item ? (isDark ? colors.bg : '#fffdf8') : colors.text, textAlign: 'center', fontWeight: '600' }]}>{item}</Text>
+                            <Text style={[{ color: priceRange === item ? accentButtonTextColor : colors.text, textAlign: 'center', fontWeight: '600' }]}>{item}</Text>
                         </TouchableOpacity>
                     ))}
                 </View>
@@ -755,7 +786,7 @@ const HomeScreen: React.FC = () => {
                             ]}
                             onPress={() => setCategory(item)}
                         >
-                            <Text style={[{ color: category === item ? (isDark ? colors.bg : '#fffdf8') : colors.text, fontWeight: '600' }]}>{item}</Text>
+                            <Text style={[{ color: category === item ? accentButtonTextColor : colors.text, fontWeight: '600' }]}>{item}</Text>
                         </TouchableOpacity>
                     ))}
                 </View>
@@ -766,7 +797,7 @@ const HomeScreen: React.FC = () => {
                     style={[styles.buttonPrimary, { backgroundColor: colors.accent, width: '100%' }]} 
                     onPress={() => { setFilterModalVisible(false); handleSmartSearch(); }}
                  >
-                     <Text style={[styles.buttonPrimaryText, { color: colors.card, textAlign: 'center' }]}>Apply Filters</Text>
+                     <Text style={[styles.buttonPrimaryText, { color: accentButtonTextColor, textAlign: 'center' }]}>Apply Filters</Text>
                  </TouchableOpacity>
              </View>
           </View>
@@ -792,7 +823,7 @@ const styles = StyleSheet.create({
   livePill: {
     alignSelf: 'flex-start',
     marginHorizontal: 2,
-    marginTop: -4,
+    marginTop: -2,
     marginBottom: 10,
     flexDirection: 'row',
     alignItems: 'center',
@@ -813,7 +844,37 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.2,
   },
-  modeToggle: {
+  logoShowcase: {
+    alignSelf: 'center',
+    width: 168,
+    height: 168,
+    marginTop: 6,
+    marginBottom: 12,
+    borderRadius: 84,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#23170b',
+    shadowOpacity: 0.14,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 6,
+  },
+  logoHalo: {
+    position: 'absolute',
+    width: 138,
+    height: 138,
+    borderRadius: 69,
+  },
+  logoBadge: {
+    width: 122,
+    height: 122,
+    borderRadius: 61,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  discoverySwitch: {
     alignSelf: 'stretch',
     marginBottom: 16,
     borderRadius: 999,
@@ -821,7 +882,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     overflow: 'hidden',
   },
-  modeToggleBtn: {
+  discoverySwitchBtn: {
     flex: 1,
     paddingVertical: 10,
     flexDirection: 'row',
@@ -829,7 +890,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
   },
-  modeToggleText: {
+  discoverySwitchText: {
     fontWeight: '700',
     fontSize: 13,
   },
@@ -927,14 +988,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#0f172a',
   },
-  modeToggle: {
-    flexDirection: 'row',
-    backgroundColor: '#f1f5f9',
-    padding: 4,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#d8c8ab',
-  },
   modeBtn: {
     paddingHorizontal: 14,
     paddingVertical: 8,
@@ -982,7 +1035,7 @@ const styles = StyleSheet.create({
   },
   hero: {
     borderRadius: 32,
-    padding: 24,
+    padding: 26,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -995,6 +1048,14 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 12 },
     elevation: 7,
   },
+  heroReference: {
+    padding: 0,
+    backgroundColor: 'transparent',
+    shadowOpacity: 0,
+    elevation: 0,
+    borderWidth: 0,
+    marginBottom: 18,
+  },
   heroStacked: {
     flexDirection: 'column',
     alignItems: 'stretch',
@@ -1003,15 +1064,18 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingRight: 16,
   },
+  heroTextCompact: {
+    paddingRight: 0,
+  },
   heroTextCentered: {
     alignItems: 'center',
     paddingRight: 0,
   },
   title: {
-    fontSize: 46,
+    fontSize: 38,
     fontWeight: '900',
     color: '#0f172a',
-    lineHeight: 50,
+    lineHeight: 42,
     marginTop: 2,
   },
   titleCentered: {
@@ -1028,8 +1092,8 @@ const styles = StyleSheet.create({
   },
   searchCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.45)',
-    borderRadius: 24,
-    padding: 16,
+    borderRadius: 28,
+    padding: 18,
     shadowColor: '#000',
     shadowOpacity: 0.09,
     shadowRadius: 20,
@@ -1043,6 +1107,14 @@ const styles = StyleSheet.create({
   searchCardFull: {
     width: '100%',
     alignSelf: 'stretch',
+  },
+  searchCardReference: {
+    marginTop: 0,
+    borderRadius: 24,
+    padding: 16,
+    shadowOpacity: 0.07,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
   },
   searchRow: {
     flexDirection: 'row',
@@ -1106,8 +1178,8 @@ const styles = StyleSheet.create({
   },
   ctaButton: {
     backgroundColor: '#0f172a',
-    borderRadius: 18,
-    paddingVertical: 16,
+    borderRadius: 20,
+    paddingVertical: 17,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
@@ -1176,8 +1248,8 @@ const styles = StyleSheet.create({
     borderColor: '#bef264',
   },
   heroCard: {
-    width: 236,
-    minHeight: 220,
+    width: 252,
+    minHeight: 254,
     backgroundColor: '#fff',
     borderRadius: 22,
     alignItems: 'center',
@@ -1193,7 +1265,7 @@ const styles = StyleSheet.create({
   },
   heroCardImage: {
     width: '100%',
-    height: 220,
+    height: 254,
     resizeMode: 'cover',
   },
   heroCardOverlay: {
@@ -1237,7 +1309,7 @@ const styles = StyleSheet.create({
   },
   filtersCard: {
     backgroundColor: '#fff',
-    borderRadius: 26,
+    borderRadius: 28,
     padding: 18,
     marginBottom: 14,
     shadowColor: '#17110a',
@@ -1331,14 +1403,19 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   categoryCard: {
-    width: 150,
-    borderRadius: 18,
+    width: 154,
+    borderRadius: 22,
     overflow: 'hidden',
     borderWidth: 1,
+    shadowColor: '#20170d',
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
   },
   categoryImage: {
     width: '100%',
-    height: 110,
+    height: 116,
   },
   categoryInfo: {
     padding: 10,
@@ -1366,11 +1443,16 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   recommendedCard: {
-    width: 140,
-    height: 110,
-    borderRadius: 16,
+    width: 146,
+    height: 112,
+    borderRadius: 18,
     overflow: 'hidden',
     borderWidth: 1,
+    shadowColor: '#20170d',
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
   },
   recommendedImage: {
     width: '100%',
@@ -1402,7 +1484,7 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: '#fff',
-    borderRadius: 20,
+    borderRadius: 24,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: '#e5e7eb',
@@ -1488,21 +1570,23 @@ const styles = StyleSheet.create({
   },
   avatar: {
     width: '100%',
-    height: 220,
+    height: 238,
   },
   ratingBadge: {
     position: 'absolute',
     right: 10,
     top: 10,
-    backgroundColor: 'rgba(33, 25, 16, 0.78)',
+    backgroundColor: 'rgba(255,255,255,0.95)',
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
     flexDirection: 'row',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#ead7b6',
   },
   ratingText: {
-    color: '#fff',
+    color: '#4b5563',
     fontWeight: '700',
     marginLeft: 6,
   },
@@ -1510,7 +1594,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 10,
     top: 10,
-    backgroundColor: '#22c55e',
+    backgroundColor: '#3f6f43',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 999,
@@ -1520,8 +1604,8 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   cardContent: {
-    padding: 12,
-    paddingTop: 10,
+    padding: 14,
+    paddingTop: 12,
   },
   name: {
     fontSize: 18,
@@ -1567,13 +1651,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     gap: 8,
-    marginTop: 8,
+    marginTop: 10,
   },
   buttonPrimary: {
     flex: 1,
     backgroundColor: '#0f172a',
-    paddingVertical: 12,
-    borderRadius: 14,
+    paddingVertical: 13,
+    borderRadius: 16,
     alignItems: 'center',
   },
   buttonPrimaryText: {
@@ -1583,8 +1667,8 @@ const styles = StyleSheet.create({
   buttonGhost: {
     flex: 1,
     backgroundColor: '#e2e8f0',
-    paddingVertical: 12,
-    borderRadius: 14,
+    paddingVertical: 13,
+    borderRadius: 16,
     alignItems: 'center',
   },
   buttonGhostText: {
@@ -1595,7 +1679,7 @@ const styles = StyleSheet.create({
   buttonSmall: {
     width: 44,
     height: 44,
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',

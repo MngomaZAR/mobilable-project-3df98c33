@@ -182,6 +182,9 @@ const AppDataContext = createContext<AppDataContextValue | undefined>(undefined)
 
 type ProfileRow = {
   role?: AppUser['role'];
+  is_photographer?: boolean | null;
+  is_model?: boolean | null;
+  is_test_account?: boolean | null;
   verified?: boolean;
   kyc_status?: AppUser['kyc_status'];
   date_of_birth?: string | null;
@@ -228,6 +231,8 @@ const PROFILE_SELECT = `
   instagram,
   website,
   availability_status,
+  is_photographer,
+  is_model,
   is_test_account
 `;
 
@@ -446,7 +451,10 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         })
         .filter((p: any) => {
           const profile = profilesMap[p.id];
-          return !profile?.is_test_account && profile?.role !== 'test_account';
+          if (!profile) return true;
+          return !profile.is_test_account &&
+            profile.role !== 'test_account' &&
+            (profile.is_photographer === true || profile.role === 'photographer');
         })
         .slice(0, MAX_PHOTOGRAPHERS);
 
@@ -515,7 +523,10 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         })
         .filter((m: any) => {
           const profile = profilesMap[m.id];
-          return !profile?.is_test_account && profile?.role !== 'test_account';
+          if (!profile) return true;
+          return !profile.is_test_account &&
+            profile.role !== 'test_account' &&
+            (profile.is_model === true || profile.role === 'model');
         });
 
       setState({ models: mapped });
@@ -1011,7 +1022,17 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
             ),
             posts: stateRef.current.posts.map((post) =>
               post.author_id === updatedProfile.id
-                ? { ...post, profile: { ...(post.profile ?? {}), avatar_url: updatedProfile.avatar_url, full_name: updatedProfile.full_name ?? post.profile?.full_name } }
+                ? {
+                    ...post,
+                    profile: {
+                      id: post.profile?.id ?? updatedProfile.id,
+                      full_name: updatedProfile.full_name ?? post.profile?.full_name ?? null,
+                      city: post.profile?.city ?? null,
+                      avatar_url: updatedProfile.avatar_url ?? post.profile?.avatar_url ?? null,
+                      bio: post.profile?.bio ?? null,
+                      username: post.profile?.username ?? null,
+                    },
+                  }
                 : post
             ),
             bookings: stateRef.current.bookings.map((booking) => {
@@ -1020,8 +1041,18 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
               if (!isClient && !isPhotographer) return booking;
               return {
                 ...booking,
-                client: isClient ? { ...booking.client, avatar_url: updatedProfile.avatar_url, name: updatedProfile.full_name ?? booking.client?.name } : booking.client,
-                photographer: isPhotographer ? { ...booking.photographer, avatar_url: updatedProfile.avatar_url, name: updatedProfile.full_name ?? booking.photographer?.name } : booking.photographer,
+                client: isClient && booking.client ? {
+                  id: booking.client.id,
+                  name: updatedProfile.full_name ?? booking.client.name,
+                  avatar_url: updatedProfile.avatar_url ?? booking.client.avatar_url,
+                  city: updatedProfile.city ?? booking.client.city ?? null,
+                } : booking.client,
+                photographer: isPhotographer && booking.photographer ? {
+                  id: booking.photographer.id,
+                  name: updatedProfile.full_name ?? booking.photographer.name,
+                  avatar_url: updatedProfile.avatar_url ?? booking.photographer.avatar_url,
+                  city: updatedProfile.city ?? booking.photographer.city ?? null,
+                } : booking.photographer,
               };
             }),
           });
@@ -2406,7 +2437,17 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
             ),
             posts: stateRef.current.posts.map(post =>
               post.author_id === userId
-                ? { ...post, profile: { ...(post.profile ?? {}), avatar_url: versionedUrl } }
+                ? {
+                    ...post,
+                    profile: {
+                      id: post.profile?.id ?? userId,
+                      full_name: post.profile?.full_name ?? null,
+                      city: post.profile?.city ?? null,
+                      avatar_url: versionedUrl,
+                      bio: post.profile?.bio ?? null,
+                      username: post.profile?.username ?? null,
+                    },
+                  }
                 : post
             ),
           });

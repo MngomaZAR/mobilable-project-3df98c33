@@ -21,7 +21,7 @@ export const fetchRecommendedMatches = async (
             .select(`
                 *,
                 profiles (
-                   full_name, avatar_url, city
+                   full_name, avatar_url, city, role, is_photographer, is_test_account
                 )
             `);
             
@@ -33,6 +33,13 @@ export const fetchRecommendedMatches = async (
             avatar_url: row.profiles?.avatar_url || '',
             tags: row.tags || [],
         })) as Photographer[];
+
+        matchables = matchables.filter((photographer: any) => {
+           const profile = photographer.profiles;
+           if (!profile) return true;
+           return !profile.is_test_account &&
+             (profile.is_photographer === true || profile.role === 'photographer');
+        });
         
         // Very basic matching heuristic
         matchables = matchables.map(photographer => {

@@ -29,7 +29,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Post } from '../types';
 import { Story, StoryViewer } from './StoryViewer';
 import { HashtagText } from './HashtagText';
-import { PLACEHOLDER_IMAGE } from '../utils/constants';
+import { BRAND, PLACEHOLDER_IMAGE } from '../utils/constants';
 import { supabase } from '../config/supabaseClient';
 import { getForYouRanking, recordRecommendationEvents } from '../services/dispatchService';
 import HowItWorksCard from './HowItWorksCard';
@@ -214,7 +214,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
   const handleShare = async (post: Post) => {
     try {
       await Share.share({
-        message: `Check out this amazing post by ${post.profile?.full_name || 'a creator'} on Papzi!\n\nhttps://papzi.com/post/${post.id}`,
+        message: `Check out this amazing post by ${post.profile?.full_name || 'a creator'} on ${BRAND.name}!\n\n${BRAND.urls.home}/post/${post.id}`,
       });
       queueRecommendationEvent({ post_id: post.id, event_type: 'share' });
     } catch (error) {
@@ -415,8 +415,8 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
       try {
         await reportContent({ targetType: 'post', targetId: post.id, reason: 'Community report from feed options' });
         Platform.OS === 'web'
-          ? window.alert('Report submitted. Thanks for keeping Papzi safe.')
-          : Alert.alert('Report submitted', 'Thanks for keeping Papzi safe.');
+          ? window.alert(`Report submitted. Thanks for keeping ${BRAND.name} safe.`)
+          : Alert.alert('Report submitted', `Thanks for keeping ${BRAND.name} safe.`);
       } catch (err) {
         console.warn(err);
         Platform.OS === 'web'

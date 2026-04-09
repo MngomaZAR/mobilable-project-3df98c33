@@ -13,7 +13,11 @@ export type TabParamList = {
 export type RootStackParamList = {
   Root: NavigatorScreenParams<TabParamList>;
   Profile: { userId: string; photographer?: Photographer };
-  BookingForm: { photographerId?: string; modelId?: string };
+  BookingForm: {
+    photographerId?: string;
+    modelId?: string;
+    serviceType?: 'photography' | 'modeling' | 'combined';
+  };
   BookingDetail: { bookingId: string };
   BookingTracking: { bookingId: string };
   Payment: { bookingId: string; dispatchIntent?: {

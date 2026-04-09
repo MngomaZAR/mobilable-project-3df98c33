@@ -25,9 +25,12 @@ export interface AppUser {
   id: string;
   email: string;
   role: UserRole;
+  is_photographer?: boolean;
+  is_model?: boolean;
+  is_test_account?: boolean;
   gender?: UserGender;
   verified?: boolean;
-  kyc_status?: 'pending' | 'approved' | 'rejected' | null;
+  kyc_status?: 'pending' | 'submitted' | 'approved' | 'rejected' | null;
   date_of_birth?: string | null;
   age_verified?: boolean;
   age_verified_at?: string | null;
@@ -50,6 +53,9 @@ export type ProfileSummary = {
   avatar_url: string | null;
   bio?: string | null;
   username?: string | null;
+  verified?: boolean;
+  kyc_status?: AppUser['kyc_status'];
+  age_verified?: boolean | null;
 };
 
 export interface PrivacySettings {

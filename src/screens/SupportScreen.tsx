@@ -17,6 +17,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { useTheme } from '../store/ThemeContext';
 import { submitSupportTicket, SupportTicketPayload } from '../services/supportService';
+import { BRAND } from '../utils/constants';
 
 type Navigation = StackNavigationProp<RootStackParamList, 'Support'>;
 
@@ -123,7 +124,7 @@ const SupportScreen: React.FC = () => {
           </TouchableOpacity>
 
           <Text style={[styles.note, { color: colors.textMuted }]}>
-            We typically respond within 24 hours. For urgent safety concerns, please contact us at support@papzi.co.za directly.
+            We typically respond within 24 hours. For urgent safety concerns, please contact us at {BRAND.email.support} directly.
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>

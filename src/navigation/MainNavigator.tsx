@@ -53,6 +53,7 @@ import ModelServicesScreen from '../screens/ModelServicesScreen';
 import { RootStackParamList, TabParamList } from './types';
 import { useAppData } from '../store/AppDataContext';
 import { useTheme } from '../store/ThemeContext';
+import { resolveUserRole } from '../utils/userRole';
 
 const Tab = createBottomTabNavigator<TabParamList>();
 const Stack = createStackNavigator<RootStackParamList>();
@@ -99,7 +100,7 @@ const TabsNavigator = () => {
   const { colors, isDark } = useTheme();
   const unreadNotifications = state.notifications.filter(n => n.status === 'queued').length;
 
-  const role = currentUser?.role ?? 'client';
+  const role = resolveUserRole(currentUser);
   const isClient = role === 'client';
   const homeComponent =
     role === 'photographer'
@@ -250,7 +251,7 @@ export const MainNavigator: React.FC<MainNavigatorProps> = ({ logoSource }) => {
           // Authenticated Stack
           <>
             {(() => {
-              const role = currentUser.role;
+              const role = resolveUserRole(currentUser);
               const ageVerified = Boolean(currentUser.age_verified);
               const requiresKyc = role === 'photographer' || role === 'model';
               const kycStatus = currentUser.kyc_status ?? (currentUser.verified ? 'approved' : 'pending');
@@ -267,7 +268,7 @@ export const MainNavigator: React.FC<MainNavigatorProps> = ({ logoSource }) => {
                 return <Stack.Screen name="PendingVerification" component={PendingVerificationScreen} options={{ headerShown: false }} />;
               }
 
-              if (!currentUser.role || (currentUser.role as string) === 'guest') {
+              if (!role || (currentUser.role as string) === 'guest') {
                 return <Stack.Screen name="RoleSelection" component={RoleSelectionScreen} options={{ headerShown: false }} />;
               }
 

@@ -1,9 +1,13 @@
 import { AppUser, Photographer, Post, ProfileSummary } from '../types';
 import { supabase } from '../config/supabaseClient';
 import { PLACEHOLDER_IMAGE } from './constants';
+import { resolveUserRole } from './userRole';
 
 type ProfileRow = { 
   role?: AppUser['role']; 
+  is_photographer?: boolean | null;
+  is_model?: boolean | null;
+  is_test_account?: boolean | null;
   gender?: AppUser['gender'];
   verified?: boolean;
   kyc_status?: AppUser['kyc_status'];
@@ -61,7 +65,17 @@ const FALLBACK_AVATAR = 'https://images.unsplash.com/photo-1508214751196-bcfd4ca
 export const mapSupabaseUser = (user: any, fallbackRole: AppUser['role'] = 'client', profile: ProfileRow = null): AppUser => ({
   id: user.id,
   email: user.email ?? 'unknown-user',
-  role: (profile?.role as AppUser['role']) ?? fallbackRole,
+  role: resolveUserRole(
+    {
+      role: (profile?.role as AppUser['role']) ?? fallbackRole,
+      is_photographer: Boolean(profile?.is_photographer),
+      is_model: Boolean(profile?.is_model),
+    },
+    fallbackRole
+  ),
+  is_photographer: Boolean(profile?.is_photographer),
+  is_model: Boolean(profile?.is_model),
+  is_test_account: Boolean(profile?.is_test_account),
   gender: (profile?.gender as AppUser['gender']) ?? (profile?.contact_details?.gender as AppUser['gender']) ?? null,
   verified: profile?.verified ?? false,
   kyc_status: profile?.kyc_status ?? (user.user_metadata?.kyc_status as AppUser['kyc_status']) ?? null,

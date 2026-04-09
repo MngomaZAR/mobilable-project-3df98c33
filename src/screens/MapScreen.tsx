@@ -22,6 +22,7 @@ import { routingService } from '../services/routingService';
 import * as Haptics from 'expo-haptics';
 import { Analytics } from '../utils/analytics';
 import { getHeatmap } from '../services/dispatchService';
+import { PLACEHOLDER_AVATAR } from '../utils/constants';
 import { resolveUserRole } from '../utils/userRole';
 
 // Carto Open Basemaps: free and no API key required.
@@ -743,7 +744,7 @@ const MapScreen: React.FC = () => {
                         >
                           <View style={s.nearbyAvatarWrap}>
                             <Image
-                              source={{ uri: marker.avatarUrl || 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=300&q=80' }}
+                              source={{ uri: marker.avatarUrl || PLACEHOLDER_AVATAR }}
                               style={s.nearbyAvatar}
                             />
                             <View style={[s.nearbyPresenceDot, !isOnline && s.nearbyPresenceDotOffline]} />

@@ -160,9 +160,10 @@ const PostDetailScreen: React.FC = () => {
             style={styles.title} 
             hashtagStyle={{ color: '#6366f1' }}
             onHashtagPress={(tag) => {
-               // Placeholder for TagSearch
-               alert(`Searching for ${tag}`);
-               // navigation.navigate('Search', { query: tag });
+               navigation.navigate('Root', {
+                 screen: 'Home',
+                 params: { searchTag: tag.replace(/^#/, '') },
+               });
             }}
           />
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>

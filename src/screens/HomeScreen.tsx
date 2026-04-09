@@ -29,6 +29,7 @@ import { AppLogo } from '../components/AppLogo';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { fetchRecommendedMatches } from '../services/matchService';
+import { PLACEHOLDER_AVATAR } from '../utils/constants';
 import { resolveUserRole } from '../utils/userRole';
 
 type Navigation = BottomTabNavigationProp<TabParamList, 'Home'>;
@@ -278,7 +279,7 @@ const HomeScreen: React.FC = () => {
         ]}
       >
         <View style={styles.imageWrap}>
-          <Image source={{ uri: item.avatar_url || 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=300&q=80' }} style={styles.avatar} />
+          <Image source={{ uri: item.avatar_url || PLACEHOLDER_AVATAR }} style={styles.avatar} />
           <View style={[styles.ratingBadge, { backgroundColor: isDark ? 'rgba(0,0,0,0.6)' : '#111827cc' }]}>
             <Ionicons name="star" size={14} color="#fbbf24" />
             <Text style={styles.ratingText}>{toSafeRating(item?.rating).toFixed(1)}</Text>

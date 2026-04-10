@@ -24,6 +24,7 @@ import { Analytics } from '../utils/analytics';
 import { getHeatmap } from '../services/dispatchService';
 import { PLACEHOLDER_AVATAR } from '../utils/constants';
 import { resolveUserRole } from '../utils/userRole';
+import { Booking } from '../types';
 
 // Carto Open Basemaps: free and no API key required.
 const MAP_STYLES = {
@@ -49,13 +50,25 @@ const formatAccuracy = (a?: number | null) => {
   return 'High accuracy';
 };
 
+const bookingTimestamp = (booking?: Pick<Booking, 'created_at' | 'booking_date'> | null) => {
+  if (!booking) return 0;
+  const candidates = [booking.created_at, booking.booking_date];
+  for (const candidate of candidates) {
+    const parsed = Date.parse(String(candidate ?? ''));
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return 0;
+};
+
+const compareBookingsNewestFirst = (a: Booking, b: Booking) => bookingTimestamp(b) - bookingTimestamp(a);
+
 const isAvailabilityOnline = (status?: string | null) => {
   const normalized = String(status ?? '').toLowerCase();
   return normalized === 'online' || normalized === 'available' || normalized === 'active';
 };
 
 const MapScreen: React.FC = () => {
-  const { state } = useAppData();
+  const { state, fetchBookings } = useAppData();
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<StackNavigationProp<RootStackParamList, 'Root'>>();
@@ -85,6 +98,12 @@ const MapScreen: React.FC = () => {
   const [routeDurationSec, setRouteDurationSec] = useState<number | null>(null);
   const [routeDistanceKm, setRouteDistanceKm] = useState<number | null>(null);
   const [heatmapSummary, setHeatmapSummary] = useState<{ demand: number; supply: number } | null>(null);
+  const [pendingRequest, setPendingRequest] = useState<{
+    bookingId: string;
+    talentId: string;
+    talentName: string;
+    talentType: 'photographer' | 'model';
+  } | null>(null);
 
   // Bottom sheet gesture
   const sheetY = useRef(new Animated.Value(SCREEN_HEIGHT - SHEET_COLLAPSED)).current;
@@ -178,18 +197,65 @@ const MapScreen: React.FC = () => {
     return () => loop.stop();
   }, [pulse]);
 
-  // Active booking detection
-  const activeBooking = useMemo(() =>
-    state.bookings.find(b =>
-      (b.status === 'accepted' || b.status === 'in_progress' || b.status === 'paid_out') &&
-      (b.client_id === currentUser?.id || b.photographer_id === currentUser?.id || b.model_id === currentUser?.id)
-    ), [state.bookings, currentUser]);
+  const participantBookings = useMemo(
+    () =>
+      state.bookings
+        .filter(
+          (booking) =>
+            booking.client_id === currentUser?.id ||
+            booking.photographer_id === currentUser?.id ||
+            booking.model_id === currentUser?.id
+        )
+        .sort(compareBookingsNewestFirst),
+    [state.bookings, currentUser?.id]
+  );
+
+  const activeBooking = useMemo(
+    () =>
+      participantBookings.find(
+        (booking) =>
+          booking.status === 'accepted' ||
+          booking.status === 'in_progress' ||
+          booking.status === 'paid_out'
+      ) ?? null,
+    [participantBookings]
+  );
+
+  const latestPendingBooking = useMemo(
+    () =>
+      participantBookings.find(
+        (booking) => booking.client_id === currentUser?.id && booking.status === 'pending'
+      ) ?? null,
+    [participantBookings, currentUser?.id]
+  );
+
+  const shouldHighlightPendingRequest = isClientFacing && Boolean(
+    pendingRequest ||
+      (latestPendingBooking &&
+        (!activeBooking || bookingTimestamp(latestPendingBooking) >= bookingTimestamp(activeBooking)))
+  );
 
   const activeTalent = useMemo(() => {
     if (!activeBooking) return null;
     const id = activeBooking.photographer_id || activeBooking.model_id;
     return state.photographers.find(p => p.id === id) || state.models.find(m => m.id === id);
   }, [activeBooking, state.photographers, state.models]);
+
+  const pendingTalent = useMemo(() => {
+    const talentId =
+      latestPendingBooking?.photographer_id ||
+      latestPendingBooking?.model_id ||
+      pendingRequest?.talentId;
+    if (!talentId) return null;
+    return state.photographers.find((p) => p.id === talentId) || state.models.find((m) => m.id === talentId);
+  }, [latestPendingBooking, pendingRequest?.talentId, state.photographers, state.models]);
+
+  useEffect(() => {
+    if (!pendingRequest) return;
+    if (state.bookings.some((booking) => booking.id === pendingRequest.bookingId)) {
+      setPendingRequest(null);
+    }
+  }, [pendingRequest, state.bookings]);
 
   // Build map markers
   const baseMarkers: MapMarker[] = useMemo(() => {
@@ -396,21 +462,33 @@ const MapScreen: React.FC = () => {
       const payout = base - commission;
       const providerId = marker.sourceId ?? marker.id;
       const isModel = marker.type === 'model';
-      const { error } = await supabase.from('bookings').insert({
-        client_id: currentUser?.id,
-        photographer_id: isModel ? null : providerId,
-        model_id: isModel ? providerId : null,
-        status: 'pending',
-        package_type: `${pkg.label} (${marker.type})`,
-        user_latitude: userCoords.lat,
-        user_longitude: userCoords.lng,
-        booking_date: new Date().toISOString(),
-        price_total: base,
-        photographer_payout: payout,
-        commission_amount: commission,
-        is_instant: true,
-      });
+      const { data, error } = await supabase
+        .from('bookings')
+        .insert({
+          client_id: currentUser?.id,
+          photographer_id: isModel ? null : providerId,
+          model_id: isModel ? providerId : null,
+          service_type: isModel ? 'modeling' : 'photography',
+          status: 'pending',
+          package_type: `${pkg.label} (${marker.type})`,
+          user_latitude: userCoords.lat,
+          user_longitude: userCoords.lng,
+          booking_date: new Date().toISOString(),
+          price_total: base,
+          photographer_payout: payout,
+          commission_amount: commission,
+          is_instant: true,
+        })
+        .select('id')
+        .single();
       if (error) throw error;
+      setPendingRequest({
+        bookingId: data.id,
+        talentId: providerId,
+        talentName: marker.title ?? 'Talent',
+        talentType: isModel ? 'model' : 'photographer',
+      });
+      void fetchBookings(currentUser?.id);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert('Request sent', `Waiting for ${marker.title} to accept...`);
       Analytics.bookingCreated(pkg.label, base);
@@ -653,6 +731,55 @@ const MapScreen: React.FC = () => {
                   </TouchableOpacity>
                 )}
               </View>
+            </>
+          ) : shouldHighlightPendingRequest ? (
+            <>
+              <View style={s.sheetHeader}>
+                <View style={[s.sheetAvatar, { backgroundColor: '#f59e0b20' }]}>
+                  <Ionicons name="time" size={24} color="#f59e0b" />
+                </View>
+                <View style={s.sheetInfo}>
+                  <Text style={[s.sheetTitle, { color: colors.text }]}>Request Sent</Text>
+                  <Text style={[s.sheetSub, { color: colors.textSecondary }]}>
+                    Waiting for {(pendingTalent?.name ?? pendingRequest?.talentName ?? 'Talent')} to accept
+                  </Text>
+                </View>
+                <View style={[s.trackBtn, { backgroundColor: isDark ? '#3f3020' : '#f6ead7' }]}>
+                  <Ionicons name="hourglass" size={20} color="#f59e0b" />
+                </View>
+              </View>
+              <View style={s.metricsRow}>
+                {[
+                  { label: 'Status', value: 'Pending', color: '#f59e0b' },
+                  {
+                    label: 'Service',
+                    value:
+                      latestPendingBooking?.service_type === 'modeling' ||
+                      pendingRequest?.talentType === 'model'
+                        ? 'Modeling'
+                        : 'Photography',
+                  },
+                  { label: 'Mode', value: 'Instant request' },
+                ].map((m) => (
+                  <View key={m.label} style={[s.metricItem, { backgroundColor: panelCard, borderColor: panelBorder }]}>
+                    <Text style={[s.metricLabel, { color: colors.textMuted }]}>{m.label}</Text>
+                    <Text numberOfLines={1} style={[s.metricValue, { color: m.color ?? colors.text }]}>
+                      {m.value}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+              <TouchableOpacity
+                style={[s.primaryBtn, { backgroundColor: primaryButtonColor }]}
+                onPress={() =>
+                  navigation.navigate('BookingDetail', {
+                    bookingId: latestPendingBooking?.id ?? pendingRequest?.bookingId ?? '',
+                  })
+                }
+              >
+                <Ionicons name="receipt-outline" size={18} color={primaryButtonText} style={{ marginRight: 8 }} />
+                <Text style={[s.primaryBtnText, { color: primaryButtonText }]}>View Request</Text>
+              </TouchableOpacity>
             </>
           ) : activeBooking ? (
             /* ACTIVE BOOKING VIEW */

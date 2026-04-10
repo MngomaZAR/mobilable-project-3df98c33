@@ -31,6 +31,7 @@ import { BlurView } from 'expo-blur';
 import { fetchRecommendedMatches } from '../services/matchService';
 import { PLACEHOLDER_AVATAR } from '../utils/constants';
 import { resolveUserRole } from '../utils/userRole';
+import { isLiveVideoAvailable, LIVE_VIDEO_UNAVAILABLE_MESSAGE } from '../utils/videoCalls';
 
 type Navigation = BottomTabNavigationProp<TabParamList, 'Home'>;
 const MAX_HOME_CARDS = 120;
@@ -113,10 +114,19 @@ const HomeScreen: React.FC = () => {
   const columns = width > 900 ? 3 : width > 700 ? 2 : 1;
   const isWideHero = width > 820;
   const role = resolveUserRole(state.currentUser);
+  const liveVideoAvailable = isLiveVideoAvailable();
   const useReferenceClientLayout = role === 'client';
   const showGetStarted = !loading && !!state.currentUser && state.bookings.length === 0;
   const showEntryCard = role !== 'client';
   const accentButtonTextColor = '#1f1a12';
+
+  const handleVideoAction = React.useCallback((item: Photographer | Model) => {
+    if (!liveVideoAvailable) {
+      Alert.alert('Unavailable', LIVE_VIDEO_UNAVAILABLE_MESSAGE);
+      return;
+    }
+    parentNavigation?.navigate('PaidVideoCall', { creatorId: item.id, role: 'viewer' });
+  }, [liveVideoAvailable, parentNavigation]);
 
   const profileById = useMemo(() => {
     const map = new Map<string, any>();
@@ -263,6 +273,7 @@ const HomeScreen: React.FC = () => {
     const priceLabel = rate > 0 ? `R${rate.toLocaleString('en-ZA')}/hr` : toHourlyRateRand(String(item?.price_range ?? '$$'));
     const requestButtonBackground = isOnline ? colors.accent : (isDark ? '#0f172a' : '#1f2937');
     const requestButtonTextColor = isOnline ? accentButtonTextColor : '#fffaf2';
+    const canOpenVideo = discoveryMode === 'models' && role === 'client' && liveVideoAvailable;
 
     return (
       <View
@@ -316,15 +327,15 @@ const HomeScreen: React.FC = () => {
             style={[
               styles.buttonGhost,
               { borderColor: colors.border },
-              discoveryMode === 'models' && role === 'client' && styles.buttonVideo
+              canOpenVideo && styles.buttonVideo
             ]} 
-            onPress={() => (discoveryMode === 'models' && role === 'client')
-              ? parentNavigation?.navigate('PaidVideoCall', { creatorId: item.id, role: 'viewer' })
+            onPress={() => canOpenVideo
+              ? handleVideoAction(item)
               : openProfile(item)}
           >
-            {(discoveryMode === 'models' && role === 'client') && <Ionicons name="videocam" size={16} color="#fff" style={{ marginRight: 6 }} />}
-            <Text style={[styles.buttonGhostText, { color: colors.text }, (discoveryMode === 'models' && role === 'client') && styles.buttonVideoText]}>
-              {(discoveryMode === 'models' && role === 'client') ? 'Video' : 'Profile'}
+            {canOpenVideo && <Ionicons name="videocam" size={16} color="#fff" style={{ marginRight: 6 }} />}
+            <Text style={[styles.buttonGhostText, { color: colors.text }, canOpenVideo && styles.buttonVideoText]}>
+              {canOpenVideo ? 'Video' : 'Profile'}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity

@@ -29,6 +29,7 @@ import { PLACEHOLDER_AVATAR } from '../utils/constants';
 import { supabase } from '../config/supabaseClient';
 import { registerForPushNotificationsAsync, savePushTokenAsync } from '../services/notificationService';
 import { isModelUser, isPhotographerUser, isProviderUser } from '../utils/userRole';
+import { isLiveVideoAvailable, LIVE_VIDEO_UNAVAILABLE_MESSAGE } from '../utils/videoCalls';
 
 type Navigation = StackNavigationProp<RootStackParamList, 'Root'>;
 
@@ -49,6 +50,7 @@ const SettingsScreen: React.FC = () => {
   const [avatarPreviewUri, setAvatarPreviewUri] = useState<string | null>(null);
   const showDevVideoTools = __DEV__ || environment.env !== 'production';
   const isModelAccount = isModelUser(currentUser);
+  const liveVideoAvailable = isLiveVideoAvailable();
   const isPhotographerAccount = isPhotographerUser(currentUser);
   const isProviderAccount = isProviderUser(currentUser);
 
@@ -197,6 +199,10 @@ const SettingsScreen: React.FC = () => {
   };
 
   const handleTestVideoCall = () => {
+    if (!liveVideoAvailable) {
+      Alert.alert('Unavailable', LIVE_VIDEO_UNAVAILABLE_MESSAGE);
+      return;
+    }
     if (!currentUser?.id) {
       Alert.alert('Not ready', 'Please sign in before starting a test call.');
       return;
@@ -209,6 +215,10 @@ const SettingsScreen: React.FC = () => {
   };
 
   const handleOpenTestRoom = () => {
+    if (!liveVideoAvailable) {
+      Alert.alert('Unavailable', LIVE_VIDEO_UNAVAILABLE_MESSAGE);
+      return;
+    }
     navigation.navigate('PaidVideoCall', { testRoom: true, role: 'viewer' });
   };
 
@@ -589,7 +599,7 @@ const SettingsScreen: React.FC = () => {
         </View>
       </View>
 
-      {showDevVideoTools && (
+      {showDevVideoTools && liveVideoAvailable && (
         <View style={s.section}>
           <Text style={s.sectionHeader}>VIDEO CALL</Text>
           <View style={s.group}>

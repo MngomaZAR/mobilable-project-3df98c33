@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, ActionSheetIOS, Platform, Alert } from 'react-native';
+import { ActivityIndicator, Image, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, ActionSheetIOS, Platform, Alert } from 'react-native';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/types';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -21,6 +21,7 @@ const PostDetailScreen: React.FC = () => {
   const [comment, setComment] = useState('');
   const [hydratedPost, setHydratedPost] = useState<Post | null>(null);
   const [loadingPost, setLoadingPost] = useState(false);
+  const [reportModalVisible, setReportModalVisible] = useState(false);
 
   const postFromState = useMemo(() => state.posts.find((p) => p.id === params.postId), [params.postId, state.posts]);
   const post = postFromState ?? hydratedPost;
@@ -107,51 +108,63 @@ const PostDetailScreen: React.FC = () => {
   const handleReport = async () => {
     const targetId = post.id;
     const reasons = ['Inappropriate content', 'Spam', 'Harassment', 'Other'];
+    const submitReport = async (reason: string) => {
+      try {
+        await reportContent({ targetType: 'post', targetId, reason });
+        Alert.alert('Reported', 'Thank you. Our team will review this.');
+      } catch {
+        Alert.alert('Error', 'Failed to submit report.');
+      }
+    };
     
     if (Platform.OS === 'ios') {
       ActionSheetIOS.showActionSheetWithOptions(
         { options: ['Cancel', ...reasons], cancelButtonIndex: 0, title: 'Report this post' },
         async (index) => {
           if (index === 0) return;
-          try {
-            await reportContent({ targetType: 'post', targetId, reason: reasons[index - 1] });
-            Alert.alert('Reported', 'Thank you. Our team will review this.');
-          } catch (e) {
-            Alert.alert('Error', 'Failed to submit report.');
-          }
+          await submitReport(reasons[index - 1]);
         }
       );
-    } else if (Platform.OS === 'web') {
-      const reason = window.prompt(`Why are you reporting this post?\nOptions: ${reasons.join(', ')}`);
-      if (reason && reasons.some(r => r.toLowerCase() === reason.toLowerCase())) {
-        await reportContent({ targetType: 'post', targetId, reason });
-        window.alert('Reported. Thank you. Our team will review this.');
-      } else if (reason) {
-        await reportContent({ targetType: 'post', targetId, reason: 'Other' });
-        window.alert('Reported. Thank you. Our team will review this.');
-      }
     } else {
-      Alert.alert('Report Post', 'Why are you reporting this?',
-        [
-          ...reasons.map((reason) => ({
-            text: reason,
-            onPress: async () => {
-              try {
-                await reportContent({ targetType: 'post', targetId, reason });
-                Alert.alert('Reported', 'Thank you. Our team will review this.');
-              } catch (e) {
-                Alert.alert('Error', 'Failed to submit report.');
-              }
-            }
-          })),
-          { text: 'Cancel', style: 'cancel' as const }
-        ]
-      );
+      setReportModalVisible(true);
     }
   };
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
+      <Modal
+        transparent
+        visible={reportModalVisible}
+        animationType="fade"
+        onRequestClose={() => setReportModalVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.reportCard}>
+            <Text style={styles.reportTitle}>Report this post</Text>
+            <Text style={styles.reportSubtitle}>Choose a reason and we’ll send it to moderation.</Text>
+            {['Inappropriate content', 'Spam', 'Harassment', 'Other'].map((reason) => (
+              <TouchableOpacity
+                key={reason}
+                style={styles.reportOption}
+                onPress={async () => {
+                  setReportModalVisible(false);
+                  try {
+                    await reportContent({ targetType: 'post', targetId: post.id, reason });
+                    Alert.alert('Reported', 'Thank you. Our team will review this.');
+                  } catch {
+                    Alert.alert('Error', 'Failed to submit report.');
+                  }
+                }}
+              >
+                <Text style={styles.reportOptionText}>{reason}</Text>
+              </TouchableOpacity>
+            ))}
+            <TouchableOpacity style={styles.reportCancel} onPress={() => setReportModalVisible(false)}>
+              <Text style={styles.reportCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
       <Image source={{ uri: post.image_url }} style={styles.image} />
       <View style={styles.content}>
         <View style={styles.row}>
@@ -295,6 +308,53 @@ const styles = StyleSheet.create({
   },
   sendText: {
     color: '#fff',
+    fontWeight: '700',
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.42)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  reportCard: {
+    width: '100%',
+    maxWidth: 360,
+    borderRadius: 24,
+    backgroundColor: '#ffffff',
+    padding: 22,
+  },
+  reportTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  reportSubtitle: {
+    marginTop: 6,
+    marginBottom: 16,
+    color: '#64748b',
+    lineHeight: 20,
+  },
+  reportOption: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginBottom: 10,
+    backgroundColor: '#f8fafc',
+  },
+  reportOptionText: {
+    color: '#0f172a',
+    fontWeight: '700',
+  },
+  reportCancel: {
+    marginTop: 4,
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  reportCancelText: {
+    color: '#64748b',
     fontWeight: '700',
   },
 });

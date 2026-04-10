@@ -572,15 +572,6 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
       {STORIES_ENABLED && liveStories.length > 0 && (
          <View style={{ marginTop: 16 }}>
            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 12 }}>
-             {appState.currentUser && (
-                <TouchableOpacity style={styles.storyAvatarWrap} onPress={() => Alert.alert('Add Story', 'Not implemented yet.')}>
-                   <Image source={{ uri: appState.profiles.find(p => p.id === appState.currentUser?.id)?.avatar_url || PLACEHOLDER_IMAGE }} style={styles.storyAvatar} />
-                   <View style={styles.addStoryPlus}>
-                       <Ionicons name="add" size={14} color="#fff" />
-                   </View>
-                </TouchableOpacity>
-             )}
-             
               {Object.values(
                 liveStories.reduce((acc, story) => {
                    if (!acc[story.author_id]) acc[story.author_id] = story;

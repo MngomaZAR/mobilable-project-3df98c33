@@ -18,6 +18,7 @@ import CreatePremiumBox from './CreatePremiumBox';
 import { NewMessageModal } from '../components/NewMessageModal';
 import { sendTip } from '../services/monetisationService';
 import HowItWorksCard from '../components/HowItWorksCard';
+import { isLiveVideoAvailable, LIVE_VIDEO_UNAVAILABLE_MESSAGE } from '../utils/videoCalls';
 
 const { width } = Dimensions.get('window');
 type Navigation = StackNavigationProp<RootStackParamList, 'Root'>;
@@ -33,6 +34,7 @@ const ModelPremiumDashboard: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [tierPayoutRate, setTierPayoutRate] = useState(0.70);
   const [showSubscribers, setShowSubscribers] = useState(false);
+  const liveVideoAvailable = isLiveVideoAvailable();
   const [subscribers, setSubscribers] = useState<any[]>([]);
   const [tiers, setTiers] = useState<any[]>([]);
   const [tipGoal, setTipGoal] = useState<any | null>(null);
@@ -159,7 +161,10 @@ const ModelPremiumDashboard: React.FC = () => {
       Alert.alert('Profile Required', 'Complete your profile to go live.');
       return;
     }
-    // Navigate to paid video call as creator
+    if (!liveVideoAvailable) {
+      Alert.alert('Unavailable', LIVE_VIDEO_UNAVAILABLE_MESSAGE);
+      return;
+    }
     navigation.navigate('PaidVideoCall', { creatorId: currentUser.id, role: 'creator' });
   };
 
@@ -610,7 +615,7 @@ const ModelPremiumDashboard: React.FC = () => {
                       booking.status === 'accepted' ? '#3b82f6' : '#f59e0b',
                   }]}>{booking.status}</Text>
                 </View>
-                {booking.status === 'accepted' && (
+                {booking.status === 'accepted' && liveVideoAvailable && (
                   <TouchableOpacity
                     style={s.joinBtn}
                     onPress={() => currentUser?.id && navigation.navigate('PaidVideoCall', { creatorId: currentUser.id, role: 'creator' })}

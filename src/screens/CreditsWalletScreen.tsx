@@ -11,6 +11,7 @@ import {
   getDefaultPayfastNotifyUrl,
   getDigitalPurchaseRestrictionMessage,
 } from '../config/commercePolicy';
+import { BRAND } from '../utils/constants';
 
 const CreditsWalletScreen: React.FC = () => {
   const { colors, isDark } = useTheme();
@@ -62,7 +63,7 @@ const CreditsWalletScreen: React.FC = () => {
           amount: priceZAR,
           credits,
           user_id: user.id,
-          item_name: `Papzi Credits - ${credits} credits`,
+          item_name: `${BRAND.name} Credits - ${credits} credits`,
           return_url: 'papzi://credits/success',
           cancel_url: 'papzi://credits/cancel',
           notify_url: getDefaultPayfastNotifyUrl(),
@@ -108,7 +109,7 @@ const CreditsWalletScreen: React.FC = () => {
         <View style={{ width: 38 }} />
       </View>
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <Text style={[styles.label, { color: colors.textMuted }]}>Papzi Credits</Text>
+        <Text style={[styles.label, { color: colors.textMuted }]}>{BRAND.name} Credits</Text>
         <Text style={[styles.balance, { color: colors.text }]}>{balance.toLocaleString('en-ZA')}</Text>
         <Text style={[styles.sub, { color: colors.textMuted }]}>
           Use credits for tips, unlocks, and live gifts.

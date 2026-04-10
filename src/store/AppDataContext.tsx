@@ -24,12 +24,14 @@ import { fetchCreatorEarnings } from '../services/monetisationService';
 import { registerForPushNotificationsAsync, savePushTokenAsync } from '../services/notificationService';
 import { assertSouthAfricanLocation, DEFAULT_CAPE_TOWN_COORDINATES, ensureSouthAfricanCoordinates } from '../utils/geo';
 import { recordConsent as recordComplianceConsent } from '../services/dispatchService';
+import { getTalentTableForRole, isPhotographerUser, roleRequiresKyc } from '../utils/userRole';
 
 type CreateBookingInput = {
   photographer_id?: string;
   talent_id?: string;
   model_id?: string;
   talent_type?: 'photographer' | 'model';
+  service_type?: Booking['service_type'];
   booking_date: string;
   package_type: string;
   notes?: string;
@@ -124,9 +126,15 @@ const dedupeById = <T extends { id: string }>(items: T[]): T[] => {
   });
 };
 
+const getErrorMessage = (err: unknown) =>
+  err && typeof err === 'object' && 'message' in err ? String((err as { message?: unknown }).message ?? '') : '';
+
+const getErrorName = (err: unknown) =>
+  err && typeof err === 'object' && 'name' in err ? String((err as { name?: unknown }).name ?? '') : '';
+
 const isRecoverableAbort = (err: unknown) => {
-  const message = (err as any)?.message ?? '';
-  return (err as any)?.name === 'AbortError' || /abort/i.test(String(message));
+  const message = getErrorMessage(err);
+  return getErrorName(err) === 'AbortError' || /abort/i.test(String(message));
 };
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -137,7 +145,7 @@ const withTimeout = async <T,>(promiseLike: PromiseLike<T>, timeoutMs = 12000): 
     new Promise<T>((_, reject) => setTimeout(() => reject(new Error(TIMEOUT_ERROR_MESSAGE)), timeoutMs)),
   ]);
 };
-const isTimeoutError = (err: unknown) => String((err as any)?.message ?? '').includes(TIMEOUT_ERROR_MESSAGE);
+const isTimeoutError = (err: unknown) => getErrorMessage(err).includes(TIMEOUT_ERROR_MESSAGE);
 
 const parseAuthCallbackParams = (url: string) => {
   try {
@@ -159,6 +167,7 @@ const BOOKING_SELECT = `
   id, 
   photographer_id, 
   model_id,
+  service_type,
   client_id, 
   booking_date, 
   package_type, 
@@ -194,6 +203,8 @@ type ProfileRow = {
 type BookingRow = {
   id: string;
   photographer_id: string;
+  model_id?: string | null;
+  service_type?: Booking['service_type'] | null;
   booking_date: string | null;
   package_type: string | null;
   notes: string | null;
@@ -260,6 +271,7 @@ const mapBookingRow = (row: any): Booking => ({
   id: row.id,
   photographer_id: row.photographer_id,
   model_id: row.model_id ?? null,
+  service_type: row.service_type ?? (row.model_id ? 'modeling' : 'photography'),
   client_id: row.client_id,
   booking_date: row.booking_date ?? '',
   package_type: row.package_type ?? 'Photography booking',
@@ -371,7 +383,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           .from('profiles')
           .update({ availability_status: nextStatus })
           .eq('id', userId);
-        if (role === 'photographer') {
+        if (isPhotographerUser(role)) {
           await supabase
             .from('photographers')
             .update({ is_online: nextStatus === 'online' })
@@ -397,11 +409,10 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const fetchProfile = useCallback(async (userId: string): Promise<ProfileRow> => {
     if (!hasSupabase) return null;
-    if (__DEV__) console.log('Fetching profile for:', userId);
     const now = Date.now();
     const lastFetchedAt = profileFetchLastRef.current.get(userId) ?? 0;
     if (now - lastFetchedAt < 1500) {
-      const cached = stateRef.current.profiles.find((p: any) => p.id === userId) as any;
+      const cached = stateRef.current.profiles.find((p) => p.id === userId);
       if (cached) return cached as ProfileRow;
     }
 
@@ -412,8 +423,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       try {
         const { data, error } = await supabase.from('profiles').select(PROFILE_SELECT).eq('id', userId).maybeSingle();
         if (error) throw error;
-        if (__DEV__) console.log('Profile fetch result:', data);
-        return (data as any) ?? null;
+        return (data as ProfileRow) ?? null;
       } catch (err) {
         logError('fetchProfile', err);
         return null;
@@ -875,7 +885,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const stored = await AsyncStorage.getItem(STORAGE_KEY);
         if (stored) {
           const parsed: AppState = JSON.parse(stored);
-          setState({ ...initialState, ...parsed, currentUser: parsed.currentUser ? { ...parsed.currentUser, verified: Boolean((parsed.currentUser as any).verified) }: null });
+          setState({ ...initialState, ...parsed, currentUser: parsed.currentUser ? { ...parsed.currentUser, verified: Boolean(parsed.currentUser.verified) }: null });
         }
 
         if (hasSupabase) {
@@ -914,20 +924,18 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   useEffect(() => {
     if (!hasSupabase) return;
     const { data } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (__DEV__) console.log('Auth State Change Event:', event);
       if (session?.user) {
         try {
           let profile = await fetchProfile(session.user.id);
           
           // Handle OAuth sign-ups where profile doesn't exist yet
           if (!profile) {
-            if (__DEV__) console.log('No profile found, profile creation will be handled by RoleSelectionScreen for:', session.user.id);
             // We set role to null to trigger RoleSelectionScreen in MainNavigator
             profile = { role: null, verified: false };
           }
 
           const currentRole = profile?.role ?? null;
-          setState({ currentUser: mapSupabaseUser(session.user, currentRole as any, profile)});
+          setState({ currentUser: mapSupabaseUser(session.user, currentRole ?? 'client', profile)});
 
           // Register for push notifications (Async, don't block auth flow)
           registerForPushNotificationsAsync()
@@ -942,7 +950,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           fetchCredits(session.user.id).catch(e => console.warn('Delayed credits fetch failed', e));
           fetchNotifications(session.user.id).catch(e => console.warn('Delayed notifications fetch failed', e));
         } catch (eventErr) {
-          console.error('Error handling auth session change:', eventErr);
+          logError('auth_session_change', eventErr);
         }
       } else {
         setState({ currentUser: null,  subscriptions: [],
@@ -1213,7 +1221,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         throw new Error('Invalid travel amount: must be non-negative');
       }
 
-      // Papzi dynamic pricing: base fee + Uber-style travel surcharge
+      // Papzii dynamic pricing: base fee + Uber-style travel surcharge
       const base = payload.base_amount ?? 1200;
       const travel = payload.travel_amount ?? 0;
       const total = base + travel;
@@ -1224,6 +1232,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         id: uid('booking'),
         photographer_id: payload.talent_id || payload.photographer_id || '',
         model_id: payload.talent_type === 'model' ? (payload.talent_id || payload.model_id || null) : null,
+        service_type: payload.service_type ?? (payload.talent_type === 'model' ? 'modeling' : 'photography'),
         client_id: currentUser.id,
         booking_date: payload.booking_date,
         package_type: payload.package_type,
@@ -1251,6 +1260,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
             talentId: providerId || '',
             clientId: currentUser.id,
             talentType: isModel ? 'model' : 'photographer',
+            serviceType: payload.service_type ?? (isModel ? 'modeling' : 'photography'),
             packageId: payload.package_type,
             totalAmount: total,
             latitude: payload.latitude || 0,
@@ -1984,7 +1994,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       return;
     }
 
-    const table = user.role === 'model' ? 'models' : 'photographers';
+    const table = getTalentTableForRole(user);
     
     await supabase
       .from(table)
@@ -2005,7 +2015,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         });
     }
 
-    if (user.role === 'model') {
+    if (table === 'models') {
       const updated = stateRef.current.models.map((m) =>
         m.id === userId ? { ...m, latitude, longitude } : m
       );
@@ -2047,7 +2057,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           const trimmedCity = extras?.city?.trim() || null;
           const trimmedPhone = extras?.phone?.trim() || null;
           const normalizedGender = extras?.gender ?? null;
-          const requiresKyc = role === 'photographer' || role === 'model';
+          const requiresKyc = roleRequiresKyc(role);
           await supabase.from('profiles').upsert({
             id: data.user.id,
             role,
@@ -2095,7 +2105,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const user: AppUser | null = data.user ? mapSupabaseUser(data.user, role, {
           role,
           verified: false,
-          kyc_status: role === 'photographer' || role === 'model' ? 'pending' : null,
+          kyc_status: roleRequiresKyc(role) ? 'pending' : null,
           city: extras?.city?.trim() || null,
           phone: extras?.phone?.trim() || null,
           date_of_birth: dob ?? null,
@@ -2124,16 +2134,13 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setAuthenticating(true);
     setError(null);
     try {
-      if (__DEV__) console.log('Attempting sign in for:', email);
       const { data, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
       if (signInError) {
-        console.error('SignIn Error:', signInError);
+        logError('sign_in', signInError);
         setError(signInError.message);
         return null;
       }
-      if (__DEV__) console.log('SignIn Successful, fetching profile for:', data.user?.id);
       const profile = data.user ? await fetchProfile(data.user.id) : null;
-      if (__DEV__) console.log('Profile fetched:', profile);
       const metadataRole = data.user?.user_metadata?.role as AppUser['role'] | undefined;
       const safeFallbackRole: AppUser['role'] =
         metadataRole && ['client', 'photographer', 'model', 'admin', 'guest'].includes(metadataRole)
@@ -2143,7 +2150,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setState({ currentUser: user });
       return user;
     } catch (err: any) {
-      console.error('SignIn Catch Block:', err);
+      logError('sign_in_catch', err);
       setError(err.message ?? 'Unable to sign in.');
       return null;
     } finally {
@@ -2203,7 +2210,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
       const profile = await fetchProfile(data.user.id);
       const currentRole = profile?.role || stateRef.current.currentUser?.role || 'client';
-      const user = mapSupabaseUser(data.user, currentRole as any, profile);
+      const user = mapSupabaseUser(data.user, currentRole ?? 'client', profile);
       setState({ currentUser: user });
       return user;
     } catch (err) {
@@ -2592,10 +2599,10 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const current = stateRef.current.currentUser;
     if (!current) throw new Error('Not signed in.');
     const role = current.role;
-    if (role !== 'photographer' && role !== 'model') return;
+    if (!roleRequiresKyc(role)) return;
     if (!hasSupabase) return;
 
-    const table = role === 'model' ? 'models' : 'photographers';
+    const table = getTalentTableForRole(role);
     const { data, error } = await supabase
       .from(table)
       .update({
@@ -2608,7 +2615,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     if (error) throw error;
 
-    if (role === 'model') {
+    if (table === 'models') {
       const updated = stateRef.current.models.map((m) =>
         m.id === current.id ? { ...m, tier_id: data?.tier_id ?? payload.tier_id ?? null, equipment: data?.equipment ?? payload.equipment ?? null } : m
       );

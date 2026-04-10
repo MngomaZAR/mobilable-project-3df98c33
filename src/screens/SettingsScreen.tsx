@@ -25,7 +25,7 @@ import { RootStackParamList } from '../navigation/types';
 import { ActionModal } from '../components/ActionModal';
 import { LEGAL_CONTENT } from '../constants/LegalContent';
 import { requestAccountDeletion } from '../services/accountService';
-import { PLACEHOLDER_AVATAR } from '../utils/constants';
+import { BRAND, PLACEHOLDER_AVATAR } from '../utils/constants';
 import { supabase } from '../config/supabaseClient';
 import { registerForPushNotificationsAsync, savePushTokenAsync } from '../services/notificationService';
 import { isModelUser, isPhotographerUser, isProviderUser } from '../utils/userRole';
@@ -51,6 +51,10 @@ const SettingsScreen: React.FC = () => {
   const showDevVideoTools = __DEV__ || environment.env !== 'production';
   const isModelAccount = isModelUser(currentUser);
   const liveVideoAvailable = isLiveVideoAvailable();
+  const userMetadata =
+    currentUser && typeof currentUser === 'object' && 'user_metadata' in currentUser
+      ? ((currentUser as Record<string, unknown>).user_metadata as Record<string, unknown> | undefined)
+      : undefined;
   const isPhotographerAccount = isPhotographerUser(currentUser);
   const isProviderAccount = isProviderUser(currentUser);
 
@@ -256,7 +260,7 @@ const SettingsScreen: React.FC = () => {
   const resolvedAvatarUri =
     avatarPreviewUri ||
     currentUser?.avatar_url ||
-    (currentUser as any)?.user_metadata?.avatar_url ||
+    (typeof userMetadata?.avatar_url === 'string' ? userMetadata.avatar_url : null) ||
     PLACEHOLDER_AVATAR;
 
   return (
@@ -286,7 +290,7 @@ const SettingsScreen: React.FC = () => {
         <View style={s.profileInfo}>
           <Text style={s.profileName}>
             {currentUser?.full_name ||
-              (currentUser as any)?.user_metadata?.full_name ||
+              (typeof userMetadata?.full_name === 'string' ? userMetadata.full_name : null) ||
               currentUser?.email?.split('@')[0] ||
               'Guest User'}
           </Text>
@@ -469,7 +473,7 @@ const SettingsScreen: React.FC = () => {
               <View style={[s.iconContainer, { backgroundColor: '#0ea5e9' }]}>
                 <Ionicons name="wallet" size={16} color="#fff" />
               </View>
-              <Text style={s.itemText}>Papzi Credits</Text>
+              <Text style={s.itemText}>{BRAND.name} Credits</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </TouchableOpacity>
@@ -496,7 +500,7 @@ const SettingsScreen: React.FC = () => {
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </TouchableOpacity>
           {isProviderAccount && (
-            <TouchableOpacity style={[s.groupItem, s.groupItemBorder]} onPress={() => (navigation as any).navigate('KYC')}>
+            <TouchableOpacity style={[s.groupItem, s.groupItemBorder]} onPress={() => navigation.navigate('KYC')}>
               <View style={s.itemLeft}>
                 <View style={[s.iconContainer, { backgroundColor: currentUser?.kyc_status === 'approved' ? '#22c55e' : '#f59e0b' }]}>
                   <Ionicons name={currentUser?.kyc_status === 'approved' ? 'shield-checkmark' : 'shield-outline'} size={16} color="#fff" />
@@ -516,7 +520,7 @@ const SettingsScreen: React.FC = () => {
             </TouchableOpacity>
           )}
           {isPhotographerAccount && (
-            <TouchableOpacity style={[s.groupItem, s.groupItemBorder]} onPress={() => (navigation as any).navigate('EquipmentSetup')}>
+            <TouchableOpacity style={[s.groupItem, s.groupItemBorder]} onPress={() => navigation.navigate('EquipmentSetup')}>
               <View style={s.itemLeft}>
                 <View style={[s.iconContainer, { backgroundColor: '#c9a44a' }]}>
                   <Ionicons name="camera" size={16} color="#fff" />
@@ -527,7 +531,7 @@ const SettingsScreen: React.FC = () => {
             </TouchableOpacity>
           )}
           {isModelAccount && (
-            <TouchableOpacity style={[s.groupItem, s.groupItemBorder]} onPress={() => (navigation as any).navigate('ModelServices')}>
+            <TouchableOpacity style={[s.groupItem, s.groupItemBorder]} onPress={() => navigation.navigate('ModelServices')}>
               <View style={s.itemLeft}>
                 <View style={[s.iconContainer, { backgroundColor: '#ec4899' }]}>
                   <Ionicons name="list" size={16} color="#fff" />
@@ -653,7 +657,7 @@ const SettingsScreen: React.FC = () => {
         </View>
       </View>
 
-      <Text style={s.footerText}>Papzi Marketplace</Text>
+      <Text style={s.footerText}>{BRAND.name} Marketplace</Text>
       
       <ActionModal
         visible={modalState.visible}

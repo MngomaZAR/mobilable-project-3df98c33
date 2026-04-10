@@ -19,9 +19,11 @@ import { supabase } from '../config/supabaseClient';
 import { DEFAULT_CAPE_TOWN_COORDINATES, ensureSouthAfricanCoordinates } from '../utils/geo';
 import { NewMessageModal } from '../components/NewMessageModal';
 import HowItWorksCard from '../components/HowItWorksCard';
+import { PLACEHOLDER_AVATAR } from '../utils/constants';
 import { isModelUser } from '../utils/userRole';
 
 type Navigation = StackNavigationProp<RootStackParamList, 'Root'>;
+type AvailabilityProfile = { id: string; availability_status?: string | null };
 
 const PhotographerDashboardScreen: React.FC = () => {
   const navigation = useNavigation<Navigation>();
@@ -48,7 +50,7 @@ const PhotographerDashboardScreen: React.FC = () => {
   const kycApproved = (currentUser?.kyc_status ?? state.currentUser?.kyc_status) === 'approved';
 
   useEffect(() => {
-    const profile = state.profiles.find((p: any) => p.id === currentUser?.id) as any;
+    const profile = state.profiles.find((p) => p.id === currentUser?.id) as AvailabilityProfile | undefined;
     if (profile?.availability_status) {
       setIsOnline(profile.availability_status === 'online');
     }
@@ -452,9 +454,9 @@ const PhotographerDashboardScreen: React.FC = () => {
               { icon: 'wallet', label: 'Payouts', color: '#14b8a6', action: () => navigation.navigate('PayoutMethods') },
               { icon: 'stats-chart', label: 'Earnings', color: '#06b6d4', action: () => navigation.navigate('EarningsDashboard') },
               ...(isModelAccount
-                ? [{ icon: 'list', label: 'Services', color: '#ec4899', action: () => (navigation as any).navigate('ModelServices') }]
-                : [{ icon: 'camera', label: 'Equipment', color: '#c9a44a', action: () => (navigation as any).navigate('EquipmentSetup') }]),
-              { icon: kycApproved ? 'shield-checkmark' : 'shield-outline', label: kycApproved ? 'Verified' : 'Verify ID', color: kycApproved ? '#22c55e' : '#f59e0b', action: () => (navigation as any).navigate('KYC') },
+                ? [{ icon: 'list', label: 'Services', color: '#ec4899', action: () => navigation.navigate('ModelServices') }]
+                : [{ icon: 'camera', label: 'Equipment', color: '#c9a44a', action: () => navigation.navigate('EquipmentSetup') }]),
+              { icon: kycApproved ? 'shield-checkmark' : 'shield-outline', label: kycApproved ? 'Verified' : 'Verify ID', color: kycApproved ? '#22c55e' : '#f59e0b', action: () => navigation.navigate('KYC') },
             ].map(tool => (
               <TouchableOpacity key={tool.label} style={s.toolBtn} onPress={tool.action}>
                 <View style={[s.toolIcon, { backgroundColor: tool.color + '20' }]}>
@@ -482,7 +484,7 @@ const PhotographerDashboardScreen: React.FC = () => {
                   style={s.modelPill}
                   onPress={() => navigation.navigate('UserProfile', { userId: model.id })}
                 >
-                  <Image source={{ uri: model.avatar_url ?? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200' }} style={s.modelAvatar} />
+                  <Image source={{ uri: model.avatar_url ?? PLACEHOLDER_AVATAR }} style={s.modelAvatar} />
                   <Text style={s.modelName} numberOfLines={1}>{model.name}</Text>
                   <TouchableOpacity
                     style={s.modelChatBtn}

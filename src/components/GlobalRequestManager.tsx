@@ -7,6 +7,7 @@ import { Alert } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
+import { getBookingTalentColumnForRole, isProviderUser } from '../utils/userRole';
 
 export const GlobalRequestManager: React.FC = () => {
   const { state } = useAppData();
@@ -18,10 +19,9 @@ export const GlobalRequestManager: React.FC = () => {
   useEffect(() => {
     if (!currentUser?.id) return;
 
-    const isTalent = currentUser.role === 'photographer' || currentUser.role === 'model';
-    if (!isTalent) return;
+    if (!isProviderUser(currentUser)) return;
 
-    const filterColumn = currentUser.role === 'model' ? 'model_id' : 'photographer_id';
+    const filterColumn = getBookingTalentColumnForRole(currentUser);
     
     // Subscribe to new booking requests for this talent
     const channel = supabase.channel(`global:bookings:${currentUser.id}`);
@@ -36,7 +36,6 @@ export const GlobalRequestManager: React.FC = () => {
       },
       (payload) => {
         if (payload.new.status === 'pending') {
-          if (__DEV__) console.log('Global Request Received:', payload.new.id);
           setIncomingRequest(payload.new);
           setShowPopup(true);
         }
@@ -46,7 +45,7 @@ export const GlobalRequestManager: React.FC = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [currentUser?.id, currentUser?.role]);
+  }, [currentUser]);
 
   const handleAccept = async () => {
     if (!incomingRequest) return;

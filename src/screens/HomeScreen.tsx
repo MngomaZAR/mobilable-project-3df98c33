@@ -29,7 +29,7 @@ import { AppLogo } from '../components/AppLogo';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { fetchRecommendedMatches } from '../services/matchService';
-import { PLACEHOLDER_AVATAR } from '../utils/constants';
+import { BRAND, PLACEHOLDER_AVATAR } from '../utils/constants';
 import { resolveUserRole } from '../utils/userRole';
 import { isLiveVideoAvailable, LIVE_VIDEO_UNAVAILABLE_MESSAGE } from '../utils/videoCalls';
 
@@ -371,7 +371,7 @@ const HomeScreen: React.FC = () => {
         >
           <View style={styles.brandRow}>
             <AppLogo size={48} />
-            <Text style={[styles.brandName, { color: colors.text }]}>Papzi</Text>
+            <Text style={[styles.brandName, { color: colors.text }]}>{BRAND.name}</Text>
           </View>
           <View style={styles.navActions}>
             <TouchableOpacity 

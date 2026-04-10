@@ -12,6 +12,7 @@ import { useAppData } from '../store/AppDataContext';
 import { useTheme } from '../store/ThemeContext';
 import { UserRole } from '../types';
 import { LinearGradient } from 'expo-linear-gradient';
+import { BRAND } from '../utils/constants';
 
 const { width } = Dimensions.get('window');
 
@@ -60,7 +61,7 @@ const RoleSelectionScreen: React.FC = () => {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
       <View style={styles.header}>
-        <Text style={[styles.title, { color: colors.text }]}>Welcome to Papzi</Text>
+        <Text style={[styles.title, { color: colors.text }]}>Welcome to {BRAND.name}</Text>
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
           Please select how you would like to use the platform. You can change this later in settings.
         </Text>

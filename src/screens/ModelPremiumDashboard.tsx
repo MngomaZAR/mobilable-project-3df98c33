@@ -19,9 +19,12 @@ import { NewMessageModal } from '../components/NewMessageModal';
 import { sendTip } from '../services/monetisationService';
 import HowItWorksCard from '../components/HowItWorksCard';
 import { isLiveVideoAvailable, LIVE_VIDEO_UNAVAILABLE_MESSAGE } from '../utils/videoCalls';
+import { PLACEHOLDER_AVATAR } from '../utils/constants';
 
 const { width } = Dimensions.get('window');
 type Navigation = StackNavigationProp<RootStackParamList, 'Root'>;
+type AvailabilityProfile = { id: string; availability_status?: string | null };
+type SubscriberProfile = { avatar_url?: string | null; full_name?: string | null } | null | undefined;
 
 const ModelPremiumDashboard: React.FC = () => {
   const navigation = useNavigation<Navigation>();
@@ -99,7 +102,7 @@ const ModelPremiumDashboard: React.FC = () => {
   }, [loadTiers, loadTipGoal]);
 
   useEffect(() => {
-    const profile = state.profiles.find((p: any) => p.id === currentUser?.id) as any;
+    const profile = state.profiles.find((p) => p.id === currentUser?.id) as AvailabilityProfile | undefined;
     if (profile?.availability_status) {
       setIsOnline(profile.availability_status === 'online');
     }
@@ -400,7 +403,7 @@ const ModelPremiumDashboard: React.FC = () => {
             </TouchableOpacity>
             <TouchableOpacity onPress={() => navigation.navigate('AccountConfig')}>
               <Image
-                source={{ uri: currentUser?.avatar_url ?? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200' }}
+                source={{ uri: currentUser?.avatar_url ?? PLACEHOLDER_AVATAR }}
                 style={s.avatar}
               />
             </TouchableOpacity>
@@ -500,8 +503,8 @@ const ModelPremiumDashboard: React.FC = () => {
             { icon: 'chatbubbles', label: 'Messages', color: '#ea580c', bg: '#fff7ed', onPress: () => navigation.navigate('Root', { screen: 'Chat' }) },
             { icon: 'images', label: 'Media', color: '#0284c7', bg: '#eff6ff', onPress: () => currentUser?.id && navigation.navigate('MediaLibrary', { creatorId: currentUser.id }) },
             { icon: 'calendar', label: 'Bookings', color: '#d97706', bg: '#fffbeb', onPress: () => navigation.navigate('Root', { screen: 'Bookings' }) },
-            { icon: 'list', label: 'Services', color: '#ec4899', bg: '#fdf2f8', onPress: () => (navigation as any).navigate('ModelServices') },
-            { icon: kycApproved ? 'shield-checkmark' : 'shield-outline', label: kycApproved ? 'Verified' : 'Verify ID', color: kycApproved ? '#22c55e' : '#f59e0b', bg: '#fffbeb', onPress: () => (navigation as any).navigate('KYC') },
+            { icon: 'list', label: 'Services', color: '#ec4899', bg: '#fdf2f8', onPress: () => navigation.navigate('ModelServices') },
+            { icon: kycApproved ? 'shield-checkmark' : 'shield-outline', label: kycApproved ? 'Verified' : 'Verify ID', color: kycApproved ? '#22c55e' : '#f59e0b', bg: '#fffbeb', onPress: () => navigation.navigate('KYC') },
             { icon: 'settings', label: 'Profile', color: '#6366f1', bg: '#eef2ff', onPress: () => navigation.navigate('AccountConfig') },
           ].map(a => (
             <TouchableOpacity key={a.label} style={s.actionBtn} onPress={a.onPress}>
@@ -642,9 +645,9 @@ const ModelPremiumDashboard: React.FC = () => {
           </View>
           <View style={s.leaderboardCard}>
             {[
-              { name: 'John Doe', amount: 2400, rank: 1, avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100' },
-              { name: 'Sarah W.', amount: 1850, rank: 2, avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100' },
-              { name: 'Mike R.', amount: 900, rank: 3, avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100' },
+              { name: 'John Doe', amount: 2400, rank: 1, avatar: PLACEHOLDER_AVATAR },
+              { name: 'Sarah W.', amount: 1850, rank: 2, avatar: PLACEHOLDER_AVATAR },
+              { name: 'Mike R.', amount: 900, rank: 3, avatar: PLACEHOLDER_AVATAR },
             ].map((fan, i) => (
               <View key={fan.name} style={[s.fanRow, i === 2 && { borderBottomWidth: 0 }]}>
                 <Text style={s.fanRank}>{fan.rank}</Text>
@@ -672,7 +675,7 @@ const ModelPremiumDashboard: React.FC = () => {
                   style={s.talentPill}
                   onPress={() => navigation.navigate('UserProfile', { userId: p.id })}
                 >
-                  <Image source={{ uri: p.avatar_url ?? 'https://images.unsplash.com/photo-1542038784456-1ea8e935640e?w=200' }} style={s.talentAvatar} />
+                  <Image source={{ uri: p.avatar_url ?? PLACEHOLDER_AVATAR }} style={s.talentAvatar} />
                   <Text style={s.talentName} numberOfLines={1}>{p.name}</Text>
                 </TouchableOpacity>
               ))}
@@ -824,21 +827,23 @@ const ModelPremiumDashboard: React.FC = () => {
             {subscribers.length === 0 ? (
               <Text style={s.empty}>No active subscribers yet.</Text>
             ) : (
-              subscribers.map((sub: any) => (
+              subscribers.map((sub: any) => {
+                const subscriberProfile = sub.profiles as SubscriberProfile;
+                return (
                 <View key={sub.id} style={s.subRow}>
                   <Image
-                    source={{ uri: (sub.profiles as any)?.avatar_url ?? 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100' }}
+                    source={{ uri: subscriberProfile?.avatar_url ?? PLACEHOLDER_AVATAR }}
                     style={s.subAvatar}
                   />
                   <View style={{ flex: 1 }}>
-                    <Text style={s.subName}>{(sub.profiles as any)?.full_name ?? 'Subscriber'}</Text>
+                    <Text style={s.subName}>{subscriberProfile?.full_name ?? 'Subscriber'}</Text>
                   <Text style={s.subTier}>{tierMap[sub.tier_id]?.name ?? 'Tier'} tier</Text>
                 </View>
                   <Text style={s.subExpiry}>
                     Renews {sub.current_period_end ? new Date(sub.current_period_end).toLocaleDateString('en-ZA') : 'soon'}
                   </Text>
                 </View>
-              ))
+              )})
             )}
           </View>
         </View>

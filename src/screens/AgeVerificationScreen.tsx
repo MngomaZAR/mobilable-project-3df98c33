@@ -7,6 +7,8 @@ import { supabase } from '../config/supabaseClient';
 import { useAuth } from '../store/AuthContext';
 import { useAppData } from '../store/AppDataContext';
 import { recordConsent as recordComplianceConsent } from '../services/dispatchService';
+import { BRAND } from '../utils/constants';
+import { roleRequiresKyc } from '../utils/userRole';
 
 const AgeVerificationScreen: React.FC = () => {
   const { colors } = useTheme();
@@ -29,7 +31,7 @@ const AgeVerificationScreen: React.FC = () => {
     if (age < 18) {
       Alert.alert(
         'Age Requirement',
-        'You must be 18 or older to use Papzi.',
+        `You must be 18 or older to use ${BRAND.name}.`,
         [{ text: 'OK' }]
       );
       return;
@@ -38,7 +40,7 @@ const AgeVerificationScreen: React.FC = () => {
     setSubmitting(true);
     try {
       const isoDob = dob.toISOString().split('T')[0];
-      const requiresKyc = currentUser?.role === 'photographer' || currentUser?.role === 'model';
+      const requiresKyc = roleRequiresKyc(currentUser);
 
       // Consent logging should never block age-gate progression if the edge function is unavailable.
       try {
@@ -121,7 +123,7 @@ const AgeVerificationScreen: React.FC = () => {
       <View style={styles.content}>
         <Text style={[styles.title, { color: colors.text }]}>Age Verification</Text>
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-          Papzi contains adult-oriented content. You must be 18 or older to continue.
+          {BRAND.name} contains adult-oriented content. You must be 18 or older to continue.
         </Text>
 
         <TouchableOpacity

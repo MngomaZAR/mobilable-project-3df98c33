@@ -21,6 +21,7 @@ import { TIER_OPTIONS, CAMERA_OPTIONS, LENS_OPTIONS, LIGHTING_OPTIONS, EXTRA_OPT
 import { useTheme } from '../store/ThemeContext';
 import { AppUser } from '../types';
 import { PLACEHOLDER_AVATAR } from '../utils/constants';
+import { getTalentTableForRole, isProviderUser } from '../utils/userRole';
 
 
 
@@ -54,9 +55,10 @@ const AccountConfigScreen: React.FC = () => {
     setCity(currentUser?.city || '');
     setInstagram(currentUser?.instagram || currentUser?.contact_details?.instagram || '');
     setWebsite(currentUser?.website || currentUser?.contact_details?.website || '');
-    const provider = currentUser?.role === 'model'
-      ? state.models.find((m) => m.id === currentUser?.id)
-      : state.photographers.find((p) => p.id === currentUser?.id);
+    const provider =
+      getTalentTableForRole(currentUser) === 'models'
+        ? state.models.find((m) => m.id === currentUser?.id)
+        : state.photographers.find((p) => p.id === currentUser?.id);
     setTierId(provider?.tier_id ?? null);
     const equipment = provider?.equipment ?? null;
     setCameraSet(new Set(equipment?.camera ?? []));
@@ -83,7 +85,7 @@ const AccountConfigScreen: React.FC = () => {
       };
 
       await updateProfile(changes);
-      if (currentUser?.role === 'photographer' || currentUser?.role === 'model') {
+      if (isProviderUser(currentUser)) {
         await updateProviderSettings({
           tier_id: tierId ?? null,
           equipment: {
@@ -267,7 +269,7 @@ const AccountConfigScreen: React.FC = () => {
           </View>
         </View>
 
-        {(currentUser?.role === 'photographer' || currentUser?.role === 'model') && (
+        {isProviderUser(currentUser) && (
           <View style={s.section}>
             <Text style={s.sectionTitle}>BOOKING READINESS</Text>
             <Text style={s.helperText}>Set your tier and equipment to appear in matching results.</Text>

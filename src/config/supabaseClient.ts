@@ -14,12 +14,12 @@ const resolvedSupabaseAnonKey = String(supabaseAnonKey ?? '').trim();
 export const hasSupabase = Boolean(resolvedSupabaseUrl && resolvedSupabaseAnonKey);
 
 if (!hasSupabase) {
-  console.warn('Supabase environment variables are missing. Check your .env configuration. The app will fall back to local demo data.');
+  console.error('Supabase environment variables are missing. The app will stay in offline-safe mode until backend config is provided.');
 }
 
-// Keep app boot stable when env is missing (web smoke/dev flows) without pretending backend is configured.
-const safeSupabaseUrl = resolvedSupabaseUrl || 'https://placeholder.supabase.co';
-const safeSupabaseAnonKey = resolvedSupabaseAnonKey || 'public-anon-key';
+// Keep app boot stable when env is missing without implying a real backend is configured.
+const safeSupabaseUrl = resolvedSupabaseUrl || 'http://127.0.0.1:54321';
+const safeSupabaseAnonKey = resolvedSupabaseAnonKey || 'offline-anon-key';
 
 export const supabase = createClient(safeSupabaseUrl, safeSupabaseAnonKey, {
   auth: {

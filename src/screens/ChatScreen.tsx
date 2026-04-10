@@ -60,10 +60,8 @@ const ChatScreen: React.FC = () => {
 
   const otherAvatar = route.params?.avatarUrl ?? PLACEHOLDER_IMAGE;
 
-  const LOCKED_MEDIA_FULL =
-    'https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?auto=format&fit=crop&w=1200&q=80';
-  const LOCKED_MEDIA_PREVIEW =
-    'https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?auto=format&fit=crop&w=500&q=20';
+  const LOCKED_MEDIA_FULL = PLACEHOLDER_IMAGE;
+  const LOCKED_MEDIA_PREVIEW = PLACEHOLDER_IMAGE;
 
   useEffect(() => {
     if (!chatId) return;

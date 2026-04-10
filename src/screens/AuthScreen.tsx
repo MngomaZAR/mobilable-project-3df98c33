@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppLogo } from '../components/AppLogo';
+import { BRAND } from '../utils/constants';
 import { useAppData } from '../store/AppDataContext';
 import { Ionicons } from '@expo/vector-icons';
 import { UserGender, UserRole } from '../types';
@@ -214,7 +215,7 @@ const AuthScreen: React.FC = () => {
           {/* Header */}
           <View style={styles.header}>
             <AppLogo size={72} />
-            <Text style={styles.title}>Welcome to Papzi</Text>
+            <Text style={styles.title}>Welcome to {BRAND.name}</Text>
             <Text style={styles.subtitle}>
               {mode === 'signin'
                 ? 'Sign in to book photographers and models or manage your services.'

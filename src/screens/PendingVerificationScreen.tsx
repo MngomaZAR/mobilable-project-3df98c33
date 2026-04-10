@@ -5,6 +5,7 @@ import { StyleSheet, Text, TouchableOpacity, View, Animated, Easing } from 'reac
 import { AppLogo } from '../components/AppLogo';
 import { useAppData } from '../store/AppDataContext';
 import { useTheme } from '../store/ThemeContext';
+import { BRAND } from '../utils/constants';
 
 const PendingVerificationScreen: React.FC = () => {
   const { currentUser, revalidateSession, signOut } = useAppData();
@@ -59,7 +60,7 @@ const PendingVerificationScreen: React.FC = () => {
           </View>
           <Text style={[styles.title, { color: colors.text }]}>Profile Under Review</Text>
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-            Thanks for joining Papzi. Our team is currently reviewing your photographer details to ensure marketplace quality.
+            Thanks for joining {BRAND.name}. Our team is currently reviewing your photographer details to ensure marketplace quality.
           </Text>
         </View>
 

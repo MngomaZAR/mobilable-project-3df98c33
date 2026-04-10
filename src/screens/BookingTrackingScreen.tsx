@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import * as Location from 'expo-location';
@@ -13,6 +13,7 @@ import { hasSupabase, supabase } from '../config/supabaseClient';
 import { getDispatchState, getEta } from '../services/dispatchService';
 import { MapLibreGL, isMapLibreNativeAvailable } from '../components/MapLibreWrapper';
 import { useTheme } from '../store/ThemeContext';
+import { isPhotographerUser } from '../utils/userRole';
 
 type Route = RouteProp<RootStackParamList, 'BookingTracking'>;
 type Navigation = StackNavigationProp<RootStackParamList, 'BookingTracking'>;
@@ -128,10 +129,10 @@ const BookingTrackingScreen: React.FC = () => {
           try {
             if (state.currentUser?.role === 'client') {
               setLiveClientLocation(next);
-              await updateBookingClientLocation(booking.id, next.latitude, next.longitude, coords.accuracy);
-            } else if (state.currentUser?.role === 'photographer') {
+              await updateBookingClientLocation(booking.id, next.latitude, next.longitude, coords.accuracy ?? undefined);
+            } else if (isPhotographerUser(state.currentUser)) {
               setLivePhotographerLocation(next);
-              await updatePhotographerLocation(next.latitude, next.longitude, booking.id, coords.accuracy);
+              await updatePhotographerLocation(next.latitude, next.longitude, booking.id, coords.accuracy ?? undefined);
             }
           } catch {
             // keep UI alive on intermittent sync failures
@@ -386,15 +387,6 @@ const BookingTrackingScreen: React.FC = () => {
         </View>
       )}
 
-      <SafeAreaView edges={['top']} style={styles.overlayTop} pointerEvents="box-none">
-        <View style={[styles.statusPill, { marginTop: insets.top + 2, backgroundColor: isDark ? 'rgba(14, 24, 42, 0.88)' : 'rgba(255, 252, 246, 0.92)', borderColor: isDark ? '#2c3c5e' : '#e9dcc7' }]}>
-          <View style={styles.liveDot} />
-          <Text style={[styles.statusText, { color: colors.text }]}>
-            {statusLabel} - {assignmentState.replace('_', ' ')}
-          </Text>
-        </View>
-      </SafeAreaView>
-
       <View style={[styles.bottomPanelWrap, { paddingBottom: Math.max(insets.bottom + 6, 18) }]}>
         <View style={[styles.bottomPanel, { backgroundColor: isDark ? 'rgba(12, 20, 38, 0.94)' : 'rgba(255, 250, 241, 0.96)', borderColor: isDark ? '#2a3755' : '#e8dbc4' }]}>
           <View style={[styles.avatarFloat, { backgroundColor: isDark ? '#101c34' : '#fff5e6', borderColor: isDark ? '#f0dbb7' : '#e7cb93' }]}>
@@ -407,7 +399,7 @@ const BookingTrackingScreen: React.FC = () => {
 
           <Text style={[styles.timerText, { color: colors.text }]}>{formatTimer(activeTimer)}</Text>
           <Text style={[styles.timerSub, { color: colors.textMuted }]}>
-            {distanceKm.toFixed(1)} km away | Confidence {(etaConfidence * 100).toFixed(0)}%
+            {statusLabel} • {assignmentState.replace('_', ' ')} • {distanceKm.toFixed(1)} km away • Confidence {(etaConfidence * 100).toFixed(0)}%
           </Text>
 
           <View style={styles.actionRow}>
@@ -478,34 +470,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'center',
   },
-  overlayTop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-  },
-  statusPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 16,
-    borderWidth: 1,
-  },
-  liveDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#22c55e',
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
   clientPinWrap: {
     width: 30,
     height: 30,
@@ -528,19 +492,23 @@ const styles = StyleSheet.create({
     borderColor: '#ffffff',
   },
   providerPin: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
+    width: 58,
+    height: 58,
+    borderRadius: 29,
     backgroundColor: '#ffffff',
     borderWidth: 3,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
+    shadowColor: '#f0c978',
+    shadowOpacity: 0.35,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 0 },
   },
   providerAvatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
   },
   bottomPanelWrap: {
     position: 'absolute',
@@ -549,14 +517,14 @@ const styles = StyleSheet.create({
     bottom: 0,
   },
   bottomPanel: {
-    borderRadius: 26,
+    borderRadius: 28,
     borderWidth: 1,
-    paddingTop: 40,
-    paddingHorizontal: 18,
-    paddingBottom: 14,
+    paddingTop: 44,
+    paddingHorizontal: 20,
+    paddingBottom: 16,
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOpacity: 0.16,
+    shadowOpacity: 0.18,
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 10 },
     elevation: 10,
@@ -578,15 +546,16 @@ const styles = StyleSheet.create({
     borderRadius: 29,
   },
   timerText: {
-    fontSize: 40,
+    fontSize: 34,
     fontWeight: '900',
-    letterSpacing: 1,
+    letterSpacing: 0.5,
   },
   timerSub: {
-    marginTop: 2,
+    marginTop: 4,
     marginBottom: 14,
     fontSize: 12,
     fontWeight: '600',
+    textAlign: 'center',
   },
   actionRow: {
     width: '100%',
@@ -598,13 +567,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 22,
+    borderRadius: 18,
     borderWidth: 1,
-    paddingVertical: 12,
+    paddingVertical: 13,
     gap: 8,
   },
   actionBtnText: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: '700',
   },
 });

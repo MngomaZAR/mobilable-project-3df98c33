@@ -1,6 +1,22 @@
-# Papzi
+# Papzii
 
 Mobile-first creator marketplace app built with Expo + React Native + Supabase.
+
+## Canonical Architecture
+
+Papzii now enforces a single-flow runtime architecture:
+
+- Discovery -> booking -> payment -> dispatch -> tracking -> completion -> payout
+- One active PayFast backend path: `payfast-handler`
+- One active notify URL source: `getDefaultPayfastNotifyUrl()`
+- One launch gate: `npm run check:launch`
+
+Supporting docs:
+
+- `docs/SINGLE_FLOW_ARCHITECTURE.md`
+- `docs/FIRST_100_USERS_OPERATIONS.md`
+- `docs/MONITORING_DASHBOARD_PLAN.md`
+- `docs/MANUAL_FALLBACK_OPS.md`
 
 ## Core Product Scope
 
@@ -48,7 +64,8 @@ This runs:
 2. Lint
 3. Unit tests
 4. Source connectivity audit
-5. Web export build
+5. Single-flow architecture audit
+6. Web export build
 
 ## Useful Scripts
 
@@ -56,6 +73,8 @@ This runs:
 - `npm run lint`
 - `npm run test`
 - `npm run audit:src`
+- `npm run audit:single-flow`
+- `npm run audit:deployed:functions`
 - `npm run build:web`
 - `npm run preview:web` (serve exported `dist` at local preview URL)
 
@@ -63,3 +82,5 @@ This runs:
 
 - The app keeps all planned UX surfaces (map/home/bookings/chat/profile) and does not remove product features.
 - Some data-heavy smoke scripts require Supabase auth/service-role environment variables.
+- Legacy duplicate payment handlers were removed from the repo to keep one canonical payment flow.
+- Use `npm run audit:deployed:functions` with `SUPABASE_ACCESS_TOKEN` to confirm the live project matches the repo.

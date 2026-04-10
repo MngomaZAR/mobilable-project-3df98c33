@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { NavigationContainer, DefaultTheme, useNavigation } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { StackNavigationProp } from '@react-navigation/stack';
 import * as Linking from 'expo-linking';
 import { Image, ImageSourcePropType } from 'react-native';
 import HomeScreen from '../screens/HomeScreen';
@@ -53,7 +54,7 @@ import ModelServicesScreen from '../screens/ModelServicesScreen';
 import { RootStackParamList, TabParamList } from './types';
 import { useAppData } from '../store/AppDataContext';
 import { useTheme } from '../store/ThemeContext';
-import { resolveUserRole } from '../utils/userRole';
+import { resolveUserRole, roleRequiresKyc } from '../utils/userRole';
 
 const Tab = createBottomTabNavigator<TabParamList>();
 const Stack = createStackNavigator<RootStackParamList>();
@@ -63,7 +64,7 @@ type MainNavigatorProps = {
 };
 
 const VerificationRejectedScreen: React.FC = () => {
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
 
   return (
     <AccessDeniedScreen
@@ -253,7 +254,7 @@ export const MainNavigator: React.FC<MainNavigatorProps> = ({ logoSource }) => {
             {(() => {
               const role = resolveUserRole(currentUser);
               const ageVerified = Boolean(currentUser.age_verified);
-              const requiresKyc = role === 'photographer' || role === 'model';
+              const requiresKyc = roleRequiresKyc(role);
               const kycStatus = currentUser.kyc_status ?? (currentUser.verified ? 'approved' : 'pending');
 
               if (!ageVerified) {

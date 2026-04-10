@@ -1,6 +1,6 @@
 import { AppUser, Photographer, Post, ProfileSummary } from '../types';
 import { supabase } from '../config/supabaseClient';
-import { PLACEHOLDER_IMAGE } from './constants';
+import { PLACEHOLDER_AVATAR, PLACEHOLDER_IMAGE } from './constants';
 import { resolveUserRole } from './userRole';
 
 type ProfileRow = { 
@@ -59,9 +59,6 @@ type PostRow = {
   profiles?: ProfileSummary[] | null;
 };
 
-const FALLBACK_AVATAR = 'https://images.unsplash.com/photo-1508214751196-bcfd4ca60f91?auto=format&fit=crop&w=300&q=80';
-
-
 export const mapSupabaseUser = (user: any, fallbackRole: AppUser['role'] = 'client', profile: ProfileRow = null): AppUser => ({
   id: user.id,
   email: user.email ?? 'unknown-user',
@@ -97,7 +94,7 @@ export const mapPhotographerRow = (row: PhotographerRow): Photographer => {
   return {
     id: row.id,
     name: profile?.full_name ?? 'New photographer',
-    avatar_url: profile?.avatar_url ?? FALLBACK_AVATAR,
+    avatar_url: profile?.avatar_url ?? PLACEHOLDER_AVATAR,
     rating: typeof row.rating === 'number' ? row.rating : 0,
     location: row.location ?? fallbackLocation,
     latitude: row.latitude ?? 0,
@@ -114,7 +111,7 @@ export const mapPhotographerRow = (row: PhotographerRow): Photographer => {
 
 export const mapPostRow = (row: PostRow): Post => {
   const imageUrl = row.image_url ?? PLACEHOLDER_IMAGE;
-  const profile = Array.isArray(row.profiles) && row.profiles.length > 0 ? row.profiles[0] : (row.profiles as any);
+  const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
   return {
     id: row.id,
     author_id: row.author_id,

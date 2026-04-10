@@ -19,6 +19,7 @@ import { BookingProvider } from './src/store/BookingContext';
 import { logo } from './src/assets/images';
 import { Ionicons } from '@expo/vector-icons';
 import { Animated, Text, StyleSheet, View } from 'react-native';
+import { BRAND } from './src/utils/constants';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -137,7 +138,7 @@ const BootGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   if (fatalError || bootTimedOut) {
     return (
       <View style={bootStyles.container}>
-        <Text style={bootStyles.title}>Papzi is having trouble starting</Text>
+        <Text style={bootStyles.title}>{BRAND.name} is having trouble starting</Text>
         <Text style={bootStyles.subtitle}>
           Please close and reopen the app. If this continues, reinstall the TestFlight build.
         </Text>

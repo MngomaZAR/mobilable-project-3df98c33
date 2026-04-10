@@ -43,7 +43,10 @@ const withTimeout = async <T,>(promiseLike: PromiseLike<T>, timeoutMs = 12000): 
     new Promise<T>((_, reject) => setTimeout(() => reject(new Error(TIMEOUT_ERROR_MESSAGE)), timeoutMs)),
   ]);
 };
-const isTimeoutError = (err: unknown) => String((err as any)?.message ?? '').includes(TIMEOUT_ERROR_MESSAGE);
+const isTimeoutError = (err: unknown) =>
+  err && typeof err === 'object' && 'message' in err
+    ? String((err as { message?: unknown }).message ?? '').includes(TIMEOUT_ERROR_MESSAGE)
+    : false;
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -177,7 +180,7 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     if (!currentUser || !hasSupabase) return;
     supabase.channel(`typing-${chatId}`).track({
       user_id: currentUser.id,
-      name: (currentUser as any).full_name ?? 'Someone',
+      name: currentUser.full_name ?? 'Someone',
       typing: true,
     });
     // Auto-clear after 3s

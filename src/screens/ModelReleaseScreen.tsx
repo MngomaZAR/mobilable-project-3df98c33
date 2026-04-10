@@ -18,6 +18,8 @@ import { RootStackParamList } from '../navigation/types';
 import { useTheme } from '../store/ThemeContext';
 import { useAppData } from '../store/AppDataContext';
 import { fetchBookingContracts, signContract, ensureBookingContracts, Contract } from '../services/contractService';
+import { BRAND } from '../utils/constants';
+import { getModelReleaseSignerRole } from '../utils/userRole';
 
 type Route = RouteProp<RootStackParamList, 'ModelRelease'>;
 type Navigation = StackNavigationProp<RootStackParamList>;
@@ -69,9 +71,7 @@ const ModelReleaseScreen: React.FC = () => {
 
     setSigning(true);
     try {
-      let role: 'creator' | 'client' | 'model' = 'client';
-      if (currentUser.role === 'photographer') role = 'creator';
-      if (currentUser.role === 'model') role = 'model';
+      const role = getModelReleaseSignerRole(currentUser);
 
       await signContract(contract.id, signature.trim(), role);
       Alert.alert('Success', 'Document signed successfully.');
@@ -108,7 +108,7 @@ const ModelReleaseScreen: React.FC = () => {
     );
   }
 
-  const userRole = currentUser?.role === 'photographer' ? 'creator' : (currentUser?.role === 'model' ? 'model' : 'client');
+  const userRole = getModelReleaseSignerRole(currentUser);
   const alreadySigned = (userRole === 'creator' && contract.creator_signature) || 
                        (userRole === 'client' && contract.client_signature) || 
                        (userRole === 'model' && contract.model_signature);
@@ -198,7 +198,7 @@ const ModelReleaseScreen: React.FC = () => {
         <View style={styles.footer}>
             <Ionicons name="shield-checkmark-outline" size={16} color={colors.textMuted} />
             <Text style={[styles.footerText, { color: colors.textMuted }]}>
-                Tamper-evident digital record stored in Papzi Secure Vault.
+                Tamper-evident digital record stored in {BRAND.name} Secure Vault.
             </Text>
         </View>
       </ScrollView>

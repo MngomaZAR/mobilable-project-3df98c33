@@ -36,12 +36,7 @@ import { isLiveVideoAvailable, LIVE_VIDEO_UNAVAILABLE_MESSAGE } from '../utils/v
 type Navigation = BottomTabNavigationProp<TabParamList, 'Home'>;
 const MAX_HOME_CARDS = 120;
 const randPerTier = 600;
-const REFERENCE_SHOWCASE: Record<string, { category: string; reviews: number; bookings: number }> = {
-  'Olivia Harris': { category: 'Portrait', reviews: 721, bookings: 324 },
-  'Michael Scott': { category: 'Wedding', reviews: 287, bookings: 206 },
-  'Anna Gomez': { category: 'Fashion', reviews: 319, bookings: 319 },
-  'Jason Lee': { category: 'Family', reviews: 728, bookings: 203 },
-};
+const SHOWCASE_PRIORITY_NAMES = ['Olivia Harris', 'Michael Scott', 'Anna Gomez', 'Jason Lee'];
 
 const toHourlyRateRand = (price_range: string) => {
   const tiers = ((price_range || '').match(/\$/g) || []).length || 2;
@@ -191,21 +186,35 @@ const HomeScreen: React.FC = () => {
     [state.profiles]
   );
   const showcaseItems = useMemo(() => {
-    const picks = Object.keys(REFERENCE_SHOWCASE);
     const byName = new Map((state.photographers ?? []).map((p) => [p.name, p]));
-    return picks
+    const priorityItems = SHOWCASE_PRIORITY_NAMES
       .map((name) => {
         const item = byName.get(name);
         if (!item) return null;
-        const meta = REFERENCE_SHOWCASE[name];
         return {
           ...item,
-          showcaseCategory: meta.category,
-          showcaseReviews: meta.reviews,
-          showcaseBookings: meta.bookings,
+          showcaseCategory:
+            item.specialties?.[0] ??
+            item.tags?.[0] ??
+            item.style ??
+            'Photography',
         };
       })
       .filter(Boolean) as Array<any>;
+
+    if (priorityItems.length > 0) return priorityItems;
+
+    return [...(state.photographers ?? [])]
+      .sort((a, b) => toSafeRating(b.rating) - toSafeRating(a.rating))
+      .slice(0, 4)
+      .map((item) => ({
+        ...item,
+        showcaseCategory:
+          item.specialties?.[0] ??
+          item.tags?.[0] ??
+          item.style ??
+          'Photography',
+      }));
   }, [state.photographers]);
 
   const recommendedPhotographers = useMemo(() => {
@@ -591,7 +600,7 @@ const HomeScreen: React.FC = () => {
                   <View style={styles.categoryMetaRow}>
                     <Ionicons name="star" size={12} color="#fbbf24" />
                     <Text style={[styles.categoryMetaText, { color: colors.textSecondary }]}>
-                      {toSafeRating(item.rating).toFixed(1)} ({item.showcaseReviews}) {item.showcaseBookings}
+                      {toSafeRating(item.rating).toFixed(1)} · {Number(item.review_count ?? 0).toLocaleString('en-ZA')} reviews · {Number(item.total_bookings ?? 0).toLocaleString('en-ZA')} bookings
                     </Text>
                   </View>
                   <Text style={[styles.categoryLabel, { color: colors.textMuted }]}>{item.showcaseCategory}</Text>

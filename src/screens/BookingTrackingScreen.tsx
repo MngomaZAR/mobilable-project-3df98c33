@@ -13,7 +13,7 @@ import { hasSupabase, supabase } from '../config/supabaseClient';
 import { getDispatchState, getEta } from '../services/dispatchService';
 import { MapLibreGL, isMapLibreNativeAvailable } from '../components/MapLibreWrapper';
 import { useTheme } from '../store/ThemeContext';
-import { isPhotographerUser } from '../utils/userRole';
+import { getEffectiveRole, isPhotographerUser } from '../utils/userRole';
 
 type Route = RouteProp<RootStackParamList, 'BookingTracking'>;
 type Navigation = StackNavigationProp<RootStackParamList, 'BookingTracking'>;
@@ -127,7 +127,7 @@ const BookingTrackingScreen: React.FC = () => {
             longitude: coords.longitude,
           });
           try {
-            if (state.currentUser?.role === 'client') {
+            if (getEffectiveRole(state.currentUser) === 'client') {
               setLiveClientLocation(next);
               await updateBookingClientLocation(booking.id, next.latitude, next.longitude, coords.accuracy ?? undefined);
             } else if (isPhotographerUser(state.currentUser)) {

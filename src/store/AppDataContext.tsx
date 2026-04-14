@@ -264,7 +264,9 @@ const PHOTOGRAPHER_SELECT = `
   is_available,
   hourly_rate,
   experience_years,
-  specialties
+  specialties,
+  review_count,
+  total_bookings
 `;
 
 const mapBookingRow = (row: any): Booking => ({

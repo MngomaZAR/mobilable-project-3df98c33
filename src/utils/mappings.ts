@@ -43,6 +43,8 @@ type PhotographerRow = {
   tags: string[] | null;
   tier_id?: string | null;
   equipment?: any | null;
+  review_count?: number | null;
+  total_bookings?: number | null;
   created_at?: string;
   profiles: PhotographerProfileRow[] | null;
 };
@@ -105,6 +107,8 @@ export const mapPhotographerRow = (row: PhotographerRow): Photographer => {
     tags: row.tags ?? [],
     tier_id: row.tier_id ?? null,
     equipment: row.equipment ?? null,
+    review_count: typeof row.review_count === 'number' ? row.review_count : 0,
+    total_bookings: typeof row.total_bookings === 'number' ? row.total_bookings : 0,
     created_at: row.created_at,
   };
 };

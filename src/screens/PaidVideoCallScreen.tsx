@@ -34,6 +34,7 @@ import { trackEvent } from '../services/analyticsService';
 import { supabase } from '../config/supabaseClient';
 import { getDefaultPayfastNotifyUrl } from '../config/commercePolicy';
 import { useAppData } from '../store/AppDataContext';
+import { isLiveVideoAvailable, LIVE_VIDEO_UNAVAILABLE_MESSAGE } from '../utils/videoCalls';
 
 const { width, height } = Dimensions.get('window');
 
@@ -237,20 +238,15 @@ const PaidVideoCallScreen: React.FC = () => {
   };
 
   // ── LiveKit package not installed yet: show placeholder ───────────────────
-  if (!LiveKitRoom) {
+  if (!LiveKitRoom || !isLiveVideoAvailable()) {
     return (
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle="light-content" />
-        <View style={styles.inlineErrorBanner}>
-          <Ionicons name="alert-circle" size={18} color="#f87171" />
-          <Text style={styles.inlineErrorText}>Live video is unavailable in this build. Install a dev build with LiveKit.</Text>
-        </View>
         <View style={styles.notInstalledBanner}>
           <Ionicons name="videocam-outline" size={64} color="rgba(255,255,255,0.5)" />
-          <Text style={styles.notInstalledTitle}>Video calls are not available yet</Text>
+          <Text style={styles.notInstalledTitle}>Video calls coming soon</Text>
           <Text style={styles.notInstalledBody}>
-            This build does not include live video. You can still message the creator
-            or return to your bookings and reschedule.
+            {LIVE_VIDEO_UNAVAILABLE_MESSAGE} You can still message the creator or return to your bookings.
           </Text>
           <View style={styles.fallbackActions}>
             <TouchableOpacity style={styles.fallbackBtn} onPress={() => navigation.navigate('Root', { screen: 'Chat' })}>

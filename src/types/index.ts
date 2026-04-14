@@ -83,6 +83,8 @@ export interface Photographer {
   hourly_rate?: number | null;
   experience_years?: number | null;
   specialties?: string[] | null;
+  review_count?: number | null;
+  total_bookings?: number | null;
   phone?: string | null;
   portfolio_urls?: string[] | null;
   subscription_tiers?: SubscriptionTier[];
@@ -132,7 +134,7 @@ export interface Booking {
   photographer_id: string;
   client_id: string;
   model_id?: string | null;
-  service_type?: 'photography' | 'modeling' | 'combined';
+  service_type?: 'photography' | 'modeling' | 'combined' | 'video_call';
   booking_date: string;
   start_datetime?: string; // ISODateString
   end_datetime?: string;   // ISODateString

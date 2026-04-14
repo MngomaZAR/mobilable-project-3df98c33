@@ -3,8 +3,8 @@ const BRAND = require('./src/constants/brand.json');
 const APP_IDS = {
   slug: 'papzshipped',
   scheme: 'papzi',
-  bundleIdentifier: 'com.saicts.papzi',
-  androidPackage: 'com.saicts.papzi',
+  bundleIdentifier: 'co.za.papzii',
+  androidPackage: 'co.za.papzii',
 };
 
 export default {
@@ -26,10 +26,11 @@ export default {
     ios: {
       supportsTablet: true,
       bundleIdentifier: APP_IDS.bundleIdentifier,
+      buildNumber: '1',
       infoPlist: {
-        NSCameraUsageDescription: `${BRAND.name} needs access to your camera to let you take and share photos directly in chat.`,
-        NSPhotoLibraryUsageDescription: `${BRAND.name} needs access to your photos to let you upload your portfolio and share media in chat.`,
-        NSLocationWhenInUseUsageDescription: `${BRAND.name} uses your location to show available talent near you and track bookings.`,
+        NSCameraUsageDescription: `${BRAND.name} needs camera access for KYC verification and story creation.`,
+        NSPhotoLibraryUsageDescription: `${BRAND.name} needs photo access for profile pictures, posts, and story creation.`,
+        NSLocationWhenInUseUsageDescription: `${BRAND.name} uses your location to show nearby photographers and track bookings.`,
         NSLocationAlwaysAndWhenInUseUsageDescription: `${BRAND.name} needs your location to track you during a live booking session.`,
         ITSAppUsesNonExemptEncryption: false
       }
@@ -40,6 +41,13 @@ export default {
         backgroundColor: "#ffffff"
       },
       package: APP_IDS.androidPackage,
+      versionCode: 1,
+      permissions: [
+        'ACCESS_FINE_LOCATION',
+        'ACCESS_COARSE_LOCATION',
+        'CAMERA',
+        'READ_EXTERNAL_STORAGE'
+      ],
       // Deep link intent filter so Android re-opens the app after OAuth redirect
       intentFilters: [
         {

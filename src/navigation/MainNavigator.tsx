@@ -54,7 +54,7 @@ import ModelServicesScreen from '../screens/ModelServicesScreen';
 import { RootStackParamList, TabParamList } from './types';
 import { useAppData } from '../store/AppDataContext';
 import { useTheme } from '../store/ThemeContext';
-import { resolveUserRole, roleRequiresKyc } from '../utils/userRole';
+import { getEffectiveRole, isEffectiveModel, isEffectivePhotographer, roleRequiresKyc } from '../utils/userRole';
 
 const Tab = createBottomTabNavigator<TabParamList>();
 const Stack = createStackNavigator<RootStackParamList>();
@@ -101,12 +101,12 @@ const TabsNavigator = () => {
   const { colors, isDark } = useTheme();
   const unreadNotifications = state.notifications.filter(n => n.status === 'queued').length;
 
-  const role = resolveUserRole(currentUser);
+  const role = getEffectiveRole(currentUser);
   const isClient = role === 'client';
   const homeComponent =
-    role === 'photographer'
+    isEffectivePhotographer(role)
       ? PhotographerDashboardScreen
-      : role === 'model'
+      : isEffectiveModel(role)
         ? ModelPremiumDashboard
         : role === 'admin'
           ? AdminDashboardScreen
@@ -252,7 +252,7 @@ export const MainNavigator: React.FC<MainNavigatorProps> = ({ logoSource }) => {
           // Authenticated Stack
           <>
             {(() => {
-              const role = resolveUserRole(currentUser);
+              const role = getEffectiveRole(currentUser);
               const ageVerified = Boolean(currentUser.age_verified);
               const requiresKyc = roleRequiresKyc(role);
               const kycStatus = currentUser.kyc_status ?? (currentUser.verified ? 'approved' : 'pending');

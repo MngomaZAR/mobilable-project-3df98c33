@@ -414,14 +414,10 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
       // Persist report to backend
       try {
         await reportContent({ targetType: 'post', targetId: post.id, reason: 'Community report from feed options' });
-        Platform.OS === 'web'
-          ? window.alert(`Report submitted. Thanks for keeping ${BRAND.name} safe.`)
-          : Alert.alert('Report submitted', `Thanks for keeping ${BRAND.name} safe.`);
+        Alert.alert('Report submitted', `Thanks for keeping ${BRAND.name} safe.`);
       } catch (err) {
         console.warn(err);
-        Platform.OS === 'web'
-          ? window.alert('Report failed. Please try again.')
-          : Alert.alert('Report failed', 'Please try again.');
+        Alert.alert('Report failed', 'Please try again.');
       }
     };
     const doBlock = () => {

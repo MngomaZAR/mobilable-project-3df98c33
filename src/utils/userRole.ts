@@ -24,8 +24,13 @@ export const resolveUserRole = (
 export const resolveRoleValue = (input: ResolvableRole, fallback: AppUser['role'] = 'client') =>
   typeof input === 'string' ? input : resolveUserRole(input, fallback);
 
+// Backward-compatible aliases used by older call sites and audit notes.
+export const getEffectiveRole = resolveRoleValue;
+
 export const isModelUser = (user: ResolvableRole) => resolveRoleValue(user) === 'model';
 export const isPhotographerUser = (user: ResolvableRole) => resolveRoleValue(user) === 'photographer';
+export const isEffectiveModel = isModelUser;
+export const isEffectivePhotographer = isPhotographerUser;
 export const isProviderUser = (user: ResolvableRole) => {
   const role = resolveRoleValue(user);
   return role === 'model' || role === 'photographer';

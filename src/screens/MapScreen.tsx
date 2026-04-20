@@ -23,7 +23,7 @@ import * as Haptics from 'expo-haptics';
 import { Analytics } from '../utils/analytics';
 import { getHeatmap } from '../services/dispatchService';
 import { PLACEHOLDER_AVATAR } from '../utils/constants';
-import { resolveUserRole } from '../utils/userRole';
+import { getEffectiveRole, isEffectiveModel, isEffectivePhotographer } from '../utils/userRole';
 import { Booking } from '../types';
 
 // Carto Open Basemaps: free and no API key required.
@@ -73,7 +73,7 @@ const MapScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<StackNavigationProp<RootStackParamList, 'Root'>>();
   const currentUser = state.currentUser;
-  const role = resolveUserRole(currentUser);
+  const role = getEffectiveRole(currentUser);
   const isClientFacing = role === 'client';
 
   const [userMarker, setUserMarker] = useState<MapMarker | null>(null);
@@ -260,9 +260,9 @@ const MapScreen: React.FC = () => {
   // Build map markers
   const baseMarkers: MapMarker[] = useMemo(() => {
     let result: MapMarker[] = [];
-    if (role === 'photographer') {
+    if (isEffectivePhotographer(role)) {
       result = state.models.map(m => ({ id: `model-${m.id}`, sourceId: m.id, title: m.name, description: 'Model', latitude: m.latitude, longitude: m.longitude, type: 'model' as const, avatarUrl: m.avatar_url, rating: m.rating }));
-    } else if (role === 'model') {
+    } else if (isEffectiveModel(role)) {
       result = state.photographers.map(p => ({ id: `photo-${p.id}`, sourceId: p.id, title: p.name, description: 'Photographer', latitude: p.latitude, longitude: p.longitude, type: 'photographer' as const, avatarUrl: p.avatar_url, rating: p.rating }));
     } else {
       result = [

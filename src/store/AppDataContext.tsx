@@ -24,7 +24,7 @@ import { fetchCreatorEarnings } from '../services/monetisationService';
 import { registerForPushNotificationsAsync, savePushTokenAsync } from '../services/notificationService';
 import { assertSouthAfricanLocation, DEFAULT_CAPE_TOWN_COORDINATES, ensureSouthAfricanCoordinates } from '../utils/geo';
 import { recordConsent as recordComplianceConsent } from '../services/dispatchService';
-import { getTalentTableForRole, isPhotographerUser, roleRequiresKyc } from '../utils/userRole';
+import { getEffectiveRole, getTalentTableForRole, isEffectiveModel, isEffectivePhotographer, isPhotographerUser, roleRequiresKyc } from '../utils/userRole';
 
 type CreateBookingInput = {
   photographer_id?: string;
@@ -2077,7 +2077,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           });
 
           // Auto-create photographer row if user signs up as photographer
-          if (role === 'photographer') {
+          if (isEffectivePhotographer(role)) {
             await supabase.from('photographers').upsert({
               id: data.user.id,
               rating: 5.0,
@@ -2091,7 +2091,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           }
 
           // Auto-create model row if user signs up as model
-          if (role === 'model') {
+          if (isEffectiveModel(role)) {
             await supabase.from('models').upsert({
               id: data.user.id,
               rating: 5.0,
@@ -2507,7 +2507,8 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
       // 2. When a role is first selected, auto-create the role-specific table row
       if (changes.role && changes.role !== currentRole) {
-        if (changes.role === 'photographer') {
+        const nextRole = getEffectiveRole(changes.role);
+        if (isEffectivePhotographer(nextRole)) {
           await supabase.from('photographers').upsert({
             id: userId,
             rating: 5.0,
@@ -2517,7 +2518,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
             bio: '',
             tags: [],
           }, { onConflict: 'id' });
-        } else if (changes.role === 'model') {
+        } else if (isEffectiveModel(nextRole)) {
           await supabase.from('models').upsert({
             id: userId,
             rating: 5.0,

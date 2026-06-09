@@ -5,7 +5,7 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StackNavigationProp } from '@react-navigation/stack';
 import * as Linking from 'expo-linking';
-import { Image, ImageSourcePropType } from 'react-native';
+import { Image, ImageSourcePropType, StyleSheet } from 'react-native';
 import HomeScreen from '../screens/HomeScreen';
 import BookingFormScreen from '../screens/BookingFormScreen';
 import BookingDetailScreen from '../screens/BookingDetailScreen';
@@ -117,35 +117,45 @@ const TabsNavigator = () => {
   const showChatTab = !isClient;
 
   return (
-    <Tab.Navigator
-      initialRouteName={isClient ? 'Map' : 'Home'}
-      screenOptions={({ route }) => ({
-        tabBarIcon: ({ focused, color, size }) => tabBarIcon(route.name, focused, color, size, homeIcon),
-        tabBarActiveTintColor: colors.accent,
-        tabBarInactiveTintColor: isDark ? '#7f8ba5' : '#9b8a72',
-        tabBarStyle: {
-          position: 'absolute',
-          left: 8,
-          right: 8,
-          bottom: 10,
-          borderRadius: 24,
-          height: 74,
-          paddingBottom: 10,
-          paddingTop: 6,
-          borderTopWidth: 0,
-          elevation: 10,
-          backgroundColor: isDark ? 'rgba(14,20,35,0.94)' : 'rgba(255,249,240,0.96)',
-        },
-        tabBarItemStyle: {
-          paddingHorizontal: 2,
-        },
-        tabBarLabelStyle: {
-          fontSize: 10,
-          fontWeight: '600',
-        },
-        tabBarHideOnKeyboard: true,
-        headerShown: false,
-      })}
+      <Tab.Navigator
+        initialRouteName={isClient ? 'Map' : 'Home'}
+        screenOptions={({ route }) => ({
+          tabBarIcon: ({ focused, color, size }) => tabBarIcon(route.name, focused, color, size, homeIcon),
+          tabBarActiveTintColor: colors.accent,
+          tabBarInactiveTintColor: isDark ? '#7f8ba5' : '#9b8a72',
+          tabBarStyle: {
+            position: 'absolute',
+            left: 8,
+            right: 8,
+            bottom: 10,
+            borderRadius: 24,
+            height: 74,
+            paddingBottom: 10,
+            paddingTop: 6,
+            borderTopWidth: 0,
+            borderWidth: StyleSheet.hairlineWidth,
+            borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(148,163,184,0.18)',
+            overflow: 'hidden',
+            elevation: 16,
+            shadowColor: '#000',
+            shadowOpacity: 0.14,
+            shadowRadius: 20,
+            shadowOffset: { width: 0, height: 10 },
+            backgroundColor: isDark ? 'rgba(12,18,32,0.88)' : 'rgba(255,250,245,0.82)',
+          },
+          tabBarItemStyle: {
+            paddingHorizontal: 4,
+            marginVertical: 6,
+            borderRadius: 16,
+          },
+          tabBarLabelStyle: {
+            fontSize: 10,
+            fontWeight: '600',
+            letterSpacing: 0.2,
+          },
+          tabBarHideOnKeyboard: true,
+          headerShown: false,
+        })}
     >
       <Tab.Screen name="Map" component={MapScreen} options={{ tabBarLabel: 'Map' }} />
       <Tab.Screen

@@ -452,7 +452,7 @@ const BookingFormScreen: React.FC = () => {
           style={[styles.input, styles.locationInput]}
         />
         <TouchableOpacity style={styles.mapPickerButton} onPress={() => setLocationPickerOpen(true)}>
-          <Ionicons name="map-outline" size={16} color="#0f172a" />
+          <Ionicons name="map-outline" size={16} color="#f8fafc" />
           <Text style={styles.mapPickerText}>Pick on map</Text>
         </TouchableOpacity>
         <View style={styles.locationRow}>
@@ -511,7 +511,7 @@ const BookingFormScreen: React.FC = () => {
           <Text style={[styles.breakdownValue, { color: '#ef4444' }]}>-R{vatAmount.toLocaleString('en-ZA')}</Text>
         </View>
         <View style={[styles.breakdownRow, styles.breakdownTotal]}>
-          <Text style={[styles.breakdownLabel, { fontWeight: '800', color: '#0f172a' }]}>Talent payout</Text>
+        <Text style={[styles.breakdownLabel, { fontWeight: '800', color: '#f8fafc' }]}>Talent payout</Text>
           <Text style={[styles.breakdownValue, { color: '#16a34a', fontWeight: '800' }]}>R{photographerPayout.toLocaleString('en-ZA')}</Text>
         </View>
         <Text style={styles.breakdownNote}>* Exact total calculated at checkout based on final scope. You will be charged R{estimatedTotalAmount.toLocaleString('en-ZA')}</Text>
@@ -562,13 +562,16 @@ const styles = StyleSheet.create({
   container: {
     padding: 16,
     paddingBottom: 120,
-    backgroundColor: '#f7f7fb',
+    backgroundColor: '#07111f',
   },
   heroCard: {
-    backgroundColor: '#0f172a',
+    backgroundColor: 'rgba(15,23,42,0.86)',
     borderRadius: 14,
     padding: 14,
     marginBottom: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.08)',
+    overflow: 'hidden',
   },
   heroTitle: {
     color: '#fff',
@@ -594,12 +597,13 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     padding: 12,
     borderRadius: 12,
-    backgroundColor: '#fee2e2',
+    backgroundColor: 'rgba(127,29,29,0.25)',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#fecaca',
+    borderColor: 'rgba(248,113,113,0.28)',
     flexDirection: 'row',
     gap: 8,
     alignItems: 'center',
+    overflow: 'hidden',
   },
   blockedText: {
     color: '#b91c1c',
@@ -627,40 +631,41 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   muted: {
-    color: '#475569',
+    color: '#cbd5e1',
   },
   label: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#0f172a',
+    color: '#f8fafc',
     marginBottom: 6,
     marginTop: 10,
   },
   value: {
-    backgroundColor: '#e5e7eb',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     borderRadius: 12,
     padding: 12,
-    color: '#0f172a',
+    color: '#f8fafc',
     fontWeight: '700',
   },
   selectedDate: {
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     borderRadius: 12,
     padding: 12,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#e5e7eb',
+    borderColor: 'rgba(255,255,255,0.08)',
     marginBottom: 10,
   },
   detailsCard: {
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#e5e7eb',
+    borderColor: 'rgba(255,255,255,0.08)',
     padding: 12,
     marginTop: 10,
+    overflow: 'hidden',
   },
   packageHint: {
-    color: '#64748b',
+    color: '#94a3b8',
     fontSize: 12,
     marginBottom: 10,
   },
@@ -676,28 +681,28 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
-    backgroundColor: '#f8fafc',
+    borderColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'rgba(255,255,255,0.08)',
   },
   choicePillActive: {
-    borderColor: '#0f172a',
-    backgroundColor: '#fff7ed',
+    borderColor: '#fbbf24',
+    backgroundColor: 'rgba(251,191,36,0.14)',
   },
   choiceTitle: {
     fontWeight: '800',
-    color: '#0f172a',
+    color: '#f8fafc',
     fontSize: 14,
   },
   choiceTitleActive: {
-    color: '#0f172a',
+    color: '#fff',
   },
   choiceSubtitle: {
-    color: '#64748b',
+    color: '#cbd5e1',
     fontSize: 12,
     marginTop: 4,
   },
   choiceSubtitleActive: {
-    color: '#475569',
+    color: '#e2e8f0',
   },
   tierGrid: {
     flexDirection: 'row',
@@ -706,39 +711,40 @@ const styles = StyleSheet.create({
   },
   tierCard: {
     width: '48%',
-    backgroundColor: '#f8fafc',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     borderRadius: 12,
     padding: 12,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: 'rgba(255,255,255,0.1)',
+    overflow: 'hidden',
   },
   tierCardActive: {
-    borderColor: '#0f172a',
-    backgroundColor: '#fff7ed',
+    borderColor: '#fbbf24',
+    backgroundColor: 'rgba(251,191,36,0.14)',
   },
   tierTitle: {
     fontWeight: '800',
-    color: '#0f172a',
+    color: '#f8fafc',
   },
   tierTitleActive: {
-    color: '#0f172a',
+    color: '#fff',
   },
   tierMeta: {
-    color: '#64748b',
+    color: '#cbd5e1',
     marginTop: 4,
     fontSize: 12,
   },
   tierMetaActive: {
-    color: '#475569',
+    color: '#e2e8f0',
   },
   tierPrice: {
-    color: '#f97316',
+    color: '#fbbf24',
     fontWeight: '800',
     marginTop: 6,
   },
   equipmentLabel: {
     fontWeight: '700',
-    color: '#0f172a',
+    color: '#f8fafc',
     marginTop: 8,
   },
   equipmentRow: {
@@ -749,26 +755,27 @@ const styles = StyleSheet.create({
   },
   equipmentPill: {
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: 'rgba(255,255,255,0.1)',
     borderRadius: 12,
     padding: 10,
-    backgroundColor: '#f8fafc',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     minWidth: '46%',
+    overflow: 'hidden',
   },
   equipmentPillActive: {
-    borderColor: '#0f172a',
-    backgroundColor: '#fff7ed',
+    borderColor: '#fbbf24',
+    backgroundColor: 'rgba(251,191,36,0.14)',
   },
   equipmentText: {
     fontWeight: '700',
-    color: '#0f172a',
+    color: '#f8fafc',
     fontSize: 12,
   },
   equipmentTextActive: {
-    color: '#0f172a',
+    color: '#fff',
   },
   equipmentPrice: {
-    color: '#f97316',
+    color: '#fbbf24',
     fontWeight: '700',
     marginTop: 4,
     fontSize: 12,
@@ -783,75 +790,77 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: 'rgba(255,255,255,0.1)',
     alignItems: 'center',
-    backgroundColor: '#f8fafc',
+    backgroundColor: 'rgba(255,255,255,0.08)',
   },
   choiceChipActive: {
-    borderColor: '#0f172a',
-    backgroundColor: '#fff7ed',
+    borderColor: '#fbbf24',
+    backgroundColor: 'rgba(251,191,36,0.14)',
   },
   choiceChipText: {
     fontWeight: '700',
-    color: '#64748b',
+    color: '#cbd5e1',
   },
   choiceChipTextActive: {
-    color: '#0f172a',
+    color: '#fff',
   },
   packageGrid: {
     gap: 12,
     marginBottom: 4,
   },
   packageCard: {
-    backgroundColor: '#f8fafc',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     borderRadius: 12,
     padding: 12,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: 'rgba(255,255,255,0.1)',
     width: 200,
+    overflow: 'hidden',
   },
   packageCardActive: {
-    borderColor: '#0f172a',
-    backgroundColor: '#fff7ed',
+    borderColor: '#fbbf24',
+    backgroundColor: 'rgba(251,191,36,0.14)',
   },
   packageTitle: {
-    color: '#0f172a',
+    color: '#f8fafc',
     fontWeight: '800',
     fontSize: 14,
   },
   packageTitleActive: {
-    color: '#0f172a',
+    color: '#fff',
   },
   packageDuration: {
-    color: '#64748b',
+    color: '#cbd5e1',
     fontSize: 12,
     marginTop: 4,
   },
   packagePrice: {
-    color: '#f97316',
+    color: '#fbbf24',
     fontWeight: '800',
     marginTop: 6,
   },
   packageMeta: {
-    color: '#64748b',
+    color: '#cbd5e1',
     fontSize: 12,
     marginTop: 6,
     lineHeight: 16,
   },
   packageMetaActive: {
-    color: '#475569',
+    color: '#e2e8f0',
   },
   selectedDateText: {
-    color: '#0f172a',
+    color: '#f8fafc',
     fontWeight: '700',
   },
   input: {
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     borderRadius: 12,
     padding: 12,
     fontSize: 14,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#e5e7eb',
+    borderColor: 'rgba(255,255,255,0.08)',
+    color: '#f8fafc',
   },
   multiline: {
     minHeight: 120,
@@ -864,15 +873,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#e2e8f0',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 12,
     marginBottom: 10,
+    overflow: 'hidden',
   },
   mapPickerText: {
     fontWeight: '700',
-    color: '#0f172a',
+    color: '#f8fafc',
   },
   locationRow: {
     flexDirection: 'row',
@@ -885,30 +895,35 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   cta: {
-    backgroundColor: '#0f172a',
+    backgroundColor: '#fbbf24',
     borderRadius: 14,
     padding: 14,
     alignItems: 'center',
     marginTop: 20,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
   },
   ctaText: {
-    color: '#fff',
+    color: '#07111f',
     fontWeight: '700',
     fontSize: 16,
   },
   breakdownCard: {
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#e5e7eb',
+    borderColor: 'rgba(255,255,255,0.08)',
     padding: 14,
     marginTop: 14,
     gap: 8,
+    overflow: 'hidden',
   },
   breakdownTitle: {
     fontWeight: '800',
     fontSize: 14,
-    color: '#0f172a',
+    color: '#f8fafc',
     marginBottom: 4,
   },
   breakdownRow: {
@@ -918,27 +933,27 @@ const styles = StyleSheet.create({
   },
   breakdownTotal: {
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#e5e7eb',
+    borderTopColor: 'rgba(255,255,255,0.08)',
     paddingTop: 8,
     marginTop: 4,
   },
   breakdownLabel: {
     fontSize: 13,
-    color: '#475569',
+    color: '#cbd5e1',
   },
   breakdownValue: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#0f172a',
+    color: '#f8fafc',
   },
   breakdownNote: {
     fontSize: 11,
-    color: '#94a3b8',
+    color: '#cbd5e1',
     marginTop: 4,
   },
   validationText: {
     marginTop: 10,
-    color: '#b91c1c',
+    color: '#fecaca',
     fontWeight: '700',
     textAlign: 'center',
   },
@@ -948,7 +963,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#f1f5f9',
+    borderBottomColor: 'rgba(255,255,255,0.08)',
   },
   addonRowActive: {
   },
@@ -959,17 +974,17 @@ const styles = StyleSheet.create({
   },
   addonLabel: {
     fontSize: 14,
-    color: '#475569',
+    color: '#cbd5e1',
     fontWeight: '500',
   },
   addonLabelActive: {
-    color: '#0f172a',
+    color: '#f8fafc',
     fontWeight: '700',
   },
   addonPrice: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#f97316',
+    color: '#fbbf24',
   },
   instantRow: {
     flexDirection: 'row',
@@ -982,13 +997,14 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
-    backgroundColor: '#f8fafc',
+    borderColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     gap: 10,
+    overflow: 'hidden',
   },
   dispatchTitle: {
     fontWeight: '700',
-    color: '#0f172a',
+    color: '#f8fafc',
   },
   configRow: {
     flexDirection: 'row',
@@ -996,7 +1012,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   configLabel: {
-    color: '#334155',
+    color: '#cbd5e1',
     fontWeight: '600',
   },
   stepper: {
@@ -1008,24 +1024,24 @@ const styles = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 8,
-    backgroundColor: '#e2e8f0',
+    backgroundColor: 'rgba(255,255,255,0.1)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   stepperText: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#0f172a',
+    color: '#f8fafc',
     lineHeight: 20,
   },
   stepperValue: {
     width: 24,
     textAlign: 'center',
     fontWeight: '700',
-    color: '#0f172a',
+    color: '#f8fafc',
   },
   dispatchQuote: {
-    color: '#0f172a',
+    color: '#f8fafc',
     fontWeight: '700',
   },
   toggleSwitch: {

@@ -5,20 +5,14 @@ import {
   StyleSheet,
   TouchableOpacity,
   SafeAreaView,
-  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppData } from '../store/AppDataContext';
-import { useTheme } from '../store/ThemeContext';
 import { UserRole } from '../types';
-import { LinearGradient } from 'expo-linear-gradient';
 import { BRAND } from '../utils/constants';
-
-const { width } = Dimensions.get('window');
 
 const RoleSelectionScreen: React.FC = () => {
   const { updateProfile } = useAppData();
-  const { colors, isDark } = useTheme();
   const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -59,10 +53,10 @@ const RoleSelectionScreen: React.FC = () => {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: '#07111f' }]}>
       <View style={styles.header}>
-        <Text style={[styles.title, { color: colors.text }]}>Welcome to {BRAND.name}</Text>
-        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+        <Text style={styles.title}>Welcome to {BRAND.name}</Text>
+        <Text style={styles.subtitle}>
           Please select how you would like to use the platform. You can change this later in settings.
         </Text>
       </View>
@@ -74,8 +68,8 @@ const RoleSelectionScreen: React.FC = () => {
             style={[
               styles.roleCard,
               {
-                backgroundColor: colors.card,
-                borderColor: selectedRole === role.id ? role.color : colors.border,
+                backgroundColor: selectedRole === role.id ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.08)',
+                borderColor: selectedRole === role.id ? role.color : 'rgba(255,255,255,0.08)',
                 borderWidth: selectedRole === role.id ? 2 : 1,
               },
             ]}
@@ -86,8 +80,8 @@ const RoleSelectionScreen: React.FC = () => {
               <Ionicons name={role.icon as any} size={28} color={role.color} />
             </View>
             <View style={styles.roleInfo}>
-              <Text style={[styles.roleTitle, { color: colors.text }]}>{role.title}</Text>
-              <Text style={[styles.roleDescription, { color: colors.textSecondary }]}>
+              <Text style={styles.roleTitle}>{role.title}</Text>
+              <Text style={styles.roleDescription}>
                 {role.description}
               </Text>
             </View>
@@ -103,14 +97,14 @@ const RoleSelectionScreen: React.FC = () => {
           style={[
             styles.confirmButton,
             {
-              backgroundColor: selectedRole ? colors.accent : colors.border,
+              backgroundColor: selectedRole ? '#fbbf24' : 'rgba(255,255,255,0.12)',
               opacity: isSubmitting ? 0.7 : 1,
             },
           ]}
           onPress={handleConfirm}
           disabled={!selectedRole || isSubmitting}
         >
-          <Text style={[styles.confirmButtonText, { color: '#fff' }]}>
+          <Text style={styles.confirmButtonText}>
             {isSubmitting ? 'Setting up...' : 'Get Started'}
           </Text>
         </TouchableOpacity>
@@ -131,10 +125,12 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '800',
     marginBottom: 8,
+    color: '#f8fafc',
   },
   subtitle: {
     fontSize: 16,
     lineHeight: 22,
+    color: '#cbd5e1',
   },
   roleList: {
     padding: 20,
@@ -146,10 +142,11 @@ const styles = StyleSheet.create({
     padding: 20,
     borderRadius: 20,
     shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
+    shadowOpacity: 0.14,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 4,
+    overflow: 'hidden',
   },
   iconContainer: {
     width: 56,
@@ -166,10 +163,12 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     marginBottom: 4,
+    color: '#f8fafc',
   },
   roleDescription: {
     fontSize: 14,
     lineHeight: 18,
+    color: '#cbd5e1',
   },
   checkIcon: {
     marginLeft: 8,
@@ -185,14 +184,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.16,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
     elevation: 4,
+    overflow: 'hidden',
   },
   confirmButtonText: {
     fontSize: 18,
     fontWeight: '700',
+    color: '#07111f',
   },
 });
 

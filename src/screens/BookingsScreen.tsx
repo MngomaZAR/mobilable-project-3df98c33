@@ -26,7 +26,7 @@ const BookingsScreen: React.FC = () => {
   const navigation = useNavigation<Navigation>();
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
-  const cardSurface = isDark ? '#141a27' : '#fffaf4';
+  const cardSurface = isDark ? 'rgba(15,23,42,0.86)' : 'rgba(255,255,255,0.86)';
   const cardShadow = isDark ? '#020611' : '#3f2e1a';
 
   const providerById = useMemo(
@@ -101,6 +101,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingHorizontal: 16,
+    backgroundColor: '#07111f',
   },
   title: {
     fontSize: 34,
@@ -126,6 +127,7 @@ const styles = StyleSheet.create({
     elevation: 5,
     borderWidth: 1,
     alignItems: 'center',
+    overflow: 'hidden',
   },
   thumbnail: {
     width: 86,

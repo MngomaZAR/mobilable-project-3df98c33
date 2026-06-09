@@ -150,12 +150,12 @@ const BookingDetailScreen: React.FC = () => {
         </Text>
         
         {booking.notes ? (
-          <View style={[styles.notes, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={[styles.notes, { backgroundColor: isDark ? 'rgba(15,23,42,0.82)' : 'rgba(255,255,255,0.84)', borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(148,163,184,0.18)' }]}>
             <Text style={{ color: colors.text }}>{booking.notes}</Text>
           </View>
         ) : null}
 
-        <View style={[styles.timeline, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={[styles.timeline, { backgroundColor: isDark ? 'rgba(15,23,42,0.82)' : 'rgba(255,255,255,0.84)', borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(148,163,184,0.18)' }]}>
           {steps.map((step, index) => {
             const active = index <= currentIndex;
             return (
@@ -169,14 +169,14 @@ const BookingDetailScreen: React.FC = () => {
           })}
         </View>
 
-        <View style={[styles.noticeCard, { backgroundColor: isDark ? '#1e293b' : '#eff6ff', borderColor: isDark ? '#334155' : '#dbeafe' }]}>
+        <View style={[styles.noticeCard, { backgroundColor: isDark ? 'rgba(30,41,59,0.82)' : 'rgba(239,246,255,0.86)', borderColor: isDark ? 'rgba(148,163,184,0.18)' : 'rgba(191,219,254,0.8)' }]}>
           <Text style={[styles.noticeTitle, { color: isDark ? '#93c5fd' : '#1e3a8a' }]}>Status updates</Text>
           <Text style={[styles.noticeText, { color: isDark ? '#cbd5e1' : '#1e40af' }]}>
             Booking progress updates automatically after secure confirmation from payments and operations.
           </Text>
         </View>
         {requiresPayment ? (
-          <View style={[styles.noticeCard, { backgroundColor: isDark ? '#2f1b1b' : '#fff7ed', borderColor: isDark ? '#7f1d1d' : '#fed7aa' }]}>
+          <View style={[styles.noticeCard, { backgroundColor: isDark ? 'rgba(47,27,27,0.82)' : 'rgba(255,247,237,0.88)', borderColor: isDark ? 'rgba(127,29,29,0.58)' : 'rgba(254,215,170,0.9)' }]}>
             <Text style={[styles.noticeTitle, { color: isDark ? '#fca5a5' : '#c2410c' }]}>Payment required</Text>
             <Text style={[styles.noticeText, { color: isDark ? '#fecaca' : '#9a3412' }]}>
               Complete payment to start dispatch and unlock live tracking.
@@ -185,7 +185,7 @@ const BookingDetailScreen: React.FC = () => {
         ) : null}
 
         <TouchableOpacity
-          style={[styles.secondary, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}
+          style={[styles.secondary, { backgroundColor: isDark ? 'rgba(15,23,42,0.84)' : 'rgba(255,255,255,0.82)', borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(148,163,184,0.18)', borderWidth: 1 }]}
           onPress={openChatThread}
         >
           <Text style={[styles.secondaryText, { color: colors.text }]}>Open chat</Text>
@@ -193,7 +193,7 @@ const BookingDetailScreen: React.FC = () => {
         
         <View style={styles.row}>
           <TouchableOpacity
-            style={[styles.secondary, styles.rowButton, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}
+            style={[styles.secondary, styles.rowButton, { backgroundColor: isDark ? 'rgba(15,23,42,0.84)' : 'rgba(255,255,255,0.82)', borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(148,163,184,0.18)', borderWidth: 1 }]}
             onPress={() => navigation.navigate('BookingTracking', { bookingId: booking.id })}
             disabled={requiresPayment}
           >
@@ -209,7 +209,7 @@ const BookingDetailScreen: React.FC = () => {
 
         {(booking.status === 'completed' || booking.status === 'reviewed' || booking.status === 'paid_out') ? (
            <TouchableOpacity
-             style={[styles.secondary, { backgroundColor: colors.accent, marginTop: 16 }]}
+             style={[styles.secondary, { backgroundColor: colors.accent, marginTop: 16, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: { width: 0, height: 6 } }]}
              onPress={handleBookAgain}
            >
              <Text style={[styles.secondaryText, { color: isDark ? colors.bg : '#fff' }]}>Book Again</Text>
@@ -217,13 +217,13 @@ const BookingDetailScreen: React.FC = () => {
         ) : null}
 
         {(booking.status === 'completed' || booking.status === 'paid_out') ? (
-          <TouchableOpacity
-            style={[styles.secondary, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}
-            onPress={() => {
-              const reviewTargetId = model?.id ?? photographer?.id;
-              if (!reviewTargetId) {
-                Alert.alert('Review unavailable', 'We could not identify the service provider for this booking.');
-                return;
+            <TouchableOpacity
+              style={[styles.secondary, { backgroundColor: isDark ? 'rgba(15,23,42,0.84)' : 'rgba(255,255,255,0.82)', borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(148,163,184,0.18)', borderWidth: 1 }]}
+              onPress={() => {
+                const reviewTargetId = model?.id ?? photographer?.id;
+                if (!reviewTargetId) {
+                  Alert.alert('Review unavailable', 'We could not identify the service provider for this booking.');
+                  return;
               }
               navigation.navigate('Reviews', { photographerId: reviewTargetId });
             }}
@@ -235,15 +235,15 @@ const BookingDetailScreen: React.FC = () => {
         {booking.status === 'pending' || booking.status === 'accepted' ? (
            <>
              <View style={styles.row}>
-               <TouchableOpacity
-                 style={[styles.secondary, styles.rowButton, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}
+             <TouchableOpacity
+                 style={[styles.secondary, styles.rowButton, { backgroundColor: isDark ? 'rgba(15,23,42,0.84)' : 'rgba(255,255,255,0.82)', borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(148,163,184,0.18)', borderWidth: 1 }]}
                  onPress={handleReschedule}
                  disabled={!!loadingAction}
                >
                  <Text style={[styles.secondaryText, { color: colors.text }]}>Reschedule</Text>
                </TouchableOpacity>
                <TouchableOpacity
-                 style={[styles.secondary, styles.rowButton, styles.rowButtonLast, { backgroundColor: colors.card, borderColor: colors.destructive, borderWidth: 1 }]}
+                 style={[styles.secondary, styles.rowButton, styles.rowButtonLast, { backgroundColor: isDark ? 'rgba(127,29,29,0.72)' : 'rgba(254,242,242,0.9)', borderColor: colors.destructive, borderWidth: 1 }]}
                  onPress={handleCancel}
                  disabled={!!loadingAction}
                >
@@ -257,7 +257,7 @@ const BookingDetailScreen: React.FC = () => {
 
         {(booking.status === 'completed' || booking.status === 'paid_out') ? (
            <TouchableOpacity
-             style={[styles.secondary, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}
+             style={[styles.secondary, { backgroundColor: isDark ? 'rgba(15,23,42,0.84)' : 'rgba(255,255,255,0.82)', borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(148,163,184,0.18)', borderWidth: 1 }]}
              onPress={handleDispute}
              disabled={!!loadingAction}
            >
@@ -266,7 +266,7 @@ const BookingDetailScreen: React.FC = () => {
         ) : null}
 
         <TouchableOpacity
-          style={[styles.secondary, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}
+          style={[styles.secondary, { backgroundColor: isDark ? 'rgba(15,23,42,0.84)' : 'rgba(255,255,255,0.82)', borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(148,163,184,0.18)', borderWidth: 1 }]}
           onPress={() => navigation.navigate('ModelRelease', { bookingId: booking.id })}
         >
           <Ionicons name="document-text-outline" size={18} color={colors.text} style={{ marginBottom: 4 }} />
@@ -285,7 +285,7 @@ const BookingDetailScreen: React.FC = () => {
             ]}
           />
         </View>
-        <View style={[styles.policyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={[styles.policyCard, { backgroundColor: isDark ? 'rgba(15,23,42,0.82)' : 'rgba(255,255,255,0.84)', borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(148,163,184,0.18)' }]}>
           <Text style={[styles.policyTitle, { color: colors.text }]}>Cancellation Policy</Text>
           <Text style={[styles.policyText, { color: colors.textSecondary }]}>- Free cancellation for 48 hours after booking.</Text>
           <Text style={[styles.policyText, { color: colors.textSecondary }]}>- Cancel before 7 days of the shoot for a 50% refund.</Text>
@@ -330,12 +330,14 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginTop: 12,
     borderWidth: StyleSheet.hairlineWidth,
+    overflow: 'hidden',
   },
   timeline: {
     marginTop: 16,
     borderRadius: 12,
     padding: 12,
     borderWidth: StyleSheet.hairlineWidth,
+    overflow: 'hidden',
   },
   stepRow: {
     flexDirection: 'row',
@@ -361,6 +363,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 12,
     borderWidth: StyleSheet.hairlineWidth,
+    overflow: 'hidden',
   },
   noticeTitle: {
     fontWeight: '700',
@@ -384,6 +387,7 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: 14,
     alignItems: 'center',
+    overflow: 'hidden',
   },
   secondaryText: {
     fontWeight: '700',
@@ -394,6 +398,7 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     borderWidth: StyleSheet.hairlineWidth,
+    overflow: 'hidden',
   },
   policyTitle: {
     fontWeight: '700',

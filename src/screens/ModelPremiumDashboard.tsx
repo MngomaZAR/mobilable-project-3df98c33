@@ -19,7 +19,6 @@ import CreatePremiumBox from './CreatePremiumBox';
 import { NewMessageModal } from '../components/NewMessageModal';
 import { sendTip } from '../services/monetisationService';
 import HowItWorksCard from '../components/HowItWorksCard';
-import { isLiveVideoAvailable, LIVE_VIDEO_UNAVAILABLE_MESSAGE } from '../utils/videoCalls';
 import { PLACEHOLDER_AVATAR } from '../utils/constants';
 
 type Navigation = StackNavigationProp<RootStackParamList, 'Root'>;
@@ -38,7 +37,6 @@ const ModelPremiumDashboard: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [tierPayoutRate, setTierPayoutRate] = useState(0.70);
   const [showSubscribers, setShowSubscribers] = useState(false);
-  const liveVideoAvailable = isLiveVideoAvailable();
   const [subscribers, setSubscribers] = useState<any[]>([]);
   const [tiers, setTiers] = useState<any[]>([]);
   const [tipGoal, setTipGoal] = useState<any | null>(null);
@@ -158,18 +156,6 @@ const ModelPremiumDashboard: React.FC = () => {
     } finally {
       setRefreshing(false);
     }
-  };
-
-  const handleGoLive = () => {
-    if (!currentUser?.id) {
-      Alert.alert('Profile Required', 'Complete your profile to go live.');
-      return;
-    }
-    if (!liveVideoAvailable) {
-      Alert.alert('Unavailable', LIVE_VIDEO_UNAVAILABLE_MESSAGE);
-      return;
-    }
-    navigation.navigate('PaidVideoCall', { creatorId: currentUser.id, role: 'creator' });
   };
 
   const handleOnlineToggle = async (nextValue: boolean) => {
@@ -499,7 +485,7 @@ const ModelPremiumDashboard: React.FC = () => {
         {/* Quick actions */}
         <View style={s.actionsGrid}>
           {[
-            { icon: 'videocam', label: 'Go Live', color: '#db2777', bg: '#fdf2f8', onPress: handleGoLive },
+            { icon: 'eye', label: 'Availability', color: '#db2777', bg: '#fdf2f8', onPress: () => navigation.navigate('Availability') },
             { icon: 'add-circle', label: 'Post', color: '#7c3aed', bg: '#f5f3ff', onPress: () => setShowPremiumBox(true) },
             { icon: 'people', label: 'Subscribers', color: '#059669', bg: '#ecfdf5', onPress: () => currentUser?.id && navigation.navigate('CreatorSubscriptions', { creatorId: currentUser.id }) },
             { icon: 'chatbubbles', label: 'Messages', color: '#ea580c', bg: '#fff7ed', onPress: () => navigation.navigate('Root', { screen: 'Chat' }) },
@@ -620,14 +606,6 @@ const ModelPremiumDashboard: React.FC = () => {
                       booking.status === 'accepted' ? '#3b82f6' : '#f59e0b',
                   }]}>{booking.status}</Text>
                 </View>
-                {booking.status === 'accepted' && liveVideoAvailable && (
-                  <TouchableOpacity
-                    style={s.joinBtn}
-                    onPress={() => currentUser?.id && navigation.navigate('PaidVideoCall', { creatorId: currentUser.id, role: 'creator' })}
-                  >
-                    <Text style={s.joinBtnText}>Join</Text>
-                  </TouchableOpacity>
-                )}
                 <TouchableOpacity
                   style={s.chatBtn}
                   onPress={() => openChatWithClient(booking.client_id, 'Client')}

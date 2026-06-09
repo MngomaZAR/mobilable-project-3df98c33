@@ -29,7 +29,6 @@ import { BRAND, PLACEHOLDER_AVATAR } from '../utils/constants';
 import { supabase } from '../config/supabaseClient';
 import { registerForPushNotificationsAsync, savePushTokenAsync } from '../services/notificationService';
 import { isModelUser, isPhotographerUser, isProviderUser } from '../utils/userRole';
-import { isLiveVideoAvailable, LIVE_VIDEO_UNAVAILABLE_MESSAGE } from '../utils/videoCalls';
 
 type Navigation = StackNavigationProp<RootStackParamList, 'Root'>;
 
@@ -48,13 +47,11 @@ const SettingsScreen: React.FC = () => {
   const [biometricsEnabled, setBiometricsEnabled] = useState(false);
   const [language, setLanguage] = useState('English');
   const [avatarPreviewUri, setAvatarPreviewUri] = useState<string | null>(null);
-  const showDevVideoTools = __DEV__ || environment.env !== 'production';
-  const isModelAccount = isModelUser(currentUser);
-  const liveVideoAvailable = isLiveVideoAvailable();
   const userMetadata =
     currentUser && typeof currentUser === 'object' && 'user_metadata' in currentUser
       ? ((currentUser as Record<string, unknown>).user_metadata as Record<string, unknown> | undefined)
       : undefined;
+  const isModelAccount = isModelUser(currentUser);
   const isPhotographerAccount = isPhotographerUser(currentUser);
   const isProviderAccount = isProviderUser(currentUser);
 
@@ -200,30 +197,6 @@ const SettingsScreen: React.FC = () => {
       },
       onCancel: () => setModalState(p => ({ ...p, visible: false }))
     });
-  };
-
-  const handleTestVideoCall = () => {
-    if (!liveVideoAvailable) {
-      Alert.alert('Unavailable', LIVE_VIDEO_UNAVAILABLE_MESSAGE);
-      return;
-    }
-    if (!currentUser?.id) {
-      Alert.alert('Not ready', 'Please sign in before starting a test call.');
-      return;
-    }
-    if (!isModelAccount) {
-      Alert.alert('Unavailable', 'Video hosting is currently available for model accounts only.');
-      return;
-    }
-    navigation.navigate('PaidVideoCall', { creatorId: currentUser.id, role: 'creator' });
-  };
-
-  const handleOpenTestRoom = () => {
-    if (!liveVideoAvailable) {
-      Alert.alert('Unavailable', LIVE_VIDEO_UNAVAILABLE_MESSAGE);
-      return;
-    }
-    navigation.navigate('PaidVideoCall', { testRoom: true, role: 'viewer' });
   };
 
   const handleUpdateAvatar = async () => {
@@ -602,34 +575,6 @@ const SettingsScreen: React.FC = () => {
           </View>
         </View>
       </View>
-
-      {showDevVideoTools && liveVideoAvailable && (
-        <View style={s.section}>
-          <Text style={s.sectionHeader}>VIDEO CALL</Text>
-          <View style={s.group}>
-            {isModelAccount && (
-              <TouchableOpacity style={[s.groupItem, s.groupItemBorder]} onPress={handleTestVideoCall}>
-                <View style={s.itemLeft}>
-                  <View style={[s.iconContainer, { backgroundColor: '#3b82f6' }]}>
-                    <Ionicons name="videocam" size={16} color="#fff" />
-                  </View>
-                  <Text style={s.itemText}>Start Test Call (Model Host)</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity style={s.groupItem} onPress={handleOpenTestRoom}>
-              <View style={s.itemLeft}>
-                <View style={[s.iconContainer, { backgroundColor: '#ec4899' }]}>
-                  <Ionicons name="people" size={16} color="#fff" />
-                </View>
-                <Text style={s.itemText}>LiveKit Test Room (2-User)</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
 
       {/* DESTRUCTIVE ACTIONS */}
       <View style={s.section}>

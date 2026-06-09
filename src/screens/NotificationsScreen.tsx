@@ -125,11 +125,15 @@ const NotificationsScreen: React.FC = () => {
         <Text style={[styles.title, { color: colors.text }]}>Notifications</Text>
       </View>
 
-      <View style={styles.tabBar}>
+      <View style={[styles.tabBar, { backgroundColor: colors.card, borderColor: colors.border }]}>
         {['all', 'booking', 'social', 'earnings'].map((tab) => (
           <TouchableOpacity
             key={tab}
-            style={[styles.tab, activeTab === tab && { borderBottomColor: colors.accent }]}
+            style={[
+              styles.tab,
+              { borderBottomColor: 'transparent' },
+              activeTab === tab && { borderBottomColor: colors.accent, backgroundColor: colors.bg },
+            ]}
             onPress={() => setActiveTab(tab as any)}
           >
             <Text style={[styles.tabText, { color: activeTab === tab ? colors.text : colors.textMuted }]}>
@@ -213,12 +217,41 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth, gap: 12 },
   backBtn: { padding: 4 },
   title: { fontSize: 20, fontWeight: '800' },
-  tabBar: { flexDirection: 'row', paddingHorizontal: 16, gap: 20, marginTop: 8 },
+  tabBar: {
+    flexDirection: 'row',
+    padding: 6,
+    gap: 6,
+    marginTop: 12,
+    marginHorizontal: 16,
+    borderRadius: 24,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 2,
+  },
   howWrap: { paddingHorizontal: 16, marginTop: 8 },
-  tab: { paddingVertical: 8, borderBottomWidth: 2, borderBottomColor: 'transparent' },
-  tabText: { fontSize: 12, fontWeight: '700' },
+  tab: {
+    flex: 1,
+    paddingVertical: 10,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+    borderRadius: 18,
+    alignItems: 'center',
+  },
+  tabText: { fontSize: 11, fontWeight: '800', letterSpacing: 0.3 },
   list: { padding: 16, gap: 10 },
-  card: { flexDirection: 'row', borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, padding: 14, gap: 12, alignItems: 'flex-start' },
+  card: {
+    flexDirection: 'row',
+    borderRadius: 18,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 14,
+    gap: 12,
+    alignItems: 'flex-start',
+    overflow: 'hidden',
+  },
   iconBox: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   cardBody: { flex: 1 },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 },
@@ -226,10 +259,10 @@ const styles = StyleSheet.create({
   unreadDot: { width: 8, height: 8, borderRadius: 4 },
   cardBody2: { fontSize: 13, lineHeight: 18 },
   actionRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
-  actionBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, alignItems: 'center', justifyContent: 'center', minWidth: 80 },
+  actionBtn: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10, alignItems: 'center', justifyContent: 'center', minWidth: 80 },
   actionBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
   cardTime: { fontSize: 11, marginTop: 8 },
-  empty: { alignItems: 'center', marginTop: 80, gap: 12 },
+  empty: { alignItems: 'center', marginTop: 80, gap: 12, paddingHorizontal: 24 },
   emptyTxt: { fontSize: 16 },
 });
 

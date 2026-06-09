@@ -161,7 +161,7 @@ const CreditsWalletScreen: React.FC = () => {
         keyExtractor={(item) => item.id}
         contentContainerStyle={{ paddingBottom: 24 }}
         ListEmptyComponent={
-          <View style={styles.empty}>
+          <View style={[styles.empty, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Ionicons name="wallet-outline" size={36} color={colors.textMuted} />
             <Text style={[styles.emptyText, { color: colors.textMuted }]}>
               No credit activity yet.
@@ -169,7 +169,7 @@ const CreditsWalletScreen: React.FC = () => {
           </View>
         }
         renderItem={({ item }) => (
-          <View style={[styles.row, { borderColor: colors.border }]}>
+          <View style={[styles.row, { borderColor: colors.border, backgroundColor: colors.card }]}>
             <View style={styles.rowLeft}>
               <Ionicons
                 name={item.direction === 'credit' ? 'arrow-down-circle' : 'arrow-up-circle'}
@@ -195,7 +195,7 @@ const CreditsWalletScreen: React.FC = () => {
       {/* Buy Credits Modal */}
       <Modal visible={buyModalVisible} transparent animationType="slide" onRequestClose={() => setBuyModalVisible(false)}>
         <Pressable style={styles.modalOverlay} onPress={() => setBuyModalVisible(false)} />
-        <View style={[styles.modalSheet, { backgroundColor: colors.card }]}>
+        <View style={[styles.modalSheet, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Text style={[styles.modalTitle, { color: colors.text }]}>Buy Credits</Text>
           <Text style={[styles.modalSub, { color: colors.textMuted }]}>Credits are used for tips, PPV unlocks, and live gifts.</Text>
           {CREDIT_PACKS.map(pack => (
@@ -224,7 +224,7 @@ const CreditsWalletScreen: React.FC = () => {
       {/* Earn Credits Modal */}
       <Modal visible={earnModalVisible} transparent animationType="slide" onRequestClose={() => setEarnModalVisible(false)}>
         <Pressable style={styles.modalOverlay} onPress={() => setEarnModalVisible(false)} />
-        <View style={[styles.modalSheet, { backgroundColor: colors.card }]}>
+        <View style={[styles.modalSheet, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Text style={[styles.modalTitle, { color: colors.text }]}>Earn Credits</Text>
           {[
             { icon: 'person-add', label: 'Refer a friend', desc: 'Earn 20 credits per successful referral' },
@@ -254,39 +254,49 @@ const styles = StyleSheet.create({
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   backBtn: { width: 38, height: 38, borderRadius: 19, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 22, fontWeight: '800' },
-  card: { borderRadius: 16, padding: 16, borderWidth: 1, marginBottom: 20 },
+  card: { borderRadius: 22, padding: 16, borderWidth: 1, marginBottom: 20, overflow: 'hidden' },
   label: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 },
   balance: { fontSize: 32, fontWeight: '900', marginTop: 6 },
   sub: { marginTop: 6 },
   actions: { flexDirection: 'row', gap: 10, marginTop: 14 },
-  actionBtn: { flex: 1, paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 },
+  actionBtn: { flex: 1, paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6, overflow: 'hidden' },
   actionText: { fontWeight: '800' },
   redeemRow: { flexDirection: 'row', gap: 10, marginTop: 14 },
-  redeemInput: { flex: 1, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 },
-  redeemBtn: { paddingHorizontal: 14, borderRadius: 10, justifyContent: 'center', borderWidth: 1 },
+  redeemInput: { flex: 1, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 },
+  redeemBtn: { paddingHorizontal: 14, borderRadius: 12, justifyContent: 'center', borderWidth: 1 },
   redeemText: { fontWeight: '800' },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   sectionTitle: { fontSize: 16, fontWeight: '800' },
-  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderRadius: 18,
+    paddingHorizontal: 12,
+    marginBottom: 10,
+    overflow: 'hidden',
+  },
   rowLeft: { flexDirection: 'row', alignItems: 'center' },
   rowTitle: { fontWeight: '700' },
   rowMeta: { fontSize: 12, marginTop: 2 },
   rowAmount: { fontWeight: '800' },
-  empty: { alignItems: 'center', padding: 24, gap: 10 },
+  empty: { alignItems: 'center', padding: 24, gap: 10, borderWidth: StyleSheet.hairlineWidth, borderRadius: 22, overflow: 'hidden' },
   emptyText: { textAlign: 'center' },
   // Modal styles
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
-  modalSheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40, gap: 12 },
+  modalSheet: { borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 40, gap: 12, borderWidth: StyleSheet.hairlineWidth },
   modalTitle: { fontSize: 20, fontWeight: '800', marginBottom: 4 },
   modalSub: { fontSize: 13, marginBottom: 8 },
-  packRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
+  packRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
   packLabel: { fontWeight: '700', fontSize: 15 },
   packCredits: { fontWeight: '800', fontSize: 16, marginTop: 2 },
   packRight: { alignItems: 'flex-end', gap: 4 },
   packTag: { fontSize: 10, fontWeight: '800', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
   packPrice: { fontSize: 18, fontWeight: '900' },
-  earnRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
-  closeBtn: { marginTop: 16, padding: 14, borderRadius: 12, alignItems: 'center' },
+  earnRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
+  closeBtn: { marginTop: 16, padding: 14, borderRadius: 12, alignItems: 'center', overflow: 'hidden' },
 });
 
 export default CreditsWalletScreen;

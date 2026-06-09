@@ -17,10 +17,14 @@ import { fetchMyPayments, PaymentRow } from '../services/paymentHistoryService';
 
 const statusColor = (status: PaymentRow['status']) => {
   switch (status) {
-    case 'completed': return '#22c55e';
-    case 'failed': return '#ef4444';
-    case 'cancelled': return '#f59e0b';
-    default: return '#94a3b8';
+    case 'completed':
+      return '#22c55e';
+    case 'failed':
+      return '#ef4444';
+    case 'cancelled':
+      return '#f59e0b';
+    default:
+      return '#94a3b8';
   }
 };
 
@@ -45,12 +49,17 @@ const PaymentHistoryScreen: React.FC = () => {
     }
   }, []);
 
-  useEffect(() => { loadPayments(); }, [loadPayments]);
+  useEffect(() => {
+    loadPayments();
+  }, [loadPayments]);
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]}>
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+      <View style={[styles.header, { borderBottomColor: colors.border, backgroundColor: colors.bg }]}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={[styles.backBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+        >
           <Ionicons name="chevron-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={[styles.title, { color: colors.text }]}>Payment History</Text>
@@ -64,18 +73,22 @@ const PaymentHistoryScreen: React.FC = () => {
         <FlatList
           data={payments}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={[styles.list, { paddingBottom: 32 }]}
           refreshControl={<RefreshControl refreshing={loading} onRefresh={loadPayments} />}
           renderItem={({ item }) => (
             <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <View style={styles.row}>
-                <View style={styles.iconBox}>
+                <View style={[styles.iconBox, { backgroundColor: colors.bg, borderColor: colors.border }]}>
                   <Ionicons name="card-outline" size={22} color={colors.accent} />
                 </View>
                 <View style={styles.info}>
                   <Text style={[styles.desc, { color: colors.text }]}>{item.description}</Text>
                   <Text style={[styles.date, { color: colors.textMuted }]}>
-                    {new Date(item.created_at).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    {new Date(item.created_at).toLocaleDateString('en-ZA', {
+                      day: 'numeric',
+                      month: 'short',
+                      year: 'numeric',
+                    })}
                   </Text>
                   <Text style={[styles.provider, { color: colors.textMuted }]}>
                     {item.provider?.toUpperCase() ?? 'PAYFAST'} {item.provider_status ? `· ${item.provider_status}` : ''}
@@ -96,13 +109,13 @@ const PaymentHistoryScreen: React.FC = () => {
           )}
           ListEmptyComponent={
             !loading ? (
-              <View style={styles.empty}>
+              <View style={[styles.empty, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <Ionicons name="receipt-outline" size={48} color={colors.textMuted} />
-                <Text style={[styles.emptyTxt, { color: colors.textMuted }]}>No payments yet</Text>
-              </View>
-            ) : null
-          }
-        />
+          <Text style={[styles.emptyTxt, { color: colors.textMuted }]}>No payments yet</Text>
+            </View>
+          ) : null
+        }
+      />
       )}
     </SafeAreaView>
   );
@@ -110,14 +123,35 @@ const PaymentHistoryScreen: React.FC = () => {
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth, gap: 12 },
-  backBtn: { padding: 4 },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: 12,
+  },
+  backBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   title: { fontSize: 20, fontWeight: '800' },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   list: { padding: 16, gap: 10 },
-  card: { borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, padding: 14 },
+  card: { borderRadius: 22, borderWidth: StyleSheet.hairlineWidth, padding: 14, overflow: 'hidden' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  iconBox: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center' },
+  iconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   info: { flex: 1 },
   desc: { fontWeight: '700', fontSize: 14 },
   date: { fontSize: 12, marginTop: 2 },
@@ -126,7 +160,16 @@ const styles = StyleSheet.create({
   amount: { fontWeight: '800', fontSize: 16 },
   statusBadge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
   statusTxt: { fontSize: 11, fontWeight: '700' },
-  empty: { alignItems: 'center', marginTop: 80, gap: 12 },
+  empty: {
+    alignItems: 'center',
+    marginTop: 80,
+    gap: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 18,
+    padding: 24,
+    marginHorizontal: 16,
+    overflow: 'hidden',
+  },
   emptyTxt: { fontSize: 16 },
 });
 

@@ -17,4 +17,4 @@ export const isLiveVideoAvailable = () => {
 };
 
 export const LIVE_VIDEO_UNAVAILABLE_MESSAGE =
-  'Live video calls are not available in this build yet. Please use chat or bookings for now.';
+  'Live video calls require a compatible native build and configured LiveKit backend. Use chat or bookings if this device cannot join a room.';

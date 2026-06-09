@@ -39,7 +39,7 @@ import { isLiveVideoAvailable, LIVE_VIDEO_UNAVAILABLE_MESSAGE } from '../utils/v
 const { width, height } = Dimensions.get('window');
 
 // ─────────────────────────────────────────────────────────────────────────────
-// LiveKit lazy import — gracefully handled if package not yet installed
+// LiveKit lazy import — the app uses this when the native package is available
 // ─────────────────────────────────────────────────────────────────────────────
 let LiveKitRoom: React.ComponentType<any> | null = null;
 let VideoView: React.ComponentType<any> | null = null;
@@ -53,7 +53,7 @@ try {
   useTracks = lk.useTracks;
   Track = lk.Track;
 } catch (_e) {
-  // @livekit/react-native not yet installed — shows placeholder with install instructions
+  // Keep the call surface functional even if the native module is unavailable on a given build.
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -237,14 +237,14 @@ const PaidVideoCallScreen: React.FC = () => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // ── LiveKit package not installed yet: show placeholder ───────────────────
+  // ── LiveKit unavailable on this build/device: show a production fallback ──
   if (!LiveKitRoom || !isLiveVideoAvailable()) {
     return (
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle="light-content" />
         <View style={styles.notInstalledBanner}>
           <Ionicons name="videocam-outline" size={64} color="rgba(255,255,255,0.5)" />
-          <Text style={styles.notInstalledTitle}>Video calls coming soon</Text>
+          <Text style={styles.notInstalledTitle}>Video room unavailable</Text>
           <Text style={styles.notInstalledBody}>
             {LIVE_VIDEO_UNAVAILABLE_MESSAGE} You can still message the creator or return to your bookings.
           </Text>
@@ -583,7 +583,7 @@ const styles = StyleSheet.create({
   activeDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#ef4444', marginRight: 8 },
   timerText: { color: '#fff', fontWeight: '800', fontSize: 16 },
   rateText: { color: 'rgba(255,255,255,0.6)', fontWeight: '600' },
-  // Video placeholders
+  // Video surface states
   noVideoPlaceholder: {
     flex: 1,
     alignItems: 'center',

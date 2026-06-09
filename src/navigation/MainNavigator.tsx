@@ -122,7 +122,7 @@ const TabsNavigator = () => {
         screenOptions={({ route }) => ({
           tabBarIcon: ({ focused, color, size }) => tabBarIcon(route.name, focused, color, size, homeIcon),
           tabBarActiveTintColor: colors.accent,
-          tabBarInactiveTintColor: isDark ? '#7f8ba5' : '#9b8a72',
+          tabBarInactiveTintColor: colors.textMuted,
           tabBarStyle: {
             position: 'absolute',
             left: 8,
@@ -134,14 +134,14 @@ const TabsNavigator = () => {
             paddingTop: 6,
             borderTopWidth: 0,
             borderWidth: StyleSheet.hairlineWidth,
-            borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(148,163,184,0.18)',
+            borderColor: colors.border,
             overflow: 'hidden',
             elevation: 16,
             shadowColor: '#000',
             shadowOpacity: 0.14,
             shadowRadius: 20,
             shadowOffset: { width: 0, height: 10 },
-            backgroundColor: isDark ? 'rgba(12,18,32,0.88)' : 'rgba(255,250,245,0.82)',
+            backgroundColor: colors.card,
           },
           tabBarItemStyle: {
             paddingHorizontal: 4,

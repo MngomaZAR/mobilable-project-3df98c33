@@ -17,25 +17,25 @@ export type ThemeColors = {
 };
 
 const LIGHT: ThemeColors = {
-  bg: '#f4f1eb',
-  card: '#fffaf2',
-  border: '#e8dcc6',
-  text: '#2f2a23',
-  textSecondary: '#4f463c',
-  textMuted: '#8d7f6b',
-  accent: '#b08957',
+  bg: '#f3ede4',
+  card: 'rgba(255, 250, 244, 0.74)',
+  border: 'rgba(148, 115, 74, 0.18)',
+  text: '#201a15',
+  textSecondary: '#4b4339',
+  textMuted: '#7e7162',
+  accent: '#b8894f',
   destructive: '#ef4444',
   successGreen: '#2bb673',
 };
 
 const DARK: ThemeColors = {
-  bg: '#090f1e',
-  card: '#121b2f',
-  border: '#2b3750',
-  text: '#f7ecd8',
-  textSecondary: '#dec8a3',
-  textMuted: '#9ba7c0',
-  accent: '#dfbf85',
+  bg: '#07111f',
+  card: 'rgba(15, 23, 42, 0.76)',
+  border: 'rgba(255, 255, 255, 0.10)',
+  text: '#f7f2e8',
+  textSecondary: '#d7c8af',
+  textMuted: '#a0aec0',
+  accent: '#f2c98b',
   destructive: '#ff453a',
   successGreen: '#3ccf8e',
 };

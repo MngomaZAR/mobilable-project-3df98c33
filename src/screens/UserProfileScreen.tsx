@@ -492,12 +492,12 @@ const UserProfileScreen: React.FC = () => {
               <View style={s.presets}>
                 {['20', '50', '100', '250'].map(p => (
                   <TouchableOpacity key={p} style={[s.presetBtn, { backgroundColor: colors.card, borderColor: colors.border }, tipAmount === p && { backgroundColor: colors.accent, borderColor: colors.accent }]} onPress={() => setTipAmount(p)}>
-                    <Text style={[s.presetText, { color: colors.text }, tipAmount === p && { color: colors.card }]}>R{p}</Text>
+                    <Text style={[s.presetText, { color: colors.text }, tipAmount === p && { color: colors.bg }]}>R{p}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
               <TouchableOpacity style={[s.confirmBtn, { backgroundColor: colors.accent }]} onPress={handleTip} disabled={isSendingTip}>
-                <Text style={[s.confirmBtnText, { color: colors.card }]}>{isSendingTip ? 'Sending...' : 'Send Tip'}</Text>
+                <Text style={[s.confirmBtnText, { color: colors.bg }]}>{isSendingTip ? 'Sending...' : 'Send Tip'}</Text>
               </TouchableOpacity>
             </View>
           </View>

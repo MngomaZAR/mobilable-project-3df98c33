@@ -91,9 +91,9 @@ export const CreatorSubscriptionsScreen: React.FC = () => {
               disabled={loadingId !== null}
             >
               {loadingId === tier.id ? (
-                <ActivityIndicator color={colors.card} />
+                <ActivityIndicator color={colors.bg} />
               ) : (
-                <Text style={[styles.subBtnText, { color: colors.card }]}>Subscribe Now</Text>
+                <Text style={[styles.subBtnText, { color: colors.bg }]}>Subscribe Now</Text>
               )}
             </TouchableOpacity>
           </View>

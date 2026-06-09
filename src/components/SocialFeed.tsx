@@ -485,7 +485,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
           <Text style={[
             styles.textChipLabel, 
             { color: colors.textMuted },
-            !selectedProfileId && !followingOnly && !forYouOnly && [styles.textChipLabelActive, { color: colors.card }]
+            !selectedProfileId && !followingOnly && !forYouOnly && [styles.textChipLabelActive, { color: colors.bg }]
           ]}>All Photographers</Text>
         </TouchableOpacity>
         
@@ -504,7 +504,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
           <Text style={[
             styles.textChipLabel, 
             { color: colors.textMuted },
-            forYouOnly && [styles.textChipLabelActive, { color: colors.card }]
+            forYouOnly && [styles.textChipLabelActive, { color: colors.bg }]
           ]}>For You</Text>
         </TouchableOpacity>
         
@@ -524,7 +524,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
               <Text style={[
                 styles.textChipLabel, 
                 { color: colors.textMuted },
-                followingOnly && [styles.textChipLabelActive, { color: colors.card }]
+                followingOnly && [styles.textChipLabelActive, { color: colors.bg }]
               ]}>Following</Text>
             </TouchableOpacity>
         )}
@@ -545,7 +545,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
             <Text style={[
               styles.textChipLabel, 
               { color: colors.textMuted },
-              selectedProfileId === p.id && [styles.textChipLabelActive, { color: colors.card }]
+              selectedProfileId === p.id && [styles.textChipLabelActive, { color: colors.bg }]
             ]}>{p.full_name ?? 'User'}</Text>
           </TouchableOpacity>
         ))}

@@ -1,7 +1,8 @@
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import {
   Alert, RefreshControl, ScrollView, StyleSheet, Text,
-  TouchableOpacity, View, Image, Dimensions, Modal, TextInput, Switch,
+  TouchableOpacity, View, Image, Modal, TextInput, Switch,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,13 +22,13 @@ import HowItWorksCard from '../components/HowItWorksCard';
 import { isLiveVideoAvailable, LIVE_VIDEO_UNAVAILABLE_MESSAGE } from '../utils/videoCalls';
 import { PLACEHOLDER_AVATAR } from '../utils/constants';
 
-const { width } = Dimensions.get('window');
 type Navigation = StackNavigationProp<RootStackParamList, 'Root'>;
 type AvailabilityProfile = { id: string; availability_status?: string | null };
 type SubscriberProfile = { avatar_url?: string | null; full_name?: string | null } | null | undefined;
 
 const ModelPremiumDashboard: React.FC = () => {
   const navigation = useNavigation<Navigation>();
+  const { width } = useWindowDimensions();
   const { currentUser: authUser } = useAuth();
   const { bookings, refreshBookings, acceptBooking, declineBooking } = useBooking();
   const { state, fetchEarnings, fetchSubscriptions, fetchCredits, fetchBookings } = useAppData();
@@ -203,6 +204,7 @@ const ModelPremiumDashboard: React.FC = () => {
   const goalCurrentAmount = Number(tipGoal?.current_amount ?? 0);
   const goalTargetAmount = Number(tipGoal?.target_amount ?? 0);
   const goalPercent = goalTargetAmount > 0 ? Math.min(100, Math.round((goalCurrentAmount / goalTargetAmount) * 100)) : 0;
+  const actionItemWidth = width > 900 ? '23%' : width > 640 ? '31%' : '48%';
 
   useFocusEffect(
     useCallback(() => {
@@ -507,7 +509,7 @@ const ModelPremiumDashboard: React.FC = () => {
             { icon: kycApproved ? 'shield-checkmark' : 'shield-outline', label: kycApproved ? 'Verified' : 'Verify ID', color: kycApproved ? '#22c55e' : '#f59e0b', bg: '#fffbeb', onPress: () => navigation.navigate('KYC') },
             { icon: 'settings', label: 'Profile', color: '#6366f1', bg: '#eef2ff', onPress: () => navigation.navigate('AccountConfig') },
           ].map(a => (
-            <TouchableOpacity key={a.label} style={s.actionBtn} onPress={a.onPress}>
+            <TouchableOpacity key={a.label} style={[s.actionBtn, { width: actionItemWidth }]} onPress={a.onPress}>
               <View style={[s.actionIcon, { backgroundColor: a.bg }]}>
                 <Ionicons name={a.icon as any} size={24} color={a.color} />
               </View>
@@ -863,7 +865,20 @@ const s = StyleSheet.create({
   greeting: { color: '#ec4899', fontWeight: '800', fontSize: 11, textTransform: 'uppercase', letterSpacing: 1.5 },
   title: { color: '#fff', fontSize: 22, fontWeight: '900', marginTop: 2 },
   avatar: { width: 48, height: 48, borderRadius: 24, borderWidth: 2, borderColor: '#ec4899' },
-  heroCard: { borderRadius: 24, padding: 24, flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
+  heroCard: {
+    borderRadius: 24,
+    padding: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.16)',
+    overflow: 'hidden',
+    shadowColor: '#fff',
+    shadowOpacity: 0.08,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+  },
   heroLabel: { color: 'rgba(255,255,255,0.75)', fontWeight: '700', fontSize: 13 },
   heroValue: { color: '#fff', fontSize: 36, fontWeight: '900', marginTop: 4 },
   heroStats: { flexDirection: 'row', marginTop: 16, gap: 20 },
@@ -882,11 +897,28 @@ const s = StyleSheet.create({
   pendingAcceptText: { color: '#fff', fontWeight: '800', fontSize: 12 },
   pendingDecline: { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(239,68,68,0.12)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(239,68,68,0.3)' },
   actionsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 24 },
-  actionBtn: { width: (width - 40 - 36) / 4, alignItems: 'center' },
+  actionBtn: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(15,23,42,0.38)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 18,
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+    overflow: 'hidden',
+  },
   actionIcon: { width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
   actionLabel: { color: '#94a3b8', fontSize: 11, fontWeight: '700', textAlign: 'center' },
   section: { marginBottom: 24 },
-  priorityCard: { backgroundColor: '#1e293b', borderRadius: 16, borderWidth: 1, borderColor: '#334155', padding: 14, marginBottom: 14 },
+  priorityCard: {
+    backgroundColor: 'rgba(30,41,59,0.86)',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.18)',
+    padding: 14,
+    marginBottom: 14,
+    overflow: 'hidden',
+  },
   priorityRow: { flexDirection: 'row', gap: 8, marginTop: 8 },
   priorityPill: { flex: 1, backgroundColor: '#0f172a', borderRadius: 12, borderWidth: 1, borderColor: '#334155', paddingVertical: 10, paddingHorizontal: 6, alignItems: 'center' },
   priorityValue: { color: '#fff', fontWeight: '900', fontSize: 15 },
@@ -918,13 +950,22 @@ const s = StyleSheet.create({
   goalSub: { color: '#94a3b8', fontSize: 12 },
   goalCta: { marginTop: 12, alignSelf: 'flex-start', backgroundColor: '#ec4899', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 },
   goalCtaText: { color: '#fff', fontWeight: '800', fontSize: 12 },
-  tierCard: { backgroundColor: '#1e293b', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#334155', width: 220, marginRight: 12 },
+  tierCard: {
+    backgroundColor: 'rgba(30,41,59,0.86)',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.18)',
+    width: 220,
+    marginRight: 12,
+    overflow: 'hidden',
+  },
   tierHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   tierName: { color: '#a855f7', fontWeight: '800', fontSize: 15, textTransform: 'uppercase' },
   tierPrice: { color: '#fff', fontWeight: '900', fontSize: 24, marginBottom: 12 },
   tierPerks: { gap: 6 },
   tierPerk: { color: '#cbd5e1', fontSize: 13 },
-  leaderboardCard: { backgroundColor: '#1e293b', borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: '#334155' },
+  leaderboardCard: { backgroundColor: 'rgba(30,41,59,0.86)', borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(148,163,184,0.18)' },
   fanRow: { flexDirection: 'row', alignItems: 'center', padding: 12, borderBottomWidth: 1, borderBottomColor: '#334155', gap: 12 },
   fanRank: { color: '#94a3b8', fontWeight: '800', width: 20 },
   fanAvatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#334155' },
@@ -937,7 +978,7 @@ const s = StyleSheet.create({
   howItem: { color: '#94a3b8' },
   // Modal
   modalBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: '#1e293b', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40, maxHeight: '80%' },
+  modalContent: { backgroundColor: 'rgba(30,41,59,0.96)', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40, maxHeight: '80%', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   modalTitle: { color: '#fff', fontSize: 18, fontWeight: '800' },
   modalLabel: { color: '#94a3b8', fontWeight: '700', fontSize: 12 },

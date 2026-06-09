@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
@@ -27,6 +27,8 @@ const AdminDashboardScreen: React.FC = () => {
   });
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const statCardWidth = width > 900 ? '31%' : width > 640 ? '48%' : '100%';
 
   const fetchRevenue = React.useCallback(async () => {
     try {
@@ -112,17 +114,17 @@ const AdminDashboardScreen: React.FC = () => {
         </View>
 
         <View style={styles.statsRow}>
-          <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border, width: statCardWidth }]}>
             <Text style={[styles.statLabel, { color: colors.textMuted }]}>Dispatch Open</Text>
             <Text style={[styles.statValue, { color: colors.text }]}>{opsMetrics.dispatchOpen}</Text>
             <Text style={[styles.statMeta, { color: colors.accent }]}>Queued/offered</Text>
           </View>
-          <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border, width: statCardWidth }]}>
             <Text style={[styles.statLabel, { color: colors.textMuted }]}>ETA Confidence</Text>
             <Text style={[styles.statValue, { color: colors.text }]}>{(opsMetrics.avgEtaConfidence * 100).toFixed(0)}%</Text>
             <Text style={[styles.statMeta, { color: '#10b981' }]}>Rolling avg</Text>
           </View>
-          <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border, marginRight: 0 }]}>
+          <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border, marginRight: 0, width: statCardWidth }]}>
             <Text style={[styles.statLabel, { color: colors.textMuted }]}>Safety/Payout</Text>
             <Text style={[styles.statValue, { color: colors.text }]}>{opsMetrics.moderationOpen}/{opsMetrics.payoutExceptions}</Text>
             <Text style={[styles.statMeta, { color: colors.destructive }]}>Open mod / pay issues</Text>
@@ -130,17 +132,17 @@ const AdminDashboardScreen: React.FC = () => {
         </View>
 
         <View style={styles.statsRow}>
-          <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border, width: statCardWidth }]}>
             <Text style={[styles.statLabel, { color: colors.textMuted }]}>Pending</Text>
             <Text style={[styles.statValue, { color: colors.text }]}>{pendingBookings}</Text>
             <Text style={[styles.statMeta, { color: colors.destructive }]}>Attention</Text>
           </View>
-          <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border, width: statCardWidth }]}>
             <Text style={[styles.statLabel, { color: colors.textMuted }]}>Active Jobs</Text>
             <Text style={[styles.statValue, { color: colors.text }]}>{activeJobs}</Text>
             <Text style={[styles.statMeta, { color: colors.accent }]}>Live now</Text>
           </View>
-          <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border, marginRight: 0 }]}>
+          <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border, marginRight: 0, width: statCardWidth }]}>
             <Text style={[styles.statLabel, { color: colors.textMuted }]}>Revenue</Text>
             <Text style={[styles.statValue, { color: colors.text }]}>
               {liveRevenue === null ? '...' : `R${liveRevenue.toLocaleString('en-ZA')}`}
@@ -230,12 +232,15 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 16, marginTop: 4 },
   heroBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, borderWidth: 1 },
   heroBtnText: { fontWeight: '700', fontSize: 13 },
-  statsRow: { flexDirection: 'row', marginBottom: 20, gap: 10 },
+  statsRow: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 20, gap: 10 },
   statCard: {
-    flex: 1,
+    flexGrow: 1,
+    flexShrink: 1,
+    minWidth: 160,
     borderRadius: 18,
     padding: 14,
     borderWidth: 1,
+    overflow: 'hidden',
   },
   statLabel: { fontWeight: '700', fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.5 },
   statValue: { fontSize: 22, fontWeight: '900', marginTop: 4 },
@@ -250,6 +255,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.05,
     shadowRadius: 10,
+    overflow: 'hidden',
   },
   cardTitle: { fontSize: 20, fontWeight: '800', marginBottom: 8 },
   cardBody: { fontSize: 14, lineHeight: 20, marginBottom: 16 },

@@ -30,8 +30,12 @@ const EquipmentSetupScreen: React.FC = () => {
 
   useEffect(() => {
     if (!userId) { setLoading(false); return; }
-    supabase.from('photographer_equipment').select('*').eq('photographer_id', userId).single()
-      .then(({ data }) => {
+    let active = true;
+
+    void (async () => {
+      try {
+        const { data } = await supabase.from('photographer_equipment').select('*').eq('photographer_id', userId).single();
+        if (!active) return;
         if (data) {
           setSelectedTier(data.tier_id ?? TIER_OPTIONS[1].id);
           setCameraBody(data.camera_body ?? '');
@@ -39,8 +43,14 @@ const EquipmentSetupScreen: React.FC = () => {
           setSelectedLighting(new Set(data.lighting ? [data.lighting] : []));
           setSelectedExtras(new Set(data.extras ?? []));
         }
-        setLoading(false);
-      }).catch(() => setLoading(false));
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
   }, [userId]);
 
   const toggle = (set: Set<string>, val: string, setter: (s: Set<string>) => void) => {

@@ -24,7 +24,7 @@ Go to: **expo.dev** → Your project → **Project settings** → **GitHub**
 
 When you ran `eas credentials --platform ios`, which profile did you configure? Credentials are **per profile**. If you set up "preview" but the build uses "production", it will fail.
 
-The new GitHub Actions workflow (`.github/workflows/eas-build-ios.yml`) uses **preview** profile.
+The current GitHub Actions workflow (`.github/workflows/eas-build-ios.yml`) uses the **production** profile.
 
 ## 4. Run the GitHub Actions workflow
 
@@ -32,4 +32,4 @@ The new GitHub Actions workflow (`.github/workflows/eas-build-ios.yml`) uses **p
 2. Select **EAS Build iOS**
 3. Click **Run workflow** → **Run workflow**
 
-This uses your EXPO_TOKEN from secrets and runs `eas build --platform ios --profile preview`.
+This uses your EXPO_TOKEN from secrets and runs `eas build --platform ios --profile production`.

@@ -5,6 +5,7 @@ export const createBookingRequest = async (params: {
   talentId: string;
   clientId: string;
   talentType: 'photographer' | 'model';
+  serviceType?: 'photography' | 'modeling' | 'combined' | 'video_call';
   packageId: string;
   totalAmount: number;
   latitude: number;
@@ -23,6 +24,7 @@ export const createBookingRequest = async (params: {
       photographer_id: params.talentType === 'photographer' ? params.talentId : null,
       model_id: params.talentType === 'model' ? params.talentId : null,
       client_id: params.clientId,
+      service_type: params.serviceType ?? (params.talentType === 'model' ? 'modeling' : 'photography'),
       package_id: params.packageId,
       status: 'pending',
       total_amount: params.totalAmount,

@@ -8,6 +8,8 @@ node_modules/
 dist/
 web-build/
 expo-env.d.ts
+papzshipped/
+test-results/
 
 # Native
 .kotlin/
@@ -48,6 +50,7 @@ package.json.bak
 migration_list.txt
 supabase_push_out.txt
 errors.log
+esp32-sensor-test/logs/
 
 # local tooling binaries
 /supabase.exe

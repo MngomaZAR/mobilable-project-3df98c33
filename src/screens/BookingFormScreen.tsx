@@ -200,6 +200,7 @@ const BookingFormScreen: React.FC = () => {
       const booking = await createBooking({
         talent_id: talent.id,
         talent_type: isModelTalent ? 'model' : 'photographer',
+        service_type: isModelTalent ? 'modeling' : selectedServiceType === 'video' ? 'combined' : 'photography',
         booking_date: bookingDate,
         package_type: `${serviceTypeLabel} • ${selectedTier.label} • ${bookingTimeMode === 'now' ? 'Now' : timeSlot}`,
         notes: finalNotes,

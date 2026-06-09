@@ -37,9 +37,7 @@ These appear to be internal ranking weight tables. If they should not be directl
 - `media` (private, image/video, 50MB)
 - `post-images` (public, image only, 10MB)
 
-## Edge functions deployed (21)
-- `payfast-sign`
-- `payfast-itn`
+## Edge functions deployed (canonical app path = 19 active + auxiliary infrastructure)
 - `media-sign-url`
 - `push-dispatcher`
 - `payfast-handler`
@@ -65,6 +63,11 @@ These appear to be internal ranking weight tables. If they should not be directl
 Frontend references:
 - Supabase tables: `40`
 - Edge functions: `17`
+
+Canonical payment flow:
+- frontend generates checkout via `payfast-handler`
+- PayFast ITN notifies `payfast-handler/notify`
+- booking acceptance and later escrow release continue from that same path
 
 Contract audits:
 - All referenced tables found in live DB
@@ -102,6 +105,7 @@ Updated tracking screen to match launch reference behavior/style:
 
 1. Physical-device smoke per platform (iOS + Android) against production backend keys.
 2. Store submission final verification (privacy/data safety/support links/screenshots).
+3. Keep the codebase on a single payment flow and do not re-introduce `payfast-sign` / `payfast-itn`.
 
 ## 7) Completed after initial report
 

@@ -7,6 +7,7 @@ module.exports = {
   testPathIgnorePatterns: [
     '/node_modules/',
     '/dist/',
+    '<rootDir>/e2e-web/',
     '<rootDir>/__tests__/e2e/',
     '<rootDir>/__tests__/hasura/',
     '<rootDir>/__tests__/hasura.e2e.test.ts', // FIX: skip standalone hasura e2e test in CI

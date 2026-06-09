@@ -71,7 +71,7 @@ const BookingDetailScreen: React.FC = () => {
   }
 
   const currentIndex = steps.indexOf(normaliseForStepper(booking.status));
-  const requiresPayment = !booking.dispatch_request_id;
+  const requiresPayment = !booking.dispatch_request_id && booking.status === 'pending';
 
   // Chat with the most relevant person: model > photographer > general chat
   const openChatThread = async () => {

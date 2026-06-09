@@ -13,6 +13,7 @@
     "__tests__",
     "supabase/functions",
     "node_modules",
-    "dist"
+    "dist",
+    "papzshipped"
   ]
 }

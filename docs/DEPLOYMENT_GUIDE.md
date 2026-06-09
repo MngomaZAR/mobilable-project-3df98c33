@@ -33,6 +33,12 @@ npx supabase db push --include-all
 
 ## 3) Deploy Edge Functions
 
+Canonical production payment path:
+
+- checkout link generation: `payfast-handler`
+- PayFast ITN callback: `payfast-handler/notify`
+- escrow release: `escrow-release`
+
 Deploy all functions:
 
 ```powershell
@@ -81,6 +87,19 @@ $env:SUPABASE_SERVICE_ROLE_KEY='<service-role-key>'
 node scripts/e2e-full-app-sweep.mjs
 ```
 
+### Deployed Function Audit
+
+```powershell
+$env:SUPABASE_ACCESS_TOKEN='<management-token>'
+$env:SUPABASE_PROJECT_REF='mizdvqhvspkjayffaqqd'
+node scripts/audit-deployed-functions.mjs
+```
+
+This must confirm:
+
+- required active functions are deployed
+- legacy functions such as `payfast-itn` and `payfast-sign` are absent
+
 ### Jest Suites
 
 ```powershell
@@ -119,7 +138,7 @@ Critical flows:
 - KYC/pending/approved/rejected path handling
 - Booking request + instant dispatch flow
 - Booking tracking map + ETA confidence updates
-- Payment link generation + post-payment booking sync
+- Payment link generation + `payfast-handler/notify` + post-payment booking sync
 - Feed PPV unlock + subscription gating
 - Creator earnings dashboards and analytics
 - Notification actions (accept/decline/view)
@@ -130,8 +149,8 @@ Critical flows:
 
 - Revert app release in EAS/App Store track if UI regression is severe.
 - For backend:
-  - deploy previous function versions if needed
-  - apply corrective migration (forward-fix preferred over destructive rollback)
+- deploy previous function versions if needed
+- apply corrective migration (forward-fix preferred over destructive rollback)
 - Re-run smoke suites after rollback.
 
 ## 8) Production Readiness Gate
@@ -144,4 +163,4 @@ Only mark production-ready if all are true:
 - Full E2E sweep passes (0 failed, 0 warnings)
 - Dashboard role checks complete
 - Manual iPhone smoke complete
-
+- Single-flow architecture audit passes

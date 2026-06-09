@@ -136,12 +136,10 @@ export const uploadBlurredPreview = async (uri: string): Promise<Result<string>>
 
 /**
  * Uploads a premium media asset and registers it in the media_assets table.
- * bookingId is required — media_assets.booking_id is NOT NULL in the DB schema.
+ * bookingId is optional for creator-library posts and required for booking delivery assets.
  */
 export const uploadMediaAsset = async (uri: string, ownerId: string, bookingId: string | null, priceZar?: number | null, title?: string | null): Promise<Result<any>> => {
   try {
-    if (!bookingId) throw new Error('bookingId is required for media_assets upload.');
-
     const manipulated = await ImageManipulator.manipulateAsync(
       uri,
       [{ resize: { width: 1200 } }],
@@ -154,8 +152,9 @@ export const uploadMediaAsset = async (uri: string, ownerId: string, bookingId: 
 
     const arrayBuffer = decode(manipulated.base64);
 
-    // Path: {ownerId}/{bookingId}/{timestamp}.jpg — matches backend spec
-    const fileName = `${ownerId}/${bookingId}/${Date.now()}.jpg`;
+    // Path keeps booking deliveries grouped while allowing creator-library uploads.
+    const scope = bookingId ?? 'library';
+    const fileName = `${ownerId}/${scope}/${Date.now()}.jpg`;
     
     // Upload to the 'media' bucket (not 'media_assets' — that doesn't exist)
     const { error: uploadError } = await supabase.storage

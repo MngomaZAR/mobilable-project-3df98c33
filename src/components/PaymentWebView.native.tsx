@@ -19,24 +19,29 @@ export const PaymentWebView: React.FC<Props> = ({
 }) => {
   const hasCompletedRef = useRef(false);
 
+  const getRedirectType = (urlValue: string) => {
+    const url = urlValue.toLowerCase();
+    const matchesSuccessPrefix =
+      !!successUrlPrefix && url.startsWith(successUrlPrefix.toLowerCase());
+    const matchesCancelPrefix =
+      !!cancelUrlPrefix && url.startsWith(cancelUrlPrefix.toLowerCase());
+
+    if (matchesSuccessPrefix) return 'success';
+    if (matchesCancelPrefix) return 'cancel';
+    return null;
+  };
+
+  const completeRedirect = (kind: 'success' | 'cancel') => {
+    if (hasCompletedRef.current) return;
+    hasCompletedRef.current = true;
+    if (kind === 'success') onSuccess?.();
+    else onError('Payment cancelled');
+  };
+
   const handleNavChange = (event: WebViewNavigation) => {
     const url = event.url.toLowerCase();
-    const matchesSuccessPrefix =
-      !successUrlPrefix || url.startsWith(successUrlPrefix.toLowerCase());
-    const matchesCancelPrefix =
-      !cancelUrlPrefix || url.startsWith(cancelUrlPrefix.toLowerCase());
-
-    if (
-      !hasCompletedRef.current &&
-      matchesSuccessPrefix &&
-      (url.includes('status=success') || url.includes('pf_status=complete'))
-    ) {
-      hasCompletedRef.current = true;
-      onSuccess?.();
-    }
-    if (matchesCancelPrefix && (url.includes('status=cancel') || url.includes('pf_status=cancelled'))) {
-      onError('Payment cancelled');
-    }
+    const redirectType = getRedirectType(url);
+    if (redirectType) completeRedirect(redirectType);
   };
 
   const handleLoadError = (event: any) => {
@@ -51,6 +56,14 @@ export const PaymentWebView: React.FC<Props> = ({
     <View style={styles.container}>
       <WebView
         source={{ uri: paymentUrl }}
+        onShouldStartLoadWithRequest={(request) => {
+          const redirectType = getRedirectType(request.url);
+          if (redirectType) {
+            completeRedirect(redirectType);
+            return false;
+          }
+          return true;
+        }}
         onNavigationStateChange={handleNavChange}
         onError={handleLoadError}
         onHttpError={handleHttpError}
@@ -79,4 +92,3 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 });
-

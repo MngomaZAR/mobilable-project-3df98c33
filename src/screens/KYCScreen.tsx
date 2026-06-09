@@ -47,7 +47,6 @@ const KYCScreen: React.FC = () => {
         data.forEach((r: any) => { updates[r.doc_type as DocType] = { uri: 'uploaded', status: r.status }; });
         setDocs(updates);
       });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
 
   const pickAndUpload = async (slot: typeof DOC_SLOTS[0]) => {

@@ -54,8 +54,8 @@ const run = async () => {
   push('Route contracts loaded', rootRoutes.size > 0 && tabRoutes.size > 0, `root=${rootRoutes.size} tab=${tabRoutes.size}`);
 
   const mappingChecks = [
-    /role\s*===\s*'photographer'[\s\S]*\?\s*PhotographerDashboardScreen/m,
-    /role\s*===\s*'model'[\s\S]*\?\s*ModelPremiumDashboard/m,
+    /(?:role\s*===\s*'photographer'|isEffectivePhotographer\(\s*role\s*\))[\s\S]*\?\s*PhotographerDashboardScreen/m,
+    /(?:role\s*===\s*'model'|isEffectiveModel\(\s*role\s*\))[\s\S]*\?\s*ModelPremiumDashboard/m,
     /role\s*===\s*'admin'[\s\S]*\?\s*AdminDashboardScreen/m,
     /:\s*HomeScreen/m,
   ];

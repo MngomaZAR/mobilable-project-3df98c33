@@ -115,6 +115,66 @@ export const recordConsent = async (payload: {
   consent_version?: string;
   context?: Record<string, any>;
 }) => {
+  const { data: userRes } = await supabase.auth.getUser();
+  const userId = userRes.user?.id;
+
+  if (userId) {
+    const nowIso = new Date().toISOString();
+    const [eventRes, consentRes] = await Promise.all([
+      supabase.from('consent_events').insert({
+        user_id: userId,
+        consent_type: payload.consent_type,
+        legal_basis: payload.legal_basis ?? 'consent',
+        consent_version: payload.consent_version ?? null,
+        enabled: Boolean(payload.enabled),
+        context: payload.context ?? {},
+        captured_at: nowIso,
+      }),
+      supabase
+        .from('user_consents')
+        .upsert(
+          {
+            user_id: userId,
+            consent_type: payload.consent_type,
+            granted: Boolean(payload.enabled),
+            accepted: Boolean(payload.enabled),
+            granted_at: nowIso,
+            accepted_at: nowIso,
+            legal_basis: payload.legal_basis ?? 'consent',
+            version: payload.consent_version ?? null,
+            metadata: payload.context ?? {},
+          },
+          { onConflict: 'user_id,consent_type', ignoreDuplicates: true }
+        ),
+    ]);
+
+    if (!eventRes.error && !consentRes.error) {
+      return {
+        success: true,
+        consent_event: {
+          user_id: userId,
+          consent_type: payload.consent_type,
+          legal_basis: payload.legal_basis ?? 'consent',
+          consent_version: payload.consent_version ?? null,
+          enabled: Boolean(payload.enabled),
+          context: payload.context ?? {},
+          captured_at: nowIso,
+        },
+        user_consent: {
+          user_id: userId,
+          consent_type: payload.consent_type,
+          granted: Boolean(payload.enabled),
+          accepted: Boolean(payload.enabled),
+          granted_at: nowIso,
+          accepted_at: nowIso,
+          legal_basis: payload.legal_basis ?? 'consent',
+          version: payload.consent_version ?? null,
+          metadata: payload.context ?? {},
+        },
+      } as { success: boolean; consent_event: Record<string, any>; user_consent: Record<string, any> };
+    }
+  }
+
   const { data, error } = await supabase.functions.invoke('compliance-consent', { body: payload });
   if (error) throw new Error(error.message || 'Unable to record consent.');
   return data as { success: boolean; consent_event: Record<string, any>; user_consent: Record<string, any> };

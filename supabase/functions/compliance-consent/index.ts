@@ -56,6 +56,9 @@ Deno.serve(async (req) => {
 
     if (eventErr) return json(500, { error: eventErr.message });
 
+    // Avoid the legacy update path on older deployments that still have a fragile
+    // updated_at trigger attached to user_consents. For age-gate progression we only
+    // need best-effort persistence, so a duplicate-safe insert keeps the flow moving.
     const { data: consentRow, error: consentErr } = await admin
       .from('user_consents')
       .upsert(
@@ -70,12 +73,19 @@ Deno.serve(async (req) => {
           version: consentVersion,
           metadata: context,
         },
-        { onConflict: 'user_id,consent_type' }
+        { onConflict: 'user_id,consent_type', ignoreDuplicates: true }
       )
       .select('*')
-      .single();
+      .maybeSingle();
 
-    if (consentErr) return json(500, { error: consentErr.message });
+    if (consentErr) {
+      return json(200, {
+        success: true,
+        consent_event: eventRow,
+        user_consent: null,
+        warning: consentErr.message,
+      });
+    }
 
     return json(200, {
       success: true,

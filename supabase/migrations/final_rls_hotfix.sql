@@ -26,7 +26,7 @@ CREATE POLICY "posts_select_public" ON public.posts
 DROP POLICY IF EXISTS "conversations_insert_auth" ON public.conversations;
 CREATE POLICY "conversations_insert_auth" ON public.conversations
   FOR INSERT TO authenticated
-  WITH CHECK (true);
+  WITH CHECK (auth.uid() = created_by);
 
 -- Allow participants to see their conversations
 DROP POLICY IF EXISTS "conversations_select_auth" ON public.conversations;
@@ -44,7 +44,17 @@ CREATE POLICY "conversations_select_auth" ON public.conversations
 DROP POLICY IF EXISTS "participants_insert_auth" ON public.conversation_participants;
 CREATE POLICY "participants_insert_auth" ON public.conversation_participants
   FOR INSERT TO authenticated
-  WITH CHECK (true);
+  WITH CHECK (
+    user_id = auth.uid()
+    AND (
+      conversation_id IN (
+        SELECT id FROM public.conversations WHERE created_by = auth.uid()
+      )
+      OR conversation_id IN (
+        SELECT conversation_id FROM public.conversation_participants WHERE user_id = auth.uid()
+      )
+    )
+  );
 
 DROP POLICY IF EXISTS "participants_select_auth" ON public.conversation_participants;
 CREATE POLICY "participants_select_auth" ON public.conversation_participants

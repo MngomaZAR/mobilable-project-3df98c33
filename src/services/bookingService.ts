@@ -5,6 +5,7 @@ export const createBookingRequest = async (params: {
   talentId: string;
   clientId: string;
   talentType: 'photographer' | 'model';
+  serviceType?: 'photography' | 'modeling' | 'combined' | 'video_call';
   packageId: string;
   totalAmount: number;
   latitude: number;

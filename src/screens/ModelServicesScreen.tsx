@@ -44,13 +44,19 @@ const ModelServicesScreen: React.FC = () => {
 
   useEffect(() => {
     if (!userId) { setLoading(false); return; }
-    supabase.from('model_services').select('service_type, is_active, rate_zar').eq('model_id', userId)
-      .then(({ data }) => {
+
+    (async () => {
+      try {
+        const { data } = await supabase.from('model_services').select('service_type, is_active, rate_zar').eq('model_id', userId);
         const map: typeof services = {};
         (data ?? []).forEach((r: any) => { map[r.service_type] = { active: r.is_active, rate: Number(r.rate_zar ?? 0) }; });
         setServices(map);
+      } catch (error) {
+        console.warn('Failed to load model services', error);
+      } finally {
         setLoading(false);
-      }).catch(() => setLoading(false));
+      }
+    })();
   }, [userId]);
 
   const toggle = (key: string, template: typeof SERVICE_TEMPLATES[0]) => {

@@ -8,6 +8,7 @@ import { useAppData } from '../store/AppDataContext';
 import { createPayfastCheckoutLink } from '../services/paymentService';
 import { createDispatch } from '../services/dispatchService';
 import { updateBookingDispatchInDb } from '../services/bookingService';
+import { getDefaultPayfastNotifyUrl } from '../config/commercePolicy';
 import HowItWorksCard from '../components/HowItWorksCard';
 
 type Route = RouteProp<RootStackParamList, 'Payment'>;
@@ -78,7 +79,7 @@ const PaymentScreen: React.FC = () => {
   const supabaseBaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? null;
   const returnUrl = supabaseBaseUrl ? `${supabaseBaseUrl}/payfast/return` : null;
   const cancelUrl = supabaseBaseUrl ? `${supabaseBaseUrl}/payfast/cancel` : null;
-  const notifyUrl = supabaseBaseUrl ? `${supabaseBaseUrl}/functions/v1/payfast-itn` : null;
+  const notifyUrl = supabaseBaseUrl ? getDefaultPayfastNotifyUrl() : null;
 
   useEffect(() => {
     if (booking?.booking_date) {

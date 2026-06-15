@@ -6,7 +6,7 @@ const supabase = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 )
 
-const PLATFORM_FEE_RATE = 0.20
+const PLATFORM_FEE_RATE = 0.30
 
 Deno.serve(async (req) => {
   try {

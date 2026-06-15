@@ -67,8 +67,8 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
-    if (!/^https:\/\//i.test(body.notifyUrl) || !/\/functions\/v1\/payfast-itn$/i.test(body.notifyUrl)) {
-      return new Response(JSON.stringify({ error: 'notifyUrl must be an https URL ending with /functions/v1/payfast-itn' }), {
+    if (!/^https:\/\//i.test(body.notifyUrl) || !/\/functions\/v1\/(?:payfast-itn|payfast-handler\/notify)$/i.test(body.notifyUrl)) {
+      return new Response(JSON.stringify({ error: 'notifyUrl must be an https URL ending with /functions/v1/payfast-itn or /functions/v1/payfast-handler/notify' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });

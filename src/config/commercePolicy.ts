@@ -75,5 +75,6 @@ export const getDefaultPayfastNotifyUrl = () => {
   if (!base) {
     throw new Error('Missing EXPO_PUBLIC_SUPABASE_URL for payment notify URL.');
   }
+  // Use the unified PayFast handler notify endpoint so booking, tip, and credit payments all reconcile correctly.
   return `${base}/functions/v1/payfast-handler/notify`;
 };

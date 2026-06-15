@@ -52,6 +52,12 @@ const json = (status: number, body: Record<string, unknown>) =>
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
 
+const textOk = (message = 'OK') =>
+  new Response(message, {
+    status: 200,
+    headers: { ...corsHeaders, 'Content-Type': 'text/plain' },
+  });
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405, headers: corsHeaders });
@@ -66,39 +72,39 @@ Deno.serve(async (req) => {
     const allowedIpsRaw = Deno.env.get('PAYFAST_ITN_ALLOWED_IPS') ?? '';
 
     if (!supabaseUrl || !serviceRoleKey) {
-      return json(500, { error: 'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY' });
+      return textOk('OK');
     }
     if (!merchantId || !merchantKey || !passphrase) {
-      return json(500, { error: 'Missing PAYFAST_MERCHANT_ID, PAYFAST_MERCHANT_KEY or PAYFAST_PASSPHRASE' });
+      return textOk('OK');
     }
 
     const raw = await req.text();
     const payload = parsePayload(raw);
 
     const paymentStatus = String(payload.payment_status ?? '').toUpperCase();
-    const bookingId = String(payload.m_payment_id ?? '');
+    const paymentOrBookingId = String(payload.m_payment_id ?? '');
     const pfPaymentId = String(payload.pf_payment_id ?? '');
     const merchantIdInPayload = String(payload.merchant_id ?? '');
     const merchantKeyInPayload = String(payload.merchant_key ?? '');
     const signature = String(payload.signature ?? '');
     const amountGross = parseAmount(payload.amount_gross);
 
-    if (!bookingId || !pfPaymentId || !signature || !merchantIdInPayload || !merchantKeyInPayload) {
-      return json(400, { error: 'Missing required ITN fields' });
+    if (!paymentOrBookingId || !pfPaymentId || !signature || !merchantIdInPayload || !merchantKeyInPayload) {
+      return textOk('OK');
     }
 
     if (merchantIdInPayload !== merchantId) {
-      return json(400, { error: 'Merchant ID mismatch' });
+      return textOk('OK');
     }
     if (merchantKeyInPayload !== merchantKey) {
-      return json(400, { error: 'Merchant key mismatch' });
+      return textOk('OK');
     }
 
     // Signature verification.
     const base = encodeParams(payload);
     const expectedSignature = md5(`${base}&passphrase=${encodeURIComponent(passphrase)}`);
     if (signature.toLowerCase() !== expectedSignature.toLowerCase()) {
-      return json(400, { error: 'Invalid signature' });
+      return textOk('OK');
     }
 
     // Optional source IP filter.
@@ -121,7 +127,7 @@ Deno.serve(async (req) => {
     });
     const validateText = (await validateResponse.text()).trim().toUpperCase();
     if (!validateResponse.ok || validateText !== 'VALID') {
-      return json(400, { error: 'PayFast validation failed', details: validateText });
+      return textOk('OK');
     }
 
     const admin = createClient(supabaseUrl, serviceRoleKey);
@@ -132,30 +138,57 @@ Deno.serve(async (req) => {
       .eq('provider_payment_id', pfPaymentId)
       .limit(1)
       .maybeSingle();
-    if (duplicatePaymentRes.error) return json(500, { error: duplicatePaymentRes.error.message });
-    if (duplicatePaymentRes.data && duplicatePaymentRes.data.booking_id !== bookingId) {
-      return json(409, { error: 'provider_payment_id already linked to another booking' });
+    if (duplicatePaymentRes.error) {
+      console.error('ITN duplicate payment lookup failed', duplicatePaymentRes.error.message);
+      return textOk('OK');
     }
 
-    const paymentRes = await admin
+    const paymentByIdRes = await admin
       .from('payments')
       .select('id, booking_id, customer_id, amount, status, provider_payment_id')
-      .eq('booking_id', bookingId)
-      .order('created_at', { ascending: false })
-      .limit(1)
+      .eq('id', paymentOrBookingId)
       .maybeSingle();
+    if (paymentByIdRes.error) {
+      console.error('ITN payment lookup failed', paymentByIdRes.error.message);
+      return textOk('OK');
+    }
 
-    if (paymentRes.error) return json(500, { error: paymentRes.error.message });
-    const payment = paymentRes.data as PaymentRow | null;
-    if (!payment) return json(404, { error: 'Payment not found for booking' });
+    let payment = paymentByIdRes.data as PaymentRow | null;
+    if (!payment) {
+      const paymentByBookingRes = await admin
+        .from('payments')
+        .select('id, booking_id, customer_id, amount, status, provider_payment_id')
+        .eq('booking_id', paymentOrBookingId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (paymentByBookingRes.error) {
+        console.error('ITN payment by booking lookup failed', paymentByBookingRes.error.message);
+        return textOk('OK');
+      }
+      payment = paymentByBookingRes.data as PaymentRow | null;
+    }
+
+    if (!payment) return textOk('OK');
+
+    if (duplicatePaymentRes.data && duplicatePaymentRes.data.booking_id !== payment.booking_id) {
+      return textOk('OK');
+    }
+
+    const bookingId = payment.booking_id;
+    if (!bookingId) {
+      console.error('ITN payment missing booking_id', { paymentId: payment.id });
+      return textOk('OK');
+    }
 
     if (!Number.isFinite(amountGross)) {
-      return json(400, { error: 'Invalid amount in ITN payload' });
+      return textOk('OK');
     }
 
     const expectedAmount = Number(Number(payment.amount).toFixed(2));
     if (expectedAmount !== amountGross) {
-      return json(400, { error: 'Amount mismatch', expectedAmount, receivedAmount: amountGross });
+      console.error('ITN amount mismatch', { expectedAmount, receivedAmount: amountGross });
+      return textOk('OK');
     }
 
     // Idempotency: already processed same PayFast payment id.
@@ -180,7 +213,10 @@ Deno.serve(async (req) => {
       })
       .eq('id', payment.id);
 
-    if (updatePayment.error) return json(500, { error: updatePayment.error.message });
+    if (updatePayment.error) {
+      console.error('ITN payment update failed', updatePayment.error.message);
+      return textOk('OK');
+    }
 
     if (mappedStatus === 'completed') {
       const updateBooking = await admin
@@ -188,7 +224,10 @@ Deno.serve(async (req) => {
         .update({ status: 'accepted' })
         .eq('id', bookingId)
         .in('status', ['pending']);
-      if (updateBooking.error) return json(500, { error: updateBooking.error.message });
+      if (updateBooking.error) {
+        console.error('ITN booking update failed', updateBooking.error.message);
+        return textOk('OK');
+      }
 
       await admin.from('notification_events').insert({
         user_id: payment.customer_id,
@@ -215,6 +254,6 @@ Deno.serve(async (req) => {
     return new Response('ok', { status: 200, headers: corsHeaders });
   } catch (error) {
     console.error('ITN error', error);
-    return json(500, { error: (error as Error).message });
+    return textOk('OK');
   }
 });

@@ -104,9 +104,9 @@ const TabsNavigator = () => {
   const role = getEffectiveRole(currentUser);
   const isClient = role === 'client';
   const homeComponent =
-    isEffectivePhotographer(role)
+    role === 'photographer'
       ? PhotographerDashboardScreen
-      : isEffectiveModel(role)
+      : role === 'model'
         ? ModelPremiumDashboard
         : role === 'admin'
           ? AdminDashboardScreen

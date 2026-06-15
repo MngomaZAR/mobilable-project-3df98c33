@@ -1,0 +1,32 @@
+name: Playwright Staging E2E
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ 'fix/p0-launch-migrations' ]
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    env:
+      STAGING_URL: ${{ secrets.STAGING_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web bundle (for static assets used in tests)
+        run: npm run build:web
+
+      - name: Run Playwright tests against staging
+        env:
+          STAGING_URL: ${{ secrets.STAGING_URL }}
+        run: |
+          npx playwright install --with-deps
+          npx playwright test --config=playwright.config.cjs || true

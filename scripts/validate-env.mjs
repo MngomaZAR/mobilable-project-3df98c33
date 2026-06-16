@@ -1,5 +1,9 @@
 #!/usr/bin/env node
 
+import { loadLocalEnv } from './lib/load-env-file.mjs';
+
+loadLocalEnv();
+
 const modeArg = process.argv.find((arg) => arg.startsWith('--mode='));
 const mode = (modeArg ? modeArg.split('=')[1] : 'ci').toLowerCase();
 
@@ -35,6 +39,16 @@ const allowedBillingProviders = new Set(['iap', 'external', 'disabled']);
 const supabaseUrl = requireEnv('EXPO_PUBLIC_SUPABASE_URL');
 requireEnv('EXPO_PUBLIC_SUPABASE_ANON_KEY');
 validateSupabaseUrl(supabaseUrl);
+
+const backendProvider = read('EXPO_PUBLIC_BACKEND_PROVIDER').toLowerCase() || 'supabase';
+if (!['supabase', 'nhost'].includes(backendProvider)) {
+  errors.push("EXPO_PUBLIC_BACKEND_PROVIDER must be either 'supabase' or 'nhost'");
+}
+
+if (backendProvider === 'nhost') {
+  requireEnv('EXPO_PUBLIC_NHOST_SUBDOMAIN');
+  requireEnv('EXPO_PUBLIC_NHOST_REGION');
+}
 
 if (mode === 'release') {
   const storeTarget = requireEnv('EXPO_PUBLIC_STORE_TARGET').toLowerCase();

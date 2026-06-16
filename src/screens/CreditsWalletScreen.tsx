@@ -6,6 +6,8 @@ import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../store/ThemeContext';
 import { useAppData } from '../store/AppDataContext';
 import { supabase } from '../config/supabaseClient';
+import { getCurrentAuthenticatedUser } from '../config/currentUser';
+import { invokeBackendFunction } from '../config/backendFunctions';
 import {
   assertDigitalPurchasesAllowed,
   getDefaultPayfastNotifyUrl,
@@ -55,19 +57,17 @@ const CreditsWalletScreen: React.FC = () => {
         return;
       }
 
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = await getCurrentAuthenticatedUser();
       if (!user) { Alert.alert('Sign in required'); return; }
-      const { data, error } = await supabase.functions.invoke('payfast-handler', {
-        body: {
-          type: 'credits',
-          amount: priceZAR,
-          credits,
-          user_id: user.id,
-          item_name: `${BRAND.name} Credits - ${credits} credits`,
-          return_url: 'papzi://credits/success',
-          cancel_url: 'papzi://credits/cancel',
-          notify_url: getDefaultPayfastNotifyUrl(),
-        },
+      const { data, error } = await invokeBackendFunction('payfast-handler', {
+        type: 'credits',
+        amount: priceZAR,
+        credits,
+        user_id: user.id,
+        item_name: `${BRAND.name} Credits - ${credits} credits`,
+        return_url: 'papzi://credits/success',
+        cancel_url: 'papzi://credits/cancel',
+        notify_url: getDefaultPayfastNotifyUrl(),
       });
       if (error || !data?.paymentUrl) {
         Alert.alert('Payment Error', error?.message || 'Unable to start payment.');

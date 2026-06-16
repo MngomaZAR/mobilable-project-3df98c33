@@ -31,6 +31,7 @@ import { Story, StoryViewer } from './StoryViewer';
 import { HashtagText } from './HashtagText';
 import { BRAND, PLACEHOLDER_IMAGE } from '../utils/constants';
 import { supabase } from '../config/supabaseClient';
+import { getCurrentAuthenticatedUser } from '../config/currentUser';
 import { getForYouRanking, recordRecommendationEvents } from '../services/dispatchService';
 import HowItWorksCard from './HowItWorksCard';
 import { reportContent } from '../services/reportService';
@@ -204,7 +205,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
     
     // Optimistic background save
     import('../config/supabaseClient').then(async ({ supabase }) => {
-       const { data: { user } } = await supabase.auth.getUser();
+       const user = await getCurrentAuthenticatedUser();
        if (!user) return;
        if (isBookmarked) await supabase.from('post_bookmarks').delete().eq('post_id', post.id).eq('user_id', user.id);
        else await supabase.from('post_bookmarks').insert({ post_id: post.id, user_id: user.id });
@@ -424,10 +425,10 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
       setBlockedUserIds((prev) => new Set([...prev, post.author_id]));
       // Persist block to user_blocks table
       import('../config/supabaseClient').then(({ supabase }) =>
-        supabase.auth.getUser().then(({ data }) => {
-          if (data.user) {
+        getCurrentAuthenticatedUser().then((user) => {
+          if (user) {
             supabase.from('user_blocks').insert({
-              blocker_id: data.user.id,
+              blocker_id: user.id,
               blocked_id: post.author_id,
             }).then(({ error }) => {
               if (error) console.warn(error);

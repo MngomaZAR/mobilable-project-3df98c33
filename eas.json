@@ -26,7 +26,11 @@
         "EAS_BUILD_NO_EXPO_GO_WARNING": "true",
         "EXPO_PUBLIC_STORE_TARGET": "both",
         "EXPO_PUBLIC_DIGITAL_BILLING_PROVIDER": "external",
-        "EXPO_PUBLIC_DISABLE_DIGITAL_PURCHASES": "true"
+        "EXPO_PUBLIC_DISABLE_DIGITAL_PURCHASES": "true",
+        "EXPO_APPLE_ID": "smngoma22@gmail.com",
+        "EXPO_APPLE_TEAM_ID": "8WJDHZJTB7",
+        "APPLE_API_KEY_ID": "8NSCTU6X72",
+        "APPLE_API_ISSUER_ID": "cf46c758-783e-4021-8353-5ad5e3ab3a3a"
       }
     }
   },

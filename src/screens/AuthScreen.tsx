@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -16,6 +16,9 @@ import { BRAND } from '../utils/constants';
 import { useAppData } from '../store/AppDataContext';
 import { Ionicons } from '@expo/vector-icons';
 import { UserGender, UserRole } from '../types';
+import * as Linking from 'expo-linking';
+import { hasNhost, nhost } from '../config/nhostClient';
+import { consumeNhostPkceVerifier } from '../config/nhostPkce';
 
 type Mode = 'signin' | 'signup';
 
@@ -28,6 +31,8 @@ const friendlyAuthError = (raw: string): string => {
     return 'Incorrect email or password. Please try again.';
   if (r.includes('email not confirmed'))
     return 'Please check your email and click the confirmation link we sent you.';
+  if (r.includes('user is not verified') || r.includes('unverified-user'))
+    return 'Please verify your email before signing in.';
   if (r.includes('user already registered'))
     return 'An account with this email already exists. Try signing in instead.';
   if (r.includes('password should be at least'))
@@ -76,7 +81,7 @@ const GENDER_OPTIONS: GenderOption[] = [
 ];
 
 const AuthScreen: React.FC = () => {
-  const { signIn, signUp, signInWithOAuth, resetState, authenticating, error, setState } = useAppData();
+  const { signIn, signUp, signInWithOAuth, resetState, authenticating, error, setState, revalidateSession } = useAppData();
   const [mode, setMode] = useState<Mode>('signin');
   const [localSubmitting, setLocalSubmitting] = useState(false);
 
@@ -112,6 +117,51 @@ const AuthScreen: React.FC = () => {
   const [localSuccess, setLocalSuccess] = useState<string | null>(null);
 
   const displayError = error ? friendlyAuthError(error) : localMessage;
+
+  useEffect(() => {
+    if (!hasNhost) return;
+
+    let active = true;
+
+    const handleAuthUrl = async (url: string) => {
+      try {
+        const parsed = Linking.parse(url);
+        const code = typeof parsed.queryParams?.code === 'string' ? parsed.queryParams.code : null;
+        if (!code) return;
+
+        setLocalMessage(null);
+        setLocalSuccess(null);
+        setLocalSubmitting(true);
+
+        const codeVerifier = await consumeNhostPkceVerifier();
+        if (!codeVerifier) {
+          throw new Error('Missing PKCE verifier. Please sign up again from this device.');
+        }
+
+        await nhost.auth.tokenExchange({ code, codeVerifier });
+        if (!active) return;
+        await revalidateSession();
+        setLocalSuccess('Email verified. You can now sign in.');
+      } catch (err: any) {
+        if (!active) return;
+        setLocalMessage(err?.message || 'Unable to complete email verification.');
+      } finally {
+        if (active) setLocalSubmitting(false);
+      }
+    };
+
+    void Linking.getInitialURL().then((url: string | null) => {
+      if (url) void handleAuthUrl(url);
+    });
+    const subscription = Linking.addEventListener('url', (event: { url: string }) => {
+      void handleAuthUrl(event.url);
+    });
+
+    return () => {
+      active = false;
+      subscription.remove();
+    };
+  }, [revalidateSession]);
 
   const submit = async () => {
     if (localSubmitting || authenticating) return;

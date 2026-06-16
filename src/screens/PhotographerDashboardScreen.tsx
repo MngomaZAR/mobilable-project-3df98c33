@@ -16,6 +16,7 @@ import { useMessaging } from '../store/MessagingContext';
 import { useAppData } from '../store/AppDataContext';
 import { RootStackParamList } from '../navigation/types';
 import { supabase } from '../config/supabaseClient';
+import { invokeBackendFunction } from '../config/backendFunctions';
 import { DEFAULT_CAPE_TOWN_COORDINATES, ensureSouthAfricanCoordinates } from '../utils/geo';
 import { NewMessageModal } from '../components/NewMessageModal';
 import HowItWorksCard from '../components/HowItWorksCard';
@@ -195,8 +196,8 @@ const PhotographerDashboardScreen: React.FC = () => {
             await updateBookingStatus(bookingId, 'completed');
 
             // Release escrow to providers
-            const { error: escrowError } = await supabase.functions.invoke('escrow-release', {
-              body: { booking_id: bookingId }
+            const { error: escrowError } = await invokeBackendFunction('escrow-release', {
+              booking_id: bookingId,
             });
             if (escrowError) {
               console.error('Escrow release failed:', escrowError);

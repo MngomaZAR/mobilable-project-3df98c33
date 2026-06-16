@@ -1,4 +1,5 @@
 import { supabase } from '../config/supabaseClient';
+import { requireCurrentAuthenticatedUser } from '../config/currentUser';
 
 export interface ReviewPayload {
   bookingId: string;
@@ -20,8 +21,7 @@ export interface ReviewRow {
 
 /** Submit a review for a completed booking */
 export const createReview = async (payload: ReviewPayload): Promise<ReviewRow> => {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('You must be logged in to leave a review.');
+  const user = await requireCurrentAuthenticatedUser();
 
   const { data, error } = await supabase
     .from('reviews')

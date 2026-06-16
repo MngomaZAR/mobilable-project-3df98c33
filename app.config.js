@@ -11,7 +11,7 @@ export default {
   expo: {
     name: BRAND.name,
     slug: APP_IDS.slug,
-    owner: "mavuso",
+    owner: "mavzar",
     scheme: APP_IDS.scheme,
     version: "1.0.0",
     orientation: "portrait",
@@ -85,7 +85,7 @@ export default {
     ],
     extra: {
       eas: {
-        projectId: "e0a67604-5f21-4215-9b2f-456ae50c632e"
+        projectId: "19f66730-a417-4fc7-9c6a-52fd7a79fd2a"
       },
       EXPO_PUBLIC_SUPABASE_URL: process.env.EXPO_PUBLIC_SUPABASE_URL || "",
       EXPO_PUBLIC_SUPABASE_ANON_KEY: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || ""

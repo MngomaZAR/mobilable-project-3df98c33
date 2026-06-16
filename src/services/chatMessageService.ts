@@ -7,7 +7,7 @@
 //   message_type, media_url, created_at, booking_id
 // ============================================================
 
-import { supabase } from '../config/supabaseClient';
+import { invokeBackendFunction } from '../config/backendFunctions';
 
 export type MessageRow = {
   id: string;
@@ -29,11 +29,9 @@ export const listConversationMessages = async (
   conversationId: string
 ): Promise<MessageRow[]> => {
   // Use the edge function which has service-role access and checks participation
-  const { data, error } = await supabase.functions.invoke('chat-messages', {
-    body: {
-      action: 'list',
-      conversation_id: conversationId,
-    },
+  const { data, error } = await invokeBackendFunction('chat-messages', {
+    action: 'list',
+    conversation_id: conversationId,
   });
 
   if (error) throw new Error(error.message || 'Failed to list messages.');
@@ -66,13 +64,11 @@ export const sendConversationTextMessage = async ({
   text: string;
 }): Promise<MessageRow> => {
   // BUG FIX: Use the Edge Function which handles auth + DB insert correctly
-  const { data, error } = await supabase.functions.invoke('chat-messages', {
-    body: {
-      action: 'send',
-      conversation_id: conversationId,
-      text,
-      message_type: 'text',
-    },
+  const { data, error } = await invokeBackendFunction('chat-messages', {
+    action: 'send',
+    conversation_id: conversationId,
+    text,
+    message_type: 'text',
   });
 
   if (error) throw new Error(error.message || 'Failed to send message.');
@@ -113,18 +109,16 @@ export const sendConversationLockedMediaMessage = async ({
   unlockBookingId?: string;
   unlockPrice?: number;
 }): Promise<MessageRow> => {
-  const { data, error } = await supabase.functions.invoke('chat-messages', {
-    body: {
-      action: 'send',
-      conversation_id: conversationId,
-      text: text ?? 'Shared a locked photo',
-      message_type: 'media',
-      media_url: mediaUrl,
-      preview_url: previewUrl,
-      locked: true,
-      unlock_booking_id: unlockBookingId,
-      unlock_price: unlockPrice,
-    },
+  const { data, error } = await invokeBackendFunction('chat-messages', {
+    action: 'send',
+    conversation_id: conversationId,
+    text: text ?? 'Shared a locked photo',
+    message_type: 'media',
+    media_url: mediaUrl,
+    preview_url: previewUrl,
+    locked: true,
+    unlock_booking_id: unlockBookingId,
+    unlock_price: unlockPrice,
   });
 
   if (error) throw new Error(error.message || 'Failed to send media message.');
@@ -157,12 +151,10 @@ export const unlockMessage = async ({
   conversationId: string;
   messageId: string;
 }): Promise<boolean> => {
-  const { data, error } = await supabase.functions.invoke('chat-messages', {
-    body: {
-      action: 'unlock',
-      conversation_id: conversationId,
-      message_id: messageId,
-    },
+  const { data, error } = await invokeBackendFunction('chat-messages', {
+    action: 'unlock',
+    conversation_id: conversationId,
+    message_id: messageId,
   });
 
   if (error) throw new Error(error.message || 'Failed to unlock message.');

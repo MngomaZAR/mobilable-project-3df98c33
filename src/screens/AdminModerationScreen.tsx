@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../store/ThemeContext';
 import { supabase } from '../config/supabaseClient';
+import { invokeBackendFunction } from '../config/backendFunctions';
 import { useMessaging } from '../store/MessagingContext';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -110,7 +111,7 @@ const AdminModerationScreen: React.FC = () => {
           .select('id,user_id,entity_type,entity_id,policy_code,severity,status,created_at')
           .order('created_at', { ascending: false })
           .limit(200),
-        supabase.functions.invoke('admin-review', { body: { action: 'list_pending' } }),
+        invokeBackendFunction('admin-review', { action: 'list_pending' }),
       ]);
 
       if (caseErr) throw caseErr;
@@ -149,8 +150,10 @@ const AdminModerationScreen: React.FC = () => {
 
   const updateVerification = async (userId: string, decision: 'approved' | 'rejected') => {
     try {
-      const { error } = await supabase.functions.invoke('admin-review', {
-        body: { action: 'decide_verification', user_id: userId, decision },
+      const { error } = await invokeBackendFunction('admin-review', {
+        action: 'decide_verification',
+        user_id: userId,
+        decision,
       });
       if (error) throw error;
       setVerifications((prev) => prev.filter((v) => v.id !== userId));
@@ -162,8 +165,10 @@ const AdminModerationScreen: React.FC = () => {
 
   const updatePayoutDecision = async (payoutMethodId: string, decision: 'verified' | 'rejected') => {
     try {
-      const { error } = await supabase.functions.invoke('admin-review', {
-        body: { action: 'decide_payout', payout_method_id: payoutMethodId, decision },
+      const { error } = await invokeBackendFunction('admin-review', {
+        action: 'decide_payout',
+        payout_method_id: payoutMethodId,
+        decision,
       });
       if (error) throw error;
       setPayoutMethods((prev) => prev.filter((m) => m.id !== payoutMethodId));
@@ -175,8 +180,10 @@ const AdminModerationScreen: React.FC = () => {
 
   const reviewKycDocument = async (documentId: string, decision: 'approved' | 'rejected') => {
     try {
-      const { error } = await supabase.functions.invoke('admin-review', {
-        body: { action: 'decide_kyc_document', document_id: documentId, decision },
+      const { error } = await invokeBackendFunction('admin-review', {
+        action: 'decide_kyc_document',
+        document_id: documentId,
+        decision,
       });
       if (error) throw error;
       setKycDocuments((prev) => prev.filter((doc) => doc.id !== documentId));

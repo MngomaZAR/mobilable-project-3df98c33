@@ -1,4 +1,6 @@
 import { supabase } from '../config/supabaseClient';
+import { requireCurrentAuthenticatedUser } from '../config/currentUser';
+import { invokeBackendFunction } from '../config/backendFunctions';
 import { assertDigitalPurchasesAllowed } from '../config/commercePolicy';
 import { Earning, Subscription, Tip } from '../types';
 import { Result, success, failure } from '../utils/result';
@@ -34,7 +36,7 @@ export const sendTip = async (
     return failure(new Error(policyError?.message || 'Digital purchases are unavailable in this build.'));
   }
 
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await requireCurrentAuthenticatedUser().catch(() => null);
   if (!user) return failure(new Error('Not authenticated'));
   if (amount <= 0) return failure(new Error('Tip amount must be positive'));
   if (amount < 5) return failure(new Error('Minimum tip is R5'));
@@ -73,7 +75,7 @@ export const createTipCheckoutLink = async (params: {
 }): Promise<{ paymentUrl: string; tipId: string }> => {
   assertDigitalPurchasesAllowed();
 
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await requireCurrentAuthenticatedUser().catch(() => null);
   if (!user) throw new Error('Not authenticated');
 
   // First record the tip as pending
@@ -92,15 +94,13 @@ export const createTipCheckoutLink = async (params: {
   if (tipError) throw tipError;
 
   // Create PayFast checkout via edge function
-  const { data, error } = await supabase.functions.invoke('payfast-handler', {
-    body: {
-      tip_id: tip.id,
-      amount: params.amount,
-      item_name: `Tip for creator`,
-      return_url: params.returnUrl,
-      cancel_url: params.cancelUrl,
-      notify_url: params.notifyUrl,
-    },
+  const { data, error } = await invokeBackendFunction('payfast-handler', {
+    tip_id: tip.id,
+    amount: params.amount,
+    item_name: `Tip for creator`,
+    return_url: params.returnUrl,
+    cancel_url: params.cancelUrl,
+    notify_url: params.notifyUrl,
   });
 
   if (error) throw new Error(error.message || 'Unable to create tip payment.');
@@ -119,7 +119,7 @@ export const subscribeToCreator = async (
     return failure(new Error(policyError?.message || 'Subscriptions are unavailable in this build.'));
   }
 
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await requireCurrentAuthenticatedUser().catch(() => null);
   if (!user) return failure(new Error('Not authenticated'));
 
   try {

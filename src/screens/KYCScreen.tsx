@@ -9,11 +9,11 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { decode } from 'base64-arraybuffer';
 import { supabase } from '../config/supabaseClient';
 import { useAppData } from '../store/AppDataContext';
 import { useTheme } from '../store/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
+import { uploadImage } from '../services/uploadService';
 
 type DocType = 'id_book' | 'passport' | 'drivers_license' | 'selfie' | 'proof_of_address';
 type Nav = StackNavigationProp<RootStackParamList>;
@@ -63,12 +63,9 @@ const KYCScreen: React.FC = () => {
         { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG, base64: true }
       );
       if (!manipulated.base64) throw new Error('Could not read image');
-      const path = `${userId}/${slot.key}_${Date.now()}.jpg`;
-      const { error: storageErr } = await supabase.storage.from('kyc-docs')
-        .upload(path, decode(manipulated.base64), { contentType: 'image/jpeg', upsert: true });
-      if (storageErr) throw storageErr;
+      const storagePath = await uploadImage(manipulated.uri, 'kyc-docs', { returnStorageRef: true });
       const { error: dbErr } = await supabase.from('kyc_documents').upsert(
-        { user_id: userId, doc_type: slot.key, storage_path: path, status: 'pending' },
+        { user_id: userId, doc_type: slot.key, storage_path: storagePath, status: 'pending' },
         { onConflict: 'user_id,doc_type' }
       );
       if (dbErr) throw dbErr;

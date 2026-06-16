@@ -140,6 +140,11 @@ CREATE TABLE IF NOT EXISTS public.media_access_logs (
   accessed_at timestamptz NOT NULL DEFAULT now()
 );
 
+ALTER TABLE public.media_access_logs
+  ADD COLUMN IF NOT EXISTS asset_id uuid REFERENCES public.media_assets(id) ON DELETE CASCADE;
+ALTER TABLE public.media_access_logs
+  ADD COLUMN IF NOT EXISTS accessed_at timestamptz NOT NULL DEFAULT now();
+
 CREATE INDEX IF NOT EXISTS idx_media_access_logs_asset
   ON public.media_access_logs(asset_id, accessed_at DESC);
 
@@ -208,6 +213,14 @@ CREATE TABLE IF NOT EXISTS public.availability (
   UNIQUE(user_id, day_of_week, start_time, end_time)
 );
 
+ALTER TABLE public.availability
+  ADD COLUMN IF NOT EXISTS user_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE,
+  ADD COLUMN IF NOT EXISTS day_of_week smallint,
+  ADD COLUMN IF NOT EXISTS start_time time,
+  ADD COLUMN IF NOT EXISTS end_time time,
+  ADD COLUMN IF NOT EXISTS is_available boolean NOT NULL DEFAULT true,
+  ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now();
+
 CREATE INDEX IF NOT EXISTS idx_availability_user_day
   ON public.availability(user_id, day_of_week);
 
@@ -226,6 +239,12 @@ CREATE TABLE IF NOT EXISTS public.blocked_dates (
   created_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE(user_id, blocked_date)
 );
+
+ALTER TABLE public.blocked_dates
+  ADD COLUMN IF NOT EXISTS user_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE,
+  ADD COLUMN IF NOT EXISTS blocked_date date,
+  ADD COLUMN IF NOT EXISTS reason text,
+  ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now();
 
 CREATE INDEX IF NOT EXISTS idx_blocked_dates_user_date
   ON public.blocked_dates(user_id, blocked_date);
@@ -250,6 +269,14 @@ CREATE TABLE IF NOT EXISTS public.push_tokens (
   created_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE(user_id, expo_push_token)
 );
+
+ALTER TABLE public.push_tokens
+  ADD COLUMN IF NOT EXISTS user_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE,
+  ADD COLUMN IF NOT EXISTS expo_push_token text,
+  ADD COLUMN IF NOT EXISTS platform text,
+  ADD COLUMN IF NOT EXISTS enabled boolean NOT NULL DEFAULT true,
+  ADD COLUMN IF NOT EXISTS last_seen_at timestamptz,
+  ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now();
 
 CREATE INDEX IF NOT EXISTS idx_push_tokens_user_enabled
   ON public.push_tokens(user_id, enabled);
@@ -325,4 +352,3 @@ DROP POLICY IF EXISTS "account deletions own" ON public.account_deletion_request
 CREATE POLICY "account deletions own" ON public.account_deletion_requests
 FOR ALL USING (auth.uid() = created_by)
 WITH CHECK (auth.uid() = created_by);
-

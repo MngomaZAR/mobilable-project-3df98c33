@@ -1,7 +1,8 @@
 import { supabase } from '../config/supabaseClient';
+import { requireCurrentAuthenticatedUser } from '../config/currentUser';
 
 export const toggleFollow = async (followingId: string): Promise<boolean> => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await requireCurrentAuthenticatedUser();
     if (!user) throw new Error("Must be logged in to follow users");
     
     // Check if already following

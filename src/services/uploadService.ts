@@ -1,4 +1,5 @@
 import { supabase } from '../config/supabaseClient';
+import { hasNhost, nhost } from '../config/nhostClient';
 import { BUCKETS } from '../config/environment';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { Result, success, failure } from '../utils/result';
@@ -8,10 +9,14 @@ import { decode } from 'base64-arraybuffer';
 const PUBLIC_BUCKETS = new Set<string>([BUCKETS.avatars]);
 const SIGNED_URL_TTL_SECONDS = 60 * 60 * 24 * 7; // 7 days
 const STORAGE_REF_SEPARATOR = '::';
+const NHOST_STORAGE_REF_PREFIX = 'nhost::';
 
 export const buildStorageRef = (bucket: string, path: string) => `${bucket}${STORAGE_REF_SEPARATOR}${path}`;
 
 export const parseStorageRef = (value: string) => {
+  if (value.startsWith(NHOST_STORAGE_REF_PREFIX)) {
+    return { bucket: 'nhost', path: value.slice(NHOST_STORAGE_REF_PREFIX.length) };
+  }
   const idx = value.indexOf(STORAGE_REF_SEPARATOR);
   if (idx <= 0) return null;
   return { bucket: value.slice(0, idx), path: value.slice(idx + STORAGE_REF_SEPARATOR.length) };
@@ -20,6 +25,13 @@ export const parseStorageRef = (value: string) => {
 export const isStorageRef = (value: string) => value.includes(STORAGE_REF_SEPARATOR);
 
 const getReadableUrl = async (bucket: string, path: string): Promise<string> => {
+  if (bucket === 'nhost' || hasNhost) {
+    const { body, status } = await nhost.storage.getFilePresignedURL(path);
+    if (status >= 300 || !body?.url) {
+      throw new Error('Unable to generate signed URL.');
+    }
+    return body.url;
+  }
   if (PUBLIC_BUCKETS.has(bucket)) {
     return supabase.storage.from(bucket as any).getPublicUrl(path).data.publicUrl;
   }
@@ -67,9 +79,26 @@ export const uploadImage = async (
     }
 
     const arrayBuffer = decode(manipulated.base64);
+    const fileBlob = new Blob([arrayBuffer], { type: 'image/jpeg' });
 
     const fileName = `${uid()}-${Date.now()}.jpg`;
     const filePath = `uploads/${fileName}`;
+
+    if (hasNhost) {
+      const uploadRes = await nhost.storage.uploadFiles({
+        'bucket-id': bucket,
+        'file[]': [fileBlob],
+        'metadata[]': [{ name: fileName }],
+      });
+      if (uploadRes.status >= 300 || !uploadRes.body?.processedFiles?.[0]?.id) {
+        throw new Error('Image upload failed');
+      }
+      const fileId = uploadRes.body.processedFiles[0].id;
+      if (options?.returnStorageRef) {
+        return `${NHOST_STORAGE_REF_PREFIX}${fileId}`;
+      }
+      return await getReadableUrl('nhost', fileId);
+    }
 
     const { error: uploadError } = await supabase.storage
       .from(bucket as any)
@@ -108,8 +137,20 @@ export const uploadAvatar = async (uri: string, userId: string): Promise<string>
   }
 
   const arrayBuffer = decode(manipulated.base64);
+  const fileBlob = new Blob([arrayBuffer], { type: 'image/jpeg' });
 
   const filePath = `uploads/${userId}-${Date.now()}.jpg`;
+  if (hasNhost) {
+    const uploadRes = await nhost.storage.uploadFiles({
+      'bucket-id': BUCKETS.avatars,
+      'file[]': [fileBlob],
+      'metadata[]': [{ name: `${userId}-${Date.now()}.jpg` }],
+    });
+    if (uploadRes.status >= 300 || !uploadRes.body?.processedFiles?.[0]?.id) {
+      throw new Error('Avatar upload failed');
+    }
+    return await getReadableUrl('nhost', uploadRes.body.processedFiles[0].id);
+  }
   const { error } = await supabase.storage
     .from(BUCKETS.avatars)
     .upload(filePath, arrayBuffer, { contentType: 'image/jpeg', upsert: false });
@@ -151,12 +192,45 @@ export const uploadMediaAsset = async (uri: string, ownerId: string, bookingId: 
     }
 
     const arrayBuffer = decode(manipulated.base64);
+    const fileBlob = new Blob([arrayBuffer], { type: 'image/jpeg' });
 
     // Path keeps booking deliveries grouped while allowing creator-library uploads.
     const scope = bookingId ?? 'library';
     const fileName = `${ownerId}/${scope}/${Date.now()}.jpg`;
     
     // Upload to the 'media' bucket (not 'media_assets' — that doesn't exist)
+    if (hasNhost) {
+      const uploadRes = await nhost.storage.uploadFiles({
+        'bucket-id': BUCKETS.media,
+        'file[]': [fileBlob],
+        'metadata[]': [{ name: fileName }],
+      });
+      if (uploadRes.status >= 300 || !uploadRes.body?.processedFiles?.[0]?.id) {
+        throw new Error('Media upload failed');
+      }
+      const fileId = uploadRes.body.processedFiles[0].id;
+      const previewRes = await uploadBlurredPreview(uri);
+      const previewUrl = previewRes.success ? previewRes.data : '';
+      const { data, error: dbError } = await supabase
+        .from('media_assets')
+        .insert({
+          owner_id: ownerId,
+          booking_id: bookingId,
+          bucket: BUCKETS.media,
+          object_path: fileId,
+          mime_type: 'image/jpeg',
+          is_locked: (priceZar ?? 0) > 0,
+          price_zar: priceZar,
+          title,
+          preview_url: previewUrl
+        })
+        .select()
+        .single();
+
+      if (dbError) throw dbError;
+      return success(data);
+    }
+
     const { error: uploadError } = await supabase.storage
       .from(BUCKETS.media)
       .upload(fileName, arrayBuffer, { contentType: 'image/jpeg' });

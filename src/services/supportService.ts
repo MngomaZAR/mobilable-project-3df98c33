@@ -1,4 +1,5 @@
 import { supabase } from '../config/supabaseClient';
+import { requireCurrentAuthenticatedUser } from '../config/currentUser';
 
 export interface SupportTicketPayload {
   subject: string;
@@ -18,8 +19,7 @@ export interface SupportTicketRow {
 
 /** Submit a support ticket to the support_tickets table */
 export const submitSupportTicket = async (payload: SupportTicketPayload): Promise<SupportTicketRow> => {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('You must be logged in to submit a support ticket.');
+  const user = await requireCurrentAuthenticatedUser();
 
   const { data, error } = await supabase
     .from('support_tickets')
@@ -39,7 +39,7 @@ export const submitSupportTicket = async (payload: SupportTicketPayload): Promis
 
 /** Fetch current user's open support tickets */
 export const fetchMyTickets = async (): Promise<SupportTicketRow[]> => {
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await requireCurrentAuthenticatedUser().catch(() => null);
   if (!user) return [];
 
   const { data, error } = await supabase

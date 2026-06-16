@@ -17,7 +17,7 @@ const requiredChecks = [
   {
     name: 'Canonical payment edge function',
     file: 'src/services/paymentService.ts',
-    includes: 'functions.invoke("payfast-handler"',
+    includes: 'invokeBackendFunction("payfast-handler"',
   },
   {
     name: 'Payment screen uses canonical notify URL helper',

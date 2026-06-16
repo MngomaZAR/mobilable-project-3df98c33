@@ -1,4 +1,4 @@
-import { supabase } from '../config/supabaseClient';
+import { invokeBackendFunction } from '../config/backendFunctions';
 
 type StartConversationPayload = {
   participantId: string;
@@ -14,11 +14,9 @@ export const startConversationViaEdge = async ({
   participantId,
   title,
 }: StartConversationPayload): Promise<StartConversationResult> => {
-  const { data, error } = await supabase.functions.invoke('conversation-start', {
-    body: {
-      participant_id: participantId,
-      title,
-    },
+  const { data, error } = await invokeBackendFunction('conversation-start', {
+    participant_id: participantId,
+    title,
   });
 
   if (error) {
@@ -39,4 +37,3 @@ export const startConversationViaEdge = async ({
         : title || 'Conversation',
   };
 };
-

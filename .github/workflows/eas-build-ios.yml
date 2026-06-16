@@ -9,6 +9,9 @@ name: EAS Build iOS
 #              Choose "production" build profile when prompted to set up App Store creds.
 
 on:
+  push:
+    branches:
+      - release/testflight-2026-06
   workflow_dispatch:
 
 jobs:

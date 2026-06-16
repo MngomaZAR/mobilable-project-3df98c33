@@ -1,4 +1,5 @@
 import { supabase } from '../config/supabaseClient';
+import { requireCurrentAuthenticatedUser } from '../config/currentUser';
 
 export interface PaymentRow {
   id: string;
@@ -17,7 +18,7 @@ export interface PaymentRow {
 
 /** Fetch all payments for the current user (as customer) */
 export const fetchMyPayments = async (): Promise<PaymentRow[]> => {
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await requireCurrentAuthenticatedUser().catch(() => null);
   if (!user) return [];
 
   const { data, error } = await supabase

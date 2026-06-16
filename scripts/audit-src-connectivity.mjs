@@ -56,6 +56,7 @@ const collectSupabaseContracts = (content) => {
   const functions = new Set();
   for (const m of content.matchAll(/\.from\('([a-zA-Z0-9_]+)'\)/g)) tables.add(m[1]);
   for (const m of content.matchAll(/functions\.invoke\('([a-zA-Z0-9\-]+)'/g)) functions.add(m[1]);
+  for (const m of content.matchAll(/invokeBackendFunction\(['"]([a-zA-Z0-9\-]+)['"]/g)) functions.add(m[1]);
   return { tables: [...tables], functions: [...functions] };
 };
 

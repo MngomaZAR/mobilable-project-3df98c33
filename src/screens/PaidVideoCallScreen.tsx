@@ -32,6 +32,8 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { createTipCheckoutLink } from '../services/monetisationService';
 import { trackEvent } from '../services/analyticsService';
 import { supabase } from '../config/supabaseClient';
+import { getCurrentAuthenticatedUser } from '../config/currentUser';
+import { invokeBackendFunction } from '../config/backendFunctions';
 import { getDefaultPayfastNotifyUrl } from '../config/commercePolicy';
 import { useAppData } from '../store/AppDataContext';
 import { isLiveVideoAvailable, LIVE_VIDEO_UNAVAILABLE_MESSAGE } from '../utils/videoCalls';
@@ -131,8 +133,8 @@ const PaidVideoCallScreen: React.FC = () => {
     const activeRole = isTestRoom ? roleChoice : requestedRole;
     if (resolvedCreatorId || activeRole !== 'creator') return;
     (async () => {
-      const { data } = await supabase.auth.getUser();
-      if (data?.user?.id) setResolvedCreatorId(data.user.id);
+      const user = await getCurrentAuthenticatedUser();
+      if (user?.id) setResolvedCreatorId(user.id);
     })();
   }, [requestedRole, resolvedCreatorId, isTestRoom, roleChoice]);
 
@@ -159,8 +161,9 @@ const PaidVideoCallScreen: React.FC = () => {
     setTokenLoading(true);
     setTokenError(null);
     try {
-      const { data, error } = await supabase.functions.invoke('livekit-token', {
-        body: { creator_id: resolvedCreatorId, role: activeRole },
+      const { data, error } = await invokeBackendFunction('livekit-token', {
+        creator_id: resolvedCreatorId,
+        role: activeRole,
       });
       if (error) throw error;
       if (!data?.token || !data?.url) throw new Error('Invalid token response from server.');
@@ -183,8 +186,9 @@ const PaidVideoCallScreen: React.FC = () => {
   const endCall = useCallback(async () => {
     if (sessionId) {
       try {
-        await supabase.functions.invoke('livekit-token', {
-          body: { action: 'end', session_id: sessionId },
+        await invokeBackendFunction('livekit-token', {
+          action: 'end',
+          session_id: sessionId,
         });
       } catch (_e) {
         // Non-blocking — session will be cleaned up server-side

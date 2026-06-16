@@ -1,9 +1,20 @@
+import { environment } from './environment';
+import { nhost } from './nhostClient';
+
 const hasuraUrl = process.env.EXPO_PUBLIC_HASURA_URL;
 const hasuraAnonKey = process.env.EXPO_PUBLIC_HASURA_ANON_KEY;
 
 export const hasHasura = Boolean(hasuraUrl && hasuraAnonKey);
 
 export async function hasuraGQL(query: string, variables?: Record<string, any>) {
+  if (environment.backendProvider === 'nhost') {
+    const response = await nhost.graphql.request({ query, variables });
+    if (response.body?.errors && response.body.errors.length > 0) {
+      throw new Error(response.body.errors.map((e: any) => e.message).join('; '));
+    }
+    return response.body?.data ?? {};
+  }
+
   if (!hasHasura) throw new Error('Hasura not configured');
   const res = await fetch(hasuraUrl!, {
     method: 'POST',

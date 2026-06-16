@@ -240,6 +240,7 @@ BEGIN
 
   INSERT INTO public.contracts (
     booking_id,
+    photographer_id,
     creator_id,
     client_id,
     model_id,
@@ -251,6 +252,7 @@ BEGIN
   )
   SELECT
     NEW.id,
+    v_creator_id,
     v_creator_id,
     NEW.client_id,
     NEW.model_id,
@@ -266,6 +268,7 @@ BEGIN
 
   INSERT INTO public.contracts (
     booking_id,
+    photographer_id,
     creator_id,
     client_id,
     model_id,
@@ -277,6 +280,7 @@ BEGIN
   )
   SELECT
     NEW.id,
+    v_creator_id,
     v_creator_id,
     NEW.client_id,
     NEW.model_id,
@@ -299,10 +303,10 @@ CREATE TRIGGER trg_booking_operational_integrity
   AFTER INSERT OR UPDATE OF status ON public.bookings
   FOR EACH ROW EXECUTE FUNCTION public.ensure_booking_conversation_and_contracts();
 
--- Backfill currently confirmed bookings.
-UPDATE public.bookings
-SET status = status
-WHERE status IN ('accepted', 'completed', 'paid_out');
+-- Historical backfill is intentionally omitted here because the live database
+-- has drifted on contract constraints. The trigger above protects future writes,
+-- and the backfill can be replayed safely after the live contract schema is
+-- inspected and normalized.
 
 -- Creator-library media can exist before it is attached to a booking.
 ALTER TABLE public.media_assets

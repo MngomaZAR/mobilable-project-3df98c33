@@ -8,7 +8,7 @@ import { trackEvent } from '../services/analyticsService';
 import { useAuth } from './AuthContext';
 import { Analytics } from '../utils/analytics';
 import { BUCKETS } from '../config/environment';
-import { parseStorageRef, resolveStorageRef } from '../services/uploadService';
+import { resolveStorageRef } from '../services/uploadService';
 
 export type Reaction = { emoji: string; count: number; myReaction: boolean };
 export type ReactionsMap = Record<string, Reaction[]>; // keyed by messageId
@@ -104,26 +104,21 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           (profilesData ?? []).forEach((p: any) => { profilesMap[p.id] = p; });
         }
 
-        (allParticipants ?? []).forEach((row: any) => {
+        for (const row of allParticipants ?? []) {
           if (!participantsByConvo[row.conversation_id]) participantsByConvo[row.conversation_id] = [];
           participantsByConvo[row.conversation_id].push(row.user_id);
           if (row.user_id === currentUser.id) return;
           const profile = profilesMap[row.user_id];
-          if (!profile) return;
+          if (!profile) continue;
           const avatarRaw = profile.avatar_url ?? '';
-          const parsed = parseStorageRef(avatarRaw);
-          const avatar = parsed
-            ? supabase.storage.from(parsed.bucket as any).getPublicUrl(parsed.path).data.publicUrl
-            : avatarRaw && !/^https?:\/\//i.test(avatarRaw)
-              ? supabase.storage.from(BUCKETS.avatars as any).getPublicUrl(avatarRaw).data.publicUrl
-              : avatarRaw;
+          const avatar = avatarRaw ? await resolveStorageRef(avatarRaw, BUCKETS.avatars) : avatarRaw;
           participantMap[row.conversation_id] = {
             id: profile.id,
             name: profile.full_name ?? 'User',
             avatar_url: avatar,
             last_active_at: profile.updated_at ?? row.last_read_at ?? null,
           };
-        });
+        }
       } catch {
         // Non-fatal — fallback to title-only
       }

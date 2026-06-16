@@ -40,6 +40,7 @@ export interface AppUser {
   phone?: string | null;
   push_token?: string | null;
   city?: string | null;
+  availability_status?: 'online' | 'offline' | null;
   username?: string | null;
   website?: string | null;
   instagram?: string | null;

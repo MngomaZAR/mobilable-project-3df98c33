@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../store/ThemeContext';
 import { useAppData } from '../store/AppDataContext';
 import { supabase } from '../config/supabaseClient';
+import { invokeBackendFunction } from '../config/backendFunctions';
 
 type PayoutMethod = {
   id: string;
@@ -43,7 +44,7 @@ const PayoutMethodsScreen: React.FC = () => {
     if (!currentUser?.id) return;
     setLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('payout-methods', { body: { action: 'list' } });
+      const { data, error } = await invokeBackendFunction('payout-methods', { action: 'list' });
       if (error) throw error;
       setMethods((data?.methods ?? []) as PayoutMethod[]);
     } catch (err: any) {
@@ -65,15 +66,13 @@ const PayoutMethodsScreen: React.FC = () => {
     }
     setSaving(true);
     try {
-      const { error } = await supabase.functions.invoke('payout-methods', {
-        body: {
-          action: 'add',
-          bank_name: bankName.trim(),
-          account_holder: accountHolder.trim(),
-          account_number: accountNumber.trim(),
-          account_type: accountType,
-          branch_code: branchCode.trim() || null,
-        },
+      const { error } = await invokeBackendFunction('payout-methods', {
+        action: 'add',
+        bank_name: bankName.trim(),
+        account_holder: accountHolder.trim(),
+        account_number: accountNumber.trim(),
+        account_type: accountType,
+        branch_code: branchCode.trim() || null,
       });
       if (error) throw error;
       setBankName('');
@@ -92,7 +91,7 @@ const PayoutMethodsScreen: React.FC = () => {
   const setDefault = async (id: string) => {
     if (!currentUser?.id) return;
     try {
-      const { error } = await supabase.functions.invoke('payout-methods', { body: { action: 'set_default', id } });
+      const { error } = await invokeBackendFunction('payout-methods', { action: 'set_default', id });
       if (error) throw error;
       await fetchMethods();
     } catch (err: any) {
@@ -111,7 +110,7 @@ const PayoutMethodsScreen: React.FC = () => {
           style: 'destructive',
           onPress: async () => {
             try {
-              const { error } = await supabase.functions.invoke('payout-methods', { body: { action: 'delete', id } });
+              const { error } = await invokeBackendFunction('payout-methods', { action: 'delete', id });
               if (error) throw error;
               await fetchMethods();
             } catch (err: any) {

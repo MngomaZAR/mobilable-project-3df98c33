@@ -1,8 +1,8 @@
 import { supabase } from '../config/supabaseClient';
+import { requireCurrentAuthenticatedUser } from '../config/currentUser';
 
 export const requestAccountDeletion = async (reason: string = '') => {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('Not authenticated');
+  const user = await requireCurrentAuthenticatedUser();
 
   const { error } = await supabase
     .from('account_deletion_requests')

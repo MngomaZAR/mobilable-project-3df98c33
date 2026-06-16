@@ -1,4 +1,5 @@
 import { supabase } from '../config/supabaseClient';
+import { requireCurrentAuthenticatedUser } from '../config/currentUser';
 
 export type ReportTargetType = 'post' | 'profile' | 'booking' | 'message';
 
@@ -11,8 +12,7 @@ export interface ReportPayload {
 
 /** Report a piece of content or a user to the admin team */
 export const reportContent = async (payload: ReportPayload): Promise<void> => {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('You must be logged in to report content.');
+  const user = await requireCurrentAuthenticatedUser();
 
   const severity =
     /harass|abuse|threat|minor|violence|illegal/i.test(payload.reason) ? 4 :

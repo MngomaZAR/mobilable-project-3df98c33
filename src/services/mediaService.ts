@@ -29,7 +29,7 @@ export const unlockMediaAsset = async (assetId: string): Promise<string> => {
 
   await supabase
     .from('media_access_logs')
-    .insert({ media_asset_id: assetId, user_id: user.id, action: 'signed_url_requested' });
+    .insert({ asset_id: assetId, user_id: user.id, action: 'signed_url_requested' });
 
   const { data: asset, error } = await supabase
     .from('media_assets')

@@ -42,9 +42,14 @@ CREATE TABLE IF NOT EXISTS public.video_call_sessions (
 ALTER TABLE public.video_call_sessions ENABLE ROW LEVEL SECURITY;
 
 -- RLS
-CREATE POLICY IF NOT EXISTS "video_calls_select_participants" ON public.video_call_sessions FOR SELECT USING (auth.uid() = creator_id OR auth.uid() = viewer_id);
-CREATE POLICY IF NOT EXISTS "video_calls_insert_viewer" ON public.video_call_sessions FOR INSERT WITH CHECK (auth.uid() = viewer_id);
-CREATE POLICY IF NOT EXISTS "video_calls_update_participants" ON public.video_call_sessions FOR UPDATE USING (auth.uid() = creator_id OR auth.uid() = viewer_id);
+DROP POLICY IF EXISTS "video_calls_select_participants" ON public.video_call_sessions;
+CREATE POLICY "video_calls_select_participants" ON public.video_call_sessions FOR SELECT USING (auth.uid() = creator_id OR auth.uid() = viewer_id);
+
+DROP POLICY IF EXISTS "video_calls_insert_viewer" ON public.video_call_sessions;
+CREATE POLICY "video_calls_insert_viewer" ON public.video_call_sessions FOR INSERT WITH CHECK (auth.uid() = viewer_id);
+
+DROP POLICY IF EXISTS "video_calls_update_participants" ON public.video_call_sessions;
+CREATE POLICY "video_calls_update_participants" ON public.video_call_sessions FOR UPDATE USING (auth.uid() = creator_id OR auth.uid() = viewer_id);
 
 -- Tip earnings trigger (70/30 split)
 CREATE OR REPLACE FUNCTION public.handle_tip_earnings()

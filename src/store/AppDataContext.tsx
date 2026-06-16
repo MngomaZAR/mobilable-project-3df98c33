@@ -2046,7 +2046,15 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           email,
           password,
           options: {
-            data: { verified: false },
+            data: {
+              verified: false,
+              full_name: fullName ?? null,
+              role,
+              city: extras?.city?.trim() || null,
+              phone: extras?.phone?.trim() || null,
+              gender: extras?.gender ?? null,
+              date_of_birth: dob ?? null,
+            },
           },
         });
         if (signUpError) {

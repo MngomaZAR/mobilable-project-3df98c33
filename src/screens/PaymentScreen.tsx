@@ -28,7 +28,7 @@ const PaymentScreen: React.FC = () => {
     [params?.bookingId, state.bookings]
   );
   const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
-  const [statusMessage, setStatusMessage] = useState('Create a signed link to start PayFast checkout.');
+  const [statusMessage, setStatusMessage] = useState('Generate a secure PayFast link to continue checkout.');
   const [loadingLink, setLoadingLink] = useState(false);
   const [awaitingVerification, setAwaitingVerification] = useState(false);
   const [dispatching, setDispatching] = useState(false);
@@ -282,9 +282,9 @@ const PaymentScreen: React.FC = () => {
         />
       ) : (
         <View style={styles.placeholder}>
-          <Text style={styles.placeholderTitle}>Awaiting signed link</Text>
+          <Text style={styles.placeholderTitle}>Checkout ready</Text>
           <Text style={styles.placeholderText}>
-            A secure payment link will appear here after setup completes.
+            Tap the button above to generate a secure PayFast link and launch the gateway.
           </Text>
         </View>
       )}

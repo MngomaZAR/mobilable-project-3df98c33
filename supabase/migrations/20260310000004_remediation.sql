@@ -220,6 +220,23 @@ CREATE POLICY reviews_update_admin ON public.reviews
 -- ============================================================
 -- SECTION 8: ATTACH OWNERSHIP TRIGGER
 -- ============================================================
+CREATE OR REPLACE FUNCTION public.ensure_conversation_owner_participant()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF NEW.created_by IS NOT NULL THEN
+    INSERT INTO public.conversation_participants (conversation_id, user_id, created_at)
+    VALUES (NEW.id, NEW.created_by, COALESCE(NEW.created_at, now()))
+    ON CONFLICT (conversation_id, user_id) DO NOTHING;
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
 DROP TRIGGER IF EXISTS ensure_conversation_owner_participant ON public.conversations;
 CREATE TRIGGER ensure_conversation_owner_participant
   AFTER INSERT ON public.conversations

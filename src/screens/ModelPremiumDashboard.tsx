@@ -68,7 +68,7 @@ const ModelPremiumDashboard: React.FC = () => {
     if (!currentUser?.id) return;
     try {
       const { data } = await supabase
-        .from('creator_subscription_tiers')
+        .from('subscription_tiers')
         .select('id, name, price, perks, is_active, color, max_subscribers, description')
         .eq('creator_id', currentUser.id)
         .order('created_at', { ascending: true });
@@ -339,14 +339,14 @@ const ModelPremiumDashboard: React.FC = () => {
       const perks = parsePerksInput(tierPerksInput);
       if (editingTier?.id) {
         const { error } = await supabase
-          .from('creator_subscription_tiers')
+          .from('subscription_tiers')
           .update({ name, price, perks })
           .eq('id', editingTier.id)
           .eq('creator_id', currentUser.id);
         if (error) throw error;
       } else {
         const { error } = await supabase
-          .from('creator_subscription_tiers')
+          .from('subscription_tiers')
           .insert({ creator_id: currentUser.id, name, price, perks, is_active: true });
         if (error) throw error;
       }

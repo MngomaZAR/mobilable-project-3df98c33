@@ -1,6 +1,9 @@
 name: iOS TestFlight (No EAS)
 
 on:
+  push:
+    branches:
+      - release/testflight-2026-06
   workflow_dispatch:
 
 jobs:

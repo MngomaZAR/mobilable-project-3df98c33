@@ -2,16 +2,13 @@ name: EAS Build iOS
 
 # Builds iOS app via GitHub Actions using your EXPO_TOKEN.
 # Uses PRODUCTION profile for TestFlight/App Store.
-# Trigger: Manual or push to main.
+# Trigger: Manual.
 #
 # Required: EXPO_TOKEN in repo secrets
 # Credentials: Must be set up once via `npx eas-cli credentials --platform ios`
 #              Choose "production" build profile when prompted to set up App Store creds.
 
 on:
-  push:
-    branches:
-      - release/testflight-2026-06
   workflow_dispatch:
 
 jobs:

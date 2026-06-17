@@ -4,7 +4,7 @@ const APP_IDS = {
   slug: 'papzi',
   scheme: 'papzi',
   bundleIdentifier: 'com.saicts.papzi',
-  androidPackage: 'co.za.papzii',
+  androidPackage: 'com.saicts.papzi',
 };
 
 export default {
@@ -26,7 +26,6 @@ export default {
     ios: {
       supportsTablet: true,
       bundleIdentifier: APP_IDS.bundleIdentifier,
-      buildNumber: '1',
       infoPlist: {
         NSCameraUsageDescription: `${BRAND.name} needs camera access for KYC verification and story creation.`,
         NSPhotoLibraryUsageDescription: `${BRAND.name} needs photo access for profile pictures, posts, and story creation.`,
@@ -41,7 +40,6 @@ export default {
         backgroundColor: "#ffffff"
       },
       package: APP_IDS.androidPackage,
-      versionCode: 1,
       permissions: [
         'ACCESS_FINE_LOCATION',
         'ACCESS_COARSE_LOCATION',

@@ -1,0 +1,15 @@
+.git
+node_modules
+dist
+web-build
+test-results
+.playwright-mcp
+.vscode
+android
+docs/output
+docs/__pycache__
+esp32-sensor-test
+local-ai-ide
+patches
+startup-backups
+supabase/.temp

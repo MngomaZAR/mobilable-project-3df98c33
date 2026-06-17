@@ -22,7 +22,6 @@
       "autoIncrement": true,
       "channel": "production",
       "env": {
-        "EAS_NO_VCS": "1",
         "EAS_BUILD_NO_EXPO_GO_WARNING": "true",
         "EXPO_PUBLIC_STORE_TARGET": "both",
         "EXPO_PUBLIC_DIGITAL_BILLING_PROVIDER": "external",

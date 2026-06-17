@@ -1,7 +1,7 @@
 const BRAND = require('./src/constants/brand.json');
 
 const APP_IDS = {
-  slug: 'papzshipped',
+  slug: 'papzi',
   scheme: 'papzi',
   bundleIdentifier: 'com.saicts.papzi',
   androidPackage: 'co.za.papzii',
@@ -11,7 +11,7 @@ export default {
   expo: {
     name: BRAND.name,
     slug: APP_IDS.slug,
-    owner: "mavzar",
+    owner: "papz",
     scheme: APP_IDS.scheme,
     version: "1.0.0",
     orientation: "portrait",

@@ -66,7 +66,7 @@ jobs:
             echo "No xcworkspace found under ios/"
             exit 1
           fi
-          SCHEME="$(xcodebuild -list -json -workspace "$WORKSPACE" | ruby -rjson -e 'print(JSON.parse(STDIN.read).dig("workspace","schemes")&.first.to_s)')"
+          SCHEME="$(xcodebuild -list -json -workspace "$WORKSPACE" | ruby -rjson -e 'schemes = JSON.parse(STDIN.read).dig("workspace", "schemes") || []; print((schemes & ["Papzii", "Papzi", "papzi"]).first || schemes.first.to_s)')"
           if [ -z "$SCHEME" ]; then
             echo "Could not resolve scheme from workspace $WORKSPACE"
             exit 1
@@ -99,7 +99,7 @@ jobs:
           <plist version="1.0">
           <dict>
             <key>method</key>
-            <string>app-store</string>
+            <string>app-store-connect</string>
             <key>signingStyle</key>
             <string>automatic</string>
             <key>teamID</key>

@@ -2,20 +2,31 @@ import Constants from 'expo-constants';
 import { BRAND } from '../utils/constants';
 
 const appOwnership = (Constants.appOwnership ?? 'standalone').toLowerCase();
+const expoExtra = (Constants.expoConfig?.extra ?? {}) as Record<string, unknown>;
+
+export const readPublicConfig = (name: string, fallback = '') => {
+  const processValue = process.env[name];
+  if (typeof processValue === 'string' && processValue.trim()) return processValue;
+
+  const extraValue = expoExtra[name];
+  if (typeof extraValue === 'string' && extraValue.trim()) return extraValue;
+
+  return fallback;
+};
 
 export const environment = {
-  env: process.env.EXPO_PUBLIC_APP_ENV ?? (__DEV__ ? 'development' : 'production'),
-  region: process.env.EXPO_PUBLIC_REGION ?? 'za',
-  supportEmail: process.env.EXPO_PUBLIC_SUPPORT_EMAIL ?? BRAND.email.support,
+  env: readPublicConfig('EXPO_PUBLIC_APP_ENV', __DEV__ ? 'development' : 'production'),
+  region: readPublicConfig('EXPO_PUBLIC_REGION', 'za'),
+  supportEmail: readPublicConfig('EXPO_PUBLIC_SUPPORT_EMAIL', BRAND.email.support),
   appOwnership,
-  backendProvider: process.env.EXPO_PUBLIC_BACKEND_PROVIDER ?? 'supabase',
-  EXPO_PUBLIC_SUPABASE_URL: process.env.EXPO_PUBLIC_SUPABASE_URL,
-  EXPO_PUBLIC_SUPABASE_ANON_KEY: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
-  EXPO_PUBLIC_NHOST_SUBDOMAIN: process.env.EXPO_PUBLIC_NHOST_SUBDOMAIN,
-  EXPO_PUBLIC_NHOST_REGION: process.env.EXPO_PUBLIC_NHOST_REGION,
-  EXPO_PUBLIC_STORE_TARGET: process.env.EXPO_PUBLIC_STORE_TARGET ?? 'development',
-  EXPO_PUBLIC_DIGITAL_BILLING_PROVIDER: process.env.EXPO_PUBLIC_DIGITAL_BILLING_PROVIDER ?? 'external',
-  EXPO_PUBLIC_DISABLE_DIGITAL_PURCHASES: process.env.EXPO_PUBLIC_DISABLE_DIGITAL_PURCHASES ?? 'false',
+  backendProvider: readPublicConfig('EXPO_PUBLIC_BACKEND_PROVIDER', 'supabase'),
+  EXPO_PUBLIC_SUPABASE_URL: readPublicConfig('EXPO_PUBLIC_SUPABASE_URL'),
+  EXPO_PUBLIC_SUPABASE_ANON_KEY: readPublicConfig('EXPO_PUBLIC_SUPABASE_ANON_KEY'),
+  EXPO_PUBLIC_NHOST_SUBDOMAIN: readPublicConfig('EXPO_PUBLIC_NHOST_SUBDOMAIN'),
+  EXPO_PUBLIC_NHOST_REGION: readPublicConfig('EXPO_PUBLIC_NHOST_REGION'),
+  EXPO_PUBLIC_STORE_TARGET: readPublicConfig('EXPO_PUBLIC_STORE_TARGET', 'development'),
+  EXPO_PUBLIC_DIGITAL_BILLING_PROVIDER: readPublicConfig('EXPO_PUBLIC_DIGITAL_BILLING_PROVIDER', 'external'),
+  EXPO_PUBLIC_DISABLE_DIGITAL_PURCHASES: readPublicConfig('EXPO_PUBLIC_DISABLE_DIGITAL_PURCHASES', 'false'),
 };
 
 /** Centralised Supabase Storage bucket names - change here and it propagates everywhere. */

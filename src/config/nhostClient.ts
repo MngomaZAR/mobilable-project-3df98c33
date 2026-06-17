@@ -3,8 +3,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { type SessionStorageBackend, type StoredSession } from '@nhost/nhost-js/session';
 import { environment } from './environment';
 
-const subdomain = String(process.env.EXPO_PUBLIC_NHOST_SUBDOMAIN ?? '').trim();
-const region = String(process.env.EXPO_PUBLIC_NHOST_REGION ?? '').trim();
+const subdomain = String(environment.EXPO_PUBLIC_NHOST_SUBDOMAIN ?? '').trim();
+const region = String(environment.EXPO_PUBLIC_NHOST_REGION ?? '').trim();
 const SESSION_STORAGE_KEY = 'nhostSession';
 let cachedSession: StoredSession | null = null;
 let hydrated = false;

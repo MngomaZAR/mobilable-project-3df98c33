@@ -13,6 +13,12 @@ const jsonResponse = (status: number, body: Record<string, unknown>) =>
   new Response(JSON.stringify(body), { status, headers: corsHeaders });
 
 const isEffectiveProviderRole = (role: string) => role === 'photographer' || role === 'model';
+const authCreateStatus = (message = '') => {
+  const lower = message.toLowerCase();
+  if (lower.includes('already') || lower.includes('registered') || lower.includes('exists')) return 409;
+  if (lower.includes('password') || lower.includes('email')) return 400;
+  return 500;
+};
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { status: 200, headers: corsHeaders });
@@ -21,6 +27,9 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+    if (!supabaseUrl || !serviceRoleKey) {
+      return jsonResponse(500, { error: 'Auth service is not configured.' });
+    }
     const admin = createClient(supabaseUrl, serviceRoleKey);
 
     const body = await req.json().catch(() => ({}));
@@ -54,7 +63,8 @@ serve(async (req) => {
     });
 
     if (createError || !created?.user?.id) {
-      return jsonResponse(500, { error: createError?.message ?? 'Unable to create user.' });
+      const message = createError?.message ?? 'Unable to create user.';
+      return jsonResponse(authCreateStatus(message), { error: message });
     }
 
     const userId = created.user.id;

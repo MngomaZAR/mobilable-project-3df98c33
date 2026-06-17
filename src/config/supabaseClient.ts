@@ -11,6 +11,8 @@ const resolvedSupabaseUrl = String(supabaseUrl ?? '').trim();
 const resolvedSupabaseAnonKey = String(supabaseAnonKey ?? '').trim();
 
 export const hasSupabase = Boolean(resolvedSupabaseUrl && resolvedSupabaseAnonKey);
+export const supabaseFunctionUrl = resolvedSupabaseUrl ? `${resolvedSupabaseUrl.replace(/\/+$/, '')}/functions/v1` : '';
+export const supabasePublishableKey = resolvedSupabaseAnonKey;
 
 if (!hasSupabase) {
   console.error('Supabase environment variables are missing. The app will stay in offline-safe mode until backend config is provided.');

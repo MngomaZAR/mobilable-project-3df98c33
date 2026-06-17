@@ -13,7 +13,6 @@ import { createBookingRequest, updateBookingStatusInDb } from '../services/booki
 import { BUCKETS } from '../config/environment';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
-import Constants from 'expo-constants';
 import { AppState, AppUser, Booking, BookingStatus, Comment, ConversationSummary, Message, Model, NotificationEvent, Post, PrivacySettings, Review, UserRole, CreditsWallet, CreditsLedgerEntry } from '../types';
 import { uid } from '../utils/id';
 import { formatAuthError, formatErrorMessage, logError } from '../utils/errors';
@@ -2465,7 +2464,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (hasNhost) {
         throw new Error('OAuth sign-in is not wired for the Nhost backend yet.');
       }
-      const redirectTo = Constants.appOwnership === 'expo' ? Linking.createURL('auth') : 'papzi://auth';
+      const redirectTo = Linking.createURL('auth');
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
@@ -2476,9 +2475,13 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
       if (error) throw error;
       if (data?.url) {
-        const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+        const result = await withTimeout(WebBrowser.openAuthSessionAsync(data.url, redirectTo), 120000).catch((err) => {
+          WebBrowser.dismissBrowser();
+          throw err;
+        });
 
         if (result.type === 'cancel' || result.type === 'dismiss') {
+          setError(null);
           return;
         }
 

@@ -1,13 +1,8 @@
 import { createPayfastCheckoutLink } from '../../src/services/paymentService';
-import { supabase } from '../../src/config/supabaseClient';
+import { invokeBackendFunction } from '../../src/config/backendFunctions';
 
-// Mock the supabase client dependency
-jest.mock('../../src/config/supabaseClient', () => ({
-  supabase: {
-    functions: {
-      invoke: jest.fn(),
-    },
-  },
+jest.mock('../../src/config/backendFunctions', () => ({
+  invokeBackendFunction: jest.fn(),
 }));
 
 describe('Payment Service', () => {
@@ -17,7 +12,7 @@ describe('Payment Service', () => {
 
   it('should return a valid payment URL if Edge Function succeeds', async () => {
     const mockPaymentUrl = 'https://sandbox.payfast.co.za/eng/process?signature=valid_sig&amount=100';
-    (supabase.functions.invoke as jest.Mock).mockResolvedValue({
+    (invokeBackendFunction as jest.Mock).mockResolvedValue({
       data: { paymentUrl: mockPaymentUrl, paymentId: 'pf_123' },
       error: null,
     });
@@ -31,13 +26,13 @@ describe('Payment Service', () => {
 
     expect(result.paymentUrl).toBe(mockPaymentUrl);
     expect(result.paymentId).toBe('pf_123');
-    expect(supabase.functions.invoke).toHaveBeenCalledWith('payfast-handler', expect.any(Object));
+    expect(invokeBackendFunction).toHaveBeenCalledWith('payfast-handler', expect.any(Object));
   });
 
   it('should throw an error if the URL is missing a signature', async () => {
     // Missing signature param
     const mockPaymentUrl = 'https://sandbox.payfast.co.za/eng/process?amount=100';
-    (supabase.functions.invoke as jest.Mock).mockResolvedValue({
+    (invokeBackendFunction as jest.Mock).mockResolvedValue({
       data: { paymentUrl: mockPaymentUrl },
       error: null,
     });
@@ -53,7 +48,7 @@ describe('Payment Service', () => {
   });
 
   it('should throw an error if the Edge function fails', async () => {
-    (supabase.functions.invoke as jest.Mock).mockResolvedValue({
+    (invokeBackendFunction as jest.Mock).mockResolvedValue({
       data: null,
       error: { message: 'Edge function timeout' },
     });

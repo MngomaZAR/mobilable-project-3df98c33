@@ -20,4 +20,15 @@ enabled = true
 
 [auth]
 enabled = true
-site_url = "http://127.0.0.1:8081"
+site_url = "papzi://auth"
+additional_redirect_urls = ["papzi://auth", "papzi://**", "exp://**"]
+enable_manual_linking = true
+
+[auth.mfa.totp]
+enroll_enabled = true
+verify_enabled = true
+
+[auth.email]
+enable_confirmations = true
+max_frequency = "1m0s"
+otp_length = 8

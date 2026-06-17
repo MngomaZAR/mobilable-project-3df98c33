@@ -1,4 +1,4 @@
-import { supabase } from './supabaseClient';
+import { supabase, supabaseFunctionUrl, supabasePublishableKey } from './supabaseClient';
 import { hasNhost, nhost } from './nhostClient';
 
 export type BackendFunctionResult<T> = {
@@ -7,6 +7,28 @@ export type BackendFunctionResult<T> = {
 };
 
 const normalizePath = (name: string) => (name.startsWith('/') ? name : `/${name}`);
+
+const parseFunctionMessage = (body: unknown, fallback: string) => {
+  if (!body) return fallback;
+  if (typeof body === 'string') return body || fallback;
+  if (typeof body === 'object') {
+    const shape = body as Record<string, unknown>;
+    if (shape.message) return String(shape.message);
+    if (shape.error) return String(shape.error);
+    if (shape.error_description) return String(shape.error_description);
+  }
+  return fallback;
+};
+
+const readResponseBody = async (response: Response) => {
+  const text = await response.text();
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+};
 
 export const invokeBackendFunction = async <T = any>(
   name: string,
@@ -26,9 +48,30 @@ export const invokeBackendFunction = async <T = any>(
     return { data: response.body ?? null, error: null };
   }
 
-  const { data, error } = await supabase.functions.invoke(name, { body });
-  if (error) {
-    return { data: null, error: { message: error.message || `Function ${name} failed` } };
+  if (!supabaseFunctionUrl || !supabasePublishableKey) {
+    return { data: null, error: { message: 'Backend is not configured for this build.' } };
   }
-  return { data: data ?? null, error: null };
+
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData.session?.access_token ?? supabasePublishableKey;
+  const response = await fetch(`${supabaseFunctionUrl}${normalizePath(name)}`, {
+    method: 'POST',
+    headers: {
+      apikey: supabasePublishableKey,
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      'x-client-info': 'papzi-app',
+    },
+    body: JSON.stringify(body ?? {}),
+  });
+  const responseBody = await readResponseBody(response);
+  if (!response.ok) {
+    return {
+      data: null,
+      error: {
+        message: parseFunctionMessage(responseBody, `Function ${name} failed (${response.status}).`),
+      },
+    };
+  }
+  return { data: (responseBody as T) ?? null, error: null };
 };

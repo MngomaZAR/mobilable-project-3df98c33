@@ -9,11 +9,12 @@ const runtimeTargets = [
   'app.config.js',
   'eas.json',
   'src',
+  'supabase/config.toml',
   '.github/workflows/ios-testflight-no-eas.yml',
   '.github/workflows/eas-deploy-web.yml',
 ];
 
-const sourceExts = new Set(['.ts', '.tsx', '.js', '.jsx', '.json', '.yml', '.yaml']);
+const sourceExts = new Set(['.ts', '.tsx', '.js', '.jsx', '.json', '.yml', '.yaml', '.toml']);
 const localEndpointPattern =
   /\b(?:https?:\/\/)?(?:localhost|127\.0\.0\.1|0\.0\.0\.0|10\.0\.2\.2|192\.168\.\d{1,3}\.\d{1,3})(?::\d+)?(?:\/[^\s'"`]*)?/gi;
 

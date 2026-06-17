@@ -21,15 +21,26 @@ const requireEnv = (name) => {
   return value;
 };
 
-const validateSupabaseUrl = (value) => {
-  if (!value) return;
+const validateHostedUrl = (name, value) => {
+  if (!value) return null;
   try {
     const url = new URL(value);
     if (url.protocol !== 'https:') {
-      warnings.push('EXPO_PUBLIC_SUPABASE_URL should use https');
+      warnings.push(`${name} should use https`);
     }
+    const hostname = url.hostname.toLowerCase();
+    const isLocalhost =
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname === '0.0.0.0' ||
+      hostname.endsWith('.localhost');
+    if (mode === 'release' && isLocalhost) {
+      errors.push(`${name} must not point to a local development host in release mode`);
+    }
+    return url;
   } catch {
-    errors.push('EXPO_PUBLIC_SUPABASE_URL must be a valid URL');
+    errors.push(`${name} must be a valid URL`);
+    return null;
   }
 };
 
@@ -38,7 +49,7 @@ const allowedBillingProviders = new Set(['iap', 'external', 'disabled']);
 
 const supabaseUrl = requireEnv('EXPO_PUBLIC_SUPABASE_URL');
 requireEnv('EXPO_PUBLIC_SUPABASE_ANON_KEY');
-validateSupabaseUrl(supabaseUrl);
+validateHostedUrl('EXPO_PUBLIC_SUPABASE_URL', supabaseUrl);
 
 const backendProvider = read('EXPO_PUBLIC_BACKEND_PROVIDER').toLowerCase() || 'supabase';
 if (!['supabase', 'nhost'].includes(backendProvider)) {
@@ -46,8 +57,11 @@ if (!['supabase', 'nhost'].includes(backendProvider)) {
 }
 
 if (backendProvider === 'nhost') {
-  requireEnv('EXPO_PUBLIC_NHOST_SUBDOMAIN');
+  const nhostSubdomain = requireEnv('EXPO_PUBLIC_NHOST_SUBDOMAIN');
   requireEnv('EXPO_PUBLIC_NHOST_REGION');
+  if (mode === 'release' && /localhost|127\.0\.0\.1|0\.0\.0\.0/i.test(nhostSubdomain)) {
+    errors.push('EXPO_PUBLIC_NHOST_SUBDOMAIN must not point to a local development host in release mode');
+  }
 }
 
 if (mode === 'release') {

@@ -13,11 +13,6 @@ jobs:
     env:
       CI: "1"
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-      EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
-      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
-      EXPO_PUBLIC_STORE_TARGET: both
-      EXPO_PUBLIC_DIGITAL_BILLING_PROVIDER: external
-      EXPO_PUBLIC_DISABLE_DIGITAL_PURCHASES: "true"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -25,8 +20,6 @@ jobs:
       - name: Validate required secrets
         run: |
           test -n "$EXPO_TOKEN" || (echo "Missing EXPO_TOKEN" && exit 1)
-          test -n "$EXPO_PUBLIC_SUPABASE_URL" || (echo "Missing EXPO_PUBLIC_SUPABASE_URL" && exit 1)
-          test -n "$EXPO_PUBLIC_SUPABASE_ANON_KEY" || (echo "Missing EXPO_PUBLIC_SUPABASE_ANON_KEY" && exit 1)
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -43,8 +36,15 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --no-fund --omit=optional
 
+      - name: Pull EAS production env
+        run: npx eas-cli@latest env:pull --environment production --path .env.eas.production --non-interactive
+
       - name: Validate required env
-        run: npm run validate:env:release
+        run: |
+          set -a
+          . ./.env.eas.production
+          set +a
+          npm run validate:env:release
 
       - name: Build and submit iOS
         run: npx eas-cli@latest build --platform ios --profile production --auto-submit-with-profile production --non-interactive --wait --message "GitHub TestFlight release"

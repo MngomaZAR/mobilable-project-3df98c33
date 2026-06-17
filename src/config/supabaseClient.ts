@@ -18,7 +18,7 @@ if (!hasSupabase) {
 }
 
 // Keep app boot stable when env is missing without implying a real backend is configured.
-const safeSupabaseUrl = resolvedSupabaseUrl || 'http://127.0.0.1:54321';
+const safeSupabaseUrl = resolvedSupabaseUrl || 'https://backend-not-configured.invalid';
 const safeSupabaseAnonKey = resolvedSupabaseAnonKey || 'offline-anon-key';
 
 export const supabase = createClient(safeSupabaseUrl, safeSupabaseAnonKey, {

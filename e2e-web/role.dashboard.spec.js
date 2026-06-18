@@ -218,7 +218,7 @@ async function prepareRoleAccounts() {
     }
     accountIds.set(spec.role, accountId);
 
-    const profile = await admin.from('profiles').insert(
+    const profile = await admin.from('profiles').upsert(
       {
         id: accountId,
         role: spec.role,
@@ -232,6 +232,7 @@ async function prepareRoleAccounts() {
         verified: spec.role !== 'client',
         is_test_account: true,
       },
+      { onConflict: 'id' },
     );
     if (profile.error) throw new Error(`profile upsert(${spec.role}) failed: ${profile.error.message}`);
   }

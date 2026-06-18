@@ -7,6 +7,7 @@ type CreateBookingInput = {
   talent_type?: 'photographer' | 'model';
   booking_date: string;
   package_type: string;
+  package_id?: string;
   notes?: string;
   base_amount?: number;
   travel_amount?: number;
@@ -56,6 +57,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         talent_type: payload.talent_type,
         booking_date: payload.booking_date,
         package_type: payload.package_type,
+        package_id: payload.package_id,
         notes: payload.notes,
         base_amount: payload.base_amount,
         travel_amount: payload.travel_amount,

@@ -16,6 +16,7 @@ import * as Linking from 'expo-linking';
 import { AppState, AppUser, Booking, BookingStatus, Comment, ConversationSummary, Message, Model, NotificationEvent, Post, PrivacySettings, Review, UserRole, CreditsWallet, CreditsLedgerEntry } from '../types';
 import { uid } from '../utils/id';
 import { formatAuthError, formatErrorMessage, logError } from '../utils/errors';
+import { PLACEHOLDER_IMAGE } from '../utils/constants';
 import { mapPhotographerRow, mapPostRow, mapSupabaseUser } from '../utils/mappings';
 import { startConversationViaEdge } from '../services/chatService';
 import {
@@ -38,6 +39,7 @@ type CreateBookingInput = {
   service_type?: Booking['service_type'];
   booking_date: string;
   package_type: string;
+  package_id?: string;
   notes?: string;
   /** Base session price in ZAR */
   base_amount?: number;
@@ -143,13 +145,22 @@ const isRecoverableAbort = (err: unknown) => {
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 const TIMEOUT_ERROR_MESSAGE = 'Request timed out.';
-const withTimeout = async <T,>(promiseLike: PromiseLike<T>, timeoutMs = 12000): Promise<T> => {
+const withTimeout = async <T,>(promiseLike: PromiseLike<T>, timeoutMs = 20000): Promise<T> => {
   return await Promise.race<T>([
     Promise.resolve(promiseLike),
     new Promise<T>((_, reject) => setTimeout(() => reject(new Error(TIMEOUT_ERROR_MESSAGE)), timeoutMs)),
   ]);
 };
 const isTimeoutError = (err: unknown) => getErrorMessage(err).includes(TIMEOUT_ERROR_MESSAGE);
+
+const safeResolveFeedImage = async (value: string) => {
+  try {
+    return await withTimeout(resolveStorageRef(value ?? '', BUCKETS.posts), 4500);
+  } catch {
+    if (/^https?:\/\//i.test(value ?? '')) return value;
+    return PLACEHOLDER_IMAGE;
+  }
+};
 
 const parseAuthCallbackParams = (url: string) => {
   try {
@@ -808,7 +819,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
       let mapped = await Promise.all(
         (rawPosts ?? []).map(async (post: any) => {
-          post.image_url = await resolveStorageRef(post.image_url ?? '', BUCKETS.posts);
+          post.image_url = await safeResolveFeedImage(post.image_url ?? '');
           post.profiles = profilesMap[post.author_id] ? [profilesMap[post.author_id]] : [];
           return mapPostRow(post);
         })
@@ -847,8 +858,17 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           await sleep(600);
           return fetchPosts({ reset, attempt: attempt + 1 });
         }
-        logError('fetch_posts', err);
-        setError(formatErrorMessage(err, `Error loading feed: ${err?.message || 'Unknown error'}`));
+        const hasUsablePosts = stateRef.current.posts.length > 0 || initialState.posts.length > 0;
+        if (hasUsablePosts && (isRecoverableAbort(err) || isTimeoutError(err) || /failed to fetch|network/i.test(getErrorMessage(err)))) {
+          console.warn('Feed network timed out, using cached posts.');
+          if (stateRef.current.posts.length === 0) {
+            setState({ posts: initialState.posts });
+          }
+          setError(null);
+        } else {
+          logError('fetch_posts', err);
+          setError(formatErrorMessage(err, `Error loading feed: ${err?.message || 'Unknown error'}`));
+        }
         return { hasMore: false };
       }
   }, []);
@@ -1459,7 +1479,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
             clientId: currentUser.id,
             talentType: isModel ? 'model' : 'photographer',
             serviceType: payload.service_type ?? (isModel ? 'modeling' : 'photography'),
-            packageId: payload.package_type,
+            packageId: payload.package_id ?? payload.package_type,
             totalAmount: total,
             latitude: payload.latitude || 0,
             longitude: payload.longitude || 0,

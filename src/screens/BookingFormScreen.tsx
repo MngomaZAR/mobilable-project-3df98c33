@@ -203,6 +203,7 @@ const BookingFormScreen: React.FC = () => {
         service_type: isModelTalent ? 'modeling' : selectedServiceType === 'video' ? 'combined' : 'photography',
         booking_date: bookingDate,
         package_type: `${serviceTypeLabel} • ${selectedTier.label} • ${bookingTimeMode === 'now' ? 'Now' : timeSlot}`,
+        package_id: selectedTier.id,
         notes: finalNotes,
         base_amount: baseAmount,
         travel_amount: travelAmount,

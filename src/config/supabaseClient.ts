@@ -11,6 +11,7 @@ const resolvedSupabaseUrl = String(supabaseUrl ?? '').trim();
 const resolvedSupabaseAnonKey = String(supabaseAnonKey ?? '').trim();
 
 export const hasSupabase = Boolean(resolvedSupabaseUrl && resolvedSupabaseAnonKey);
+export const supabaseRestUrl = resolvedSupabaseUrl ? `${resolvedSupabaseUrl.replace(/\/+$/, '')}/rest/v1` : '';
 export const supabaseFunctionUrl = resolvedSupabaseUrl ? `${resolvedSupabaseUrl.replace(/\/+$/, '')}/functions/v1` : '';
 export const supabasePublishableKey = resolvedSupabaseAnonKey;
 

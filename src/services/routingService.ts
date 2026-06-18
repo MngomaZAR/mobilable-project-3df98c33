@@ -9,6 +9,7 @@ export type RouteResponse = {
   coordinates: [number, number][]; // [longitude, latitude]
   distance: number;
   duration: number;
+  source: 'osrm' | 'fallback';
 };
 
 /**
@@ -16,18 +17,22 @@ export type RouteResponse = {
  * Uses OSRM (Open Source Routing Machine) public API.
  */
 class RoutingService {
-  private readonly BASE_URL = 'https://router.project-osrm.org/routed-v1/driving';
+  private readonly BASE_URL = 'https://router.project-osrm.org/route/v1/driving';
+  private readonly REQUEST_TIMEOUT_MS = 8000;
 
   /**
    * Fetches a route between two points following streets.
    */
   async getRoute(start: Coordinate, end: Coordinate): Promise<RouteResponse> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), this.REQUEST_TIMEOUT_MS);
+
     try {
-      const url = `${this.BASE_URL}/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson`;
+      const url = `${this.BASE_URL}/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson&steps=true`;
       
-      const response = await fetch(url);
+      const response = await fetch(url, { signal: controller.signal });
       if (!response.ok) {
-        throw new Error('Routing API failed');
+        throw new Error(`Routing API failed with HTTP ${response.status}`);
       }
 
       const data = await response.json();
@@ -37,14 +42,22 @@ class RoutingService {
       }
 
       const route = data.routes[0];
+      const coordinates = route?.geometry?.coordinates;
+      if (!Array.isArray(coordinates) || coordinates.length < 2) {
+        throw new Error('Routing API returned invalid geometry');
+      }
+
       return {
-        coordinates: route.geometry.coordinates,
+        coordinates,
         distance: route.distance / 1000, // convert to km
         duration: route.duration, // in seconds
+        source: 'osrm',
       };
     } catch (error) {
       console.warn('RoutingService: Failed to fetch street route, falling back to straight line.', error);
       return this.getFallbackRoute(start, end);
+    } finally {
+      clearTimeout(timeout);
     }
   }
 
@@ -59,6 +72,7 @@ class RoutingService {
       ],
       distance: haversineDistanceKm(start, end),
       duration: (haversineDistanceKm(start, end) / 40) * 3600, // Approx 40km/h
+      source: 'fallback',
     };
   }
 }

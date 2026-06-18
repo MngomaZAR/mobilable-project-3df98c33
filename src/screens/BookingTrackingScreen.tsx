@@ -14,6 +14,7 @@ import { getDispatchState, getEta } from '../services/dispatchService';
 import { MapLibreGL, isMapLibreNativeAvailable } from '../components/MapLibreWrapper';
 import { useTheme } from '../store/ThemeContext';
 import { getEffectiveRole, isPhotographerUser } from '../utils/userRole';
+import { routingService, RouteResponse } from '../services/routingService';
 
 type Route = RouteProp<RootStackParamList, 'BookingTracking'>;
 type Navigation = StackNavigationProp<RootStackParamList, 'BookingTracking'>;
@@ -72,6 +73,7 @@ const BookingTrackingScreen: React.FC = () => {
   const [etaMinutes, setEtaMinutes] = useState<number | null>(null);
   const [etaConfidence, setEtaConfidence] = useState<number>(booking?.eta_confidence ?? 0.6);
   const [countdownSec, setCountdownSec] = useState(0);
+  const [trackingRoute, setTrackingRoute] = useState<RouteResponse | null>(null);
 
   useEffect(() => {
     const loop = Animated.loop(
@@ -239,6 +241,26 @@ const BookingTrackingScreen: React.FC = () => {
     return () => clearInterval(timer);
   }, [countdownSec]);
 
+  useEffect(() => {
+    let active = true;
+
+    const hydrateRoute = async () => {
+      const route = await routingService.getRoute(livePhotographerLocation, liveClientLocation);
+      if (!active) return;
+      setTrackingRoute(route);
+    };
+
+    hydrateRoute();
+    return () => {
+      active = false;
+    };
+  }, [
+    liveClientLocation.latitude,
+    liveClientLocation.longitude,
+    livePhotographerLocation.latitude,
+    livePhotographerLocation.longitude,
+  ]);
+
   const openChatThread = async () => {
     if (!photographer) {
       navigation.navigate('Root', { screen: 'Chat' });
@@ -287,15 +309,17 @@ const BookingTrackingScreen: React.FC = () => {
     type: 'Feature',
     geometry: {
       type: 'LineString',
-      coordinates: [
-        [livePhotographerLocation.longitude, livePhotographerLocation.latitude],
-        [liveClientLocation.longitude, liveClientLocation.latitude],
-      ],
+      coordinates:
+        trackingRoute?.coordinates ?? [
+          [livePhotographerLocation.longitude, livePhotographerLocation.latitude],
+          [liveClientLocation.longitude, liveClientLocation.latitude],
+        ],
     },
     properties: {},
   };
 
-  const distanceKm = haversineDistanceKm(livePhotographerLocation, liveClientLocation);
+  const distanceKm = trackingRoute?.distance ?? haversineDistanceKm(livePhotographerLocation, liveClientLocation);
+  const routeSourceLabel = trackingRoute?.source === 'osrm' ? 'Road route' : 'Direct estimate';
   const fallbackMins = Math.max(3, Math.round((distanceKm / 35) * 60));
   const activeTimer = countdownSec > 0 ? countdownSec : Math.max(60, (etaMinutes ?? fallbackMins) * 60);
   const isCancellable = booking.status === 'pending' || booking.status === 'accepted' || booking.status === 'in_progress';
@@ -323,9 +347,9 @@ const BookingTrackingScreen: React.FC = () => {
             <MapLibreGL.LineLayer
               id="track-route-glow"
               style={{
-                lineColor: isDark ? '#f7d7a2' : '#e5c28b',
-                lineWidth: 12,
-                lineOpacity: 0.35,
+                lineColor: trackingRoute?.source === 'fallback' ? (isDark ? '#7b879b' : '#b8a78f') : (isDark ? '#f7d7a2' : '#e5c28b'),
+                lineWidth: trackingRoute?.source === 'fallback' ? 8 : 12,
+                lineOpacity: trackingRoute?.source === 'fallback' ? 0.22 : 0.35,
                 lineBlur: 2.2,
                 lineCap: 'round',
                 lineJoin: 'round',
@@ -334,9 +358,10 @@ const BookingTrackingScreen: React.FC = () => {
             <MapLibreGL.LineLayer
               id="track-route-line"
               style={{
-                lineColor: isDark ? '#f3d7a7' : '#d5b069',
-                lineWidth: 6,
-                lineOpacity: 0.94,
+                lineColor: trackingRoute?.source === 'fallback' ? (isDark ? '#94a3b8' : '#8b7d6b') : (isDark ? '#f3d7a7' : '#d5b069'),
+                lineWidth: trackingRoute?.source === 'fallback' ? 4 : 6,
+                lineOpacity: trackingRoute?.source === 'fallback' ? 0.68 : 0.94,
+                lineDasharray: trackingRoute?.source === 'fallback' ? [2, 3] : undefined,
                 lineCap: 'round',
                 lineJoin: 'round',
               }}
@@ -399,7 +424,7 @@ const BookingTrackingScreen: React.FC = () => {
 
           <Text style={[styles.timerText, { color: colors.text }]}>{formatTimer(activeTimer)}</Text>
           <Text style={[styles.timerSub, { color: colors.textMuted }]}>
-            {statusLabel} • {assignmentState.replace('_', ' ')} • {distanceKm.toFixed(1)} km away • Confidence {(etaConfidence * 100).toFixed(0)}%
+            {statusLabel} • {assignmentState.replace('_', ' ')} • {routeSourceLabel} • {distanceKm.toFixed(1)} km • Confidence {(etaConfidence * 100).toFixed(0)}%
           </Text>
 
           <View style={styles.actionRow}>

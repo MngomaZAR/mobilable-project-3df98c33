@@ -97,6 +97,7 @@ const MapScreen: React.FC = () => {
   const [altRoute, setAltRoute] = useState<Array<{ lat: number; lng: number }>>([]);
   const [routeDurationSec, setRouteDurationSec] = useState<number | null>(null);
   const [routeDistanceKm, setRouteDistanceKm] = useState<number | null>(null);
+  const [routeSource, setRouteSource] = useState<'osrm' | 'fallback' | null>(null);
   const [heatmapSummary, setHeatmapSummary] = useState<{ demand: number; supply: number } | null>(null);
   const [pendingRequest, setPendingRequest] = useState<{
     bookingId: string;
@@ -352,17 +353,17 @@ const MapScreen: React.FC = () => {
       const start = { latitude: userCoords.lat, longitude: userCoords.lng };
       const end = { latitude: selectedMarker.latitude, longitude: selectedMarker.longitude };
       const route = await routingService.getRoute(start, end);
-      setPrimaryRoute(route.coordinates.map(([lng, lat]) => ({ lat, lng })));
-      setAltRoute(route.coordinates.map(([lng, lat], i) => ({
-        lat: lat + (i % 3 === 0 ? 0.0002 : -0.0001),
-        lng: lng + (i % 3 === 0 ? 0.0002 : -0.0001),
-      })));
+      const routeCoords = route.coordinates.map(([lng, lat]) => ({ lat, lng }));
+      setPrimaryRoute(route.source === 'osrm' ? routeCoords : []);
+      setAltRoute(route.source === 'fallback' ? routeCoords : []);
       setRouteDistanceKm(route.distance);
       setRouteDurationSec(route.duration);
+      setRouteSource(route.source);
       setRouteProgress(0);
     } catch {
       setRouteDistanceKm(null);
       setRouteDurationSec(null);
+      setRouteSource(null);
     }
   }, [selectedMarker, userCoords]);
 
@@ -458,8 +459,6 @@ const MapScreen: React.FC = () => {
     try {
       const pkg = BOOKING_PACKAGES.find(p => p.id === 'instant') ?? BOOKING_PACKAGES[0];
       const base = pkg.basePrice;
-      const commission = Math.round(base * 0.3);
-      const payout = base - commission;
       const providerId = marker.sourceId ?? marker.id;
       const isModel = marker.type === 'model';
       const { data, error } = await supabase
@@ -471,12 +470,11 @@ const MapScreen: React.FC = () => {
           service_type: isModel ? 'modeling' : 'photography',
           status: 'pending',
           package_type: `${pkg.label} (${marker.type})`,
+          package_id: pkg.id,
+          pricing_mode: 'flat',
           user_latitude: userCoords.lat,
           user_longitude: userCoords.lng,
           booking_date: new Date().toISOString(),
-          price_total: base,
-          photographer_payout: payout,
-          commission_amount: commission,
           is_instant: true,
         })
         .select('id')
@@ -540,8 +538,8 @@ const MapScreen: React.FC = () => {
             animationDuration={700}
           />
 
-          {/* Alt route (dashed, muted Uber-like fallback) */}
-          {altSlice.length > 1 && (
+          {/* Direct fallback estimate when OSRM cannot return a road route. */}
+          {routeSource === 'fallback' && altSlice.length > 1 && (
             <MapLibreGL.ShapeSource id="route-alt" shape={toGeoJson(altSlice) as any}>
               <MapLibreGL.LineLayer id="route-alt-line" style={{ lineColor: isDark ? '#6f7f9c' : '#b8a78f', lineOpacity: 0.45, lineWidth: 4, lineDasharray: [2, 3] }} />
             </MapLibreGL.ShapeSource>

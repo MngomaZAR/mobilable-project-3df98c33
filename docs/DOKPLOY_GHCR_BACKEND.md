@@ -26,6 +26,11 @@ The workflow builds:
 
 Tags include commit SHA, branch names, and `latest`. The Dokploy compose file uses `latest` by default.
 
+The GHCR manifest endpoint currently returns HTTP 401 without credentials, so Dokploy must either:
+
+- pull with a GitHub token that has package read access, or
+- use packages that have been made public in GitHub Container Registry.
+
 ## Dokploy Variables
 
 Set these in Dokploy, not in EAS:

@@ -24,7 +24,7 @@ The workflow builds:
 - `ghcr.io/mngomazar/papzi-api`
 - `ghcr.io/mngomazar/papzi-worker`
 
-Tags include commit SHA and branch names. `latest` is only published for the default branch.
+Tags include commit SHA, branch names, and `latest`. The Dokploy compose file uses `latest` by default.
 
 ## Dokploy Variables
 

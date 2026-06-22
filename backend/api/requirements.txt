@@ -1,0 +1,9 @@
+fastapi==0.118.2
+uvicorn[standard]==0.38.0
+pydantic-settings==2.11.0
+python-jose[cryptography]==3.5.0
+httpx==0.28.1
+asyncpg==0.30.0
+boto3==1.41.5
+nats-py==2.11.0
+typesense==1.1.1

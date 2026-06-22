@@ -108,10 +108,9 @@ const PaymentScreen: React.FC = () => {
     setStatusMessage(message);
   };
 
-  const supabaseBaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? null;
   const returnUrl = PAYMENT_SUCCESS_URL;
   const cancelUrl = PAYMENT_CANCEL_URL;
-  const notifyUrl = supabaseBaseUrl ? getDefaultPayfastNotifyUrl() : null;
+  const notifyUrl = getDefaultPayfastNotifyUrl();
 
   useEffect(() => {
     if (booking?.booking_date) {

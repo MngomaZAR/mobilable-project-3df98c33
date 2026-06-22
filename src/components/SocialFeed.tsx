@@ -30,7 +30,7 @@ import { Post } from '../types';
 import { Story, StoryViewer } from './StoryViewer';
 import { HashtagText } from './HashtagText';
 import { BRAND, PLACEHOLDER_IMAGE } from '../utils/constants';
-import { supabase } from '../config/supabaseClient';
+import { backendDb } from '../services/backendGateway';
 import { getCurrentAuthenticatedUser } from '../config/currentUser';
 import { getForYouRanking, recordRecommendationEvents } from '../services/dispatchService';
 import HowItWorksCard from './HowItWorksCard';
@@ -116,7 +116,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
     let mounted = true;
     const loadStories = async () => {
       try {
-        const { data } = await supabase
+        const { data } = await backendDb
           .from('stories')
           .select('id, author_id, media_url, media_type, duration, created_at, profiles:author_id(full_name, avatar_url)')
           .gt('expires_at', new Date().toISOString())
@@ -204,11 +204,11 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
     setBookmarkedPostIds(newSet);
     
     // Optimistic background save
-    import('../config/supabaseClient').then(async ({ supabase }) => {
+    import('../services/backendGateway').then(async ({ backendDb }) => {
        const user = await getCurrentAuthenticatedUser();
        if (!user) return;
-       if (isBookmarked) await supabase.from('post_bookmarks').delete().eq('post_id', post.id).eq('user_id', user.id);
-       else await supabase.from('post_bookmarks').insert({ post_id: post.id, user_id: user.id });
+       if (isBookmarked) await backendDb.from('post_bookmarks').delete().eq('post_id', post.id).eq('user_id', user.id);
+       else await backendDb.from('post_bookmarks').insert({ post_id: post.id, user_id: user.id });
     });
   };
 
@@ -298,8 +298,8 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
 
     const hydrateEntitlements = async () => {
       const [unlocksRes, subsRes] = await Promise.all([
-        supabase.from('post_unlocks').select('post_id').eq('user_id', userId),
-        supabase
+        backendDb.from('post_unlocks').select('post_id').eq('user_id', userId),
+        backendDb
           .from('subscriptions')
           .select('creator_id,status,current_period_end')
           .eq('subscriber_id', userId)
@@ -327,7 +327,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
     }
 
     try {
-      const { error } = await supabase.from('post_unlocks').upsert(
+      const { error } = await backendDb.from('post_unlocks').upsert(
         { user_id: userId, post_id: post.id, amount_paid: post.price },
         { onConflict: 'user_id,post_id' }
       );
@@ -424,10 +424,10 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
     const doBlock = () => {
       setBlockedUserIds((prev) => new Set([...prev, post.author_id]));
       // Persist block to user_blocks table
-      import('../config/supabaseClient').then(({ supabase }) =>
+      import('../services/backendGateway').then(({ backendDb }) =>
         getCurrentAuthenticatedUser().then((user) => {
           if (user) {
-            supabase.from('user_blocks').insert({
+            backendDb.from('user_blocks').insert({
               blocker_id: user.id,
               blocked_id: post.author_id,
             }).then(({ error }) => {

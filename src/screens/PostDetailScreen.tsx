@@ -4,7 +4,7 @@ import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/types';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useAppData } from '../store/AppDataContext';
-import { hasSupabase, supabase } from '../config/supabaseClient';
+import { hasBackendProvider, backendDb } from '../services/backendGateway';
 import { Post } from '../types';
 import { resolveStorageRef } from '../services/uploadService';
 import { BUCKETS } from '../config/environment';
@@ -36,12 +36,12 @@ const PostDetailScreen: React.FC = () => {
   }, [params.postId, fetchComments]);
 
   useEffect(() => {
-    if (postFromState || !hasSupabase) return;
+    if (postFromState || !hasBackendProvider) return;
     let mounted = true;
     const loadPost = async () => {
       setLoadingPost(true);
       try {
-        const { data } = await supabase
+        const { data } = await backendDb
           .from('posts')
           .select('id, author_id, caption, image_url, created_at, location, likes_count, comment_count')
           .eq('id', params.postId)
@@ -51,7 +51,7 @@ const PostDetailScreen: React.FC = () => {
         const currentUserId = state.currentUser?.id;
         let liked = false;
         if (currentUserId) {
-          const { data: likeData } = await supabase
+          const { data: likeData } = await backendDb
             .from('post_likes')
             .select('post_id')
             .eq('user_id', currentUserId)

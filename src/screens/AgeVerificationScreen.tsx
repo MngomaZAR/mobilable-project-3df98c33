@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform } from 'react
 import { SafeAreaView } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useTheme } from '../store/ThemeContext';
-import { supabase } from '../config/supabaseClient';
+import { backendDb } from '../services/backendGateway';
 import { useAuth } from '../store/AuthContext';
 import { useAppData } from '../store/AppDataContext';
 import { recordConsent as recordComplianceConsent } from '../services/dispatchService';
@@ -68,14 +68,14 @@ const AgeVerificationScreen: React.FC = () => {
       }
 
       // Use upsert so users without a pre-created profile row cannot get stuck.
-      const { error } = await supabase
+      const { error } = await backendDb
         .from('profiles')
         .upsert(profilePayload, { onConflict: 'id' });
       if (error) throw error;
 
       if (requiresKyc) {
         // Create moderation queue item once so retries do not duplicate open tickets.
-        const { data: existingCase, error: existingCaseErr } = await supabase
+        const { data: existingCase, error: existingCaseErr } = await backendDb
           .from('moderation_cases')
           .select('id')
           .eq('target_user_id', currentUser.id)
@@ -86,7 +86,7 @@ const AgeVerificationScreen: React.FC = () => {
         if (existingCaseErr) throw existingCaseErr;
 
         if (!existingCase?.id) {
-          const { error: insertCaseErr } = await supabase.from('moderation_cases').insert({
+          const { error: insertCaseErr } = await backendDb.from('moderation_cases').insert({
             reporter_id: currentUser.id,
             target_user_id: currentUser.id,
             target_type: 'profile',

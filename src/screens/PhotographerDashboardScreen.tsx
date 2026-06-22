@@ -15,7 +15,7 @@ import { useBooking } from '../store/BookingContext';
 import { useMessaging } from '../store/MessagingContext';
 import { useAppData } from '../store/AppDataContext';
 import { RootStackParamList } from '../navigation/types';
-import { supabase } from '../config/supabaseClient';
+import { backendDb } from '../services/backendGateway';
 import { invokeBackendFunction } from '../config/backendFunctions';
 import { DEFAULT_CAPE_TOWN_COORDINATES, ensureSouthAfricanCoordinates } from '../utils/geo';
 import { NewMessageModal } from '../components/NewMessageModal';
@@ -140,11 +140,11 @@ const PhotographerDashboardScreen: React.FC = () => {
     setIsOnline(nextValue);
     try {
       const providerTable = isModelAccount ? 'models' : 'photographers';
-      await supabase
+      await backendDb
         .from('profiles')
         .update({ availability_status: nextValue ? 'online' : 'offline' })
         .eq('id', currentUser?.id);
-      await supabase
+      await backendDb
         .from(providerTable)
         .update({ is_online: nextValue })
         .eq('id', currentUser?.id);

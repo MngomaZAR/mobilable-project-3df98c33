@@ -1,4 +1,4 @@
-ï»¿import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   FlatList,
   StyleSheet,
@@ -14,7 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../store/ThemeContext';
-import { supabase } from '../config/supabaseClient';
+import { backendDb } from '../services/backendGateway';
 import { invokeBackendFunction } from '../config/backendFunctions';
 import { useMessaging } from '../store/MessagingContext';
 import { useNavigation } from '@react-navigation/native';
@@ -101,12 +101,12 @@ const AdminModerationScreen: React.FC = () => {
     setLoading(true);
     try {
       const [{ data: caseRows, error: caseErr }, { data: violationRows, error: violationErr }, { data: pendingData, error: pendingErr }] = await Promise.all([
-        supabase
+        backendDb
           .from('moderation_cases')
           .select('id,reporter_id,target_user_id,target_type,target_id,reason,severity,status,sla_due_at,created_at')
           .order('created_at', { ascending: false })
           .limit(200),
-        supabase
+        backendDb
           .from('policy_violations')
           .select('id,user_id,entity_type,entity_id,policy_code,severity,status,created_at')
           .order('created_at', { ascending: false })
@@ -206,7 +206,7 @@ const AdminModerationScreen: React.FC = () => {
 
   const updateCaseStatus = async (id: string, nextStatus: ModerationCase['status']) => {
     try {
-      const { error } = await supabase
+      const { error } = await backendDb
         .from('moderation_cases')
         .update({ status: nextStatus })
         .eq('id', id);
@@ -219,7 +219,7 @@ const AdminModerationScreen: React.FC = () => {
 
   const updateViolationStatus = async (id: string, nextStatus: PolicyViolation['status']) => {
     try {
-      const { error } = await supabase
+      const { error } = await backendDb
         .from('policy_violations')
         .update({ status: nextStatus })
         .eq('id', id);
@@ -260,7 +260,7 @@ const AdminModerationScreen: React.FC = () => {
         </View>
 
         <Text style={[styles.title, { color: colors.text }]}>{item.reason}</Text>
-        <Text style={[styles.meta, { color: colors.textSecondary }]}>Target: {item.target_type} Â· Severity {item.severity} Â· Status {item.status}</Text>
+        <Text style={[styles.meta, { color: colors.textSecondary }]}>Target: {item.target_type} · Severity {item.severity} · Status {item.status}</Text>
         <Text style={[styles.code, { color: colors.textMuted }]}>Case #{item.id.slice(0, 8)}</Text>
 
         <View style={styles.messageRow}>
@@ -298,7 +298,7 @@ const AdminModerationScreen: React.FC = () => {
         <Text style={[styles.meta, { color: colors.textMuted }]}>{new Date(item.created_at).toLocaleString()}</Text>
       </View>
       <Text style={[styles.title, { color: colors.text }]}>{item.policy_code}</Text>
-      <Text style={[styles.meta, { color: colors.textSecondary }]}>Entity: {item.entity_type} Â· Status: {item.status}</Text>
+      <Text style={[styles.meta, { color: colors.textSecondary }]}>Entity: {item.entity_type} · Status: {item.status}</Text>
       <Text style={[styles.code, { color: colors.textMuted }]}>Violation #{item.id.slice(0, 8)}</Text>
       <View style={styles.actions}>
         <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#dc2626' }]} onPress={() => updateViolationStatus(item.id, 'blocked')}>
@@ -351,7 +351,7 @@ const AdminModerationScreen: React.FC = () => {
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.verificationName, { color: colors.text }]}>{doc.user_name || 'Unknown creator'}</Text>
                   <Text style={[styles.verificationMeta, { color: colors.textMuted }]}>
-                    {String(doc.user_role ?? 'creator').toUpperCase()} Â· {doc.user_id.slice(0, 8)}
+                    {String(doc.user_role ?? 'creator').toUpperCase()} · {doc.user_id.slice(0, 8)}
                   </Text>
                 </View>
                 <View style={[styles.docTypeBadge, { borderColor: '#f59e0b', backgroundColor: '#f59e0b22' }]}>
@@ -395,7 +395,7 @@ const AdminModerationScreen: React.FC = () => {
             <View key={v.id} style={[styles.verificationRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <View style={{ flex: 1 }}>
                 <Text style={[styles.verificationName, { color: colors.text }]}>{v.full_name || 'Unnamed creator'}</Text>
-                <Text style={[styles.verificationMeta, { color: colors.textMuted }]}>{String(v.role).toUpperCase()} Â· {v.id.slice(0, 8)}</Text>
+                <Text style={[styles.verificationMeta, { color: colors.textMuted }]}>{String(v.role).toUpperCase()} · {v.id.slice(0, 8)}</Text>
               </View>
               <TouchableOpacity style={[styles.smallAction, { backgroundColor: '#16a34a' }]} onPress={() => updateVerification(v.id, 'approved')}>
                 <Text style={styles.smallActionText}>Approve</Text>
@@ -414,8 +414,8 @@ const AdminModerationScreen: React.FC = () => {
           {payoutMethods.slice(0, 8).map((m) => (
             <View key={m.id} style={[styles.verificationRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.verificationName, { color: colors.text }]}>{m.user_name || 'Unknown creator'} Â· {m.bank_name}</Text>
-                <Text style={[styles.verificationMeta, { color: colors.textMuted }]}>{m.account_holder} Â· {m.account_masked} Â· {m.account_type}</Text>
+                <Text style={[styles.verificationName, { color: colors.text }]}>{m.user_name || 'Unknown creator'} · {m.bank_name}</Text>
+                <Text style={[styles.verificationMeta, { color: colors.textMuted }]}>{m.account_holder} · {m.account_masked} · {m.account_type}</Text>
               </View>
               <TouchableOpacity style={[styles.smallAction, { backgroundColor: '#16a34a' }]} onPress={() => updatePayoutDecision(m.id, 'verified')}>
                 <Text style={styles.smallActionText}>Verify</Text>

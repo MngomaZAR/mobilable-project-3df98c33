@@ -1,0 +1,1 @@
+"""PAPZII FastAPI backend package."""

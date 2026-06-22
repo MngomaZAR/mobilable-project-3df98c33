@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { readPublicConfig } from './environment';
+import { environment, readPublicConfig } from './environment';
 
 const supabaseUrl = readPublicConfig('EXPO_PUBLIC_SUPABASE_URL');
 const supabaseAnonKey =
@@ -10,10 +10,10 @@ const supabaseAnonKey =
 const resolvedSupabaseUrl = String(supabaseUrl ?? '').trim();
 const resolvedSupabaseAnonKey = String(supabaseAnonKey ?? '').trim();
 
-export const hasSupabase = Boolean(resolvedSupabaseUrl && resolvedSupabaseAnonKey);
-export const supabaseRestUrl = resolvedSupabaseUrl ? `${resolvedSupabaseUrl.replace(/\/+$/, '')}/rest/v1` : '';
-export const supabaseFunctionUrl = resolvedSupabaseUrl ? `${resolvedSupabaseUrl.replace(/\/+$/, '')}/functions/v1` : '';
-export const supabasePublishableKey = resolvedSupabaseAnonKey;
+export const hasSupabase = environment.backendProvider === 'supabase' && Boolean(resolvedSupabaseUrl && resolvedSupabaseAnonKey);
+export const supabaseRestUrl = hasSupabase ? `${resolvedSupabaseUrl.replace(/\/+$/, '')}/rest/v1` : '';
+export const supabaseFunctionUrl = hasSupabase ? `${resolvedSupabaseUrl.replace(/\/+$/, '')}/functions/v1` : '';
+export const supabasePublishableKey = hasSupabase ? resolvedSupabaseAnonKey : '';
 
 if (!hasSupabase) {
   console.error('Supabase environment variables are missing. The app will stay in offline-safe mode until backend config is provided.');

@@ -1,10 +1,10 @@
-﻿import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { supabase } from '../config/supabaseClient';
+import { backendDb } from '../services/backendGateway';
 import { useAppData } from '../store/AppDataContext';
 import { useTheme } from '../store/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
@@ -34,7 +34,7 @@ const EquipmentSetupScreen: React.FC = () => {
 
     void (async () => {
       try {
-        const { data } = await supabase.from('photographer_equipment').select('*').eq('photographer_id', userId).single();
+        const { data } = await backendDb.from('photographer_equipment').select('*').eq('photographer_id', userId).single();
         if (!active) return;
         if (data) {
           setSelectedTier(data.tier_id ?? TIER_OPTIONS[1].id);
@@ -64,7 +64,7 @@ const EquipmentSetupScreen: React.FC = () => {
     if (!cameraBody.trim()) { Alert.alert('Camera body required', 'Enter your primary camera body.'); return; }
     setSaving(true);
     try {
-      const { error } = await supabase.from('photographer_equipment').upsert({
+      const { error } = await backendDb.from('photographer_equipment').upsert({
         photographer_id: userId,
         tier_id: selectedTier,
         camera_body: cameraBody.trim(),
@@ -74,7 +74,7 @@ const EquipmentSetupScreen: React.FC = () => {
         updated_at: new Date().toISOString(),
       }, { onConflict: 'photographer_id' });
       if (error) throw error;
-      await supabase.from('photographers').update({ tier_id: selectedTier }).eq('id', userId);
+      await backendDb.from('photographers').update({ tier_id: selectedTier }).eq('id', userId);
       Alert.alert('Saved!', 'Your gear profile is visible to clients when booking.', [{ text: 'OK', onPress: () => navigation.goBack() }]);
     } catch (err: any) {
       Alert.alert('Error', err.message || 'Could not save. Try again.');
@@ -112,7 +112,7 @@ const EquipmentSetupScreen: React.FC = () => {
         {selectedTierData && (
           <View style={s.infoBox}>
             <Ionicons name="information-circle-outline" size={15} color="#c9a44a" />
-            <Text style={s.infoText}>Base from R{selectedTierData.basePrice.toLocaleString('en-ZA')} â€” equipment add-ons increase this</Text>
+            <Text style={s.infoText}>Base from R{selectedTierData.basePrice.toLocaleString('en-ZA')} — equipment add-ons increase this</Text>
           </View>
         )}
 

@@ -1,4 +1,5 @@
 import { routingService } from '../../src/services/routingService';
+import { environment } from '../../src/config/environment';
 
 describe('routingService', () => {
   const originalFetch = global.fetch;
@@ -64,5 +65,55 @@ describe('routingService', () => {
       [18.4241, -33.9249],
       [18.4265, -33.9227],
     ]);
+  });
+
+  it('uses OpenRouteService road geometry when configured', async () => {
+    const originalProvider = environment.routingProvider;
+    const originalKey = environment.openRouteServiceApiKey;
+    environment.routingProvider = 'ors';
+    environment.openRouteServiceApiKey = 'ors-test-key';
+
+    try {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          features: [
+            {
+              geometry: {
+                coordinates: [
+                  [18.4241, -33.9249],
+                  [18.4252, -33.9238],
+                  [18.4265, -33.9227],
+                ],
+              },
+              properties: {
+                summary: { distance: 3100, duration: 510 },
+              },
+            },
+          ],
+        }),
+      }) as jest.Mock;
+
+      const route = await routingService.getRoute(
+        { latitude: -33.9249, longitude: 18.4241 },
+        { latitude: -33.9227, longitude: 18.4265 }
+      );
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        'https://api.openrouteservice.org/v2/directions/driving-car/geojson',
+        expect.objectContaining({
+          method: 'POST',
+          headers: expect.objectContaining({ Authorization: 'ors-test-key' }),
+        })
+      );
+      expect(route).toMatchObject({
+        distance: 3.1,
+        duration: 510,
+        source: 'ors',
+      });
+    } finally {
+      environment.routingProvider = originalProvider;
+      environment.openRouteServiceApiKey = originalKey;
+    }
   });
 });

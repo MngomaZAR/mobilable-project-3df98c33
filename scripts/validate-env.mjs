@@ -44,16 +44,47 @@ const validateHostedUrl = (name, value) => {
   }
 };
 
+const checkApiHealth = async (apiBaseUrl) => {
+  if (!apiBaseUrl || errors.length > 0) return;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12000);
+  try {
+    const response = await fetch(new URL('/health', apiBaseUrl).toString(), {
+      headers: { Accept: 'application/json' },
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      errors.push(`EXPO_PUBLIC_API_BASE_URL /health returned HTTP ${response.status}`);
+      return;
+    }
+    const body = await response.json().catch(() => null);
+    if (!body || body.status !== 'ok') {
+      errors.push('EXPO_PUBLIC_API_BASE_URL /health did not return { "status": "ok" }');
+    }
+  } catch (error) {
+    const message = error instanceof Error && error.name === 'AbortError' ? 'timed out' : 'could not be reached';
+    errors.push(`EXPO_PUBLIC_API_BASE_URL /health ${message}`);
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
 const allowedStoreTargets = new Set(['development', 'web', 'internal', 'appstore', 'play', 'both']);
 const allowedBillingProviders = new Set(['iap', 'external', 'disabled']);
-
-const supabaseUrl = requireEnv('EXPO_PUBLIC_SUPABASE_URL');
-requireEnv('EXPO_PUBLIC_SUPABASE_ANON_KEY');
-validateHostedUrl('EXPO_PUBLIC_SUPABASE_URL', supabaseUrl);
 
 const backendProvider = read('EXPO_PUBLIC_BACKEND_PROVIDER').toLowerCase() || 'supabase';
 if (!['supabase', 'nhost'].includes(backendProvider)) {
   errors.push("EXPO_PUBLIC_BACKEND_PROVIDER must be either 'supabase' or 'nhost'");
+}
+
+if (mode === 'release' && backendProvider !== 'nhost') {
+  errors.push('Release builds must use EXPO_PUBLIC_BACKEND_PROVIDER=nhost because Supabase free-plan rate limits are a known production blocker.');
+}
+
+if (backendProvider === 'supabase') {
+  const supabaseUrl = requireEnv('EXPO_PUBLIC_SUPABASE_URL');
+  requireEnv('EXPO_PUBLIC_SUPABASE_ANON_KEY');
+  validateHostedUrl('EXPO_PUBLIC_SUPABASE_URL', supabaseUrl);
 }
 
 if (backendProvider === 'nhost') {
@@ -62,9 +93,18 @@ if (backendProvider === 'nhost') {
   if (mode === 'release' && /localhost|127\.0\.0\.1|0\.0\.0\.0/i.test(nhostSubdomain)) {
     errors.push('EXPO_PUBLIC_NHOST_SUBDOMAIN must not point to a local development host in release mode');
   }
+  if (read('EXPO_PUBLIC_SUPABASE_URL') || read('EXPO_PUBLIC_SUPABASE_ANON_KEY')) {
+    warnings.push('Supabase env values are present but ignored when EXPO_PUBLIC_BACKEND_PROVIDER=nhost');
+  }
 }
 
 if (mode === 'release') {
+  const apiBaseUrl = validateHostedUrl('EXPO_PUBLIC_API_BASE_URL', requireEnv('EXPO_PUBLIC_API_BASE_URL'));
+  if (apiBaseUrl?.hostname === 'api.example.com') {
+    errors.push('EXPO_PUBLIC_API_BASE_URL must be set to the real Dokploy/FastAPI API host, not api.example.com');
+  }
+  await checkApiHealth(apiBaseUrl);
+
   const storeTarget = requireEnv('EXPO_PUBLIC_STORE_TARGET').toLowerCase();
   const billingProvider = requireEnv('EXPO_PUBLIC_DIGITAL_BILLING_PROVIDER').toLowerCase();
   const disableDigital = read('EXPO_PUBLIC_DISABLE_DIGITAL_PURCHASES');

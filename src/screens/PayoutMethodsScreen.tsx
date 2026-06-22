@@ -13,7 +13,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../store/ThemeContext';
 import { useAppData } from '../store/AppDataContext';
-import { supabase } from '../config/supabaseClient';
+import { backendDb } from '../services/backendGateway';
 import { invokeBackendFunction } from '../config/backendFunctions';
 
 type PayoutMethod = {

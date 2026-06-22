@@ -14,7 +14,7 @@ import { useBooking } from '../store/BookingContext';
 import { useAppData } from '../store/AppDataContext';
 import { useMessaging } from '../store/MessagingContext';
 import { RootStackParamList } from '../navigation/types';
-import { supabase } from '../config/supabaseClient';
+import { backendDb } from '../services/backendGateway';
 import CreatePremiumBox from './CreatePremiumBox';
 import { NewMessageModal } from '../components/NewMessageModal';
 import { sendTip } from '../services/monetisationService';
@@ -67,7 +67,7 @@ const ModelPremiumDashboard: React.FC = () => {
   const loadTiers = useCallback(async () => {
     if (!currentUser?.id) return;
     try {
-      const { data } = await supabase
+      const { data } = await backendDb
         .from('subscription_tiers')
         .select('id, name, price, perks, is_active, color, max_subscribers, description')
         .eq('creator_id', currentUser.id)
@@ -81,7 +81,7 @@ const ModelPremiumDashboard: React.FC = () => {
   const loadTipGoal = useCallback(async () => {
     if (!currentUser?.id) return;
     try {
-      const { data } = await supabase
+      const { data } = await backendDb
         .from('tip_goals')
         .select('*')
         .eq('creator_id', currentUser.id)
@@ -110,7 +110,7 @@ const ModelPremiumDashboard: React.FC = () => {
   const fetchSubscribers = useCallback(async () => {
     if (!currentUser?.id) return;
     try {
-      const { data } = await supabase
+      const { data } = await backendDb
         .from('subscriptions')
         .select('id, subscriber_id, status, current_period_end, tier_id, profiles:subscriber_id(full_name, avatar_url)')
         .eq('creator_id', currentUser.id)
@@ -165,11 +165,11 @@ const ModelPremiumDashboard: React.FC = () => {
     }
     setIsOnline(nextValue);
     try {
-      await supabase
+      await backendDb
         .from('profiles')
         .update({ availability_status: nextValue ? 'online' : 'offline' })
         .eq('id', currentUser?.id);
-      await supabase
+      await backendDb
         .from('models')
         .update({ is_online: nextValue })
         .eq('id', currentUser?.id);
@@ -285,13 +285,13 @@ const ModelPremiumDashboard: React.FC = () => {
     setSavingGoal(true);
     try {
       if (tipGoal?.id) {
-        const { error } = await supabase
+        const { error } = await backendDb
           .from('tip_goals')
           .update({ title, target_amount: targetAmount })
           .eq('id', tipGoal.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase
+        const { error } = await backendDb
           .from('tip_goals')
           .insert({ creator_id: currentUser.id, title, target_amount: targetAmount, is_active: true });
         if (error) throw error;
@@ -338,14 +338,14 @@ const ModelPremiumDashboard: React.FC = () => {
     try {
       const perks = parsePerksInput(tierPerksInput);
       if (editingTier?.id) {
-        const { error } = await supabase
+        const { error } = await backendDb
           .from('subscription_tiers')
           .update({ name, price, perks })
           .eq('id', editingTier.id)
           .eq('creator_id', currentUser.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase
+        const { error } = await backendDb
           .from('subscription_tiers')
           .insert({ creator_id: currentUser.id, name, price, perks, is_active: true });
         if (error) throw error;

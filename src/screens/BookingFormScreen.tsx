@@ -1,4 +1,4 @@
-ï»¿import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
@@ -103,7 +103,7 @@ const BookingFormScreen: React.FC = () => {
   const formattedDate = useMemo(() => {
     if (bookingTimeMode === 'now') return 'Now (dispatch)';
     if (!selectedDate) return 'Pick a date and time slot below';
-    return `${selectedDate.toDateString()} Â· ${timeSlot}`;
+    return `${selectedDate.toDateString()} · ${timeSlot}`;
   }, [bookingTimeMode, selectedDate, timeSlot]);
 
   const selectedTier = useMemo(
@@ -202,7 +202,7 @@ const BookingFormScreen: React.FC = () => {
         talent_type: isModelTalent ? 'model' : 'photographer',
         service_type: isModelTalent ? 'modeling' : selectedServiceType === 'video' ? 'combined' : 'photography',
         booking_date: bookingDate,
-        package_type: `${serviceTypeLabel} â€¢ ${selectedTier.label} â€¢ ${bookingTimeMode === 'now' ? 'Now' : timeSlot}`,
+        package_type: `${serviceTypeLabel} • ${selectedTier.label} • ${bookingTimeMode === 'now' ? 'Now' : timeSlot}`,
         package_id: selectedTier.id,
         notes: finalNotes,
         base_amount: baseAmount,
@@ -262,7 +262,7 @@ const BookingFormScreen: React.FC = () => {
     <ScrollView contentContainerStyle={styles.container}>
       <View style={styles.heroCard}>
         <Text style={styles.heroTitle}>Book {talent.name}</Text>
-        <Text style={styles.heroMeta}>{talent.style} Â· {talent.location}</Text>
+        <Text style={styles.heroMeta}>{talent.style} · {talent.location}</Text>
         <View style={styles.heroFooter}>
           <Text style={styles.heroPrice}>{estimatedRate}</Text>
           <TouchableOpacity style={styles.msgBadge} onPress={handleMessage}>

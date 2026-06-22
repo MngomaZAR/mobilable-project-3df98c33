@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useRef, useState } from 'react';
-import { supabase, hasSupabase } from '../config/supabaseClient';
+import { backendDb, hasBackendProvider } from '../services/backendGateway';
 import { ConversationSummary, Message, AppUser } from '../types';
 import { logError } from '../utils/errors';
 import { startConversationViaEdge } from '../services/chatService';
@@ -59,7 +59,7 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const typingTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   const fetchConversations = useCallback(async (attempt = 0) => {
-    if (!hasSupabase || !currentUser) {
+    if (!hasBackendProvider || !currentUser) {
       setLoading(false);
       return;
     }
@@ -67,7 +67,7 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     try {
       // Step 1: get conversation IDs this user participates in
     const { data: participations, error: partError } = await withTimeout(
-      supabase
+      backendDb
         .from('conversation_participants')
         .select('conversation_id, user_id, last_read_at')
         .eq('user_id', currentUser.id)
@@ -86,7 +86,7 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       const participantsByConvo: Record<string, string[]> = {};
       try {
         const { data: allParticipants } = await withTimeout(
-          supabase
+          backendDb
             .from('conversation_participants')
             .select('conversation_id, user_id, last_read_at')
             .in('conversation_id', ids)
@@ -96,7 +96,7 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         let profilesMap: Record<string, any> = {};
         if (profileIds.length > 0) {
           const { data: profilesData } = await withTimeout(
-            supabase
+            backendDb
               .from('profiles')
               .select('id, full_name, avatar_url, updated_at')
               .in('id', profileIds)
@@ -125,7 +125,7 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
       // Step 2: fetch conversation details
       const { data, error } = await withTimeout(
-        supabase
+        backendDb
           .from('conversations')
           .select('id, title, last_message, last_message_at, created_at')
           .in('id', ids)
@@ -160,9 +160,9 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   }, [currentUser]);
 
   const markMessagesRead = useCallback(async (chatId: string) => {
-    if (!currentUser || !hasSupabase) return;
+    if (!currentUser || !hasBackendProvider) return;
     try {
-      await supabase
+      await backendDb
         .from('messages')
         .update({ read_at: new Date().toISOString() })
         .eq('chat_id', chatId)
@@ -172,8 +172,8 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   }, [currentUser]);
 
   const broadcastTyping = useCallback((chatId: string) => {
-    if (!currentUser || !hasSupabase) return;
-    supabase.channel(`typing-${chatId}`).track({
+    if (!currentUser || !hasBackendProvider) return;
+    backendDb.channel(`typing-${chatId}`).track({
       user_id: currentUser.id,
       name: currentUser.full_name ?? 'Someone',
       typing: true,
@@ -181,22 +181,22 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     // Auto-clear after 3s
     if (typingTimers.current[chatId]) clearTimeout(typingTimers.current[chatId]);
     typingTimers.current[chatId] = setTimeout(() => {
-      supabase.channel(`typing-${chatId}`).track({ user_id: currentUser.id, typing: false });
+      backendDb.channel(`typing-${chatId}`).track({ user_id: currentUser.id, typing: false });
     }, 3000);
   }, [currentUser]);
 
   const addReaction = useCallback(async (chatId: string, messageId: string, emoji: string) => {
-    if (!currentUser || !hasSupabase) return;
+    if (!currentUser || !hasBackendProvider) return;
     try {
-      await supabase.from('message_reactions').insert({ message_id: messageId, user_id: currentUser.id, emoji });
+      await backendDb.from('message_reactions').insert({ message_id: messageId, user_id: currentUser.id, emoji });
       await fetchReactions([messageId]);
     } catch { /* likely duplicate — ignore */ }
   }, [currentUser]);
 
   const removeReaction = useCallback(async (chatId: string, messageId: string, emoji: string) => {
-    if (!currentUser || !hasSupabase) return;
+    if (!currentUser || !hasBackendProvider) return;
     try {
-      await supabase.from('message_reactions')
+      await backendDb.from('message_reactions')
         .delete()
         .eq('message_id', messageId)
         .eq('user_id', currentUser.id)
@@ -206,9 +206,9 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   }, [currentUser]);
 
   const fetchReactions = useCallback(async (messageIds: string[]) => {
-    if (!currentUser || !hasSupabase || messageIds.length === 0) return;
+    if (!currentUser || !hasBackendProvider || messageIds.length === 0) return;
     try {
-      const { data } = await supabase
+      const { data } = await backendDb
         .from('message_reactions')
         .select('message_id, emoji, user_id')
         .in('message_id', messageIds);
@@ -230,19 +230,19 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   }, [currentUser]);
 
   const deleteMessage = useCallback(async (chatId: string, messageId: string) => {
-    if (!currentUser || !hasSupabase) return;
+    if (!currentUser || !hasBackendProvider) return;
     try {
-      await supabase.from('messages').update({ deleted_at: new Date().toISOString(), body: 'Message deleted' }).eq('id', messageId).eq('sender_id', currentUser.id);
+      await backendDb.from('messages').update({ deleted_at: new Date().toISOString(), body: 'Message deleted' }).eq('id', messageId).eq('sender_id', currentUser.id);
       setMessages(prev => ({ ...prev, [chatId]: (prev[chatId] ?? []).filter(m => m.id !== messageId) }));
     } catch { /* silent */ }
   }, [currentUser]);
 
   const fetchMessages = useCallback(async (chatId: string) => {
-    if (!hasSupabase || !chatId) return;
+    if (!hasBackendProvider || !chatId) return;
     try {
       // Direct DB query using the correct column name: chat_id
       const { data, error } = await withTimeout<{ data: any[] | null; error: any }>(
-        supabase
+        backendDb
           .from('messages')
           .select('id, chat_id, sender_id, body, message_type, media_url, preview_url, locked, unlocked, unlock_booking_id, unlock_price, created_at, read_at, reply_to_id, reply_preview, audio_url, audio_duration_seconds')
           .eq('chat_id', chatId)
@@ -291,9 +291,9 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   }, [currentUser]);
 
   const subscribeToMessages = useCallback((chatId: string) => {
-    if (!hasSupabase || !currentUser) return () => {};
+    if (!hasBackendProvider || !currentUser) return () => {};
 
-    const channel = supabase
+    const channel = backendDb
       .channel(`messages-${chatId}`)
       .on('postgres_changes', {
         event: 'INSERT',
@@ -350,11 +350,11 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       })
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    return () => { backendDb.removeChannel(channel); };
   }, [currentUser, markMessagesRead]);
 
   const sendMessage = async (chatId: string, text: string, replyToId?: string): Promise<Message> => {
-    if (!currentUser || !hasSupabase) throw new Error('Auth required');
+    if (!currentUser || !hasBackendProvider) throw new Error('Auth required');
     const trimmed = text.trim();
     if (!trimmed) throw new Error('Message required');
 
@@ -393,7 +393,7 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       }));
 
       // Update conversation preview
-      await supabase
+      await backendDb
         .from('conversations')
         .update({ last_message: trimmed, last_message_at: data.timestamp })
         .eq('id', chatId);
@@ -414,7 +414,7 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const sendLockedMediaMessage = async (chatId: string, payload: {
     mediaUrl: string; previewUrl?: string; text?: string; unlockBookingId?: string; unlockPrice?: number;
   }): Promise<Message> => {
-    if (!currentUser || !hasSupabase) throw new Error('Auth required');
+    if (!currentUser || !hasBackendProvider) throw new Error('Auth required');
 
     const rawMessage = await sendConversationLockedMediaMessage({
       conversationId: chatId,
@@ -442,7 +442,7 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   };
 
   const unlockPremiumMessage = async (chatId: string, messageId: string): Promise<boolean> => {
-    if (!currentUser || !hasSupabase) throw new Error('Auth required');
+    if (!currentUser || !hasBackendProvider) throw new Error('Auth required');
     const { unlockMessage } = require('../services/chatMessageService');
     const success = await unlockMessage({ conversationId: chatId, messageId });
     if (success) {

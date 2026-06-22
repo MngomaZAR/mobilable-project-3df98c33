@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator, Alert, ScrollView, StyleSheet, Text,
   TextInput, TouchableOpacity, View, Switch,
@@ -7,7 +7,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { supabase } from '../config/supabaseClient';
+import { backendDb } from '../services/backendGateway';
 import { useAppData } from '../store/AppDataContext';
 import { useTheme } from '../store/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
@@ -27,7 +27,7 @@ const SERVICE_TEMPLATES = [
   // Adult (age-verified only)
   { key: 'lingerie_shoot',    label: 'Lingerie / Swimwear', desc: 'Tasteful lingerie or swimwear modelling',   rate: 3000, adult: true,  icon: 'body-outline',           cat: 'Adult Content (18+)' },
   { key: 'boudoir',           label: 'Boudoir Session',     desc: 'Intimate tasteful boudoir photography',     rate: 3500, adult: true,  icon: 'rose-outline',           cat: 'Adult Content (18+)' },
-  { key: 'adult_content',     label: 'Adult Content',       desc: 'Explicit adult content â€” age verification required', rate: 5000, adult: true, icon: 'lock-closed-outline', cat: 'Adult Content (18+)' },
+  { key: 'adult_content',     label: 'Adult Content',       desc: 'Explicit adult content — age verification required', rate: 5000, adult: true, icon: 'lock-closed-outline', cat: 'Adult Content (18+)' },
 ];
 
 const ModelServicesScreen: React.FC = () => {
@@ -48,7 +48,7 @@ const ModelServicesScreen: React.FC = () => {
 
     void (async () => {
       try {
-        const { data } = await supabase.from('model_services').select('service_type, is_active, rate_zar').eq('model_id', userId);
+        const { data } = await backendDb.from('model_services').select('service_type, is_active, rate_zar').eq('model_id', userId);
         if (!active) return;
         const map: typeof services = {};
         (data ?? []).forEach((r: any) => { map[r.service_type] = { active: r.is_active, rate: Number(r.rate_zar ?? 0) }; });
@@ -86,7 +86,7 @@ const ModelServicesScreen: React.FC = () => {
     if (!userId) return;
     setSaving(true);
     try {
-      await supabase.from('model_services').update({ is_active: false }).eq('model_id', userId);
+      await backendDb.from('model_services').update({ is_active: false }).eq('model_id', userId);
       const active = Object.entries(services).filter(([, v]) => v.active).map(([key, v]) => ({
         model_id: userId,
         service_type: key,
@@ -95,7 +95,7 @@ const ModelServicesScreen: React.FC = () => {
         requires_age_verification: SERVICE_TEMPLATES.find(t => t.key === key)?.adult ?? false,
       }));
       if (active.length > 0) {
-        const { error } = await supabase.from('model_services').upsert(active, { onConflict: 'model_id,service_type' });
+        const { error } = await backendDb.from('model_services').upsert(active, { onConflict: 'model_id,service_type' });
         if (error) throw error;
       }
       Alert.alert('Saved!', 'Your services are now visible to clients.', [{ text: 'OK', onPress: () => navigation.goBack() }]);
@@ -118,7 +118,7 @@ const ModelServicesScreen: React.FC = () => {
         {!isAgeVerified && (
           <TouchableOpacity style={[s.verifyBanner, { borderColor: '#f59e0b', backgroundColor: '#f59e0b18' }]} onPress={() => navigation.navigate('AgeVerification')}>
             <Ionicons name="alert-circle-outline" size={16} color="#f59e0b" />
-            <Text style={s.verifyText}>Complete age verification to unlock adult content services â†’</Text>
+            <Text style={s.verifyText}>Complete age verification to unlock adult content services →</Text>
           </TouchableOpacity>
         )}
 

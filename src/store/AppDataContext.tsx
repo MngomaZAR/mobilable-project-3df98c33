@@ -3,7 +3,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import { AppState as RNAppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { initialState } from '../data/initialData';
-import { supabase, hasSupabase } from '../config/supabaseClient';
+import { backendDb, hasBackendProvider } from '../services/backendGateway';
 import { hasNhost, hydrateNhostSessionStorage, nhost, getNhostSession } from '../config/nhostClient';
 import { getCurrentAuthenticatedUser } from '../config/currentUser';
 import { hasuraGQL } from '../config/hasuraClient';
@@ -17,7 +17,8 @@ import { AppState, AppUser, Booking, BookingStatus, Comment, ConversationSummary
 import { uid } from '../utils/id';
 import { formatAuthError, formatErrorMessage, logError } from '../utils/errors';
 import { PLACEHOLDER_IMAGE } from '../utils/constants';
-import { mapPhotographerRow, mapPostRow, mapSupabaseUser } from '../utils/mappings';
+import { mapPhotographerRow, mapPostRow } from '../utils/mappings';
+import { mapProviderUser } from '../services/legacyMappers';
 import { startConversationViaEdge } from '../services/chatService';
 import {
   listConversationMessages,
@@ -294,7 +295,7 @@ const NHOST_PROFILE_SELECT = `
 
 const mapNhostUser = (user: any, profile: ProfileRow = null): AppUser => {
   const fallbackRole = (profile?.role ?? (user?.defaultRole as AppUser['role']) ?? 'client') as AppUser['role'];
-  return mapSupabaseUser(
+  return mapProviderUser(
     {
       id: user.id,
       email: user.email ?? 'unknown-user',
@@ -555,7 +556,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const setError = (payload: string | null) => dispatch({ type: 'SET_ERROR', payload });
 
   useEffect(() => {
-    if (!hasSupabase || !state.currentUser?.id) return;
+    if (!hasBackendProvider || !state.currentUser?.id) return;
     const userId = state.currentUser.id;
     const role = state.currentUser.role;
 
@@ -563,12 +564,12 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (presenceRef.current === nextStatus) return;
       presenceRef.current = nextStatus;
       try {
-        await supabase
+        await backendDb
           .from('profiles')
           .update({ availability_status: nextStatus })
           .eq('id', userId);
         if (isPhotographerUser(role)) {
-          await supabase
+          await backendDb
             .from('photographers')
             .update({ is_online: nextStatus === 'online' })
             .eq('id', userId);
@@ -601,7 +602,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         return null;
       }
     }
-    if (!hasSupabase) return null;
+    if (!hasBackendProvider) return null;
     const now = Date.now();
     const lastFetchedAt = profileFetchLastRef.current.get(userId) ?? 0;
     if (now - lastFetchedAt < 1500) {
@@ -614,7 +615,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     const promise = (async () => {
       try {
-        const { data, error } = await supabase.from('profiles').select(PROFILE_SELECT).eq('id', userId).maybeSingle();
+        const { data, error } = await backendDb.from('profiles').select(PROFILE_SELECT).eq('id', userId).maybeSingle();
         if (error) throw error;
         return (data as ProfileRow) ?? null;
       } catch (err) {
@@ -630,9 +631,9 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, []);
 
   const fetchPhotographers = useCallback(async () => {
-    if (!hasSupabase) return;
+    if (!hasBackendProvider) return;
     try {
-      const { data: rawPhotographers, error: photographerError } = await supabase
+      const { data: rawPhotographers, error: photographerError } = await backendDb
         .from('photographers')
         .select(PHOTOGRAPHER_SELECT)
         .limit(MAX_PHOTOGRAPHERS)
@@ -643,7 +644,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const profileIds = [...new Set((rawPhotographers ?? []).map((p: any) => p.id).filter(Boolean))];
       let profilesMap: Record<string, any> = {};
       if (profileIds.length > 0) {
-        const { data: profilesData } = await supabase.from('profiles').select(PROFILE_SELECT).in('id', profileIds);
+        const { data: profilesData } = await backendDb.from('profiles').select(PROFILE_SELECT).in('id', profileIds);
         (profilesData ?? []).forEach((p: any) => { profilesMap[p.id] = p; });
       }
 
@@ -674,9 +675,9 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, []);
 
   const fetchModels = useCallback(async () => {
-    if (!hasSupabase) return;
+    if (!hasBackendProvider) return;
     try {
-      const { data: rawModels, error: modelError } = await supabase
+      const { data: rawModels, error: modelError } = await backendDb
         .from('models')
         .select(`
           id,
@@ -700,7 +701,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const profileIds = [...new Set((rawModels ?? []).map((m: any) => m.id).filter(Boolean))];
       let profilesMap: Record<string, any> = {};
       if (profileIds.length > 0) {
-        const { data: profilesData } = await supabase.from('profiles').select(PROFILE_SELECT).in('id', profileIds);
+        const { data: profilesData } = await backendDb.from('profiles').select(PROFILE_SELECT).in('id', profileIds);
         (profilesData ?? []).forEach((p: any) => { profilesMap[p.id] = p; });
       }
       
@@ -740,7 +741,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const fetchBookings = useCallback(
     async (userId?: string | null) => {
-      if (!hasSupabase) return;
+      if (!hasBackendProvider) return;
       const targetUserId = userId ?? stateRef.current.currentUser?.id;
       if (!targetUserId) {
         setState({ bookings: [] });
@@ -748,7 +749,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
 
       try {
-        const { data: rawBookings, error } = await supabase
+        const { data: rawBookings, error } = await backendDb
           .from('bookings')
           .select(BOOKING_SELECT)
           .or(`client_id.eq.${targetUserId},photographer_id.eq.${targetUserId},model_id.eq.${targetUserId}`)
@@ -757,13 +758,13 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
         if (error) throw error;
 
-        // Manual Join to Avoid Supabase FK Errors
+        // Manual Join to Avoid provider FK Errors
         const profileIds = [...new Set(
           (rawBookings ?? []).flatMap((b: any) => [b.client_id, b.photographer_id, b.model_id]).filter(Boolean)
         )];
         let profilesMap: Record<string, any> = {};
         if (profileIds.length > 0) {
-          const { data: profilesData } = await supabase
+          const { data: profilesData } = await backendDb
             .from('profiles')
             .select(PROFILE_SELECT)
             .in('id', profileIds);
@@ -790,14 +791,14 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   );
 
   const fetchPosts = useCallback(async ({ reset = true, attempt = 0 }: FetchPostsOptions = {}): Promise<{ hasMore: boolean }> => {
-    if (!hasSupabase) return { hasMore: false };
+    if (!hasBackendProvider) return { hasMore: false };
     setError(null);
     try {
       const start = reset ? 0 : stateRef.current.posts.length;
       const end = start + 11; // Fetch 12 at a time
 
         const { data: rawPosts, error: postError } = await withTimeout(
-          supabase
+          backendDb
             .from('posts')
             .select(`
               id, author_id, caption, location, comment_count, created_at, image_url, likes_count
@@ -812,7 +813,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       let profilesMap: Record<string, any> = {};
       if (profileIds.length > 0) {
           const { data: profilesData } = await withTimeout(
-            supabase.from('profiles').select('id, full_name, city, avatar_url').in('id', profileIds)
+            backendDb.from('profiles').select('id, full_name, city, avatar_url').in('id', profileIds)
           );
         (profilesData ?? []).forEach((p: any) => { profilesMap[p.id] = p; });
       }
@@ -830,7 +831,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (currentUserId && mapped.length > 0) {
         const postIds = mapped.map(p => p.id);
           const { data: likesData } = await withTimeout(
-            supabase
+            backendDb
               .from('post_likes')
               .select('post_id')
               .eq('user_id', currentUserId)
@@ -874,10 +875,10 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, []);
 
   const fetchProfiles = useCallback(async () => {
-    if (!hasSupabase) return;
+    if (!hasBackendProvider) return;
     try {
         const { data, error: profileError } = await withTimeout(
-          supabase
+          backendDb
             .from('profiles')
             .select(PROFILE_SELECT)
             .limit(40)
@@ -890,13 +891,13 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, []);
 
   const fetchConversations = useCallback(async (userId?: string | null) => {
-    if (!hasSupabase) return;
+    if (!hasBackendProvider) return;
     const targetUserId = userId ?? stateRef.current.currentUser?.id;
     if (!targetUserId) { setState({ conversations: [] }); return; }
 
     try {
       // Step 1: Get conversation IDs for this user
-      const { data: myParticipants, error: p1 } = await supabase
+      const { data: myParticipants, error: p1 } = await backendDb
         .from('conversation_participants')
         .select('conversation_id')
         .eq('user_id', targetUserId);
@@ -908,15 +909,15 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (!conversationIds.length) { setState({ conversations: [] }); return; }
 
       // Step 2: Get conversations
-      const { data: convRows, error: p2 } = await supabase
+      const { data: convRows, error: p2 } = await backendDb
         .from('conversations')
         .select('id, title, last_message, last_message_at, created_at')
         .in('id', conversationIds)
         .order('last_message_at', { ascending: false });
       if (p2) throw p2;
 
-      // Step 3: Get all participants manually to bypass Supabase FK errors
-      const { data: allParticipants, error: p3 } = await supabase
+      // Step 3: Get all participants manually to bypass provider FK errors
+      const { data: allParticipants, error: p3 } = await backendDb
         .from('conversation_participants')
         .select('conversation_id, user_id')
         .in('conversation_id', conversationIds);
@@ -925,7 +926,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const profileIds = [...new Set((allParticipants ?? []).map((p: any) => p.user_id).filter(Boolean))];
       let profilesMap: Record<string, any> = {};
       if (profileIds.length > 0) {
-        const { data: profilesData } = await supabase.from('profiles').select('id, full_name, avatar_url').in('id', profileIds);
+        const { data: profilesData } = await backendDb.from('profiles').select('id, full_name, avatar_url').in('id', profileIds);
         (profilesData ?? []).forEach((p: any) => { profilesMap[p.id] = p; });
       }
 
@@ -954,7 +955,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, []);
   
   const fetchCredits = useCallback(async (userId?: string | null) => {
-    if (!hasSupabase) return;
+    if (!hasBackendProvider) return;
     const targetUserId = userId ?? stateRef.current.currentUser?.id;
     if (!targetUserId) {
       setState({ creditsWallet: null, creditsLedger: [] });
@@ -962,12 +963,12 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
     try {
       const [walletRes, ledgerRes] = await Promise.all([
-        supabase
+        backendDb
           .from('credits_wallets')
           .select('user_id, balance, updated_at')
           .eq('user_id', targetUserId)
           .maybeSingle(),
-        supabase
+        backendDb
           .from('credits_ledger')
           .select('id, user_id, amount, direction, reason, ref_type, ref_id, created_at')
           .eq('user_id', targetUserId)
@@ -986,14 +987,14 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, []);
 
   const fetchNotifications = useCallback(async (userId?: string | null) => {
-    if (!hasSupabase) return;
+    if (!hasBackendProvider) return;
     const targetUserId = userId ?? stateRef.current.currentUser?.id;
     if (!targetUserId) {
       setState({ notifications: [] });
       return;
     }
     try {
-      const { data, error } = await supabase
+      const { data, error } = await backendDb
         .from('notification_events')
         .select('id, user_id, event_type, title, body, status, created_at')
         .eq('user_id', targetUserId)
@@ -1007,9 +1008,9 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, []);
 
   const adjustCredits = useCallback(async (amount: number, reason?: string, refType?: string, refId?: string) => {
-    if (!hasSupabase) return 0;
+    if (!hasBackendProvider) return 0;
     try {
-      const { data, error } = await supabase.rpc('credits_adjust', {
+      const { data, error } = await backendDb.rpc('credits_adjust', {
         p_amount: amount,
         p_reason: reason ?? null,
         p_ref_type: refType ?? null,
@@ -1032,9 +1033,9 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [fetchCredits]);
 
   const redeemCreditsCode = useCallback(async (code: string) => {
-    if (!hasSupabase) return 0;
+    if (!hasBackendProvider) return 0;
     try {
-      const { data, error } = await supabase.rpc('credits_redeem_code', { p_code: code });
+      const { data, error } = await backendDb.rpc('credits_redeem_code', { p_code: code });
       if (error) throw error;
       const balance = Array.isArray(data) ? data[0]?.balance : data?.balance;
       if (typeof balance === 'number') {
@@ -1052,7 +1053,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [fetchCredits]);
 
   const fetchEarnings = useCallback(async (userId: string) => {
-    if (!hasSupabase) return;
+    if (!hasBackendProvider) return;
     try {
       const data = await fetchCreatorEarnings(userId);
       setState({ earnings: data });
@@ -1062,11 +1063,11 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, []);
 
   const fetchSubscriptions = useCallback(async (userId?: string | null) => {
-    if (!hasSupabase) return;
+    if (!hasBackendProvider) return;
     const targetUserId = userId ?? stateRef.current.currentUser?.id;
     if (!targetUserId) { setState({ subscriptions: [] }); return; }
     try {
-      const { data, error } = await supabase
+      const { data, error } = await backendDb
         .from('subscriptions')
         .select('id, subscriber_id, creator_id, tier_id, status, current_period_start, current_period_end, created_at')
         .or(`subscriber_id.eq.${targetUserId},creator_id.eq.${targetUserId}`)
@@ -1106,12 +1107,12 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           } else {
             setState({ bookings: [], conversations: [] });
           }
-        } else if (hasSupabase) {
+        } else if (hasBackendProvider) {
           try {
             const user = await getCurrentAuthenticatedUser();
             if (user?.id) {
               const profile = await fetchProfile(user.id);
-              setState({ currentUser: { ...mapSupabaseUser({ id: user.id, email: user.email ?? 'unknown-user', user_metadata: {} }, profile?.role || 'client', profile) } });
+              setState({ currentUser: { ...mapProviderUser({ id: user.id, email: user.email ?? 'unknown-user', user_metadata: {} }, profile?.role || 'client', profile) } });
               await Promise.all([
                 fetchBookings(user.id),
                 fetchConversations(user.id),
@@ -1140,8 +1141,8 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [fetchBookings, fetchConversations, fetchCredits, fetchPhotographers, fetchProfile, fetchModels, fetchSubscriptions]);
 
   useEffect(() => {
-    if (!hasSupabase) return;
-    const { data } = supabase.auth.onAuthStateChange(async (event, session) => {
+    if (!hasBackendProvider) return;
+    const { data } = backendDb.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
         try {
           let profile = await fetchProfile(session.user.id);
@@ -1153,7 +1154,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           }
 
           const currentRole = profile?.role ?? null;
-          setState({ currentUser: mapSupabaseUser(session.user, currentRole ?? 'client', profile)});
+          setState({ currentUser: mapProviderUser(session.user, currentRole ?? 'client', profile)});
 
           // Register for push notifications (Async, don't block auth flow)
           registerForPushNotificationsAsync()
@@ -1181,7 +1182,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
     });
 
-    const postsChannel = supabase
+    const postsChannel = backendDb
       .channel('global:posts-sync')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, async (payload) => {
         if (payload.eventType === 'DELETE') {
@@ -1196,7 +1197,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const targetId = (payload.new as any)?.id;
         if (!targetId) return;
 
-        const { data: rawPost } = await supabase
+        const { data: rawPost } = await backendDb
           .from('posts')
           .select(`
             id, author_id, caption, location, comment_count, created_at, image_url, likes_count
@@ -1206,14 +1207,14 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
         if (rawPost) {
           rawPost.image_url = await resolveStorageRef(rawPost.image_url ?? '', BUCKETS.posts);
-          const { data: profileData } = await supabase.from('profiles').select('id, full_name, city, avatar_url').eq('id', rawPost.author_id).maybeSingle();
+          const { data: profileData } = await backendDb.from('profiles').select('id, full_name, city, avatar_url').eq('id', rawPost.author_id).maybeSingle();
           const postData = { ...rawPost, profiles: profileData ? [profileData] : [] };
           const hydrated = mapPostRow(postData);
           
           // Check if liked by current user
           const currentUserId = stateRef.current.currentUser?.id;
           if (currentUserId) {
-            const { data: likeData } = await supabase
+            const { data: likeData } = await backendDb
               .from('post_likes')
               .select('id')
               .eq('user_id', currentUserId)
@@ -1232,14 +1233,14 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       .subscribe();
 
     // Unified Profile Sync
-    const profileChannel = supabase
+    const profileChannel = backendDb
       .channel('global:profiles-sync')
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles' }, async (payload) => {
         const updatedProfile = payload.new as any;
         const currentUserId = stateRef.current.currentUser?.id;
 
           if (updatedProfile.id === currentUserId) {
-            setState({ currentUser: mapSupabaseUser(stateRef.current.currentUser, updatedProfile.role, updatedProfile) });
+            setState({ currentUser: mapProviderUser(stateRef.current.currentUser, updatedProfile.role, updatedProfile) });
           }
 
           setState({
@@ -1294,7 +1295,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       .subscribe();
 
     // Booking Sync
-    const bookingChannel = supabase
+    const bookingChannel = backendDb
       .channel('global:bookings-sync')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, async (payload) => {
         const currentUserId = stateRef.current.currentUser?.id;
@@ -1308,7 +1309,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       .subscribe();
 
     // Notification Sync
-    const notificationChannel = supabase
+    const notificationChannel = backendDb
       .channel('global:notifications-sync')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'notification_events' }, async (payload) => {
         const currentUserId = stateRef.current.currentUser?.id;
@@ -1320,7 +1321,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       })
       .subscribe();
 
-    const earningsChannel = supabase
+    const earningsChannel = backendDb
       .channel('global:earnings-sync')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'earnings' }, async (payload) => {
         const currentUserId = stateRef.current.currentUser?.id;
@@ -1332,7 +1333,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       })
       .subscribe();
 
-    const subscriptionsChannel = supabase
+    const subscriptionsChannel = backendDb
       .channel('global:subscriptions-sync')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'subscriptions' }, async (payload) => {
         const currentUserId = stateRef.current.currentUser?.id;
@@ -1345,7 +1346,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       .subscribe();
 
     // Messages Realtime — live chat updates
-    const messagesChannel = supabase
+    const messagesChannel = backendDb
       .channel('global:messages-sync')
       .on(
         'postgres_changes',
@@ -1392,13 +1393,13 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     return () => {
       data.subscription?.unsubscribe();
-      supabase.removeChannel(postsChannel);
-      supabase.removeChannel(profileChannel);
-      supabase.removeChannel(bookingChannel);
-      supabase.removeChannel(notificationChannel);
-      supabase.removeChannel(earningsChannel);
-      supabase.removeChannel(subscriptionsChannel);
-      supabase.removeChannel(messagesChannel);
+      backendDb.removeChannel(postsChannel);
+      backendDb.removeChannel(profileChannel);
+      backendDb.removeChannel(bookingChannel);
+      backendDb.removeChannel(notificationChannel);
+      backendDb.removeChannel(earningsChannel);
+      backendDb.removeChannel(subscriptionsChannel);
+      backendDb.removeChannel(messagesChannel);
     };
   }, [fetchBookings, fetchConversations, fetchEarnings, fetchNotifications, fetchProfile, fetchSubscriptions]);
 
@@ -1469,7 +1470,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
       let persistedBooking = booking;
 
-      if (hasSupabase) {
+      if (hasBackendProvider) {
         try {
           const providerId = payload.talent_id || payload.photographer_id || payload.model_id;
           const isModel = payload.talent_type === 'model';
@@ -1569,9 +1570,9 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setState({ bookings });
 
 
-    if (hasSupabase) {
+    if (hasBackendProvider) {
         try {
-            const { error } = await supabase
+            const { error } = await backendDb
                 .from('bookings')
                 .update({ status: newStatus })
                 .eq('id', bookingId);
@@ -1639,7 +1640,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const prevMsgs = stateRef.current.messages[chatId] ?? [];
       setState({ messages: { ...stateRef.current.messages, [chatId]: [...prevMsgs, optimisticMessage] } });
 
-      if (!hasSupabase) {
+      if (!hasBackendProvider) {
         return optimisticMessage;
       }
 
@@ -1689,7 +1690,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         setError(message);
         throw new Error(message);
       }
-      if (!hasSupabase) {
+      if (!hasBackendProvider) {
         throw new Error('Media messages require a backend connection.');
       }
 
@@ -1711,7 +1712,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const prevLockedMsgs = stateRef.current.messages[chatId] ?? [];
       setState({ messages: { ...stateRef.current.messages, [chatId]: [...prevLockedMsgs, optimisticMessage] } });
 
-      if (!hasSupabase) {
+      if (!hasBackendProvider) {
         return optimisticMessage;
       }
 
@@ -1776,7 +1777,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   );
 
   const fetchMessages = useCallback(async (chatId: string) => {
-    if (!hasSupabase) return;
+    if (!hasBackendProvider) return;
     const currentUserId = stateRef.current.currentUser?.id;
     if (!currentUserId) return;
 
@@ -1854,7 +1855,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setState({ conversations: [convo, ...originalConversations] });
 
 
-    if (hasSupabase) {
+    if (hasBackendProvider) {
       try {
         const data = await startConversationViaEdge({ participantId, title: convoTitle });
         const newConvo: ConversationSummary = {
@@ -1872,7 +1873,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         try {
           // 1. Create Conversation
           // Note: RLS policy "conversations_insert_auth" allows this for authenticated users
-          const { data: convData, error: convErr } = await supabase
+          const { data: convData, error: convErr } = await backendDb
             .from('conversations')
             .insert({
               title: convoTitle,
@@ -1891,7 +1892,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           if (!convData) throw new Error('No conversation data returned');
 
           // 2. Add Self as Participant (Allowed by RLS)
-          const { error: partSelfErr } = await supabase
+          const { error: partSelfErr } = await backendDb
             .from('conversation_participants')
             .insert({
               conversation_id: convData.id,
@@ -1904,7 +1905,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           }
 
           // 3. Add Other Participant
-          const { error: partOtherErr } = await supabase
+          const { error: partOtherErr } = await backendDb
             .from('conversation_participants')
             .insert({
               conversation_id: convData.id,
@@ -1964,7 +1965,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const originalPosts = stateRef.current.posts;
         setState({ posts: [post, ...originalPosts] });
 
-        if (hasSupabase) {
+        if (hasBackendProvider) {
             try {
                 let finalImageRef = imageUri;
                 let finalImageUrl = imageUri;
@@ -1973,7 +1974,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
                   finalImageUrl = await resolveStorageRef(finalImageRef, BUCKETS.posts);
                 }
 
-                const { data, error: insertError } = await supabase
+                const { data, error: insertError } = await backendDb
                 .from('posts')
                 .insert({
                     author_id: ownerId,
@@ -2036,9 +2037,9 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     });
     setState({ posts });
 
-    if (hasSupabase) {
+    if (hasBackendProvider) {
       try {
-        const { data, error } = await supabase.rpc('toggle_post_like', {
+        const { data, error } = await backendDb.rpc('toggle_post_like', {
           p_post_id: postId,
           p_user_id: userId,
         });
@@ -2098,9 +2099,9 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     );
     setState({ comments: { ...originalComments, [postId]: [...existingForPost, comment] }, posts });
 
-    if (hasSupabase) {
+    if (hasBackendProvider) {
         try {
-            const { data, error } = await supabase
+            const { data, error } = await backendDb
               .from('post_comments')
               .insert([{ post_id: postId, user_id: resolvedUserId, body: text }])
               .select('id, post_id, user_id, body, created_at')
@@ -2137,9 +2138,9 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, []);
 
   const fetchComments = useCallback(async (postId: string) => {
-    if (!hasSupabase) return;
+    if (!hasBackendProvider) return;
     try {
-      const { data, error } = await supabase
+      const { data, error } = await backendDb
         .from('post_comments')
         .select('id, post_id, user_id, body, created_at')
         .eq('post_id', postId)
@@ -2160,7 +2161,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, []);
 
   const updateBookingClientLocation = useCallback(async (bookingId: string, latitude: number, longitude: number, accuracy?: number) => {
-    if (!hasSupabase) return;
+    if (!hasBackendProvider) return;
     const userId = stateRef.current.currentUser?.id;
     if (!userId) return;
 
@@ -2173,13 +2174,13 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       return;
     }
 
-    await supabase
+    await backendDb
       .from('bookings')
       .update({ user_latitude: latitude, user_longitude: longitude, updated_at: new Date().toISOString() })
       .eq('id', bookingId)
       .eq('client_id', userId);
 
-    await supabase
+    await backendDb
       .from('location_tracks')
       .insert({
         booking_id: bookingId,
@@ -2198,7 +2199,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, []);
 
   const updatePhotographerLocation = useCallback(async (latitude: number, longitude: number, bookingId?: string, accuracy?: number) => {
-    if (!hasSupabase) return;
+    if (!hasBackendProvider) return;
     const user = stateRef.current.currentUser;
     const userId = user?.id;
     if (!userId) return;
@@ -2212,13 +2213,13 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     const table = getTalentTableForRole(user);
     
-    await supabase
+    await backendDb
       .from(table)
       .update({ latitude, longitude })
       .eq('id', userId);
 
     if (bookingId) {
-      await supabase
+      await backendDb
         .from('location_tracks')
         .insert({
           booking_id: bookingId,
@@ -2328,14 +2329,14 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           return null;
         }
 
-        const signInResponse = await supabase.auth.signInWithPassword({ email, password });
+        const signInResponse = await backendDb.auth.signInWithPassword({ email, password });
         if (signInResponse.error) {
           setError(formatAuthError(signInResponse.error));
           return null;
         }
 
         const profile = await fetchProfile(created.id);
-        const user: AppUser | null = mapSupabaseUser(
+        const user: AppUser | null = mapProviderUser(
           signInResponse.data.user ?? { id: created.id, email, user_metadata: { role } },
           role,
           profile
@@ -2369,7 +2370,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         return user;
       }
 
-      const { data, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+      const { data, error: signInError } = await backendDb.auth.signInWithPassword({ email, password });
       if (signInError) {
         logError('sign_in', signInError);
         setError(signInError.message);
@@ -2381,7 +2382,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         metadataRole && ['client', 'photographer', 'model', 'admin', 'guest'].includes(metadataRole)
           ? metadataRole
           : 'client';
-      const user: AppUser | null = data.user ? mapSupabaseUser(data.user, safeFallbackRole, profile) : null;
+      const user: AppUser | null = data.user ? mapProviderUser(data.user, safeFallbackRole, profile) : null;
       setState({ currentUser: user });
       return user;
     } catch (err: any) {
@@ -2404,11 +2405,11 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         } catch (e) {
           logError('nhost_sign_out', e);
         }
-      } else if (hasSupabase) {
+      } else if (hasBackendProvider) {
         try {
-          await supabase.auth.signOut();
+          await backendDb.auth.signOut();
         } catch (e) {
-          logError('supabase_sign_out', e);
+          logError('legacy_provider_sign_out', e);
         }
       }
       
@@ -2427,7 +2428,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       });
 
       if (typeof window !== 'undefined') {
-        window.localStorage?.removeItem('supabase.auth.token');
+        window.localStorage?.removeItem('provider.auth.token');
       }
     } catch (err: any) {
       setError(err.message ?? 'Unable to sign out.');
@@ -2455,7 +2456,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
     }
 
-    if (!hasSupabase) {
+    if (!hasBackendProvider) {
       return stateRef.current.currentUser;
     }
 
@@ -2468,7 +2469,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
       const profile = await fetchProfile(user.id);
       const currentRole = profile?.role || stateRef.current.currentUser?.role || 'client';
-      const nextUser = mapSupabaseUser({ id: user.id, email: user.email ?? 'unknown-user', user_metadata: {} }, currentRole ?? 'client', profile);
+      const nextUser = mapProviderUser({ id: user.id, email: user.email ?? 'unknown-user', user_metadata: {} }, currentRole ?? 'client', profile);
       setState({ currentUser: nextUser });
       return nextUser;
     } catch (err) {
@@ -2485,7 +2486,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         throw new Error('OAuth sign-in is not wired for the Nhost backend yet.');
       }
       const redirectTo = Linking.createURL('auth');
-      const { data, error } = await supabase.auth.signInWithOAuth({
+      const { data, error } = await backendDb.auth.signInWithOAuth({
         provider,
         options: {
           redirectTo,
@@ -2518,20 +2519,20 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           }
 
           if (accessToken && refreshToken) {
-            const { error: sessionErr } = await supabase.auth.setSession({
+            const { error: sessionErr } = await backendDb.auth.setSession({
               access_token: accessToken,
               refresh_token: refreshToken,
             });
             if (sessionErr) throw sessionErr;
           } else if (code) {
-            const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+            const { error: exchangeError } = await backendDb.auth.exchangeCodeForSession(code);
             if (exchangeError) throw exchangeError;
           }
         }
 
-        let sessionData: Awaited<ReturnType<typeof supabase.auth.getSession>>['data'] | null = null;
+        let sessionData: Awaited<ReturnType<typeof backendDb.auth.getSession>>['data'] | null = null;
         for (let attempt = 0; attempt < 10; attempt += 1) {
-          const { data: nextSession, error: sessionError } = await supabase.auth.getSession();
+          const { data: nextSession, error: sessionError } = await backendDb.auth.getSession();
           if (sessionError) throw sessionError;
           if (nextSession.session) {
             sessionData = nextSession;
@@ -2606,7 +2607,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const privacy = { ...originalPrivacy, ...changes };
     setState({ privacy });
 
-    if (hasSupabase) {
+    if (hasBackendProvider) {
         try {
             const consentTypeBySetting: Record<'marketingOptIn' | 'personalizedAds' | 'locationEnabled', string> = {
               marketingOptIn: 'marketing',
@@ -2653,9 +2654,9 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const requestedAt = new Date().toISOString();
     setState({ privacy: { ...originalPrivacy, dataDeletionRequestedAt: requestedAt } });
 
-    if (hasSupabase) {
+    if (hasBackendProvider) {
         try {
-            const { error } = await supabase.from('account_deletion_requests').insert({
+            const { error } = await backendDb.from('account_deletion_requests').insert({
               created_by: userId,
               reason: 'Requested from mobile app settings',
             });
@@ -2672,7 +2673,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const updateProfilePicture = useCallback(async (uri: string) => {
     const currentState = stateRef.current;
     const userId = currentState.currentUser?.id;
-    if (!userId || !hasSupabase) {
+    if (!userId || !hasBackendProvider) {
       const msg = 'You need to be logged in and online to update your profile picture.';
       setError(msg);
       throw new Error(msg);
@@ -2681,18 +2682,18 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     try {
       const finalUrl = await uploadAvatar(uri, userId);
       const versionedUrl = `${finalUrl}?v=${Date.now()}`;
-      const { error: authError } = await supabase.auth.updateUser({
+      const { error: authError } = await backendDb.auth.updateUser({
         data: { avatar_url: versionedUrl }
       });
       if (authError) throw authError;
 
-      const { error: dbError } = await supabase
+      const { error: dbError } = await backendDb
         .from('profiles')
         .update({ avatar_url: versionedUrl })
         .eq('id', userId);
       if (dbError) throw dbError;
 
-      await supabase.auth.refreshSession();
+      await backendDb.auth.refreshSession();
       // Immediate local update so UI reflects new avatar without restart
       const currentUser = stateRef.current.currentUser;
         if (currentUser) {
@@ -2738,7 +2739,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const userId = stateRef.current.currentUser?.id;
     const currentRole = stateRef.current.currentUser?.role;
     const newRole = changes.role ?? currentRole;
-    if (!userId || !hasSupabase) {
+    if (!userId || !hasBackendProvider) {
       const msg = 'You need to be logged in and online to update your profile.';
       setError(msg);
       throw new Error(msg);
@@ -2762,7 +2763,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (changes.role !== undefined) profileChanges.role = changes.role;
 
       if (Object.keys(profileChanges).length > 1) { // more than just the id
-        const { error } = await supabase
+        const { error } = await backendDb
           .from('profiles')
           .upsert(profileChanges, { onConflict: 'id' });
         if (error) throw error;
@@ -2772,7 +2773,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (changes.role && changes.role !== currentRole) {
         const nextRole = getEffectiveRole(changes.role);
         if (isEffectivePhotographer(nextRole)) {
-          await supabase.from('photographers').upsert({
+          await backendDb.from('photographers').upsert({
             id: userId,
             rating: 5.0,
             location: '',
@@ -2782,7 +2783,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
             tags: [],
           }, { onConflict: 'id' });
         } else if (isEffectiveModel(nextRole)) {
-          await supabase.from('models').upsert({
+          await backendDb.from('models').upsert({
             id: userId,
             rating: 5.0,
             location: '',
@@ -2798,9 +2799,9 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       // 3. Sync bio to role-specific table if bio changed
       if (changes.bio !== undefined) {
         if (newRole === 'photographer') {
-          await supabase.from('photographers').update({ bio: changes.bio }).eq('id', userId);
+          await backendDb.from('photographers').update({ bio: changes.bio }).eq('id', userId);
         } else if (newRole === 'model') {
-          await supabase.from('models').update({ bio: changes.bio }).eq('id', userId);
+          await backendDb.from('models').update({ bio: changes.bio }).eq('id', userId);
         }
       }
 
@@ -2866,10 +2867,10 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (!current) throw new Error('Not signed in.');
     const role = current.role;
     if (!roleRequiresKyc(role)) return;
-    if (!hasSupabase) return;
+    if (!hasBackendProvider) return;
 
     const table = getTalentTableForRole(role);
-    const { data, error } = await supabase
+    const { data, error } = await backendDb
       .from(table)
       .update({
         tier_id: payload.tier_id ?? null,

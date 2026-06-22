@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../store/ThemeContext';
 import { useAppData } from '../store/AppDataContext';
-import { supabase } from '../config/supabaseClient';
+import { backendDb } from '../services/backendGateway';
 import { getCurrentAuthenticatedUser } from '../config/currentUser';
 import { invokeBackendFunction } from '../config/backendFunctions';
 import {

@@ -17,7 +17,7 @@ import { useTheme } from '../store/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { BOOKING_PACKAGES } from '../constants/pricing';
 import { haversineDistanceKm } from '../utils/geo';
-import { supabase } from '../config/supabaseClient';
+import { backendDb } from '../services/backendGateway';
 import { routingService } from '../services/routingService';
 import * as Haptics from 'expo-haptics';
 import { Analytics } from '../utils/analytics';
@@ -97,7 +97,7 @@ const MapScreen: React.FC = () => {
   const [altRoute, setAltRoute] = useState<Array<{ lat: number; lng: number }>>([]);
   const [routeDurationSec, setRouteDurationSec] = useState<number | null>(null);
   const [routeDistanceKm, setRouteDistanceKm] = useState<number | null>(null);
-  const [routeSource, setRouteSource] = useState<'osrm' | 'fallback' | null>(null);
+  const [routeSource, setRouteSource] = useState<'osrm' | 'ors' | 'fallback' | null>(null);
   const [heatmapSummary, setHeatmapSummary] = useState<{ demand: number; supply: number } | null>(null);
   const [pendingRequest, setPendingRequest] = useState<{
     bookingId: string;
@@ -150,7 +150,7 @@ const MapScreen: React.FC = () => {
     if (!currentUser?.id) return;
     // Initial load of online profiles
     const loadOnline = async () => {
-      const { data, error } = await supabase
+      const { data, error } = await backendDb
         .from('profiles')
         .select('id, availability_status');
       if (error) {
@@ -167,7 +167,7 @@ const MapScreen: React.FC = () => {
     loadOnline();
 
     // Subscribe to realtime changes on profiles availability status
-    const channel = supabase
+    const channel = backendDb
       .channel('online-presence')
       .on('postgres_changes', {
         event: 'UPDATE',
@@ -184,7 +184,7 @@ const MapScreen: React.FC = () => {
       })
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    return () => { backendDb.removeChannel(channel); };
   }, [currentUser?.id]);
 
   // Pulse animation for user pin
@@ -354,7 +354,7 @@ const MapScreen: React.FC = () => {
       const end = { latitude: selectedMarker.latitude, longitude: selectedMarker.longitude };
       const route = await routingService.getRoute(start, end);
       const routeCoords = route.coordinates.map(([lng, lat]) => ({ lat, lng }));
-      setPrimaryRoute(route.source === 'osrm' ? routeCoords : []);
+      setPrimaryRoute(route.source === 'fallback' ? [] : routeCoords);
       setAltRoute(route.source === 'fallback' ? routeCoords : []);
       setRouteDistanceKm(route.distance);
       setRouteDurationSec(route.duration);
@@ -461,7 +461,7 @@ const MapScreen: React.FC = () => {
       const base = pkg.basePrice;
       const providerId = marker.sourceId ?? marker.id;
       const isModel = marker.type === 'model';
-      const { data, error } = await supabase
+      const { data, error } = await backendDb
         .from('bookings')
         .insert({
           client_id: currentUser?.id,

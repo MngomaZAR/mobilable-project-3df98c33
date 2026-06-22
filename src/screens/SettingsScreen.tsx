@@ -26,7 +26,7 @@ import { ActionModal } from '../components/ActionModal';
 import { LEGAL_CONTENT } from '../constants/LegalContent';
 import { requestAccountDeletion } from '../services/accountService';
 import { BRAND, PLACEHOLDER_AVATAR } from '../utils/constants';
-import { supabase } from '../config/supabaseClient';
+import { backendDb } from '../services/backendGateway';
 import { registerForPushNotificationsAsync, savePushTokenAsync } from '../services/notificationService';
 import { isModelUser, isPhotographerUser, isProviderUser } from '../utils/userRole';
 
@@ -59,7 +59,7 @@ const SettingsScreen: React.FC = () => {
     const checkStatus = async () => {
       if (!currentUser?.id) return;
       try {
-        const { data, error } = await supabase
+        const { data, error } = await backendDb
           .from('push_tokens')
           .select('enabled')
           .eq('user_id', currentUser.id)
@@ -79,7 +79,7 @@ const SettingsScreen: React.FC = () => {
     try {
       if (!value) {
         // Disable: mark any existing token as disabled
-        await supabase
+        await backendDb
           .from('push_tokens')
           .update({ enabled: false })
           .eq('user_id', currentUser.id);
@@ -170,7 +170,10 @@ const SettingsScreen: React.FC = () => {
   };
 
   const handleOpen2FA = () => {
-    WebBrowser.openBrowserAsync('https://supabase.com/dashboard/project/_/auth/mfa');
+    Alert.alert(
+      'Two-factor authentication',
+      'Two-factor authentication is managed through PAPZII account security and will open from the production account API once it is enabled.'
+    );
   };
 
   const handleDownloadData = () => {

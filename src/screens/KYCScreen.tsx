@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator, Alert, Image, ScrollView,
   StyleSheet, Text, TouchableOpacity, View,
@@ -9,7 +9,7 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { supabase } from '../config/supabaseClient';
+import { backendDb } from '../services/backendGateway';
 import { useAppData } from '../store/AppDataContext';
 import { useTheme } from '../store/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
@@ -40,7 +40,7 @@ const KYCScreen: React.FC = () => {
 
   useEffect(() => {
     if (!userId) return;
-    supabase.from('kyc_documents').select('doc_type, status').eq('user_id', userId)
+    backendDb.from('kyc_documents').select('doc_type, status').eq('user_id', userId)
       .then(({ data }) => {
         if (!data) return;
         const updates: typeof docs = { ...docs };
@@ -64,7 +64,7 @@ const KYCScreen: React.FC = () => {
       );
       if (!manipulated.base64) throw new Error('Could not read image');
       const storagePath = await uploadImage(manipulated.uri, 'kyc-docs', { returnStorageRef: true });
-      const { error: dbErr } = await supabase.from('kyc_documents').upsert(
+      const { error: dbErr } = await backendDb.from('kyc_documents').upsert(
         { user_id: userId, doc_type: slot.key, storage_path: storagePath, status: 'pending' },
         { onConflict: 'user_id,doc_type' }
       );
@@ -80,7 +80,7 @@ const KYCScreen: React.FC = () => {
     if (missing.length) { Alert.alert('Missing documents', `Please upload: ${missing.map(s => s.label).join(', ')}`); return; }
     setSubmitting(true);
     try {
-      await supabase.from('profiles').update({ kyc_status: 'submitted' }).eq('id', userId);
+      await backendDb.from('profiles').update({ kyc_status: 'submitted' }).eq('id', userId);
       Alert.alert('Submitted!', 'Documents sent for review. We usually respond within 24 hours.', [{ text: 'OK', onPress: () => navigation.goBack() }]);
     } catch (err: any) {
       Alert.alert('Error', err.message || 'Could not submit. Please try again.');
@@ -104,7 +104,7 @@ const KYCScreen: React.FC = () => {
         {kycStatus === 'approved' && (
           <View style={[st.approvedBanner, { borderColor: '#22c55e', backgroundColor: '#22c55e18' }]}>
             <Ionicons name="shield-checkmark" size={20} color="#22c55e" />
-            <Text style={[st.approvedText, { color: '#22c55e' }]}>Identity verified âœ“</Text>
+            <Text style={[st.approvedText, { color: '#22c55e' }]}>Identity verified ✓</Text>
           </View>
         )}
 

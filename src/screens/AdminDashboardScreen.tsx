@@ -9,7 +9,7 @@ import { useAppData } from '../store/AppDataContext';
 import { useTheme } from '../store/ThemeContext';
 import { useMessaging } from '../store/MessagingContext';
 import { NewMessageModal } from '../components/NewMessageModal';
-import { supabase } from '../config/supabaseClient';
+import { backendDb } from '../services/backendGateway';
 
 type Navigation = StackNavigationProp<RootStackParamList>;
 
@@ -32,7 +32,7 @@ const AdminDashboardScreen: React.FC = () => {
 
   const fetchRevenue = React.useCallback(async () => {
     try {
-      const { data, error } = await supabase.from('earnings').select('amount');
+      const { data, error } = await backendDb.from('earnings').select('amount');
       if (!error && data) {
         const total = data.reduce((sum: number, row: any) => sum + Number(row.amount || 0), 0);
         setLiveRevenue(total);
@@ -45,10 +45,10 @@ const AdminDashboardScreen: React.FC = () => {
   const fetchOpsMetrics = React.useCallback(async () => {
     try {
       const [dispatchRes, etaRes, modRes, payoutRes] = await Promise.all([
-        supabase.from('dispatch_requests').select('id', { count: 'exact', head: true }).in('status', ['queued', 'offered']),
-        supabase.from('eta_snapshots').select('eta_confidence').order('created_at', { ascending: false }).limit(100),
-        supabase.from('moderation_cases').select('id', { count: 'exact', head: true }).in('status', ['open', 'in_review', 'escalated']),
-        supabase.from('payments').select('id', { count: 'exact', head: true }).in('status', ['failed', 'cancelled']),
+        backendDb.from('dispatch_requests').select('id', { count: 'exact', head: true }).in('status', ['queued', 'offered']),
+        backendDb.from('eta_snapshots').select('eta_confidence').order('created_at', { ascending: false }).limit(100),
+        backendDb.from('moderation_cases').select('id', { count: 'exact', head: true }).in('status', ['open', 'in_review', 'escalated']),
+        backendDb.from('payments').select('id', { count: 'exact', head: true }).in('status', ['failed', 'cancelled']),
       ]);
 
       const avgEtaConfidence = etaRes.data && etaRes.data.length > 0

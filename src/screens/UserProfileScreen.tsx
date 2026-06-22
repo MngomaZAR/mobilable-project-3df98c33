@@ -14,7 +14,7 @@ import { toggleFollow } from '../services/followService';
 import { trackEvent } from '../services/analyticsService';
 import { PLACEHOLDER_IMAGE } from '../utils/constants';
 import { getStatusLeaderboard } from '../services/dispatchService';
-import { supabase } from '../config/supabaseClient';
+import { backendDb } from '../services/backendGateway';
 import { getDefaultPayfastNotifyUrl } from '../config/commercePolicy';
 
 type Route = RouteProp<RootStackParamList, 'UserProfile'>;
@@ -43,7 +43,7 @@ const UserProfileScreen: React.FC = () => {
     const loadTagged = async () => {
       setTaggedLoading(true);
       try {
-        const { data } = await supabase
+        const { data } = await backendDb
           .from('posts')
           .select('id, image_url, caption, created_at, likes_count, author_id')
           .ilike('caption', `%@${params.userId}%`)
@@ -93,7 +93,7 @@ const UserProfileScreen: React.FC = () => {
       const userId = params.userId;
       try {
         const [{ data: score }, board] = await Promise.all([
-          supabase.from('status_scores').select('seen_score,scene_rank').eq('user_id', userId).maybeSingle(),
+          backendDb.from('status_scores').select('seen_score,scene_rank').eq('user_id', userId).maybeSingle(),
           getStatusLeaderboard({ city: talent?.location || profileFallback?.city || 'Cape Town', limit: 100 }),
         ]);
         if (!active) return;

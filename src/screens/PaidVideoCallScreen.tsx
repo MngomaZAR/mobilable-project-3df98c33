@@ -5,7 +5,7 @@
  * Install: npx expo install @livekit/react-native livekit-client
  *
  * Architecture:
- *   - Server generates a LiveKit access token via a Supabase Edge Function
+ *   - Server generates a LiveKit access token via a provider Edge Function
  *     (`livekit-token`) using the LiveKit server SDK + API key/secret (in env).
  *   - Client connects to the LiveKit Cloud (or self-hosted) room.
  *   - Billing: `video_call_sessions` table records start/end; a DB trigger
@@ -31,7 +31,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { createTipCheckoutLink } from '../services/monetisationService';
 import { trackEvent } from '../services/analyticsService';
-import { supabase } from '../config/supabaseClient';
+import { backendDb } from '../services/backendGateway';
 import { getCurrentAuthenticatedUser } from '../config/currentUser';
 import { invokeBackendFunction } from '../config/backendFunctions';
 import { getDefaultPayfastNotifyUrl } from '../config/commercePolicy';
@@ -154,7 +154,7 @@ const PaidVideoCallScreen: React.FC = () => {
     return () => clearInterval(timer);
   }, []);
 
-  // ── Fetch LiveKit token from Supabase Edge Function ───────────────────────
+  // ── Fetch LiveKit token from provider Edge Function ───────────────────────
   const fetchToken = useCallback(async () => {
     const activeRole = isTestRoom ? roleChoice : requestedRole;
     if (!resolvedCreatorId) return;

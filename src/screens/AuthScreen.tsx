@@ -22,9 +22,9 @@ import { consumeNhostPkceVerifier } from '../config/nhostPkce';
 
 type Mode = 'signin' | 'signup';
 
-// SUPABASE_CALLBACK removed — dynamic redirect via Linking.createURL('auth') is used
+// provider_CALLBACK removed — dynamic redirect via Linking.createURL('auth') is used
 
-// Map raw Supabase auth errors to human-friendly messages
+// Map raw provider auth errors to human-friendly messages
 const friendlyAuthError = (raw: string): string => {
   const r = raw.toLowerCase();
   if (r.includes('invalid login credentials') || r.includes('invalid_credentials'))

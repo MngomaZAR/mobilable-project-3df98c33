@@ -9,7 +9,7 @@ import { RootStackParamList } from '../navigation/types';
 import { Booking, Photographer } from '../types';
 import { useAppData } from '../store/AppDataContext';
 import { DEFAULT_CAPE_TOWN_COORDINATES, ensureSouthAfricanCoordinates, haversineDistanceKm } from '../utils/geo';
-import { hasSupabase, supabase } from '../config/supabaseClient';
+import { hasBackendProvider, backendDb } from '../services/backendGateway';
 import { getDispatchState, getEta } from '../services/dispatchService';
 import { MapLibreGL, isMapLibreNativeAvailable } from '../components/MapLibreWrapper';
 import { useTheme } from '../store/ThemeContext';
@@ -152,8 +152,8 @@ const BookingTrackingScreen: React.FC = () => {
   }, [booking, state.currentUser, updateBookingClientLocation, updatePhotographerLocation]);
 
   useEffect(() => {
-    if (!hasSupabase || !booking) return;
-    const channel = supabase
+    if (!hasBackendProvider || !booking) return;
+    const channel = backendDb
       .channel(`booking-tracking-${booking.id}`)
       .on(
         'postgres_changes',
@@ -319,7 +319,7 @@ const BookingTrackingScreen: React.FC = () => {
   };
 
   const distanceKm = trackingRoute?.distance ?? haversineDistanceKm(livePhotographerLocation, liveClientLocation);
-  const routeSourceLabel = trackingRoute?.source === 'osrm' ? 'Road route' : 'Direct estimate';
+  const routeSourceLabel = trackingRoute?.source === 'fallback' ? 'Direct estimate' : 'Road route';
   const fallbackMins = Math.max(3, Math.round((distanceKm / 35) * 60));
   const activeTimer = countdownSec > 0 ? countdownSec : Math.max(60, (etaMinutes ?? fallbackMins) * 60);
   const isCancellable = booking.status === 'pending' || booking.status === 'accepted' || booking.status === 'in_progress';

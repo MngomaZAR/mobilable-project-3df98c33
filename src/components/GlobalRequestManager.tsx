@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { useAppData } from '../store/AppDataContext';
 import { RequestPopup } from './RequestPopup';
-import { supabase } from '../config/supabaseClient';
+import { backendDb } from '../services/backendGateway';
 import { Alert } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -24,7 +24,7 @@ export const GlobalRequestManager: React.FC = () => {
     const filterColumn = getBookingTalentColumnForRole(currentUser);
     
     // Subscribe to new booking requests for this talent
-    const channel = supabase.channel(`global:bookings:${currentUser.id}`);
+    const channel = backendDb.channel(`global:bookings:${currentUser.id}`);
 
     channel.on(
       'postgres_changes',
@@ -43,14 +43,14 @@ export const GlobalRequestManager: React.FC = () => {
     ).subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      backendDb.removeChannel(channel);
     };
   }, [currentUser]);
 
   const handleAccept = async () => {
     if (!incomingRequest) return;
     try {
-      const { error } = await supabase
+      const { error } = await backendDb
         .from('bookings')
         .update({ status: 'accepted' })
         .eq('id', incomingRequest.id);
@@ -68,7 +68,7 @@ export const GlobalRequestManager: React.FC = () => {
   const handleDecline = async () => {
     if (!incomingRequest) return;
     try {
-      await supabase
+      await backendDb
         .from('bookings')
         .update({ status: 'declined' })
         .eq('id', incomingRequest.id);

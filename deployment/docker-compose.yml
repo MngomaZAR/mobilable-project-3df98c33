@@ -1,0 +1,106 @@
+services:
+  api:
+    image: ${PAPZI_API_IMAGE:-ghcr.io/mngomazar/papzi-api:latest}
+    restart: unless-stopped
+    environment:
+      APP_ENV: ${APP_ENV:-production}
+      APP_VERSION: ${APP_VERSION:-0.1.0}
+      API_PUBLIC_URL: ${API_PUBLIC_URL}
+      NEON_DATABASE_URL: ${NEON_DATABASE_URL}
+      KEYCLOAK_URL: ${KEYCLOAK_URL}
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM}
+      KEYCLOAK_AUDIENCE: ${KEYCLOAK_AUDIENCE:-papzi-mobile}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-http://minio:9000}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+      MINIO_BUCKET_MEDIA: ${MINIO_BUCKET_MEDIA:-papzi-media}
+      NATS_URL: ${NATS_URL:-nats://nats:4222}
+      TYPESENSE_HOST: ${TYPESENSE_HOST:-typesense}
+      TYPESENSE_PORT: ${TYPESENSE_PORT:-8108}
+      TYPESENSE_PROTOCOL: ${TYPESENSE_PROTOCOL:-http}
+      TYPESENSE_API_KEY: ${TYPESENSE_API_KEY}
+      LIVEKIT_URL: ${LIVEKIT_URL}
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET}
+      PAYFAST_BASE_URL: ${PAYFAST_BASE_URL}
+      PAYFAST_MERCHANT_ID: ${PAYFAST_MERCHANT_ID}
+      PAYFAST_MERCHANT_KEY: ${PAYFAST_MERCHANT_KEY}
+      PAYFAST_PASSPHRASE: ${PAYFAST_PASSPHRASE}
+    depends_on:
+      - keycloak
+      - minio
+      - nats
+      - typesense
+    ports:
+      - "${API_PORT:-8000}:8000"
+
+  worker:
+    image: ${PAPZI_WORKER_IMAGE:-ghcr.io/mngomazar/papzi-worker:latest}
+    restart: unless-stopped
+    environment:
+      APP_ENV: ${APP_ENV:-production}
+      NEON_DATABASE_URL: ${NEON_DATABASE_URL}
+      KEYCLOAK_URL: ${KEYCLOAK_URL}
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-http://minio:9000}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+      NATS_URL: ${NATS_URL:-nats://nats:4222}
+      TYPESENSE_HOST: ${TYPESENSE_HOST:-typesense}
+      TYPESENSE_PORT: ${TYPESENSE_PORT:-8108}
+      TYPESENSE_PROTOCOL: ${TYPESENSE_PROTOCOL:-http}
+      TYPESENSE_API_KEY: ${TYPESENSE_API_KEY}
+    depends_on:
+      - api
+      - minio
+      - nats
+      - typesense
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    restart: unless-stopped
+    command: ["start", "--http-enabled=true", "--hostname-strict=false"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      KC_PROXY_HEADERS: xforwarded
+    ports:
+      - "${KEYCLOAK_PORT:-8080}:8080"
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
+    volumes:
+      - minio-data:/data
+    ports:
+      - "${MINIO_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+
+  nats:
+    image: nats:2.12-alpine
+    restart: unless-stopped
+    command: ["-js"]
+    volumes:
+      - nats-data:/data
+    ports:
+      - "${NATS_PORT:-4222}:4222"
+
+  typesense:
+    image: typesense/typesense:29.0
+    restart: unless-stopped
+    environment:
+      TYPESENSE_API_KEY: ${TYPESENSE_API_KEY}
+      TYPESENSE_DATA_DIR: /data
+    volumes:
+      - typesense-data:/data
+    ports:
+      - "${TYPESENSE_PORT:-8108}:8108"
+
+volumes:
+  minio-data:
+  nats-data:
+  typesense-data:

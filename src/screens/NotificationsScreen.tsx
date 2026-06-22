@@ -12,7 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../store/ThemeContext';
-import { supabase, hasSupabase } from '../config/supabaseClient';
+import { backendDb, hasBackendProvider } from '../services/backendGateway';
 import { useAppData } from '../store/AppDataContext';
 import { RootStackParamList } from '../navigation/types';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -42,10 +42,10 @@ const NotificationsScreen: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'all' | 'booking' | 'social' | 'earnings'>('all');
 
   const fetchNotifications = useCallback(async () => {
-    if (!hasSupabase || !state.currentUser) return;
+    if (!hasBackendProvider || !state.currentUser) return;
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      const { data, error } = await backendDb
         .from('notification_events')
         .select('id, event_type, title, body, status, created_at, category, action_type, action_payload')
         .eq('user_id', state.currentUser.id)
@@ -57,7 +57,7 @@ const NotificationsScreen: React.FC = () => {
           .filter((n: any) => n.status === 'queued')
           .map((n: any) => n.id);
         if (queuedIds.length > 0) {
-          await supabase
+          await backendDb
             .from('notification_events')
             .update({ status: 'sent' })
             .in('id', queuedIds);

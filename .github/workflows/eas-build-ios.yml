@@ -14,8 +14,14 @@ on:
 jobs:
   build_ios:
     runs-on: ubuntu-latest
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Validate required secrets
+        run: |
+          test -n "$EXPO_TOKEN" || (echo "Missing EXPO_TOKEN" && exit 1)
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -30,9 +36,17 @@ jobs:
           token: ${{ secrets.EXPO_TOKEN }}
 
       - name: Install dependencies
-        run: npm ci --no-audit --no-fund --no-optional
+        run: npm ci --no-audit --no-fund --omit=optional
+
+      - name: Pull EAS production env
+        run: npx eas-cli@latest env:pull --environment production --path .env.eas.production --non-interactive
+
+      - name: Validate release env
+        run: |
+          set -a
+          . ./.env.eas.production
+          set +a
+          npm run validate:env:release
 
       - name: Build iOS (production profile)
         run: npx eas-cli build --platform ios --profile production --non-interactive
-        env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}

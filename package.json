@@ -37,10 +37,10 @@
     "hasura:up": "docker-compose -f docker/hasura/docker-compose.yml up -d",
     "hasura:down": "docker-compose -f docker/hasura/docker-compose.yml down",
     "hasura:logs": "docker-compose -f docker/hasura/docker-compose.yml logs -f",
-    "eas:build": "npx eas-cli@latest build --platform all",
-    "eas:build:workflow": "npx eas-cli@latest workflow:run .eas/workflows/create-production-builds.yml",
-    "eas:build:ios": "npx eas-cli@latest workflow:run .eas/workflows/build-ios-preview.yml",
-    "eas:deploy:web": "npx eas-cli@latest workflow:run .eas/workflows/deploy-web.yml",
+    "eas:build": "npm run check:release && npx eas-cli@latest build --platform all",
+    "eas:build:workflow": "npm run validate:env:release && npx eas-cli@latest workflow:run .eas/workflows/create-production-builds.yml",
+    "eas:build:ios": "npm run validate:env:release && npx eas-cli@latest workflow:run .eas/workflows/build-ios-preview.yml",
+    "eas:deploy:web": "npm run validate:env:release && npx eas-cli@latest workflow:run .eas/workflows/deploy-web.yml",
     "prepare": "husky"
   },
   "lint-staged": {

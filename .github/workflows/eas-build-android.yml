@@ -1,0 +1,47 @@
+name: EAS Build Android
+
+# Builds Android app via GitHub Actions using the production profile.
+# This is blocked by the same release env/API health gate used for iOS.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build_android:
+    runs-on: ubuntu-latest
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate required secrets
+        run: |
+          test -n "$EXPO_TOKEN" || (echo "Missing EXPO_TOKEN" && exit 1)
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund --omit=optional
+
+      - name: Pull EAS production env
+        run: npx eas-cli@latest env:pull --environment production --path .env.eas.production --non-interactive
+
+      - name: Validate release env
+        run: |
+          set -a
+          . ./.env.eas.production
+          set +a
+          npm run validate:env:release
+
+      - name: Build Android (production profile)
+        run: npx eas-cli@latest build --platform android --profile production --non-interactive

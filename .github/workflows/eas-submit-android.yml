@@ -1,0 +1,47 @@
+name: EAS Submit Android
+
+# Submits the latest production Android build to the Google Play internal track.
+# This is blocked by the release env/API health gate before submission.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  submit_android:
+    runs-on: ubuntu-latest
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate required secrets
+        run: |
+          test -n "$EXPO_TOKEN" || (echo "Missing EXPO_TOKEN" && exit 1)
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund --omit=optional
+
+      - name: Pull EAS production env
+        run: npx eas-cli@latest env:pull --environment production --path .env.eas.production --non-interactive
+
+      - name: Validate release env
+        run: |
+          set -a
+          . ./.env.eas.production
+          set +a
+          npm run validate:env:release
+
+      - name: Submit latest Android build (production)
+        run: npx eas-cli@latest submit --platform android --profile production --latest --non-interactive

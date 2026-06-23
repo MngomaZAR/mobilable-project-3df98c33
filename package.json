@@ -40,6 +40,9 @@
     "eas:build": "npm run check:release && npx eas-cli@latest build --platform all",
     "eas:build:workflow": "npm run validate:env:release && npx eas-cli@latest workflow:run .eas/workflows/create-production-builds.yml",
     "eas:build:ios": "npm run validate:env:release && npx eas-cli@latest workflow:run .eas/workflows/build-ios-preview.yml",
+    "eas:build:android": "npm run validate:env:release && npx eas-cli@latest build --platform android --profile production",
+    "eas:submit:ios": "npm run validate:env:release && npx eas-cli@latest submit --platform ios --profile production --latest",
+    "eas:submit:android": "npm run validate:env:release && npx eas-cli@latest submit --platform android --profile production --latest",
     "eas:deploy:web": "npm run validate:env:release && npx eas-cli@latest workflow:run .eas/workflows/deploy-web.yml",
     "prepare": "husky"
   },

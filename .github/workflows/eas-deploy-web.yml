@@ -29,15 +29,9 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --no-fund --no-optional
 
-      - name: Pull EAS production env
-        run: npx eas-cli@latest env:pull --environment production --path .env.eas.production --non-interactive
-
       - name: Validate required env (release)
         run: |
-          set -a
-          . ./.env.eas.production
-          set +a
-          npm run validate:env:release
+          npx eas-cli@latest env:exec production "npm run validate:env:release" --non-interactive
           npm run audit:release-runtime
 
       - name: Export web bundle

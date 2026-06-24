@@ -4,6 +4,10 @@ name: EAS Build Android
 # This is blocked by the same release env/API health gate used for iOS.
 
 on:
+  push:
+    branches:
+      - main
+      - release/testflight-2026-06
   workflow_dispatch:
 
 jobs:
@@ -36,5 +40,5 @@ jobs:
       - name: Validate release env
         run: npx eas-cli@latest env:exec production "npm run validate:env:release" --non-interactive
 
-      - name: Build Android (production profile)
-        run: npx eas-cli@latest build --platform android --profile production --non-interactive
+      - name: Build and submit Android
+        run: npx eas-cli@latest build --platform android --profile production --auto-submit-with-profile production --non-interactive --wait --message "GitHub Play internal release"

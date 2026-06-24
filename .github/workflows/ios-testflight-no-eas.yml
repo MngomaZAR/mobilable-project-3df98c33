@@ -3,6 +3,7 @@ name: iOS TestFlight
 on:
   push:
     branches:
+      - main
       - release/testflight-2026-06
   workflow_dispatch:
 

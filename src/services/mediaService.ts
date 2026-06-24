@@ -1,10 +1,16 @@
 import { supabase } from '../config/supabaseClient';
 import { hasNhost, nhost } from '../config/nhostClient';
 import { requireCurrentAuthenticatedUser } from '../config/currentUser';
+import { environment } from '../config/environment';
+import { apiClient } from '../config/apiClient';
+import { getApiAccessToken } from '../config/apiSession';
+import { backendDb } from './backendGateway';
 import { MediaAsset } from '../types';
 
+const hasApiStorage = environment.backendProvider === 'api';
+
 export const fetchCreatorMedia = async (creatorId: string): Promise<MediaAsset[]> => {
-  const { data, error } = await supabase
+  const { data, error } = await backendDb
     .from('media_assets')
     .select('*')
     .eq('owner_id', creatorId)
@@ -13,6 +19,12 @@ export const fetchCreatorMedia = async (creatorId: string): Promise<MediaAsset[]
   if (error) throw new Error(error.message);
 
   const resolveUrl = async (bucket: string, objectPath: string) => {
+    if (hasApiStorage) {
+      const token = await getApiAccessToken();
+      const response = await apiClient.post<{ url: string }>('/storage/signed-url', { bucket, path: objectPath }, { token });
+      if (!response.url) throw new Error('Unable to resolve media URL.');
+      return response.url;
+    }
     if (hasNhost) {
       const { body, status } = await nhost.storage.getFilePresignedURL(objectPath);
       if (status >= 300 || !body?.url) throw new Error('Unable to resolve media URL.');
@@ -21,7 +33,7 @@ export const fetchCreatorMedia = async (creatorId: string): Promise<MediaAsset[]
     return supabase.storage.from(bucket).getPublicUrl(objectPath).data.publicUrl;
   };
 
-  const assets = await Promise.all((data || []).map(async (asset) => ({
+  const assets = await Promise.all((data || []).map(async (asset: any) => ({
     ...asset,
     preview_url:
       asset.preview_url ||
@@ -37,17 +49,28 @@ export const fetchCreatorMedia = async (creatorId: string): Promise<MediaAsset[]
 export const unlockMediaAsset = async (assetId: string): Promise<string> => {
   const user = await requireCurrentAuthenticatedUser();
 
-  await supabase
+  await backendDb
     .from('media_access_logs')
     .insert({ asset_id: assetId, user_id: user.id, action: 'signed_url_requested' });
 
-  const { data: asset, error } = await supabase
+  const { data: asset, error } = await backendDb
     .from('media_assets')
     .select('bucket, object_path')
     .eq('id', assetId)
     .single();
 
   if (error || !asset) throw new Error('Asset not found');
+
+  if (hasApiStorage) {
+    const token = await getApiAccessToken();
+    const response = await apiClient.post<{ url: string }>(
+      '/storage/signed-url',
+      { bucket: asset.bucket, path: asset.object_path },
+      { token }
+    );
+    if (!response.url) throw new Error('Could not generate signed URL');
+    return response.url;
+  }
 
   if (hasNhost) {
     const { body, status } = await nhost.storage.getFilePresignedURL(asset.object_path);

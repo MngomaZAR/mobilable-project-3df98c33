@@ -37,9 +37,17 @@ Set these in Dokploy, not in EAS:
 
 ```env
 NEON_DATABASE_URL=
+DATABASE_URL=
+NHOST_SUBDOMAIN=otismbqjmpvvtygfjbcu
+NHOST_REGION=ap-southeast-1
+NHOST_AUTH_URL=
+NHOST_GRAPHQL_URL=
+NHOST_FUNCTIONS_URL=
+NHOST_ADMIN_SECRET=
 KEYCLOAK_URL=
 KEYCLOAK_REALM=papzi
 KEYCLOAK_AUDIENCE=papzi-mobile
+KEYCLOAK_CLIENT_SECRET=
 KEYCLOAK_ADMIN_PASSWORD=
 MINIO_ACCESS_KEY=
 MINIO_SECRET_KEY=
@@ -60,6 +68,7 @@ Reuse the existing Supabase secret names for PayFast and LiveKit when copying va
 Only public mobile configuration belongs in EAS:
 
 ```env
+EXPO_PUBLIC_BACKEND_PROVIDER=api
 EXPO_PUBLIC_API_BASE_URL=https://api.your-domain.example
 EXPO_PUBLIC_STORE_TARGET=both
 EXPO_PUBLIC_DIGITAL_BILLING_PROVIDER=external
@@ -67,6 +76,23 @@ EXPO_PUBLIC_DISABLE_DIGITAL_PURCHASES=true
 ```
 
 `EXPO_PUBLIC_API_BASE_URL=https://api.example.com` is a blocking placeholder. Replace it with the real Dokploy API URL before release builds.
+
+The mobile release provider is now `api`. Nhost/Supabase values may exist during migration, but the shipped app should call only the FastAPI host from `EXPO_PUBLIC_API_BASE_URL`.
+
+The app expects these FastAPI routes:
+
+- `GET /health`
+- `GET /version`
+- `GET /auth/me`
+- `POST /auth/sign-in`
+- `POST /auth/sign-up`
+- `POST /auth/sign-out`
+- `POST /data/{table}`
+- `POST /rpc/{name}`
+- `POST /graphql`
+- `POST /storage/upload`
+- `POST /storage/signed-url`
+- `POST /functions/{name}`
 
 ## Local Checks
 

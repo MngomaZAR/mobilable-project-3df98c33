@@ -1,6 +1,6 @@
-import { supabase } from '../config/supabaseClient';
 import { requireCurrentAuthenticatedUser } from '../config/currentUser';
 import { invokeBackendFunction } from '../config/backendFunctions';
+import { backendDb } from './backendGateway';
 import { DispatchOffer, DispatchRequest, EtaSnapshot, LeaderboardEntry, PricingQuote } from '../types';
 
 export const createDispatch = async (payload: {
@@ -126,7 +126,7 @@ export const recordConsent = async (payload: {
   if (userId) {
     const nowIso = new Date().toISOString();
     const [eventRes, consentRes] = await Promise.all([
-      supabase.from('consent_events').insert({
+      backendDb.from('consent_events').insert({
         user_id: userId,
         consent_type: payload.consent_type,
         legal_basis: payload.legal_basis ?? 'consent',
@@ -135,7 +135,7 @@ export const recordConsent = async (payload: {
         context: payload.context ?? {},
         captured_at: nowIso,
       }),
-      supabase
+      backendDb
         .from('user_consents')
         .upsert(
           {

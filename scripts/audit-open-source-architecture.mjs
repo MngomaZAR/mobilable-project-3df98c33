@@ -53,7 +53,7 @@ for (const file of sourceFiles) {
     providerCounts[provider].hits += matches.length;
     const isReleaseBoundary = releaseBoundaryRoots.some((prefix) => rel.startsWith(prefix));
     const isAllowedProviderLayer = allowedProviderRoots.some((prefix) => rel.startsWith(prefix));
-    if ((provider === 'supabase' || provider === 'legacy-provider') && isReleaseBoundary && !isAllowedProviderLayer) {
+    if ((provider === 'supabase' || provider === 'nhost' || provider === 'legacy-provider') && isReleaseBoundary && !isAllowedProviderLayer) {
       const first = matches[0];
       const line = content.slice(0, first.index ?? 0).split(/\r?\n/).length;
       providerFindings.push({
@@ -68,11 +68,11 @@ for (const file of sourceFiles) {
 }
 
 const currentEnv = await read('eas.json').catch(() => '{}');
-const releaseProviderIsExplicitNhost =
-  /"production"\s*:\s*{[\s\S]*?"env"\s*:\s*{[\s\S]*?"EXPO_PUBLIC_BACKEND_PROVIDER"\s*:\s*"nhost"/.test(currentEnv);
+const releaseProviderIsExplicitApi =
+  /"production"\s*:\s*{[\s\S]*?"env"\s*:\s*{[\s\S]*?"EXPO_PUBLIC_BACKEND_PROVIDER"\s*:\s*"api"/.test(currentEnv);
 
 const appConfig = await read('app.config.js').catch(() => '');
-const appDefaultProviderIsNhost = /EXPO_PUBLIC_BACKEND_PROVIDER:[^\n]*\|\|\s*["']nhost["']/.test(appConfig);
+const appDefaultProviderIsApi = /EXPO_PUBLIC_BACKEND_PROVIDER:[^\n]*\|\|\s*["']api["']/.test(appConfig);
 
 const blockers = [];
 
@@ -85,19 +85,19 @@ if (screenModules.length !== 44) {
   });
 }
 
-if (!releaseProviderIsExplicitNhost) {
+if (!releaseProviderIsExplicitApi) {
   blockers.push({
-    type: 'release_provider_not_nhost',
+    type: 'release_provider_not_api',
     file: 'eas.json',
-    message: 'Production EAS config must explicitly set EXPO_PUBLIC_BACKEND_PROVIDER=nhost.',
+    message: 'Production EAS config must explicitly set EXPO_PUBLIC_BACKEND_PROVIDER=api.',
   });
 }
 
-if (!appDefaultProviderIsNhost) {
+if (!appDefaultProviderIsApi) {
   blockers.push({
-    type: 'app_default_provider_not_nhost',
+    type: 'app_default_provider_not_api',
     file: 'app.config.js',
-    message: 'App config should default to Nhost so missing env does not silently fall back to Supabase.',
+    message: 'App config should default to the FastAPI boundary so missing env does not silently fall back to a vendor SDK.',
   });
 }
 

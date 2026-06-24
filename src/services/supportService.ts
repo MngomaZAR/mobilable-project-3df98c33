@@ -1,4 +1,4 @@
-import { supabase } from '../config/supabaseClient';
+import { backendDb } from './backendGateway';
 import { requireCurrentAuthenticatedUser } from '../config/currentUser';
 
 export interface SupportTicketPayload {
@@ -21,7 +21,7 @@ export interface SupportTicketRow {
 export const submitSupportTicket = async (payload: SupportTicketPayload): Promise<SupportTicketRow> => {
   const user = await requireCurrentAuthenticatedUser();
 
-  const { data, error } = await supabase
+  const { data, error } = await backendDb
     .from('support_tickets')
     .insert({
       created_by: user.id,
@@ -42,7 +42,7 @@ export const fetchMyTickets = async (): Promise<SupportTicketRow[]> => {
   const user = await requireCurrentAuthenticatedUser().catch(() => null);
   if (!user) return [];
 
-  const { data, error } = await supabase
+  const { data, error } = await backendDb
     .from('support_tickets')
     .select('*')
     .eq('created_by', user.id)

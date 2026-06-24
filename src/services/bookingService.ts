@@ -1,4 +1,4 @@
-import { supabase, supabasePublishableKey, supabaseRestUrl } from '../config/supabaseClient';
+import { backendDb } from './backendGateway';
 import { Booking, BookingStatus } from '../types';
 
 const BOOKING_WRITE_TIMEOUT_MS = 20000;
@@ -46,56 +46,28 @@ export const createBookingRequest = async (params: {
     dispatch_request_id: params.dispatchRequestId ?? null,
   };
 
-  const { data: sessionData } = await supabase.auth.getSession();
-  const accessToken = sessionData.session?.access_token;
-
-  if (supabaseRestUrl && supabasePublishableKey && accessToken) {
-    const abort = createAbortSignal(BOOKING_WRITE_TIMEOUT_MS);
-    try {
-      const response = await fetch(`${supabaseRestUrl}/bookings?select=*`, {
-        method: 'POST',
-        signal: abort.signal,
-        headers: {
-          apikey: supabasePublishableKey,
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-          Prefer: 'return=representation',
-          'x-client-info': 'papzi-app',
-        },
-        body: JSON.stringify(payload),
-      });
-
-      const bodyText = await response.text();
-      const body = bodyText ? JSON.parse(bodyText) : null;
-      if (!response.ok) {
-        const message = body?.message || body?.error || `Booking request failed (${response.status}).`;
-        throw new Error(message);
-      }
-      const row = Array.isArray(body) ? body[0] : body;
-      if (!row?.id) throw new Error('Booking request did not return a booking.');
-      return row;
-    } catch (error: any) {
-      if (error?.name === 'AbortError') {
-        throw new Error('Booking request timed out. Check your connection and try again.');
-      }
-      throw error;
-    } finally {
-      abort.clear();
-    }
-  }
-
-  const { data, error } = await supabase
+  const abort = createAbortSignal(BOOKING_WRITE_TIMEOUT_MS);
+  try {
+    const { data, error } = await Promise.race([
+      backendDb
     .from('bookings')
     .insert(payload)
     .select('*')
-    .single();
+        .single(),
+      new Promise((_, reject) =>
+        abort.signal.addEventListener('abort', () => reject(new Error('Booking request timed out. Check your connection and try again.')))
+      ),
+    ]) as { data: any; error: Error | null };
 
-  if (error) throw error;
-  return data;
+    if (error) throw error;
+    return data;
+  } finally {
+    abort.clear();
+  }
 };
 
 export const updateBookingStatusInDb = async (bookingId: string, status: BookingStatus) => {
-  const { data, error } = await supabase
+  const { data, error } = await backendDb
     .from('bookings')
     .update({ status })
     .eq('id', bookingId)
@@ -112,7 +84,7 @@ export const updateBookingDispatchInDb = async (bookingId: string, payload: {
   quote_token?: string | null;
   eta_confidence?: number | null;
 }) => {
-  const { data, error } = await supabase
+  const { data, error } = await backendDb
     .from('bookings')
     .update({
       dispatch_request_id: payload.dispatch_request_id ?? null,

@@ -1,4 +1,4 @@
-import { supabase } from '../config/supabaseClient';
+import { backendDb } from './backendGateway';
 
 export interface Availability {
   id: string;
@@ -17,7 +17,7 @@ export interface BlockedDate {
 }
 
 export const fetchAvailability = async (userId: string) => {
-  const { data, error } = await supabase
+  const { data, error } = await backendDb
     .from('availability')
     .select('*')
     .eq('user_id', userId);
@@ -29,7 +29,7 @@ export const fetchAvailability = async (userId: string) => {
 export const updateAvailability = async (userId: string, slots: Partial<Availability>[]) => {
   // Simple implementation: upsert based on user_id and day_of_week
   // Assumes a unique constraint on (user_id, day_of_week)
-  const { error } = await supabase
+  const { error } = await backendDb
     .from('availability')
     .upsert(slots.map(s => ({ ...s, user_id: userId })));
     
@@ -37,7 +37,7 @@ export const updateAvailability = async (userId: string, slots: Partial<Availabi
 };
 
 export const fetchBlockedDates = async (userId: string) => {
-  const { data, error } = await supabase
+  const { data, error } = await backendDb
     .from('blocked_dates')
     .select('*')
     .eq('user_id', userId);
@@ -48,12 +48,12 @@ export const fetchBlockedDates = async (userId: string) => {
 
 export const toggleBlockedDate = async (userId: string, date: string, isBlocked: boolean) => {
   if (isBlocked) {
-    const { error } = await supabase
+    const { error } = await backendDb
       .from('blocked_dates')
       .insert({ user_id: userId, blocked_date: date });
     if (error) throw error;
   } else {
-    const { error } = await supabase
+    const { error } = await backendDb
       .from('blocked_dates')
       .delete()
       .match({ user_id: userId, blocked_date: date });

@@ -1,6 +1,9 @@
 import { supabase } from '../config/supabaseClient';
 import { hasNhost, nhost } from '../config/nhostClient';
-import { BUCKETS } from '../config/environment';
+import { BUCKETS, environment } from '../config/environment';
+import { apiClient } from '../config/apiClient';
+import { getApiAccessToken } from '../config/apiSession';
+import { backendDb } from './backendGateway';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { Result, success, failure } from '../utils/result';
 import { uid } from '../utils/id';
@@ -10,6 +13,7 @@ const PUBLIC_BUCKETS = new Set<string>([BUCKETS.avatars]);
 const SIGNED_URL_TTL_SECONDS = 60 * 60 * 24 * 7; // 7 days
 const STORAGE_REF_SEPARATOR = '::';
 const NHOST_STORAGE_REF_PREFIX = 'nhost::';
+const hasApiStorage = environment.backendProvider === 'api';
 
 export const buildStorageRef = (bucket: string, path: string) => `${bucket}${STORAGE_REF_SEPARATOR}${path}`;
 
@@ -25,6 +29,13 @@ export const parseStorageRef = (value: string) => {
 export const isStorageRef = (value: string) => value.includes(STORAGE_REF_SEPARATOR);
 
 const getReadableUrl = async (bucket: string, path: string): Promise<string> => {
+  if (hasApiStorage) {
+    const token = await getApiAccessToken();
+    const response = await apiClient.post<{ url: string }>('/storage/signed-url', { bucket, path }, { token });
+    if (!response.url) throw new Error('Unable to generate signed URL.');
+    return response.url;
+  }
+
   if (bucket === 'nhost' || hasNhost) {
     const { body, status } = await nhost.storage.getFilePresignedURL(path);
     if (status >= 300 || !body?.url) {
@@ -84,6 +95,25 @@ export const uploadImage = async (
     const fileName = `${uid()}-${Date.now()}.jpg`;
     const filePath = `uploads/${fileName}`;
 
+    if (hasApiStorage) {
+      const token = await getApiAccessToken();
+      const response = await apiClient.post<{ url?: string; path?: string; storageRef?: string }>(
+        '/storage/upload',
+        {
+          bucket,
+          path: filePath,
+          contentType: 'image/jpeg',
+          base64: manipulated.base64,
+        },
+        { token, timeoutMs: 30000 }
+      );
+      if (options?.returnStorageRef) {
+        return response.storageRef ?? buildStorageRef(bucket, response.path ?? filePath);
+      }
+      if (response.url) return response.url;
+      return await getReadableUrl(bucket, response.path ?? filePath);
+    }
+
     if (hasNhost) {
       const uploadRes = await nhost.storage.uploadFiles({
         'bucket-id': bucket,
@@ -140,6 +170,21 @@ export const uploadAvatar = async (uri: string, userId: string): Promise<string>
   const fileBlob = new Blob([arrayBuffer], { type: 'image/jpeg' });
 
   const filePath = `uploads/${userId}-${Date.now()}.jpg`;
+  if (hasApiStorage) {
+    const token = await getApiAccessToken();
+    const response = await apiClient.post<{ url?: string; path?: string }>(
+      '/storage/upload',
+      {
+        bucket: BUCKETS.avatars,
+        path: filePath,
+        contentType: 'image/jpeg',
+        base64: manipulated.base64,
+      },
+      { token, timeoutMs: 30000 }
+    );
+    return response.url ?? (await getReadableUrl(BUCKETS.avatars, response.path ?? filePath));
+  }
+
   if (hasNhost) {
     const uploadRes = await nhost.storage.uploadFiles({
       'bucket-id': BUCKETS.avatars,
@@ -199,6 +244,41 @@ export const uploadMediaAsset = async (uri: string, ownerId: string, bookingId: 
     const fileName = `${ownerId}/${scope}/${Date.now()}.jpg`;
     
     // Upload to the 'media' bucket (not 'media_assets' — that doesn't exist)
+    if (hasApiStorage) {
+      const token = await getApiAccessToken();
+      const uploadRes = await apiClient.post<{ path?: string; url?: string }>(
+        '/storage/upload',
+        {
+          bucket: BUCKETS.media,
+          path: fileName,
+          contentType: 'image/jpeg',
+          base64: manipulated.base64,
+        },
+        { token, timeoutMs: 30000 }
+      );
+      const objectPath = uploadRes.path ?? fileName;
+      const previewRes = await uploadBlurredPreview(uri);
+      const previewUrl = previewRes.success ? previewRes.data : '';
+      const { data, error: dbError } = await backendDb
+        .from('media_assets')
+        .insert({
+          owner_id: ownerId,
+          booking_id: bookingId,
+          bucket: BUCKETS.media,
+          object_path: objectPath,
+          mime_type: 'image/jpeg',
+          is_locked: (priceZar ?? 0) > 0,
+          price_zar: priceZar,
+          title,
+          preview_url: previewUrl
+        })
+        .select()
+        .single();
+
+      if (dbError) throw dbError;
+      return success(data);
+    }
+
     if (hasNhost) {
       const uploadRes = await nhost.storage.uploadFiles({
         'bucket-id': BUCKETS.media,
@@ -211,7 +291,7 @@ export const uploadMediaAsset = async (uri: string, ownerId: string, bookingId: 
       const fileId = uploadRes.body.processedFiles[0].id;
       const previewRes = await uploadBlurredPreview(uri);
       const previewUrl = previewRes.success ? previewRes.data : '';
-      const { data, error: dbError } = await supabase
+      const { data, error: dbError } = await backendDb
         .from('media_assets')
         .insert({
           owner_id: ownerId,
@@ -242,7 +322,7 @@ export const uploadMediaAsset = async (uri: string, ownerId: string, bookingId: 
     const previewUrl = previewRes.success ? previewRes.data : '';
 
     // Register asset in DB — bucket column must match actual bucket name
-    const { data, error: dbError } = await supabase
+    const { data, error: dbError } = await backendDb
       .from('media_assets')
       .insert({
         owner_id: ownerId,

@@ -4,11 +4,8 @@ import { AppState as RNAppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { initialState } from '../data/initialData';
 import { backendDb, hasBackendProvider } from '../services/backendGateway';
-import { hasNhost, hydrateNhostSessionStorage, nhost, getNhostSession } from '../config/nhostClient';
 import { getCurrentAuthenticatedUser } from '../config/currentUser';
-import { hasuraGQL } from '../config/hasuraClient';
 import { invokeBackendFunction } from '../config/backendFunctions';
-import { generateNhostPkcePair, storeNhostPkceVerifier } from '../config/nhostPkce';
 import { createBookingRequest, updateBookingStatusInDb } from '../services/bookingService';
 import { BUCKETS } from '../config/environment';
 import * as WebBrowser from 'expo-web-browser';
@@ -269,167 +266,6 @@ const PROFILE_SELECT = `
   is_test_account
 `;
 
-const NHOST_PROFILE_SELECT = `
-  id
-  full_name
-  avatar_url
-  city
-  role
-  verified
-  kyc_status
-  date_of_birth
-  age_verified
-  age_verified_at
-  bio
-  phone
-  push_token
-  contact_details
-  username
-  instagram
-  website
-  availability_status
-  is_photographer
-  is_model
-  is_test_account
-`;
-
-const mapNhostUser = (user: any, profile: ProfileRow = null): AppUser => {
-  const fallbackRole = (profile?.role ?? (user?.defaultRole as AppUser['role']) ?? 'client') as AppUser['role'];
-  return mapProviderUser(
-    {
-      id: user.id,
-      email: user.email ?? 'unknown-user',
-      user_metadata: {
-        role: fallbackRole,
-        full_name: user.displayName ?? profile?.full_name ?? null,
-        avatar_url: user.avatarUrl ?? profile?.avatar_url ?? null,
-        kyc_status: profile?.kyc_status ?? null,
-        age_verified: profile?.age_verified ?? false,
-      },
-    },
-    fallbackRole,
-    profile
-  );
-};
-
-const buildNhostProfileInput = (user: any, profile: ProfileRow | null = null) => {
-  const metadata = user?.metadata ?? user?.raw_user_meta_data ?? {};
-  const role = (profile?.role ?? user?.defaultRole ?? metadata?.role ?? 'client') as AppUser['role'];
-  const fullName = user?.displayName ?? metadata?.full_name ?? metadata?.displayName ?? metadata?.name ?? user?.email ?? null;
-  const city = metadata?.city ?? profile?.city ?? null;
-  const phone = metadata?.phone ?? profile?.phone ?? null;
-  const gender = metadata?.gender ?? profile?.gender ?? null;
-  const dob = metadata?.date_of_birth ?? profile?.date_of_birth ?? null;
-  const ageVerified = Boolean(metadata?.age_verified ?? profile?.age_verified ?? dob);
-
-  return {
-    id: user.id,
-    role,
-    verified: false,
-    kyc_status: roleRequiresKyc(role) ? 'pending' : profile?.kyc_status ?? null,
-    full_name: fullName,
-    city,
-    phone,
-    date_of_birth: dob,
-    age_verified: ageVerified,
-    age_verified_at: ageVerified ? profile?.age_verified_at ?? new Date().toISOString() : null,
-    contact_details: {
-      gender,
-    },
-    availability_status: role === 'photographer' || role === 'model' ? (profile?.availability_status ?? 'offline') : profile?.availability_status ?? null,
-    avatar_url: user?.avatarUrl ?? profile?.avatar_url ?? null,
-  };
-};
-
-const ensureNhostProfile = async (user: any, profile: ProfileRow | null = null) => {
-  if (!hasNhost || !user?.id) return profile;
-  const existing = profile ?? (await hasuraGQL(nhostProfileQuery, { id: user.id }).then((data) => (data?.profiles_by_pk ?? null) as ProfileRow));
-  if (existing) return existing;
-
-  const object = buildNhostProfileInput(user, existing);
-  try {
-    await hasuraGQL(nhostInsertProfileMutation, { object });
-
-    if (object.role === 'photographer') {
-      await hasuraGQL(nhostUpsertPhotographerMutation, {
-        object: {
-          id: user.id,
-          rating: 5,
-          location: '',
-          price_range: '',
-          style: '',
-          bio: '',
-          tags: [],
-          name: object.full_name ?? null,
-        },
-      }).catch(() => undefined);
-    }
-
-    if (object.role === 'model') {
-      await hasuraGQL(nhostUpsertModelMutation, {
-        object: {
-          id: user.id,
-          rating: 5,
-          location: '',
-          price_range: '',
-          style: '',
-          bio: '',
-          tags: [],
-          portfolio_urls: [],
-        },
-      }).catch(() => undefined);
-    }
-  } catch (err) {
-    logError('ensure_nhost_profile', err);
-  }
-
-  return await hasuraGQL(nhostProfileQuery, { id: user.id }).then((data) => (data?.profiles_by_pk ?? null) as ProfileRow);
-};
-
-const nhostProfileQuery = `
-  query NhostProfile($id: uuid!) {
-    profiles_by_pk(id: $id) {
-      ${NHOST_PROFILE_SELECT}
-    }
-  }
-`;
-
-const nhostInsertProfileMutation = `
-  mutation InsertProfile($object: profiles_insert_input!) {
-    insert_profiles_one(object: $object) {
-      ${NHOST_PROFILE_SELECT}
-    }
-  }
-`;
-
-const nhostUpsertPhotographerMutation = `
-  mutation UpsertPhotographer($object: photographers_insert_input!) {
-    insert_photographers_one(
-      object: $object
-      on_conflict: {
-        constraint: photographers_pkey
-        update_columns: [rating, location, price_range, style, bio, tags, name]
-      }
-    ) {
-      id
-    }
-  }
-`;
-
-const nhostUpsertModelMutation = `
-  mutation UpsertModel($object: models_insert_input!) {
-    insert_models_one(
-      object: $object
-      on_conflict: {
-        constraint: models_pkey
-        update_columns: [rating, location, price_range, style, bio, tags, portfolio_urls]
-      }
-    ) {
-      id
-    }
-  }
-`;
-
 const PHOTOGRAPHER_SELECT = `
   id,
   name,
@@ -593,15 +429,6 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [state.currentUser?.id, state.currentUser?.role]);
 
   const fetchProfile = useCallback(async (userId: string): Promise<ProfileRow> => {
-    if (hasNhost) {
-      try {
-        const data = await hasuraGQL(nhostProfileQuery, { id: userId });
-        return (data?.profiles_by_pk ?? null) as ProfileRow;
-      } catch (err) {
-        logError('fetchProfile_nhost', err);
-        return null;
-      }
-    }
     if (!hasBackendProvider) return null;
     const now = Date.now();
     const lastFetchedAt = profileFetchLastRef.current.get(userId) ?? 0;
@@ -839,7 +666,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           );
         
         if (likesData) {
-          const likedSet = new Set(likesData.map(l => l.post_id));
+          const likedSet = new Set(likesData.map((l: any) => l.post_id));
           mapped = mapped.map(p => ({ ...p, liked: likedSet.has(p.id) }));
         }
       }
@@ -1091,12 +918,13 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           setState({ ...initialState, ...parsed, currentUser: parsed.currentUser ? { ...parsed.currentUser, verified: Boolean(parsed.currentUser.verified) }: null });
         }
 
-        if (hasNhost) {
-          await hydrateNhostSessionStorage();
-          const session = getNhostSession();
+        if (hasBackendProvider) {
+          const { data: sessionData } = await backendDb.auth.getSession();
+          const session = sessionData?.session;
           if (session?.user) {
             const profile = await fetchProfile(session.user.id);
-            setState({ currentUser: mapNhostUser(session.user, profile) });
+            const role = (profile?.role ?? session.user.user_metadata?.role ?? 'client') as AppUser['role'];
+            setState({ currentUser: mapProviderUser(session.user, role, profile) });
             await Promise.all([
               fetchBookings(session.user.id),
               fetchConversations(session.user.id),
@@ -1106,27 +934,8 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
             ]);
           } else {
             setState({ bookings: [], conversations: [] });
+            await Promise.all([fetchPhotographers(), fetchModels()]);
           }
-        } else if (hasBackendProvider) {
-          try {
-            const user = await getCurrentAuthenticatedUser();
-            if (user?.id) {
-              const profile = await fetchProfile(user.id);
-              setState({ currentUser: { ...mapProviderUser({ id: user.id, email: user.email ?? 'unknown-user', user_metadata: {} }, profile?.role || 'client', profile) } });
-              await Promise.all([
-                fetchBookings(user.id),
-                fetchConversations(user.id),
-                fetchEarnings(user.id),
-                fetchSubscriptions(user.id),
-                fetchCredits(user.id)
-              ]);
-            } else {
-              setState({ bookings: [], conversations: [] });
-            }
-          } catch (authErr) {
-            console.warn('Network offline or auth failed, skipping live session check and using cache.');
-          }
-          await Promise.all([fetchPhotographers(), fetchModels()]);
         }
       } catch (err) {
         logError('load_state', err);
@@ -2257,55 +2066,6 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setAuthenticating(true);
       setError(null);
       try {
-        if (hasNhost) {
-          const { verifier, challenge } = await generateNhostPkcePair();
-          await storeNhostPkceVerifier(verifier);
-          const signUpResponse = await nhost.auth.signUpEmailPassword({
-            email,
-            password,
-            codeChallenge: challenge,
-            options: {
-              defaultRole: 'user',
-              allowedRoles: ['user'],
-              displayName: fullName ?? undefined,
-              metadata: {
-                verified: false,
-                full_name: fullName ?? null,
-                role,
-                city: extras?.city?.trim() || null,
-                phone: extras?.phone?.trim() || null,
-                gender: extras?.gender ?? null,
-                date_of_birth: dob ?? null,
-              },
-            },
-          } as any);
-
-          if (signUpResponse.body.session?.user) {
-            const currentSessionUser = signUpResponse.body.session.user;
-            const profile = await ensureNhostProfile(currentSessionUser);
-            const user = mapNhostUser(currentSessionUser, profile);
-            setState({ currentUser: user });
-            return user;
-          }
-
-          setState({ currentUser: null });
-          return {
-            id: email,
-            email,
-            role,
-            verified: false,
-            full_name: fullName ?? null,
-            city: extras?.city?.trim() || null,
-            phone: extras?.phone?.trim() || null,
-            date_of_birth: dob ?? null,
-            age_verified: Boolean(dob),
-            age_verified_at: dob ? new Date().toISOString() : null,
-            contact_details: {
-              gender: extras?.gender ?? null,
-            },
-          } satisfies AppUser;
-        }
-
         const signupResult = await invokeBackendFunction<{ user?: { id: string; email: string; role?: UserRole; full_name?: string | null } }>('auth-signup', {
           email,
           password,
@@ -2358,18 +2118,6 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setAuthenticating(true);
     setError(null);
     try {
-      if (hasNhost) {
-        const response = await nhost.auth.signInEmailPassword({ email, password });
-        if (!response.body.session?.user) {
-          setError('Unable to sign in.');
-          return null;
-        }
-        const profile = await ensureNhostProfile(response.body.session.user);
-        const user = mapNhostUser(response.body.session.user, profile);
-        setState({ currentUser: user });
-        return user;
-      }
-
       const { data, error: signInError } = await backendDb.auth.signInWithPassword({ email, password });
       if (signInError) {
         logError('sign_in', signInError);
@@ -2398,18 +2146,11 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setAuthenticating(true);
     setError(null);
     try {
-      if (hasNhost) {
-        try {
-          const session = getNhostSession();
-          await nhost.auth.signOut(session?.refreshToken ? { refreshToken: session.refreshToken } : { all: true });
-        } catch (e) {
-          logError('nhost_sign_out', e);
-        }
-      } else if (hasBackendProvider) {
+      if (hasBackendProvider) {
         try {
           await backendDb.auth.signOut();
         } catch (e) {
-          logError('legacy_provider_sign_out', e);
+          logError('backend_sign_out', e);
         }
       }
       
@@ -2438,24 +2179,6 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, []);
 
   const revalidateSession = useCallback(async (): Promise<AppUser | null> => {
-    if (hasNhost) {
-      try {
-        const { body, status } = await nhost.auth.getUser();
-        if (status >= 400 || !body) {
-          setState({ currentUser: null });
-          return null;
-        }
-        const profile = await ensureNhostProfile(body);
-        const user = mapNhostUser(body, profile);
-        setState({ currentUser: user });
-        return user;
-      } catch (err) {
-        logError('revalidate_session_nhost', err);
-        setError(formatErrorMessage(err, 'Unable to validate your current session.'));
-        return null;
-      }
-    }
-
     if (!hasBackendProvider) {
       return stateRef.current.currentUser;
     }
@@ -2482,9 +2205,6 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const signInWithOAuth = useCallback(async (provider: 'google' | 'apple') => {
     setState({ authenticating: true, error: null });
     try {
-      if (hasNhost) {
-        throw new Error('OAuth sign-in is not wired for the Nhost backend yet.');
-      }
       const redirectTo = Linking.createURL('auth');
       const { data, error } = await backendDb.auth.signInWithOAuth({
         provider,

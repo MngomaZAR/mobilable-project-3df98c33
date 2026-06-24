@@ -1,4 +1,4 @@
-import { supabase } from '../config/supabaseClient';
+import { backendDb } from './backendGateway';
 import { requireCurrentAuthenticatedUser } from '../config/currentUser';
 
 export const toggleFollow = async (followingId: string): Promise<boolean> => {
@@ -6,7 +6,7 @@ export const toggleFollow = async (followingId: string): Promise<boolean> => {
     if (!user) throw new Error("Must be logged in to follow users");
     
     // Check if already following
-    const { data: existing, error: checkErr } = await supabase
+    const { data: existing, error: checkErr } = await backendDb
         .from('follows')
         .select('*')
         .eq('follower_id', user.id)
@@ -19,7 +19,7 @@ export const toggleFollow = async (followingId: string): Promise<boolean> => {
     
     if (existing) {
         // Unfollow
-        const { error: delErr } = await supabase
+        const { error: delErr } = await backendDb
             .from('follows')
             .delete()
             .eq('follower_id', user.id)
@@ -29,7 +29,7 @@ export const toggleFollow = async (followingId: string): Promise<boolean> => {
         return false;
     } else {
         // Follow
-        const { error: insErr } = await supabase
+        const { error: insErr } = await backendDb
             .from('follows')
             .insert({
                 follower_id: user.id,
@@ -42,7 +42,7 @@ export const toggleFollow = async (followingId: string): Promise<boolean> => {
 };
 
 export const fetchUserFollowings = async (userId: string): Promise<string[]> => {
-    const { data, error } = await supabase
+    const { data, error } = await backendDb
         .from('follows')
         .select('following_id')
         .eq('follower_id', userId);

@@ -1,5 +1,8 @@
 import { supabase, supabaseFunctionUrl, supabasePublishableKey } from './supabaseClient';
 import { hasNhost, nhost } from './nhostClient';
+import { apiClient, hasApiBackend } from './apiClient';
+import { getApiAccessToken } from './apiSession';
+import { environment } from './environment';
 
 export type BackendFunctionResult<T> = {
   data: T | null;
@@ -34,6 +37,28 @@ export const invokeBackendFunction = async <T = any>(
   name: string,
   body?: Record<string, any>
 ): Promise<BackendFunctionResult<T>> => {
+  if (environment.backendProvider === 'api') {
+    if (!hasApiBackend) {
+      return { data: null, error: { message: 'Backend API is not configured for this build.' } };
+    }
+
+    try {
+      const token = await getApiAccessToken();
+      const data = await apiClient.post<T>(`/functions/${normalizePath(name).slice(1)}`, body ?? {}, { token });
+      return { data: data ?? null, error: null };
+    } catch (error) {
+      return {
+        data: null,
+        error: {
+          message: parseFunctionMessage(
+            error && typeof error === 'object' && 'body' in error ? (error as { body?: unknown }).body : null,
+            error instanceof Error ? error.message : `Function ${name} failed`
+          ),
+        },
+      };
+    }
+  }
+
   if (hasNhost) {
     const response = await nhost.functions.post<T>(normalizePath(name), body);
     if (response.status >= 300) {

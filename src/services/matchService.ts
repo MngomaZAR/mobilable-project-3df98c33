@@ -1,4 +1,4 @@
-import { supabase } from '../config/supabaseClient';
+import { backendDb } from './backendGateway';
 import { Photographer } from '../types';
 
 /**
@@ -16,7 +16,7 @@ export const fetchRecommendedMatches = async (
 ): Promise<Photographer[]> => {
     try {
         // Fetch all photographers
-        const { data, error } = await supabase
+        const { data, error } = await backendDb
             .from('photographers')
             .select(`
                 *,

@@ -1,4 +1,4 @@
-import { supabase } from '../config/supabaseClient';
+import { backendDb } from './backendGateway';
 import { requireCurrentAuthenticatedUser } from '../config/currentUser';
 
 export interface PaymentRow {
@@ -21,7 +21,7 @@ export const fetchMyPayments = async (): Promise<PaymentRow[]> => {
   const user = await requireCurrentAuthenticatedUser().catch(() => null);
   if (!user) return [];
 
-  const { data, error } = await supabase
+  const { data, error } = await backendDb
     .from('payments')
     .select('id, booking_id, customer_id, amount, currency, description, status, provider, provider_payment_id, provider_status, created_at, processed_at')
     .eq('customer_id', user.id)
@@ -34,7 +34,7 @@ export const fetchMyPayments = async (): Promise<PaymentRow[]> => {
 
 /** Fetch a single payment by booking ID */
 export const fetchPaymentForBooking = async (bookingId: string): Promise<PaymentRow | null> => {
-  const { data, error } = await supabase
+  const { data, error } = await backendDb
     .from('payments')
     .select('*')
     .eq('booking_id', bookingId)

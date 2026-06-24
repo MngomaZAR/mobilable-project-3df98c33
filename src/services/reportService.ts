@@ -1,4 +1,4 @@
-import { supabase } from '../config/supabaseClient';
+import { backendDb } from './backendGateway';
 import { requireCurrentAuthenticatedUser } from '../config/currentUser';
 
 export type ReportTargetType = 'post' | 'profile' | 'booking' | 'message';
@@ -19,7 +19,7 @@ export const reportContent = async (payload: ReportPayload): Promise<void> => {
     /fake|spam|scam/i.test(payload.reason) ? 3 : 2;
   const slaDueAt = new Date(Date.now() + (severity >= 4 ? 6 : 24) * 60 * 60 * 1000).toISOString();
 
-  const { error } = await supabase.from('reports').insert({
+  const { error } = await backendDb.from('reports').insert({
     created_by: user.id,
     target_type: payload.targetType,
     target_id: payload.targetId,
@@ -31,7 +31,7 @@ export const reportContent = async (payload: ReportPayload): Promise<void> => {
   if (error) throw new Error(error.message || 'Failed to submit report.');
 
   // Best-effort mirror into moderation queue with SLA.
-  await supabase.from('moderation_cases').insert({
+    await backendDb.from('moderation_cases').insert({
     reporter_id: user.id,
     target_type: payload.targetType,
     target_id: payload.targetId,

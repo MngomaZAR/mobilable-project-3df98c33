@@ -1,7 +1,7 @@
 import * as Device from 'expo-device';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
-import { supabase } from '../config/supabaseClient';
+import { backendDb } from './backendGateway';
 
 let notificationsModule: typeof import('expo-notifications') | null = null;
 
@@ -79,7 +79,7 @@ export async function savePushTokenAsync(userId: string, token: string) {
     const platform: 'ios' | 'android' | 'web' =
       Platform.OS === 'ios' ? 'ios' : Platform.OS === 'android' ? 'android' : 'web';
 
-    const { error: tokenError } = await supabase.from('push_tokens').upsert(
+    const { error: tokenError } = await backendDb.from('push_tokens').upsert(
       {
         user_id: userId,
         expo_push_token: token,
@@ -94,7 +94,7 @@ export async function savePushTokenAsync(userId: string, token: string) {
     }
 
     // Keep profiles.push_token in sync for legacy queries
-    await supabase.from('profiles').update({ push_token: token }).eq('id', userId);
+    await backendDb.from('profiles').update({ push_token: token }).eq('id', userId);
   } catch (error) {
     console.error('Failed to save push token', error);
   }

@@ -1,9 +1,19 @@
 import { hasNhost, getNhostSession, hydrateNhostSessionStorage, nhost } from './nhostClient';
 import { hasSupabase, supabase } from './supabaseClient';
+import { environment } from './environment';
+import { getApiSession } from './apiSession';
 
 type CurrentUser = { id: string; email?: string | null } | null;
 
 export const getCurrentAuthenticatedUser = async (): Promise<CurrentUser> => {
+  if (environment.backendProvider === 'api') {
+    const session = await getApiSession();
+    if (session?.user?.id) {
+      return { id: session.user.id, email: session.user.email ?? null };
+    }
+    return null;
+  }
+
   if (hasNhost) {
     await hydrateNhostSessionStorage();
     const session = getNhostSession();

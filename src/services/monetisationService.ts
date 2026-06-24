@@ -1,4 +1,4 @@
-import { supabase } from '../config/supabaseClient';
+import { backendDb } from './backendGateway';
 import { requireCurrentAuthenticatedUser } from '../config/currentUser';
 import { invokeBackendFunction } from '../config/backendFunctions';
 import { assertDigitalPurchasesAllowed } from '../config/commercePolicy';
@@ -7,7 +7,7 @@ import { Result, success, failure } from '../utils/result';
 
 export const fetchCreatorEarnings = async (userId: string): Promise<Earning[]> => {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await backendDb
       .from('earnings')
       .select('*')
       .eq('user_id', userId)
@@ -42,7 +42,7 @@ export const sendTip = async (
   if (amount < 5) return failure(new Error('Minimum tip is R5'));
 
   try {
-    const { data, error } = await supabase
+    const { data, error } = await backendDb
       .from('tips')
       .insert({
         sender_id: user.id,
@@ -79,7 +79,7 @@ export const createTipCheckoutLink = async (params: {
   if (!user) throw new Error('Not authenticated');
 
   // First record the tip as pending
-  const { data: tip, error: tipError } = await supabase
+  const { data: tip, error: tipError } = await backendDb
     .from('tips')
     .insert({
       sender_id: user.id,
@@ -124,7 +124,7 @@ export const subscribeToCreator = async (
 
   try {
     // Check for existing active subscription
-    const { data: existing } = await supabase
+    const { data: existing } = await backendDb
       .from('subscriptions')
       .select('id, status, current_period_end')
       .eq('subscriber_id', user.id)
@@ -135,7 +135,7 @@ export const subscribeToCreator = async (
 
     if (existing) return failure(new Error('You already have an active subscription to this creator.'));
 
-    const { data, error } = await supabase
+    const { data, error } = await backendDb
       .from('subscriptions')
       .insert({
         subscriber_id: user.id,
@@ -157,7 +157,7 @@ export const subscribeToCreator = async (
 
 export const cancelSubscription = async (subscriptionId: string): Promise<Result<void>> => {
   try {
-    const { error } = await supabase
+    const { error } = await backendDb
       .from('subscriptions')
       .update({ status: 'cancelled' })
       .eq('id', subscriptionId);

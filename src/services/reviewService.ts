@@ -1,4 +1,4 @@
-import { supabase } from '../config/supabaseClient';
+import { backendDb } from './backendGateway';
 import { requireCurrentAuthenticatedUser } from '../config/currentUser';
 
 export interface ReviewPayload {
@@ -23,7 +23,7 @@ export interface ReviewRow {
 export const createReview = async (payload: ReviewPayload): Promise<ReviewRow> => {
   const user = await requireCurrentAuthenticatedUser();
 
-  const { data, error } = await supabase
+  const { data, error } = await backendDb
     .from('reviews')
     .insert({
       booking_id: payload.bookingId,
@@ -42,7 +42,7 @@ export const createReview = async (payload: ReviewPayload): Promise<ReviewRow> =
 
 /** Fetch all approved reviews for a given photographer or model */
 export const fetchReviewsForUser = async (photographerId: string): Promise<ReviewRow[]> => {
-  const { data, error } = await supabase
+  const { data, error } = await backendDb
     .from('reviews')
     .select('id, booking_id, client_id, photographer_id, rating, comment, moderation_status, created_at')
     .eq('photographer_id', photographerId)

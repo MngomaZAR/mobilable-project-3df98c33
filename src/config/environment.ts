@@ -23,7 +23,7 @@ export const environment = {
   region: readPublicConfig('EXPO_PUBLIC_REGION', 'za'),
   supportEmail: readPublicConfig('EXPO_PUBLIC_SUPPORT_EMAIL', BRAND.email.support),
   appOwnership,
-  backendProvider: readPublicConfig('EXPO_PUBLIC_BACKEND_PROVIDER', 'nhost'),
+  backendProvider: readPublicConfig('EXPO_PUBLIC_BACKEND_PROVIDER', 'api'),
   EXPO_PUBLIC_SUPABASE_URL: readPublicConfig('EXPO_PUBLIC_SUPABASE_URL'),
   EXPO_PUBLIC_SUPABASE_ANON_KEY: readPublicConfig('EXPO_PUBLIC_SUPABASE_ANON_KEY'),
   EXPO_PUBLIC_API_BASE_URL: readPublicConfig('EXPO_PUBLIC_API_BASE_URL'),

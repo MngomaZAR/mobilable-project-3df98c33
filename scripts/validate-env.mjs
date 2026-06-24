@@ -72,13 +72,13 @@ const checkApiHealth = async (apiBaseUrl) => {
 const allowedStoreTargets = new Set(['development', 'web', 'internal', 'appstore', 'play', 'both']);
 const allowedBillingProviders = new Set(['iap', 'external', 'disabled']);
 
-const backendProvider = read('EXPO_PUBLIC_BACKEND_PROVIDER').toLowerCase() || 'supabase';
-if (!['supabase', 'nhost'].includes(backendProvider)) {
-  errors.push("EXPO_PUBLIC_BACKEND_PROVIDER must be either 'supabase' or 'nhost'");
+const backendProvider = read('EXPO_PUBLIC_BACKEND_PROVIDER').toLowerCase() || 'api';
+if (!['api', 'supabase', 'nhost'].includes(backendProvider)) {
+  errors.push("EXPO_PUBLIC_BACKEND_PROVIDER must be one of 'api', 'supabase', or 'nhost'");
 }
 
-if (mode === 'release' && backendProvider !== 'nhost') {
-  errors.push('Release builds must use EXPO_PUBLIC_BACKEND_PROVIDER=nhost because Supabase free-plan rate limits are a known production blocker.');
+if (mode === 'release' && backendProvider !== 'api') {
+  errors.push('Release builds must use EXPO_PUBLIC_BACKEND_PROVIDER=api so mobile traffic goes through the deployed FastAPI boundary.');
 }
 
 if (backendProvider === 'supabase') {
@@ -95,6 +95,15 @@ if (backendProvider === 'nhost') {
   }
   if (read('EXPO_PUBLIC_SUPABASE_URL') || read('EXPO_PUBLIC_SUPABASE_ANON_KEY')) {
     warnings.push('Supabase env values are present but ignored when EXPO_PUBLIC_BACKEND_PROVIDER=nhost');
+  }
+}
+
+if (backendProvider === 'api') {
+  if (read('EXPO_PUBLIC_SUPABASE_URL') || read('EXPO_PUBLIC_SUPABASE_ANON_KEY')) {
+    warnings.push('Supabase env values are present but ignored when EXPO_PUBLIC_BACKEND_PROVIDER=api');
+  }
+  if (read('EXPO_PUBLIC_NHOST_SUBDOMAIN') || read('EXPO_PUBLIC_NHOST_REGION')) {
+    warnings.push('Nhost env values are present but should only be used by the server when EXPO_PUBLIC_BACKEND_PROVIDER=api');
   }
 }
 

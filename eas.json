@@ -23,10 +23,10 @@
       "channel": "production",
       "env": {
         "EAS_BUILD_NO_EXPO_GO_WARNING": "true",
-        "EXPO_PUBLIC_API_BASE_URL": "https://api.example.com",
+        "EXPO_PUBLIC_API_BASE_URL": "",
         "EXPO_PUBLIC_ROUTING_PROVIDER": "osrm",
         "EXPO_PUBLIC_OSRM_BASE_URL": "https://router.project-osrm.org",
-        "EXPO_PUBLIC_BACKEND_PROVIDER": "nhost",
+        "EXPO_PUBLIC_BACKEND_PROVIDER": "api",
         "EXPO_PUBLIC_NHOST_SUBDOMAIN": "otismbqjmpvvtygfjbcu",
         "EXPO_PUBLIC_NHOST_REGION": "ap-southeast-1",
         "EXPO_PUBLIC_STORE_TARGET": "both",

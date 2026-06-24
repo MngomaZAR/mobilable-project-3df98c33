@@ -1,4 +1,4 @@
-import { supabase } from '../config/supabaseClient';
+import { backendDb } from './backendGateway';
 import { LEGAL_CONTENT } from '../constants/LegalContent';
 
 export interface Contract {
@@ -69,7 +69,7 @@ Republic of South Africa.
 };
 
 export const fetchBookingContracts = async (bookingId: string) => {
-  const { data, error } = await supabase
+  const { data, error } = await backendDb
     .from('contracts')
     .select('*')
     .eq('booking_id', bookingId);
@@ -83,7 +83,7 @@ export const fetchBookingContracts = async (bookingId: string) => {
 
 export const createContract = async (bookingId: string, type: 'model_release' | 'shoot_agreement', content: string) => {
   // Fetch booking details to get participants
-  const { data: booking, error: bError } = await supabase
+  const { data: booking, error: bError } = await backendDb
     .from('bookings')
     .select('photographer_id, client_id, model_id')
     .eq('id', bookingId)
@@ -93,7 +93,7 @@ export const createContract = async (bookingId: string, type: 'model_release' | 
   const creatorId = booking.photographer_id ?? booking.model_id;
   if (!creatorId) throw new Error('Booking does not have a creator/model participant.');
 
-  const { data, error } = await supabase
+  const { data, error } = await backendDb
     .from('contracts')
     .insert({
       booking_id: bookingId,
@@ -116,7 +116,7 @@ export const createContract = async (bookingId: string, type: 'model_release' | 
 
 export const ensureBookingContracts = async (bookingId: string): Promise<Contract[]> => {
   const existing = await fetchBookingContracts(bookingId);
-  const have = new Set(existing.map((c) => c.contract_type));
+  const have = new Set(existing.map((c: Contract) => c.contract_type));
 
   const missing: Array<'model_release' | 'shoot_agreement'> = [];
   if (!have.has('model_release')) missing.push('model_release');
@@ -141,7 +141,7 @@ export const ensureBookingContracts = async (bookingId: string): Promise<Contrac
 };
 
 export const signContract = async (contractId: string, signature: string, role: 'creator' | 'client' | 'model') => {
-  const { data: existing, error: fetchError } = await supabase
+  const { data: existing, error: fetchError } = await backendDb
     .from('contracts')
     .select('id, client_id, model_id, creator_signature, client_signature, model_signature, signed_by_photographer, signed_by_client, signed_by_model')
     .eq('id', contractId)
@@ -172,7 +172,7 @@ export const signContract = async (contractId: string, signature: string, role: 
     signed_at: fullySigned ? new Date().toISOString() : null,
   };
 
-  const { error } = await supabase
+  const { error } = await backendDb
     .from('contracts')
     .update(update)
     .eq('id', contractId);

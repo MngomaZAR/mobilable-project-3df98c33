@@ -1,6 +1,7 @@
 services:
   api:
     image: ${PAPZI_API_IMAGE:-ghcr.io/mngomazar/papzi-api:latest}
+    pull_policy: always
     restart: unless-stopped
     environment:
       APP_ENV: ${APP_ENV:-production}
@@ -54,6 +55,7 @@ services:
 
   worker:
     image: ${PAPZI_WORKER_IMAGE:-ghcr.io/mngomazar/papzi-worker:latest}
+    pull_policy: always
     restart: unless-stopped
     environment:
       APP_ENV: ${APP_ENV:-production}

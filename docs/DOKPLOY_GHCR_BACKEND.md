@@ -31,6 +31,45 @@ The GHCR manifest endpoint currently returns HTTP 401 without credentials, so Do
 - pull with a GitHub token that has package read access, or
 - use packages that have been made public in GitHub Container Registry.
 
+`deployment/docker-compose.yml` sets `pull_policy: always` for the API and worker so Dokploy pulls the latest GHCR image during redeploys.
+
+## GitHub to Dokploy Redeploy
+
+`.github/workflows/deploy-backend-dokploy.yml` triggers after `Build Backend Images` completes successfully, and can also be run manually.
+
+Required GitHub repository secrets:
+
+```env
+DOKPLOY_URL=https://your-dokploy-host.example
+DOKPLOY_API_KEY=your-dokploy-api-key
+DOKPLOY_COMPOSE_ID=your-dokploy-compose-id
+DOKPLOY_API_HEALTH_URL=https://api.papzii.co.za/health
+```
+
+The workflow calls Dokploy's `POST /api/compose.redeploy` endpoint, then waits for the API health route to return `{"status":"ok"}`. It fails loudly if any secret is missing or the API does not come online.
+
+## Domain/DNS
+
+The available hosting details found for this project are for `papzii.co.za`, not `papzi.co.za`.
+
+Current DNS status at the time this deployment path was prepared:
+
+- `papzii.co.za` resolves to the Register Domain shared hosting IP.
+- `api.papzii.co.za` does not resolve yet.
+- `papzi.co.za` and `api.papzi.co.za` do not resolve.
+
+Before a mobile release build can pass, create a public API hostname, preferably:
+
+```text
+api.papzii.co.za -> Dokploy VPS public IP
+```
+
+Then set EAS production:
+
+```env
+EXPO_PUBLIC_API_BASE_URL=https://api.papzii.co.za
+```
+
 ## Dokploy Variables
 
 Set these in Dokploy, not in EAS:
@@ -69,7 +108,7 @@ Only public mobile configuration belongs in EAS:
 
 ```env
 EXPO_PUBLIC_BACKEND_PROVIDER=api
-EXPO_PUBLIC_API_BASE_URL=https://api.your-domain.example
+EXPO_PUBLIC_API_BASE_URL=https://api.papzii.co.za
 EXPO_PUBLIC_STORE_TARGET=both
 EXPO_PUBLIC_DIGITAL_BILLING_PROVIDER=external
 EXPO_PUBLIC_DISABLE_DIGITAL_PURCHASES=true

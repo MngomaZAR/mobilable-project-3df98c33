@@ -18,15 +18,31 @@ jobs:
       DOKPLOY_API_HEALTH_URL: ${{ secrets.DOKPLOY_API_HEALTH_URL }}
       DOKPLOY_API_CONTRACT_URL: ${{ secrets.DOKPLOY_API_CONTRACT_URL }}
     steps:
-      - name: Validate Dokploy configuration
+      - name: Check Dokploy configuration
+        id: dokploy_config
         shell: bash
         run: |
-          test -n "$DOKPLOY_URL" || (echo "::error::Missing DOKPLOY_URL repo secret" && exit 1)
-          test -n "$DOKPLOY_API_KEY" || (echo "::error::Missing DOKPLOY_API_KEY repo secret" && exit 1)
-          test -n "$DOKPLOY_COMPOSE_ID" || (echo "::error::Missing DOKPLOY_COMPOSE_ID repo secret" && exit 1)
-          test -n "$DOKPLOY_API_HEALTH_URL" || (echo "::error::Missing DOKPLOY_API_HEALTH_URL repo secret" && exit 1)
+          missing=()
+          test -n "$DOKPLOY_URL" || missing+=("DOKPLOY_URL")
+          test -n "$DOKPLOY_API_KEY" || missing+=("DOKPLOY_API_KEY")
+          test -n "$DOKPLOY_COMPOSE_ID" || missing+=("DOKPLOY_COMPOSE_ID")
+          test -n "$DOKPLOY_API_HEALTH_URL" || missing+=("DOKPLOY_API_HEALTH_URL")
+
+          if [ "${#missing[@]}" -gt 0 ]; then
+            message="Missing Dokploy repo secrets: ${missing[*]}"
+            if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+              echo "::error::$message"
+              exit 1
+            fi
+            echo "::notice::$message; skipping automatic Dokploy redeploy."
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "configured=true" >> "$GITHUB_OUTPUT"
 
       - name: Trigger Dokploy compose redeploy
+        if: steps.dokploy_config.outputs.configured == 'true'
         shell: bash
         run: |
           base="${DOKPLOY_URL%/}"
@@ -37,6 +53,7 @@ jobs:
             --data "{\"composeId\":\"$DOKPLOY_COMPOSE_ID\"}"
 
       - name: Smoke API health
+        if: steps.dokploy_config.outputs.configured == 'true'
         shell: bash
         run: |
           for attempt in {1..18}; do
@@ -50,6 +67,7 @@ jobs:
           exit 1
 
       - name: Smoke API contract
+        if: steps.dokploy_config.outputs.configured == 'true'
         shell: bash
         run: |
           contract_url="${DOKPLOY_API_CONTRACT_URL:-${DOKPLOY_API_HEALTH_URL%/health}/health/contract}"

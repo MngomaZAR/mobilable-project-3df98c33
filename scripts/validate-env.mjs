@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+import { lookup } from 'node:dns/promises';
+
 import { loadLocalEnv } from './lib/load-env-file.mjs';
 
 loadLocalEnv();
@@ -41,6 +43,18 @@ const validateHostedUrl = (name, value) => {
   } catch {
     errors.push(`${name} must be a valid URL`);
     return null;
+  }
+};
+
+const checkDns = async (name, url) => {
+  if (!url || errors.length > 0) return;
+  try {
+    await lookup(url.hostname);
+  } catch (error) {
+    const code = error && typeof error === 'object' && 'code' in error ? error.code : 'DNS_ERROR';
+    errors.push(
+      `${name} host ${url.hostname} does not resolve in DNS (${code}). Create the API A/CNAME record before building store binaries.`
+    );
   }
 };
 
@@ -138,6 +152,7 @@ if (mode === 'release') {
   if (apiBaseUrl?.hostname === 'api.example.com') {
     errors.push('EXPO_PUBLIC_API_BASE_URL must be set to the real Dokploy/FastAPI API host, not api.example.com');
   }
+  await checkDns('EXPO_PUBLIC_API_BASE_URL', apiBaseUrl);
   await checkApiHealth(apiBaseUrl);
   await checkApiContract(apiBaseUrl);
 

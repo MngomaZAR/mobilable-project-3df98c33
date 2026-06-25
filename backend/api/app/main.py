@@ -1,12 +1,82 @@
 from typing import Annotated, Any
+from urllib.parse import urlencode
 
 import httpx
 from fastapi import Body, Depends, FastAPI, HTTPException, Request, status
 from pydantic import BaseModel
 
 from .config import Settings, get_settings
-from .database import execute_rpc, execute_table_query
+from .database import execute_rpc, execute_table_query, schema_contract_status as postgres_schema_contract_status
+from .nhost_graphql import (
+    execute_nhost_rpc,
+    execute_nhost_table_query,
+    schema_contract_status as nhost_schema_contract_status,
+)
 from .storage import put_object, signed_url
+
+
+REQUIRED_SCHEMA_COLUMNS = {
+    "profiles": [
+        "id",
+        "role",
+        "full_name",
+        "avatar_url",
+        "bio",
+        "city",
+        "phone",
+        "availability_status",
+        "kyc_status",
+        "age_verified",
+    ],
+    "photographers": [
+        "id",
+        "name",
+        "bio",
+        "price_range",
+        "style",
+        "tags",
+        "portfolio_urls",
+        "hourly_rate",
+        "latitude",
+        "longitude",
+    ],
+    "models": [
+        "id",
+        "name",
+        "bio",
+        "price_range",
+        "style",
+        "tags",
+        "portfolio_urls",
+        "hourly_rate",
+        "latitude",
+        "longitude",
+    ],
+    "bookings": [
+        "id",
+        "client_id",
+        "photographer_id",
+        "model_id",
+        "status",
+        "service_type",
+        "package_id",
+        "start_datetime",
+        "end_datetime",
+        "price_total",
+        "is_instant",
+        "assignment_state",
+        "dispatch_request_id",
+        "quote_token",
+    ],
+    "posts": ["id", "author_id", "media_url", "media_type", "created_at"],
+    "conversations": ["id", "title", "last_message", "last_message_at", "created_at"],
+    "conversation_participants": ["conversation_id", "user_id"],
+    "messages": ["id", "conversation_id", "sender_id", "body", "created_at", "read_at", "deleted_at"],
+    "reviews": ["id", "reviewer_id", "reviewee_id", "rating", "comment", "status", "created_at"],
+    "notification_events": ["id", "user_id", "event_type", "title", "body", "status", "created_at"],
+    "credits_wallets": ["user_id", "balance", "updated_at"],
+    "credits_ledger": ["id", "user_id", "amount", "direction", "reason", "created_at"],
+}
 
 
 class HealthResponse(BaseModel):
@@ -42,6 +112,22 @@ async def health(settings: Annotated[Settings, Depends(get_settings)]) -> Health
 @app.get("/version", response_model=VersionResponse, tags=["system"])
 async def version(settings: Annotated[Settings, Depends(get_settings)]) -> VersionResponse:
     return VersionResponse(name=settings.app_name, version=settings.app_version, environment=settings.app_env)
+
+
+@app.get("/health/contract", tags=["system"])
+async def health_contract(settings: Annotated[Settings, Depends(get_settings)]) -> dict[str, Any]:
+    if settings.postgres_url:
+        result = await postgres_schema_contract_status(settings, REQUIRED_SCHEMA_COLUMNS)
+    elif settings.resolved_nhost_graphql_url:
+        result = await nhost_schema_contract_status(settings, REQUIRED_SCHEMA_COLUMNS)
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="No data backend is configured. Set DATABASE_URL/NEON_DATABASE_URL or NHOST_GRAPHQL_URL/NHOST_SUBDOMAIN.",
+        )
+    if not result.get("ok"):
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=result)
+    return result
 
 
 def bearer_token(request: Request) -> str | None:
@@ -105,9 +191,14 @@ async def nhost_auth_request(
     return response.json() if response.content else {}
 
 
-async def ensure_signup_profile(settings: Settings, user: dict[str, Any], options: dict[str, Any] | None) -> None:
+async def ensure_signup_profile(
+    settings: Settings,
+    user: dict[str, Any],
+    options: dict[str, Any] | None,
+    token: str | None = None,
+) -> None:
     user_id = user.get("id")
-    if not user_id or not settings.postgres_url:
+    if not user_id:
         return
     metadata = options.get("metadata", {}) if isinstance(options, dict) else {}
     role = metadata.get("role") or "client"
@@ -126,18 +217,18 @@ async def ensure_signup_profile(settings: Settings, user: dict[str, Any], option
         "availability_status": "offline" if role in {"photographer", "model"} else None,
         "avatar_url": None,
     }
-    await execute_table_query(
-        settings,
-        "profiles",
-        {
-            "action": "upsert",
-            "payload": profile,
-            "select": "*",
-            "onConflict": "id",
-            "maybeSingle": True,
-            "filters": [],
-        },
-    )
+    query = {
+        "action": "upsert",
+        "payload": profile,
+        "select": "*",
+        "onConflict": "id",
+        "maybeSingle": True,
+        "filters": [],
+    }
+    if settings.postgres_url:
+        await execute_table_query(settings, "profiles", query)
+    elif settings.resolved_nhost_graphql_url:
+        await execute_nhost_table_query(settings, "profiles", query, token)
 
 
 @app.get("/auth/me", tags=["auth"])
@@ -184,7 +275,7 @@ async def auth_sign_up(
     session = normalize_session(body.get("session") or body)
     user = session.get("user") if session else normalize_user(body.get("user"))
     if user:
-        await ensure_signup_profile(settings, user, options)
+        await ensure_signup_profile(settings, user, options, session.get("access_token") if session else None)
     return {"session": session, "user": user}
 
 
@@ -209,38 +300,82 @@ async def auth_refresh(
 @app.post("/auth/oauth", tags=["auth"])
 async def auth_oauth(payload: Annotated[dict[str, Any], Body()], settings: Annotated[Settings, Depends(get_settings)]) -> dict[str, str]:
     provider = str(payload.get("provider") or "").strip()
-    redirect_to = ((payload.get("options") or {}).get("redirectTo") if isinstance(payload.get("options"), dict) else None) or ""
+    options = payload.get("options") if isinstance(payload.get("options"), dict) else {}
+    redirect_to = options.get("redirectTo") or ""
     if not provider or not settings.resolved_nhost_auth_url:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="OAuth is not configured.")
-    return {"url": f"{settings.resolved_nhost_auth_url}/signin/provider/{provider}?redirectTo={redirect_to}"}
+    params: dict[str, str] = {}
+    if redirect_to:
+        params["redirectTo"] = str(redirect_to)
+    code_challenge = options.get("codeChallenge") or options.get("code_challenge")
+    if code_challenge:
+        params["code_challenge"] = str(code_challenge)
+        params["code_challenge_method"] = str(options.get("codeChallengeMethod") or options.get("code_challenge_method") or "S256")
+    query = f"?{urlencode(params)}" if params else ""
+    return {"url": f"{settings.resolved_nhost_auth_url}/signin/provider/{provider}{query}"}
 
 
 @app.post("/auth/exchange", tags=["auth"])
-async def auth_exchange(_: Annotated[dict[str, Any], Body()]) -> dict[str, Any]:
-    raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="OAuth code exchange must be configured on the API host.")
+async def auth_exchange(
+    payload: Annotated[dict[str, Any], Body()],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict[str, Any]:
+    code = payload.get("code")
+    code_verifier = payload.get("codeVerifier") or payload.get("code_verifier")
+    if not code:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Missing OAuth code.")
+    body = await nhost_auth_request(
+        settings,
+        "POST",
+        "/token/exchange",
+        {"code": code, "codeVerifier": code_verifier},
+    )
+    session = normalize_session(body.get("session") or body)
+    return {"session": session, "user": session.get("user") if session else normalize_user(body.get("user"))}
 
 
 @app.post("/auth/update-user", tags=["auth"])
-async def auth_update_user() -> dict[str, Any]:
-    raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Auth user updates are not implemented yet.")
+async def auth_update_user(
+    request: Request,
+    payload: Annotated[dict[str, Any], Body()],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict[str, Any]:
+    token = bearer_token(request)
+    if not token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing bearer token.")
+    try:
+        body = await nhost_auth_request(settings, "PATCH", "/user", payload, token=token)
+        return {"user": normalize_user(body.get("user") or body)}
+    except HTTPException:
+        # Profile updates should not fail just because the auth provider rejected
+        # a cosmetic metadata update. Return the current user and let the profile
+        # table update continue on the client.
+        body = await nhost_auth_request(settings, "GET", "/user", token=token)
+        return {"user": normalize_user(body)}
 
 
 @app.post("/data/{table}", tags=["data"])
 async def data_query(
     table: str,
+    request: Request,
     payload: Annotated[dict[str, Any], Body()],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> dict[str, Any]:
-    return await execute_table_query(settings, table, payload)
+    if settings.postgres_url:
+        return await execute_table_query(settings, table, payload)
+    return await execute_nhost_table_query(settings, table, payload, bearer_token(request))
 
 
 @app.post("/rpc/{name}", tags=["data"])
 async def rpc_query(
     name: str,
+    request: Request,
     payload: Annotated[dict[str, Any], Body()],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> dict[str, Any]:
-    return await execute_rpc(settings, name, payload)
+    if settings.postgres_url:
+        return await execute_rpc(settings, name, payload)
+    return await execute_nhost_rpc(settings, name, payload, bearer_token(request))
 
 
 @app.post("/graphql", tags=["graphql"])

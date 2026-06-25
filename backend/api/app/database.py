@@ -259,3 +259,60 @@ async def execute_rpc(settings: Settings, name: str, params: dict[str, Any]) -> 
         return {"data": value, "error": None}
     finally:
         await conn.close()
+
+
+async def schema_contract_status(settings: Settings, required_columns: dict[str, list[str]]) -> dict[str, Any]:
+    conn = await connect(settings)
+    try:
+        table_names = list(required_columns.keys())
+        table_rows = await conn.fetch(
+            """
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_schema = 'public'
+              AND table_name = ANY($1::text[])
+            """,
+            table_names,
+        )
+        available_tables = {row["table_name"] for row in table_rows}
+
+        column_rows = await conn.fetch(
+            """
+            SELECT table_name, column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = ANY($1::text[])
+            """,
+            table_names,
+        )
+        columns_by_table: dict[str, set[str]] = {table: set() for table in table_names}
+        for row in column_rows:
+            columns_by_table.setdefault(row["table_name"], set()).add(row["column_name"])
+
+        table_status: dict[str, dict[str, Any]] = {}
+        for table, required in required_columns.items():
+            available = table in available_tables
+            columns = sorted(columns_by_table.get(table, set()))
+            missing_columns = [column for column in required if column not in columns]
+            table_status[table] = {
+                "available": available,
+                "columns": columns,
+                "missingColumns": missing_columns,
+            }
+
+        missing_tables = [table for table, info in table_status.items() if not info["available"]]
+        missing_columns = {
+            table: info["missingColumns"]
+            for table, info in table_status.items()
+            if info["available"] and info["missingColumns"]
+        }
+
+        return {
+            "provider": "postgres",
+            "ok": not missing_tables and not missing_columns,
+            "missingTables": missing_tables,
+            "missingColumns": missing_columns,
+            "tables": table_status,
+        }
+    finally:
+        await conn.close()

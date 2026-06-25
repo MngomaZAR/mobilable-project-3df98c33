@@ -10,6 +10,7 @@ import { createBookingRequest, updateBookingStatusInDb } from '../services/booki
 import { BUCKETS } from '../config/environment';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
+import { consumeNhostPkceVerifier, generateNhostPkcePair, storeNhostPkceVerifier } from '../config/nhostPkce';
 import { AppState, AppUser, Booking, BookingStatus, Comment, ConversationSummary, Message, Model, NotificationEvent, Post, PrivacySettings, Review, UserRole, CreditsWallet, CreditsLedgerEntry } from '../types';
 import { uid } from '../utils/id';
 import { formatAuthError, formatErrorMessage, logError } from '../utils/errors';
@@ -2206,10 +2207,14 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setState({ authenticating: true, error: null });
     try {
       const redirectTo = Linking.createURL('auth');
+      const pkce = await generateNhostPkcePair();
+      await storeNhostPkceVerifier(pkce.verifier);
       const { data, error } = await backendDb.auth.signInWithOAuth({
         provider,
         options: {
           redirectTo,
+          codeChallenge: pkce.challenge,
+          codeChallengeMethod: 'S256',
           skipBrowserRedirect: true,
         },
       });
@@ -2222,6 +2227,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         });
 
         if (result.type === 'cancel' || result.type === 'dismiss') {
+          await consumeNhostPkceVerifier().catch(() => undefined);
           setError(null);
           return;
         }
@@ -2239,13 +2245,15 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           }
 
           if (accessToken && refreshToken) {
+            await consumeNhostPkceVerifier().catch(() => undefined);
             const { error: sessionErr } = await backendDb.auth.setSession({
               access_token: accessToken,
               refresh_token: refreshToken,
             });
             if (sessionErr) throw sessionErr;
           } else if (code) {
-            const { error: exchangeError } = await backendDb.auth.exchangeCodeForSession(code);
+            const verifier = await consumeNhostPkceVerifier();
+            const { error: exchangeError } = await backendDb.auth.exchangeCodeForSession(code, verifier);
             if (exchangeError) throw exchangeError;
           }
         }
@@ -2267,6 +2275,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         await revalidateSession();
       }
     } catch (err: any) {
+      await consumeNhostPkceVerifier().catch(() => undefined);
       logError(`oauth_${provider}`, err);
       setError(formatErrorMessage(err, `Unable to sign in with ${provider}.`));
       throw err;

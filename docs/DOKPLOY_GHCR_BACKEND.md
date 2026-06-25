@@ -44,9 +44,11 @@ DOKPLOY_URL=https://your-dokploy-host.example
 DOKPLOY_API_KEY=your-dokploy-api-key
 DOKPLOY_COMPOSE_ID=your-dokploy-compose-id
 DOKPLOY_API_HEALTH_URL=https://api.papzii.co.za/health
+# Optional. Defaults to DOKPLOY_API_HEALTH_URL with /health replaced by /health/contract.
+DOKPLOY_API_CONTRACT_URL=https://api.papzii.co.za/health/contract
 ```
 
-The workflow calls Dokploy's `POST /api/compose.redeploy` endpoint, then waits for the API health route to return `{"status":"ok"}`. It fails loudly if any secret is missing or the API does not come online.
+The workflow calls Dokploy's `POST /api/compose.redeploy` endpoint, waits for the API health route to return `{"status":"ok"}`, then waits for `/health/contract` to return `{"ok":true}`. A live container is not enough for release; the backend must prove it can see the app tables and required columns.
 
 ## Domain/DNS
 
@@ -121,6 +123,7 @@ The mobile release provider is now `api`. Nhost/Supabase values may exist during
 The app expects these FastAPI routes:
 
 - `GET /health`
+- `GET /health/contract`
 - `GET /version`
 - `GET /auth/me`
 - `POST /auth/sign-in`
@@ -148,3 +151,5 @@ npm run audit:architecture
 npm run validate:env:release
 npm run check:launch
 ```
+
+`validate:env:release` checks both `/health` and `/health/contract`. If the app schema is missing from the configured Postgres/Nhost backend, release validation must fail before EAS builds a broken binary.

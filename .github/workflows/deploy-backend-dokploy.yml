@@ -16,6 +16,7 @@ jobs:
       DOKPLOY_API_KEY: ${{ secrets.DOKPLOY_API_KEY }}
       DOKPLOY_COMPOSE_ID: ${{ secrets.DOKPLOY_COMPOSE_ID }}
       DOKPLOY_API_HEALTH_URL: ${{ secrets.DOKPLOY_API_HEALTH_URL }}
+      DOKPLOY_API_CONTRACT_URL: ${{ secrets.DOKPLOY_API_CONTRACT_URL }}
     steps:
       - name: Validate Dokploy configuration
         shell: bash
@@ -46,4 +47,20 @@ jobs:
             sleep 10
           done
           echo "::error::API health check did not return {\"status\":\"ok\"}"
+          exit 1
+
+      - name: Smoke API contract
+        shell: bash
+        run: |
+          contract_url="${DOKPLOY_API_CONTRACT_URL:-${DOKPLOY_API_HEALTH_URL%/health}/health/contract}"
+          for attempt in {1..18}; do
+            body="$(curl --show-error --silent "$contract_url" || true)"
+            if echo "$body" | grep -q '"ok"[[:space:]]*:[[:space:]]*true'; then
+              echo "API contract check passed"
+              exit 0
+            fi
+            echo "Contract check attempt $attempt failed: ${body:0:600}"
+            sleep 10
+          done
+          echo "::error::API contract check did not return {\"ok\":true}"
           exit 1

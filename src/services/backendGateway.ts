@@ -65,7 +65,7 @@ type BackendDb = {
     signOut: () => Promise<{ error: BackendError | null }>;
     signInWithOAuth: (payload: { provider: string; options?: Record<string, unknown> }) => Promise<{ data: { url: string | null }; error: BackendError | null }>;
     setSession: (session: ApiSession) => Promise<{ data: { session: ApiSession }; error: BackendError | null }>;
-    exchangeCodeForSession: (code: string) => Promise<{ data: { session: ApiSession | null; user: ApiSession['user'] | null }; error: BackendError | null }>;
+    exchangeCodeForSession: (code: string, codeVerifier?: string | null) => Promise<{ data: { session: ApiSession | null; user: ApiSession['user'] | null }; error: BackendError | null }>;
     refreshSession: () => Promise<{ data: { session: ApiSession | null; user: ApiSession['user'] | null }; error: BackendError | null }>;
     updateUser: (attributes: Record<string, unknown>) => Promise<{ data: { user: ApiSession['user'] | null }; error: BackendError | null }>;
     onAuthStateChange: (
@@ -309,9 +309,9 @@ const createApiBackendDb = () => {
       await setApiSession(session);
       return { data: { session }, error: null };
     },
-    exchangeCodeForSession: async (code: string) => {
+    exchangeCodeForSession: async (code: string, codeVerifier?: string | null) => {
       try {
-        const response = await apiClient.post<AuthResponse>('/auth/exchange', { code });
+        const response = await apiClient.post<AuthResponse>('/auth/exchange', { code, codeVerifier });
         const session = response.session ?? null;
         await setApiSession(session);
         return { data: { session, user: toAuthUser(session, response.user) }, error: null };

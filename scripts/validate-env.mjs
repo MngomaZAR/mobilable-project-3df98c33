@@ -69,6 +69,32 @@ const checkApiHealth = async (apiBaseUrl) => {
   }
 };
 
+const checkApiContract = async (apiBaseUrl) => {
+  if (!apiBaseUrl || errors.length > 0) return;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12000);
+  try {
+    const response = await fetch(new URL('/health/contract', apiBaseUrl).toString(), {
+      headers: { Accept: 'application/json' },
+      signal: controller.signal,
+    });
+    const body = await response.json().catch(() => null);
+    if (!response.ok) {
+      const detail = body?.detail ?? body;
+      errors.push(`EXPO_PUBLIC_API_BASE_URL /health/contract returned HTTP ${response.status}: ${JSON.stringify(detail)}`);
+      return;
+    }
+    if (!body?.ok) {
+      errors.push(`EXPO_PUBLIC_API_BASE_URL /health/contract returned ok=false: ${JSON.stringify(body)}`);
+    }
+  } catch (error) {
+    const message = error instanceof Error && error.name === 'AbortError' ? 'timed out' : 'could not be reached';
+    errors.push(`EXPO_PUBLIC_API_BASE_URL /health/contract ${message}`);
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
 const allowedStoreTargets = new Set(['development', 'web', 'internal', 'appstore', 'play', 'both']);
 const allowedBillingProviders = new Set(['iap', 'external', 'disabled']);
 
@@ -113,6 +139,7 @@ if (mode === 'release') {
     errors.push('EXPO_PUBLIC_API_BASE_URL must be set to the real Dokploy/FastAPI API host, not api.example.com');
   }
   await checkApiHealth(apiBaseUrl);
+  await checkApiContract(apiBaseUrl);
 
   const storeTarget = requireEnv('EXPO_PUBLIC_STORE_TARGET').toLowerCase();
   const billingProvider = requireEnv('EXPO_PUBLIC_DIGITAL_BILLING_PROVIDER').toLowerCase();

@@ -2,12 +2,14 @@
 
 These variables are now enforced by `scripts/validate-env.mjs`.
 
-## Required in all CI environments
+## Legacy provider variables
 
 | Variable | Required | Notes |
 |---|---|---|
-| `EXPO_PUBLIC_SUPABASE_URL` | Yes | Supabase project URL |
-| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Yes | Supabase anon key |
+| `EXPO_PUBLIC_SUPABASE_URL` | No for release | Legacy/reference Supabase project URL. Ignored when `EXPO_PUBLIC_BACKEND_PROVIDER=api`. |
+| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | No for release | Legacy/reference Supabase anon key. Ignored when `EXPO_PUBLIC_BACKEND_PROVIDER=api`. |
+| `EXPO_PUBLIC_NHOST_SUBDOMAIN` | No for release client logic | Public Nhost identifier. It may be present for migration, but release traffic must still go through the FastAPI API boundary. |
+| `EXPO_PUBLIC_NHOST_REGION` | No for release client logic | Public Nhost region. Server-side Nhost credentials belong in Dokploy/API env, not in the mobile binary. |
 
 ## Required for release builds (`validate:env:release`)
 

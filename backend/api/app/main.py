@@ -1,4 +1,4 @@
-from typing import Annotated, Any
+from typing import Annotated, Any, NoReturn
 from urllib.parse import urlencode
 
 import httpx
@@ -104,6 +104,23 @@ app = FastAPI(
 )
 
 
+def raise_upstream_unreachable(provider: str, url: str, error: httpx.RequestError) -> NoReturn:
+    try:
+        host = httpx.URL(url).host or url
+    except httpx.InvalidURL:
+        host = url
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail={
+            "provider": provider,
+            "ok": False,
+            "message": f"{provider} could not be reached.",
+            "host": host,
+            "error": type(error).__name__,
+        },
+    ) from error
+
+
 @app.get("/health", response_model=HealthResponse, tags=["system"])
 async def health(settings: Annotated[Settings, Depends(get_settings)]) -> HealthResponse:
     return HealthResponse(status="ok", service=settings.app_name, environment=settings.app_env)
@@ -178,13 +195,17 @@ async def nhost_auth_request(
     headers = {"Content-Type": "application/json"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
-    async with httpx.AsyncClient(timeout=15) as client:
-        response = await client.request(
-            method,
-            f"{settings.resolved_nhost_auth_url}/{path.lstrip('/')}",
-            json=body,
-            headers=headers,
-        )
+    url = f"{settings.resolved_nhost_auth_url}/{path.lstrip('/')}"
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            response = await client.request(
+                method,
+                url,
+                json=body,
+                headers=headers,
+            )
+    except httpx.RequestError as error:
+        raise_upstream_unreachable("nhost_auth", url, error)
     if response.status_code >= 400:
         detail = response.json() if response.headers.get("content-type", "").startswith("application/json") else response.text
         raise HTTPException(status_code=response.status_code, detail=detail)
@@ -392,8 +413,11 @@ async def graphql_proxy(
         headers["Authorization"] = f"Bearer {token}"
     if settings.nhost_admin_secret:
         headers["x-hasura-admin-secret"] = settings.nhost_admin_secret
-    async with httpx.AsyncClient(timeout=20) as client:
-        response = await client.post(settings.resolved_nhost_graphql_url, json=payload, headers=headers)
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            response = await client.post(settings.resolved_nhost_graphql_url, json=payload, headers=headers)
+    except httpx.RequestError as error:
+        raise_upstream_unreachable("nhost_graphql", settings.resolved_nhost_graphql_url, error)
     if response.status_code >= 400:
         raise HTTPException(status_code=response.status_code, detail=response.text)
     return response.json()
@@ -449,8 +473,12 @@ async def function_proxy(
     token = bearer_token(request)
     if token:
         headers["Authorization"] = f"Bearer {token}"
-    async with httpx.AsyncClient(timeout=30) as client:
-        response = await client.post(f"{settings.resolved_nhost_functions_url}/{name}", json=payload, headers=headers)
+    url = f"{settings.resolved_nhost_functions_url}/{name}"
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.post(url, json=payload, headers=headers)
+    except httpx.RequestError as error:
+        raise_upstream_unreachable("nhost_functions", url, error)
     if response.status_code >= 400:
         detail = response.json() if response.headers.get("content-type", "").startswith("application/json") else response.text
         raise HTTPException(status_code=response.status_code, detail=detail)

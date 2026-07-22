@@ -1,5 +1,5 @@
 import re
-from typing import Any
+from typing import Any, NoReturn
 
 import httpx
 from fastapi import HTTPException, status
@@ -18,6 +18,23 @@ FILTER_OPS = {
 }
 SCALAR_KINDS = {"SCALAR", "ENUM"}
 SCALAR_FIELD_CACHE: dict[tuple[str, str], list[str]] = {}
+
+
+def raise_provider_unreachable(provider: str, url: str, error: httpx.RequestError) -> NoReturn:
+    try:
+        host = httpx.URL(url).host or url
+    except httpx.InvalidURL:
+        host = url
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail={
+            "provider": provider,
+            "ok": False,
+            "message": f"{provider} could not be reached.",
+            "host": host,
+            "error": type(error).__name__,
+        },
+    ) from error
 
 
 def ensure_identifier(value: str) -> str:
@@ -113,8 +130,11 @@ async def graphql_request(settings: Settings, payload: dict[str, Any], token: st
         headers["Authorization"] = f"Bearer {token}"
     if settings.nhost_admin_secret:
         headers["x-hasura-admin-secret"] = settings.nhost_admin_secret
-    async with httpx.AsyncClient(timeout=20) as client:
-        response = await client.post(settings.resolved_nhost_graphql_url, json=payload, headers=headers)
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            response = await client.post(settings.resolved_nhost_graphql_url, json=payload, headers=headers)
+    except httpx.RequestError as error:
+        raise_provider_unreachable("nhost_graphql", settings.resolved_nhost_graphql_url, error)
     if response.status_code >= 400:
         raise HTTPException(status_code=response.status_code, detail=response.text)
     body = response.json()

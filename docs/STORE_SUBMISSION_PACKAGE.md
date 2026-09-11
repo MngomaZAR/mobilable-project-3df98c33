@@ -6,10 +6,10 @@ This file is the final launch checklist for App Store Connect and Google Play Co
 
 ## 1) Required URLs
 
-- Privacy policy: `https://papzi.co.za/privacy`
-- Terms: `https://papzi.co.za/terms`
-- Support: `mailto:support@papzi.co.za`
-- Marketing site: `https://papzi.co.za`
+- Privacy policy: `https://papzii.co.za/privacy`
+- Terms: `https://papzii.co.za/terms`
+- Support: `mailto:support@papzii.co.za`
+- Marketing site: `https://papzii.co.za`
 
 ## 2) Payment disclosure answers
 

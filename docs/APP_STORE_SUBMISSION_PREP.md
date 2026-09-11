@@ -38,8 +38,8 @@ Declare all relevant data uses:
 
 ## Required policy links
 
-- Privacy Policy: `https://papzi.co.za/privacy`
-- Terms of Service: `https://papzi.co.za/terms`
+- Privacy Policy: `https://papzii.co.za/privacy`
+- Terms of Service: `https://papzii.co.za/terms`
 
 ## Review safety checks
 

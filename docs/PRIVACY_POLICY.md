@@ -37,7 +37,7 @@ Depending on your jurisdiction, you may request:
 - Deletion of your account and related personal data.
 - Restriction or objection to processing in limited circumstances.
 
-To request account/data deletion, contact: support@papzi.co.za
+To request account/data deletion, contact: support@papzii.co.za
 
 ## Security
 
@@ -49,4 +49,4 @@ Papzi is not intended for children under the minimum digital consent age in your
 
 ## Contact
 
-Privacy inquiries: support@papzi.co.za
+Privacy inquiries: support@papzii.co.za

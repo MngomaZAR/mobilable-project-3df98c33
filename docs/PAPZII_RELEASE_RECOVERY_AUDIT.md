@@ -1,6 +1,6 @@
 # PAPZII Release Recovery Audit
 
-Date: 2026-07-22
+Date: 2026-09-11
 
 Status: not public-deployable yet.
 
@@ -11,6 +11,7 @@ The repository has the right release direction now: mobile traffic is configured
 | Area | Result | Evidence |
 | --- | --- | --- |
 | Mobile release provider | Configured for API boundary | `eas.json` production uses `EXPO_PUBLIC_BACKEND_PROVIDER=api` and `EXPO_PUBLIC_API_BASE_URL=https://api.papzii.co.za`. |
+| Store app identity | Aligned | Resolved Expo config uses iOS bundle identifier `com.saicts.papzi`, Android package `com.saicts.papzi`, and EAS project id `f0c1ef90-ac26-4e4c-a799-77b377e2f452`. |
 | API DNS | Failing | `api.papzii.co.za` returns NXDOMAIN from Google DNS. |
 | Release env gate | Failing correctly | `npm run validate:env:release` fails because `api.papzii.co.za` does not resolve. |
 | Architecture audit | Passing | `npm run audit:architecture` reports 44 screens, 23 services, and 0 blockers. |
@@ -18,8 +19,9 @@ The repository has the right release direction now: mobile traffic is configured
 | Source/connectivity audit | Passing | `npm run audit:src` reports 5 checks, 0 failed, 0 warnings. |
 | Live schema reference audit | Passing | `npm run audit:live-schema` reports 58 referenced tables, 71 live tables, and 0 findings. |
 | Dashboard role audit | Passing | `npm run audit:dashboards` verifies client, photographer, model, and admin dashboard route contracts. |
-| TypeScript/lint/Jest | Passing | `npm run typecheck`, `npm run lint`, and `npx jest --runInBand --passWithNoTests` pass locally. |
+| TypeScript/lint/Jest | Passing | `npm run typecheck`, `npm run lint`, and `npm run test:ci` pass locally. |
 | Web export | Passing | `npm run build:web` completed and exported `dist`. |
+| Full local launch gate | Passing | `npm run check:launch` passes locally. |
 | Maps routing | Passing focused test | `npx jest __tests__/services/routingService.test.ts --runInBand --passWithNoTests` passes. OSRM road geometry is requested with `overview=full&geometries=geojson&steps=true`. |
 | Backend upstream diagnostics | Improved | `/health/contract`, `/auth/sign-in`, and `/functions/{name}` now return structured 503 responses when Nhost upstream DNS is unreachable. |
 | Docker Compose config | Passing | `docker compose -f deployment/docker-compose.yml --env-file deployment/dokploy.env.example config --quiet` passes. |
@@ -76,6 +78,23 @@ curl https://api.papzii.co.za/health/contract
 ```
 
 The correct next infrastructure move is not more frontend rebuilding. It is making the public API host real, wiring server-side env into Dokploy, and proving the database contract before EAS builds a new binary.
+
+## September 2026 Follow-Up
+
+Changes made after rechecking the docs and actual build:
+
+- `app.config.js` now uses `com.saicts.papzi` for iOS so the binary targets the existing App Store/TestFlight app record.
+- `package.json` now has `test:ci` and `check:launch` uses it directly.
+- Store-facing docs and policy contacts now use `papzii.co.za`.
+- In-app privacy text no longer names the old Supabase/AWS storage arrangement as the active processor stack.
+
+Remaining release blockers:
+
+- Create DNS for `api.papzii.co.za`.
+- Make the FastAPI host respond with `200` from `/health`.
+- Configure server-side data/auth env so `/health/contract` returns `{"ok":true}`.
+- Add/confirm Dokploy GitHub secrets so the redeploy workflow actually runs its redeploy and smoke checks.
+- Only after those pass, trigger EAS iOS/Android production builds and submit to TestFlight/Play internal testing.
 
 ## Source Basis
 

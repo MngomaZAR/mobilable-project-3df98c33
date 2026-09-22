@@ -116,6 +116,15 @@ def user_response(row: asyncpg.Record | dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def metadata_from_options(options: dict[str, Any]) -> dict[str, Any]:
+    metadata: dict[str, Any] = {}
+    for key in ("metadata", "data", "user_metadata"):
+        value = options.get(key)
+        if isinstance(value, dict):
+            metadata.update(value)
+    return metadata
+
+
 async def create_session(settings: Settings, user: asyncpg.Record | dict[str, Any]) -> dict[str, Any]:
     await ensure_local_auth_schema(settings)
     now = _now()
@@ -152,7 +161,7 @@ async def local_sign_up(settings: Settings, payload: dict[str, Any]) -> dict[str
     email = normalize_email(payload.get("email"))
     password = normalize_password(payload.get("password"))
     options = payload.get("options") if isinstance(payload.get("options"), dict) else {}
-    metadata = options.get("metadata") if isinstance(options.get("metadata"), dict) else {}
+    metadata = metadata_from_options(options)
     merged_metadata = {
         **metadata,
         "role": metadata.get("role") or "client",

@@ -149,6 +149,15 @@ def normalize_db_value(value: Any) -> Any:
     return value
 
 
+def normalize_db_value_for_type(value: Any, column_type: str | None = None) -> Any:
+    normalized = normalize_db_value(value)
+    if normalized is None:
+        return None
+    if column_type in {"text", "character varying", "character"} and not isinstance(normalized, str):
+        return json.dumps(normalized) if isinstance(normalized, (dict, list)) else str(normalized)
+    return normalized
+
+
 def infer_column_type(column: str, sample: Any = None, force_json: bool = False) -> str:
     if force_json or column in JSON_COLUMNS:
         return "jsonb"
@@ -219,14 +228,41 @@ async def ensure_columns(
     current = await existing_columns(conn, table)
     table_sql = quote_ident(table)
     for column, descriptor in columns.items():
-        if column in current:
-            continue
         if not IDENTIFIER_RE.match(column):
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid identifier: {column}")
         force_json = descriptor is True
         sample = descriptor[1] if isinstance(descriptor, tuple) else None
         column_type = infer_column_type(column, sample, force_json)
+        if column in current:
+            if current[column] in {"text", "character varying", "character"} and column_type != "text":
+                await maybe_upgrade_text_column(conn, table_sql, column, column_type)
+            continue
         await conn.execute(f"ALTER TABLE {table_sql} ADD COLUMN IF NOT EXISTS {quote_ident(column)} {column_type}")
+
+
+async def maybe_upgrade_text_column(conn: asyncpg.Connection, table_sql: str, column: str, column_type: str) -> None:
+    col = quote_ident(column)
+    if column_type == "double precision":
+        using = f"NULLIF({col}::text, '')::double precision"
+    elif column_type == "boolean":
+        using = (
+            f"CASE WHEN {col} IS NULL OR {col}::text = '' THEN NULL "
+            f"WHEN lower({col}::text) IN ('true','t','1','yes','y') THEN true "
+            f"WHEN lower({col}::text) IN ('false','f','0','no','n') THEN false "
+            f"ELSE NULL END"
+        )
+    elif column_type == "jsonb":
+        using = f"CASE WHEN {col} IS NULL OR {col}::text = '' THEN NULL ELSE {col}::jsonb END"
+    elif column_type == "timestamptz":
+        using = f"NULLIF({col}::text, '')::timestamptz"
+    else:
+        return
+    try:
+        await conn.execute(f"ALTER TABLE {table_sql} ALTER COLUMN {col} TYPE {column_type} USING {using}")
+    except asyncpg.PostgresError:
+        # Existing bad seed data should not break ordinary app writes. Values
+        # still get coerced to the current column type at mutation time.
+        return
 
 
 async def ensure_unique_constraint(conn: asyncpg.Connection, table: str, columns: list[str]) -> None:
@@ -252,8 +288,8 @@ class SqlBuilder:
         self.values: list[Any] = []
         self.where: list[str] = []
 
-    def add_value(self, value: Any) -> str:
-        self.values.append(normalize_db_value(value))
+    def add_value(self, value: Any, column_type: str | None = None) -> str:
+        self.values.append(normalize_db_value_for_type(value, column_type))
         return f"${len(self.values)}"
 
     def add_filter(self, filter_item: dict[str, Any]) -> None:
@@ -354,6 +390,7 @@ async def execute_table_query(settings: Settings, table: str, payload: dict[str,
             for column, value in payload["payload"].items():
                 query_columns[column] = (column, value)
         await ensure_columns(conn, table, query_columns)
+        current = await existing_columns(conn, table)
 
         builder = SqlBuilder()
         where = builder.where_sql(filters)
@@ -397,7 +434,11 @@ async def execute_table_query(settings: Settings, table: str, payload: dict[str,
             value_groups = []
             insert_builder = SqlBuilder()
             for row in rows:
-                value_groups.append("(" + ", ".join(insert_builder.add_value(row.get(column)) for column in columns) + ")")
+                value_groups.append(
+                    "("
+                    + ", ".join(insert_builder.add_value(row.get(column), current.get(column)) for column in columns)
+                    + ")"
+                )
             conflict_sql = ""
             if action == "upsert" and payload.get("onConflict"):
                 conflict_cols = [quote_ident(col.strip()) for col in str(payload["onConflict"]).split(",") if col.strip()]
@@ -418,7 +459,9 @@ async def execute_table_query(settings: Settings, table: str, payload: dict[str,
             row = payload.get("payload")
             if not isinstance(row, dict) or not row:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Update payload must be an object.")
-            assignments = ", ".join(f"{quote_ident(column)} = {builder.add_value(value)}" for column, value in row.items())
+            assignments = ", ".join(
+                f"{quote_ident(column)} = {builder.add_value(value, current.get(column))}" for column, value in row.items()
+            )
             records = await conn.fetch(
                 f"UPDATE {table_sql} SET {assignments}{where} RETURNING {select_sql}",
                 *builder.values,

@@ -416,26 +416,39 @@ def payfast_signature(params: dict[str, Any], passphrase: str | None = None) -> 
 
 async def handle_payfast(settings: Settings, payload: dict[str, Any]) -> dict[str, Any]:
     payment_id = str(payload.get("booking_id") or payload.get("tip_id") or payload.get("payment_id") or new_id())
-    amount = payload.get("amount") or payload.get("price_total") or 0
+    amount = payload.get("amount") or payload.get("price_total")
+    booking_id = payload.get("booking_id")
+    if (amount is None or amount == "") and booking_id:
+        rows = await select_rows(
+            settings,
+            "bookings",
+            "price_total,total_amount,amount",
+            [{"op": "eq", "column": "id", "value": booking_id}],
+            limit=1,
+        )
+        booking = rows[0] if rows else {}
+        amount = booking.get("price_total") or booking.get("total_amount") or booking.get("amount")
+    amount_value = float(amount or 0)
     params: dict[str, Any] = {
         "merchant_id": settings.payfast_merchant_id or "10000100",
         "merchant_key": settings.payfast_merchant_key or "46f0cd694581a",
         "m_payment_id": payment_id,
-        "amount": f"{float(amount or 0):.2f}",
+        "amount": f"{amount_value:.2f}",
         "item_name": payload.get("item_name") or "PAPZII booking",
         "return_url": payload.get("return_url"),
         "cancel_url": payload.get("cancel_url"),
         "notify_url": payload.get("notify_url"),
     }
     params["signature"] = payfast_signature(params, settings.payfast_passphrase or None)
+    signed_params = {key: value for key, value in params.items() if value is not None and str(value).strip()}
     base_url = settings.payfast_base_url or "https://www.payfast.co.za/eng/process"
     payment = await insert_row(
         settings,
         "payments",
         {
             "id": payment_id,
-            "booking_id": payload.get("booking_id"),
-            "amount": float(amount or 0),
+            "booking_id": booking_id,
+            "amount": amount_value,
             "currency": "ZAR",
             "description": params["item_name"],
             "status": "pending",
@@ -444,7 +457,7 @@ async def handle_payfast(settings: Settings, payload: dict[str, Any]) -> dict[st
             "created_at": now_iso(),
         },
     )
-    return {"paymentUrl": f"{base_url}?{urlencode(params)}", "paymentId": payment.get("id") or payment_id}
+    return {"paymentUrl": f"{base_url}?{urlencode(signed_params)}", "paymentId": payment.get("id") or payment_id}
 
 
 async def handle_payout_methods(settings: Settings, token: str | None, payload: dict[str, Any]) -> dict[str, Any]:

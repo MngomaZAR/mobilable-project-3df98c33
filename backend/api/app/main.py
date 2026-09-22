@@ -200,6 +200,17 @@ def normalize_session(raw: dict[str, Any] | None) -> dict[str, Any] | None:
     }
 
 
+def metadata_from_auth_options(options: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(options, dict):
+        return {}
+    metadata: dict[str, Any] = {}
+    for key in ("metadata", "data", "user_metadata"):
+        value = options.get(key)
+        if isinstance(value, dict):
+            metadata.update(value)
+    return metadata
+
+
 async def nhost_auth_request(
     settings: Settings,
     method: str,
@@ -238,14 +249,16 @@ async def ensure_signup_profile(
     user_id = user.get("id")
     if not user_id:
         return
-    metadata = options.get("metadata", {}) if isinstance(options, dict) else {}
+    metadata = metadata_from_auth_options(options)
     role = metadata.get("role") or "client"
     profile = {
         "id": user_id,
         "role": role,
         "verified": False,
         "kyc_status": "pending" if role in {"photographer", "model"} else None,
-        "full_name": options.get("displayName") if isinstance(options, dict) else None,
+        "full_name": (options.get("displayName") if isinstance(options, dict) else None)
+        or metadata.get("full_name")
+        or metadata.get("name"),
         "city": metadata.get("city"),
         "phone": metadata.get("phone"),
         "date_of_birth": metadata.get("date_of_birth"),

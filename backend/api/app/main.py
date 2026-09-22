@@ -3,10 +3,20 @@ from urllib.parse import urlencode
 
 import httpx
 from fastapi import Body, Depends, FastAPI, HTTPException, Request, status
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from .config import Settings, get_settings
+from .builtin_functions import handle_builtin_function
 from .database import execute_rpc, execute_table_query, schema_contract_status as postgres_schema_contract_status
+from .local_auth import (
+    local_refresh,
+    local_sign_in,
+    local_sign_out,
+    local_sign_up,
+    local_update_user,
+    user_from_access_token,
+)
 from .nhost_graphql import (
     execute_nhost_rpc,
     execute_nhost_table_query,
@@ -101,6 +111,13 @@ app = FastAPI(
     title="PAPZII API",
     version="0.1.0",
     description="Public backend API boundary for PAPZII mobile clients.",
+)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
@@ -257,6 +274,10 @@ async def auth_me(request: Request, settings: Annotated[Settings, Depends(get_se
     token = bearer_token(request)
     if not token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing bearer token.")
+    if settings.postgres_url:
+        user = await user_from_access_token(settings, token)
+        role = (user.get("user_metadata") or {}).get("role") or "client"
+        return {"user": user, "id": user.get("id"), "email": user.get("email"), "roles": [role]}
     body = await nhost_auth_request(settings, "GET", "/user", token=token)
     user = normalize_user(body)
     return {"user": user, "id": user.get("id") if user else "", "email": user.get("email") if user else None, "roles": []}
@@ -267,6 +288,8 @@ async def auth_sign_in(
     payload: Annotated[dict[str, Any], Body()],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> dict[str, Any]:
+    if settings.postgres_url:
+        return await local_sign_in(settings, payload)
     body = await nhost_auth_request(
         settings,
         "POST",
@@ -282,6 +305,12 @@ async def auth_sign_up(
     payload: Annotated[dict[str, Any], Body()],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> dict[str, Any]:
+    if settings.postgres_url:
+        result = await local_sign_up(settings, payload)
+        options = payload.get("options") if isinstance(payload.get("options"), dict) else {}
+        if result.get("user"):
+            await ensure_signup_profile(settings, result["user"], options, result.get("session", {}).get("access_token"))
+        return result
     options = payload.get("options") if isinstance(payload.get("options"), dict) else {}
     body = await nhost_auth_request(
         settings,
@@ -303,6 +332,9 @@ async def auth_sign_up(
 @app.post("/auth/sign-out", tags=["auth"])
 async def auth_sign_out(request: Request, settings: Annotated[Settings, Depends(get_settings)]) -> dict[str, bool]:
     token = bearer_token(request)
+    if settings.postgres_url:
+        await local_sign_out(settings, token)
+        return {"success": True}
     if token:
         await nhost_auth_request(settings, "POST", "/signout", token=token)
     return {"success": True}
@@ -313,6 +345,8 @@ async def auth_refresh(
     payload: Annotated[dict[str, Any], Body()],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> dict[str, Any]:
+    if settings.postgres_url:
+        return await local_refresh(settings, payload.get("refresh_token"))
     body = await nhost_auth_request(settings, "POST", "/token", {"refreshToken": payload.get("refresh_token")})
     session = normalize_session(body.get("session") or body)
     return {"session": session, "user": session.get("user") if session else None}
@@ -323,6 +357,8 @@ async def auth_oauth(payload: Annotated[dict[str, Any], Body()], settings: Annot
     provider = str(payload.get("provider") or "").strip()
     options = payload.get("options") if isinstance(payload.get("options"), dict) else {}
     redirect_to = options.get("redirectTo") or ""
+    if settings.postgres_url:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=f"OAuth provider {provider or 'unknown'} is not configured on the self-hosted API yet. Use email and password sign-in.")
     if not provider or not settings.resolved_nhost_auth_url:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="OAuth is not configured.")
     params: dict[str, str] = {}
@@ -343,6 +379,8 @@ async def auth_exchange(
 ) -> dict[str, Any]:
     code = payload.get("code")
     code_verifier = payload.get("codeVerifier") or payload.get("code_verifier")
+    if settings.postgres_url:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="OAuth code exchange is not configured on the self-hosted API yet.")
     if not code:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Missing OAuth code.")
     body = await nhost_auth_request(
@@ -364,6 +402,8 @@ async def auth_update_user(
     token = bearer_token(request)
     if not token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing bearer token.")
+    if settings.postgres_url:
+        return await local_update_user(settings, token, payload)
     try:
         body = await nhost_auth_request(settings, "PATCH", "/user", payload, token=token)
         return {"user": normalize_user(body.get("user") or body)}
@@ -466,6 +506,10 @@ async def function_proxy(
           settings,
       )
       return {"user": result.get("user")}
+
+    builtin = await handle_builtin_function(settings, name, bearer_token(request), payload)
+    if builtin is not None:
+        return builtin
 
     if not settings.resolved_nhost_functions_url:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=f"Function {name} is not configured.")

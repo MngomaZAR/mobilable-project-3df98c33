@@ -36,6 +36,8 @@ class Settings(BaseSettings):
     typesense_api_key: str = Field(default="", alias="TYPESENSE_API_KEY")
 
     livekit_url: str = Field(default="", alias="LIVEKIT_URL")
+    livekit_api_key: str = Field(default="", alias="LIVEKIT_API_KEY")
+    livekit_api_secret: str = Field(default="", alias="LIVEKIT_API_SECRET")
     payfast_base_url: str = Field(default="", alias="PAYFAST_BASE_URL")
     payfast_merchant_id: str = Field(default="", alias="PAYFAST_MERCHANT_ID")
     payfast_merchant_key: str = Field(default="", alias="PAYFAST_MERCHANT_KEY")

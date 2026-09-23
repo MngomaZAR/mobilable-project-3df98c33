@@ -40,7 +40,10 @@
     },
     "production-ios-local": {
       "extends": "production",
-      "credentialsSource": "local"
+      "credentialsSource": "local",
+      "env": {
+        "EXPO_IOS_BUNDLE_IDENTIFIER": "com.papzi.app"
+      }
     }
   },
   "submit": {

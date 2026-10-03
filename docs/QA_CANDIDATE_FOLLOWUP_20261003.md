@@ -4,12 +4,12 @@ Date: 2026-10-03. Public release remains blocked; Oracle QA is not a store launc
 
 ## Deployment Identity
 
-- Branch: `release/testflight-2026-06`; baseline `0fe9556` plus the changes described here.
+- Branch: `release/testflight-2026-06`; deployed source `291433aaa38af76f6bc8dd1bc7ce5c830c4a61e4`, plus later QA-safety/documentation changes.
 - Host: Jones Madunga's `papzi-prod-a1`, `129.151.188.15`, Johannesburg.
 - Isolated source/database: `/opt/papzii-qa-20261003` / `papzii_qa_20261003`.
 - Migrations 001-006 applied in QA; previously applied files were not rewritten.
-- Latest tested backend archive SHA-256: `EE64B5969F0C2A7D99EB5688AB8EE621633F6D0A30CC12100474AAF7B92D027A`.
-- Latest API image manifest list: `sha256:5261ccbc840e05d411e9120e802d9e8b6d64db7030a031d58e2c35f6b3852c51`.
+- Current API manifest list: `sha256:97c71ec57211ac19430fb9d178b68519a9ff51ce806f1f38f659032c14bd0657`; worker: `sha256:ef30e2c13e93a4f3e5987104ccf01ec181016a04d700c59324cbcab1e6ab0cfa`.
+- Earlier local backend archive SHA-256: `EE64B5969F0C2A7D99EB5688AB8EE621633F6D0A30CC12100474AAF7B92D027A`; its local image evidence is historical, not the currently running GHCR deployment.
 - API port 18000 is Oracle-loopback only. Browser access is a private SSH test tunnel, not laptop production hosting.
 - QA secrets exclude real merchant, SMTP, LiveKit and push credentials. Fixtures refuse non-QA databases.
 - Existing public API has not been promoted to this candidate. No new signed binary or store submission is claimed.
@@ -29,7 +29,7 @@ Date: 2026-10-03. Public release remains blocked; Oracle QA is not a store launc
 | Discovery | Explicit provider/profile queries, normalized published rates, verified-profile ranking; no embedded-query or invented-price fallback. | Unit regressions, web export and four-role browser rerun passed. Ranking is heuristic, not a trained recommendation engine. |
 | CI/release | Backend database/load protocols gate GHCR; frontend QA compilation stays private; EAS production readiness guard; candidate branches do not auto-promote production. | Production workflow checks live capabilities, not health alone, and explicitly reports a missing-config no-op. GitHub execution and promotion must be recorded separately. |
 
-## Latest Backend Results
+## Earlier Backend Results
 
 Earlier candidate run started `2026-10-03T17:04:33.505908+00:00`:
 
@@ -131,6 +131,14 @@ skipped the actual redeploy and both smoke steps. It is not evidence of a public
 rollout. CI and image publishing remain enabled. Install the reviewed production
 guard on `main`, configure the deployment environment and complete acceptance
 before re-enabling automatic production deployment.
+
+The later QA-isolation/evidence commit `c34cb1d4c9662bc926811189359ac79fe26dcbc3`
+also passed [GitHub CI](https://github.com/MngomaZAR/mobilable-project-3df98c33/actions/runs/37147078259).
+It adds an explicit check for the Neon database override so a QA environment
+cannot silently redirect protocol writes to production. `--check-only` passed on
+Oracle. The application images above are unchanged by this safety/documentation
+follow-up. The temporary browser server and private SSH tunnel were stopped;
+the remote QA API/worker and OSRM service remain deployed.
 
 ## Public Release Blockers
 

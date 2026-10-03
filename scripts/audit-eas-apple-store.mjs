@@ -34,7 +34,11 @@ for (const metadata of keys.slice(0, 10)) {
       continue;
     }
     const report = JSON.parse(fs.readFileSync(output, 'utf8'));
-    receipts.push({ keyIdentifier: metadata.keyIdentifier, report: path.relative(process.cwd(), output), ...report });
+    receipts.push({ keyIdentifier: metadata.keyIdentifier, report: path.relative(process.cwd(), output),
+      checkedAt: report.checkedAt, apps: report.apps.map(app => ({ bundleIdentifier: app.bundleIdentifier,
+        lookupStatus: app.appLookup.status, errorCodes: app.appLookup.errorCodes,
+        storeStates: app.storeVersions?.resources?.map(row => row.attributes?.appStoreState),
+        latestBuild: app.builds?.resources?.find(row => row.type === 'builds')?.attributes })) });
     const authenticated = report.apps.some(app => app.appLookup.status === 200 ||
       app.appLookup.errorCodes?.includes('FORBIDDEN.REQUIRED_AGREEMENTS_MISSING_OR_EXPIRED'));
     if (process.env.SYNC_EXISTING_GITHUB_APPLE_SECRETS === 'true' && authenticated) {

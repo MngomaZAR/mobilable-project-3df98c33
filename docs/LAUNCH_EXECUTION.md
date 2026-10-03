@@ -60,7 +60,7 @@ or private QA. Unchecked items stay open even where candidate code/tests exist.
 - [ ] Pass public version, schema contract, readiness and domain smoke checks with production HTTPS configuration.
 - [ ] Verify enabled four-role web workflows and remaining screen controls/accessibility; retain untested scope.
 - [ ] Build the exact accepted source for iPhone and Android and run physical-device journeys, including permissions/reconnect/expiry.
-- [ ] Resolve Apple agreements and Google Publisher API/permission blockers below; recheck synchronized credentials.
+- [ ] Recheck synchronized Apple credentials and resolve Google Publisher API/permission and accepted upload-key blockers. The latest Apple query succeeds; the earlier agreement block has cleared.
 - [ ] Complete separately authorized live payment, refund and bank-settlement evidence.
 - [ ] Publish web and submit native releases only after applicable gates pass; record tester availability and public approval separately.
 
@@ -102,14 +102,17 @@ Historical receipts are in [store history](store-history-20261003.json):
 
 October 4 local-date account checks (receipts use October 3 late-evening UTC):
 
-- **Apple:** the authenticated EAS App Store Connect key `8NSCTU6X72` returns
-  HTTP 403 `FORBIDDEN.REQUIRED_AGREEMENTS_MISSING_OR_EXPIRED` for both checked
-  bundle identifiers. The account holder must resolve required agreements, then
-  access must be rechecked. [Read-only Apple receipt](apple-store-eas-8NSCTU6X72-20261004.json).
+- **Apple:** the latest authenticated check now returns HTTP 200; the earlier
+  agreement block has cleared. App `6760396864` / `com.papzi.app` has valid build
+  38 in internal beta testing, externally ready for beta submission. Its public
+  version is still `PREPARE_FOR_SUBMISSION`. App `6760158086` / `com.saicts.papzi`
+  has expired build 4. Configuration now targets the successful `com.papzi.app`
+  identity and the matching existing private signing certificate/profile.
+  [Read-only Apple receipt](apple-store-eas-8NSCTU6X72-20261004.json).
 - **GitHub Apple credentials:** the earlier GitHub copy returned 401. The parent
   release task reports updating three existing secrets to the EAS key. This is a
-  configuration change, not a post-sync successful upload; authenticated access
-  must be retested, and the Apple agreement blocker is separate.
+  configuration change, not a post-sync successful upload. The EAS key now reads
+  Apple records successfully; GitHub uses that same synchronized credential.
 - **Google:** the local service-account credential for project `papz-601b5`
   (key identifier prefix `5842`) authenticates, but Android Publisher access is
   HTTP 403 `SERVICE_DISABLED`. The credential also lacks Service Usage permission
@@ -117,8 +120,12 @@ October 4 local-date account checks (receipts use October 3 late-evening UTC):
   must enable Android Publisher and verify the account's Play permissions; this
   is not merely a failed key. [Publisher status](play-publisher-status-20261004.json)
   and [submission log audit](android-submission-audit-20261004.json).
+  The user-confirmed intended app is the registered `com.papziiii.paparazzi`,
+  with an inactive internal track. Android configuration now targets it, but EAS
+  has no signing record for that package. Recover the accepted upload key or
+  complete an authorized reset; do not reuse an unverified legacy key or AAB.
 
-Account-holder actions have been requested asynchronously and remain pending.
+Google account-holder actions remain pending; Apple API access has been restored.
 The read-only audits did not retry submission, publish artifacts or change live
 store state. Do not print credential material or create replacement accounts to
 conceal these permission/agreement failures.

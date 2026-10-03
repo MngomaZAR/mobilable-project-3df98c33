@@ -23,6 +23,7 @@
       "channel": "production",
       "env": {
         "EAS_BUILD_NO_EXPO_GO_WARNING": "true",
+        "EXPO_IOS_BUNDLE_IDENTIFIER": "com.papzi.app",
         "EXPO_ANDROID_PACKAGE": "com.papziiii.paparazzi",
         "EXPO_PUBLIC_API_BASE_URL": "https://papzii-api.129.151.188.15.nip.io",
         "EXPO_PUBLIC_ROUTING_PROVIDER": "osrm",
@@ -50,7 +51,8 @@
   "submit": {
     "production": {
       "ios": {
-        "ascAppId": "6760396864"
+        "ascAppId": "6760396864",
+        "bundleIdentifier": "com.papzi.app"
       },
       "android": {
         "applicationId": "com.papziiii.paparazzi",

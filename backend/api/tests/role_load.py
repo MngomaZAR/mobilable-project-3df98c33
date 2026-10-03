@@ -277,7 +277,9 @@ async def main():
         ranked = (await check(client, "Ranking excludes unapproved posts", "POST", "/functions/for-you-ranking", 200, client_actor, {"limit": 100})).json()["ranked_posts"]
         assert post["id"] not in {row["post_id"] for row in ranked}
         await check(client, "Unapproved post cannot be liked by client", "POST", "/rpc/toggle_post_like", 404, client_actor, {"p_post_id": post["id"], "p_user_id": client_actor["id"]})
-        await check(client, "Admin approves feed content", "POST", "/data/posts", 200, admin, {"action": "update", "payload": {"moderation_status": "approved"}, "filters": [{"op": "eq", "column": "id", "value": post["id"]}]})
+        await check(client, 'Admin generic moderation bypass is rejected', 'POST', '/data/posts', 403, admin, {'action': 'update', 'payload': {'moderation_status': 'approved'}, 'filters': [{'op': 'eq', 'column': 'id', 'value': post['id']}]})
+        approved = (await check(client, 'Admin approves feed content with audited reason', 'POST', '/admin/moderation/content/review', 200, admin, {'table': 'posts', 'id': post['id'], 'decision': 'approved', 'reason': 'Synthetic QA portfolio review', 'expected_status': 'pending'})).json()
+        assert approved['audit_event_id']
         visible = (await check(client, "Approved feed content is discoverable", "POST", "/data/posts", 200, client_actor, {"action": "select", "filters": [{"op": "eq", "column": "id", "value": post["id"]}]})).json()["data"]
         assert len(visible) == 1
         report_payload = {'target_type': 'post', 'target_id': post['id'], 'reason': 'QA spam report', 'details': 'Synthetic moderation fixture'}
@@ -291,8 +293,9 @@ async def main():
         assert commented['id'] == replayed_comment['id'] and commented['moderation_status'] == 'pending'
         private_comment = (await check(client, 'Pending comments hidden from other users', 'POST', '/data/post_comments', 200, model, {'action': 'select', 'filters': [{'op': 'eq', 'column': 'id', 'value': commented['id']}]})).json()['data']
         assert private_comment == []
-        await check(client, 'Client cannot moderate comments', 'POST', '/moderation/review', 403, client_actor, {'table': 'post_comments', 'id': commented['id'], 'decision': 'approved'})
-        await check(client, 'Admin approves comment', 'POST', '/moderation/review', 200, admin, {'table': 'post_comments', 'id': commented['id'], 'decision': 'approved'})
+        await check(client, 'Client cannot moderate comments', 'POST', '/moderation/review', 403, client_actor, {'table': 'post_comments', 'id': commented['id'], 'decision': 'approved', 'reason': 'Synthetic QA comment review'})
+        approved_comment = (await check(client, 'Admin approves comment with audited reason', 'POST', '/moderation/review', 200, admin, {'table': 'post_comments', 'id': commented['id'], 'decision': 'approved', 'reason': 'Synthetic QA comment review'})).json()
+        assert approved_comment['audit_event_id']
         shared_comment = (await check(client, 'Approved comment is visible', 'POST', '/data/post_comments', 200, model, {'action': 'select', 'filters': [{'op': 'eq', 'column': 'id', 'value': commented['id']}]})).json()['data']
         assert len(shared_comment) == 1
         await check(client, "Approved post can be liked", "POST", "/rpc/toggle_post_like", 200, client_actor, {"p_post_id": post["id"], "p_user_id": client_actor["id"]})

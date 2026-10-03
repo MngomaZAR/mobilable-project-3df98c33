@@ -1,22 +1,1162 @@
 {
-  "checkedAt": "2026-10-03T22:12:13Z",
+  "checkedAt": "2026-10-03T23:16:00Z",
   "readOnly": true,
   "apps": [
     {
       "bundleIdentifier": "com.papzi.app",
       "appLookup": {
-        "status": 403,
-        "errorCodes": [
-          "FORBIDDEN.REQUIRED_AGREEMENTS_MISSING_OR_EXPIRED"
+        "status": 200,
+        "resources": [
+          {
+            "id": "6760396864",
+            "type": "apps",
+            "attributes": {
+              "name": "Papzi",
+              "bundleId": "com.papzi.app"
+            }
+          }
+        ]
+      },
+      "builds": {
+        "status": 200,
+        "resources": [
+          {
+            "id": "b18c42bb-fe4b-4144-bdfd-3eddb123da03",
+            "type": "builds",
+            "attributes": {
+              "version": "38",
+              "uploadedDate": "2026-09-23T13:36:37-07:00",
+              "expirationDate": "2026-12-22T12:36:37-08:00",
+              "expired": false,
+              "processingState": "VALID"
+            },
+            "relationships": {
+              "preReleaseVersion": {
+                "type": "preReleaseVersions",
+                "id": "71dd189e-8393-45a9-b1ac-ffaef37bf105"
+              },
+              "buildBetaDetail": {
+                "type": "buildBetaDetails",
+                "id": "b18c42bb-fe4b-4144-bdfd-3eddb123da03"
+              }
+            }
+          },
+          {
+            "id": "49b081c1-3012-4f67-a071-40ab1638830c",
+            "type": "builds",
+            "attributes": {
+              "version": "37",
+              "uploadedDate": "2026-06-18T08:34:24-07:00",
+              "expirationDate": "2026-09-16T08:34:24-07:00",
+              "expired": true,
+              "processingState": "VALID"
+            },
+            "relationships": {
+              "preReleaseVersion": {
+                "type": "preReleaseVersions",
+                "id": "71dd189e-8393-45a9-b1ac-ffaef37bf105"
+              },
+              "buildBetaDetail": {
+                "type": "buildBetaDetails",
+                "id": "49b081c1-3012-4f67-a071-40ab1638830c"
+              }
+            }
+          },
+          {
+            "id": "e6aa5f9e-9bfa-4a4d-80a0-c8060c175ee9",
+            "type": "builds",
+            "attributes": {
+              "version": "36",
+              "uploadedDate": "2026-06-18T08:29:05-07:00",
+              "expirationDate": "2026-09-16T08:29:05-07:00",
+              "expired": true,
+              "processingState": "VALID"
+            },
+            "relationships": {
+              "preReleaseVersion": {
+                "type": "preReleaseVersions",
+                "id": "71dd189e-8393-45a9-b1ac-ffaef37bf105"
+              },
+              "buildBetaDetail": {
+                "type": "buildBetaDetails",
+                "id": "e6aa5f9e-9bfa-4a4d-80a0-c8060c175ee9"
+              }
+            }
+          },
+          {
+            "id": "b7d8329d-55c8-4a41-82ef-ac31324e896e",
+            "type": "builds",
+            "attributes": {
+              "version": "35",
+              "uploadedDate": "2026-06-18T07:56:22-07:00",
+              "expirationDate": "2026-09-16T07:56:22-07:00",
+              "expired": true,
+              "processingState": "VALID"
+            },
+            "relationships": {
+              "preReleaseVersion": {
+                "type": "preReleaseVersions",
+                "id": "71dd189e-8393-45a9-b1ac-ffaef37bf105"
+              },
+              "buildBetaDetail": {
+                "type": "buildBetaDetails",
+                "id": "b7d8329d-55c8-4a41-82ef-ac31324e896e"
+              }
+            }
+          },
+          {
+            "id": "63ade522-006f-428e-be54-b9d5637487fc",
+            "type": "builds",
+            "attributes": {
+              "version": "33",
+              "uploadedDate": "2026-06-18T06:59:47-07:00",
+              "expirationDate": "2026-09-16T06:59:47-07:00",
+              "expired": true,
+              "processingState": "VALID"
+            },
+            "relationships": {
+              "preReleaseVersion": {
+                "type": "preReleaseVersions",
+                "id": "71dd189e-8393-45a9-b1ac-ffaef37bf105"
+              },
+              "buildBetaDetail": {
+                "type": "buildBetaDetails",
+                "id": "63ade522-006f-428e-be54-b9d5637487fc"
+              }
+            }
+          },
+          {
+            "id": "57b20705-aa23-482d-8809-6f97cbc4f0ed",
+            "type": "builds",
+            "attributes": {
+              "version": "34",
+              "uploadedDate": "2026-06-18T06:53:22-07:00",
+              "expirationDate": "2026-09-16T06:53:22-07:00",
+              "expired": true,
+              "processingState": "VALID"
+            },
+            "relationships": {
+              "preReleaseVersion": {
+                "type": "preReleaseVersions",
+                "id": "71dd189e-8393-45a9-b1ac-ffaef37bf105"
+              },
+              "buildBetaDetail": {
+                "type": "buildBetaDetails",
+                "id": "57b20705-aa23-482d-8809-6f97cbc4f0ed"
+              }
+            }
+          },
+          {
+            "id": "09630945-28aa-4e2e-807a-8a8db052f798",
+            "type": "builds",
+            "attributes": {
+              "version": "32",
+              "uploadedDate": "2026-06-18T03:16:41-07:00",
+              "expirationDate": "2026-09-16T03:16:41-07:00",
+              "expired": true,
+              "processingState": "VALID"
+            },
+            "relationships": {
+              "preReleaseVersion": {
+                "type": "preReleaseVersions",
+                "id": "71dd189e-8393-45a9-b1ac-ffaef37bf105"
+              },
+              "buildBetaDetail": {
+                "type": "buildBetaDetails",
+                "id": "09630945-28aa-4e2e-807a-8a8db052f798"
+              }
+            }
+          },
+          {
+            "id": "309b4f6e-3793-4078-bd1e-558b1d310631",
+            "type": "builds",
+            "attributes": {
+              "version": "31",
+              "uploadedDate": "2026-06-17T11:42:01-07:00",
+              "expirationDate": "2026-09-15T11:42:01-07:00",
+              "expired": true,
+              "processingState": "VALID"
+            },
+            "relationships": {
+              "preReleaseVersion": {
+                "type": "preReleaseVersions",
+                "id": "71dd189e-8393-45a9-b1ac-ffaef37bf105"
+              },
+              "buildBetaDetail": {
+                "type": "buildBetaDetails",
+                "id": "309b4f6e-3793-4078-bd1e-558b1d310631"
+              }
+            }
+          },
+          {
+            "id": "a586c636-75ad-4c0a-a6dd-42c7ce0bb039",
+            "type": "builds",
+            "attributes": {
+              "version": "30",
+              "uploadedDate": "2026-06-17T11:32:15-07:00",
+              "expirationDate": "2026-09-15T11:32:15-07:00",
+              "expired": true,
+              "processingState": "VALID"
+            },
+            "relationships": {
+              "preReleaseVersion": {
+                "type": "preReleaseVersions",
+                "id": "71dd189e-8393-45a9-b1ac-ffaef37bf105"
+              },
+              "buildBetaDetail": {
+                "type": "buildBetaDetails",
+                "id": "a586c636-75ad-4c0a-a6dd-42c7ce0bb039"
+              }
+            }
+          },
+          {
+            "id": "05b43727-f4bd-4d2f-811b-cda12d6ddaf0",
+            "type": "builds",
+            "attributes": {
+              "version": "29",
+              "uploadedDate": "2026-06-17T07:26:15-07:00",
+              "expirationDate": "2026-09-15T07:26:15-07:00",
+              "expired": true,
+              "processingState": "VALID"
+            },
+            "relationships": {
+              "preReleaseVersion": {
+                "type": "preReleaseVersions",
+                "id": "71dd189e-8393-45a9-b1ac-ffaef37bf105"
+              },
+              "buildBetaDetail": {
+                "type": "buildBetaDetails",
+                "id": "05b43727-f4bd-4d2f-811b-cda12d6ddaf0"
+              }
+            }
+          },
+          {
+            "id": "0d28308f-88e4-40bd-8ea8-bf453de3ed5d",
+            "type": "builds",
+            "attributes": {
+              "version": "28",
+              "uploadedDate": "2026-06-17T07:20:20-07:00",
+              "expirationDate": "2026-09-15T07:20:20-07:00",
+              "expired": true,
+              "processingState": "VALID"
+            },
+            "relationships": {
+              "preReleaseVersion": {
+                "type": "preReleaseVersions",
+                "id": "71dd189e-8393-45a9-b1ac-ffaef37bf105"
+              },
+              "buildBetaDetail": {
+                "type": "buildBetaDetails",
+                "id": "0d28308f-88e4-40bd-8ea8-bf453de3ed5d"
+              }
+            }
+          },
+          {
+            "id": "f1d503ef-4959-4d16-9c99-68bcc0631b15",
+            "type": "builds",
+            "attributes": {
+              "version": "27",
+              "uploadedDate": "2026-06-17T04:14:10-07:00",
+              "expirationDate": "2026-09-15T04:14:10-07:00",
+              "expired": true,
+              "processingState": "VALID"
+            },
+            "relationships": {
+              "preReleaseVersion": {
+                "type": "preReleaseVersions",
+                "id": "71dd189e-8393-45a9-b1ac-ffaef37bf105"
+              },
+              "buildBetaDetail": {
+                "type": "buildBetaDetails",
+                "id": "f1d503ef-4959-4d16-9c99-68bcc0631b15"
+              }
+            }
+          },
+          {
+            "id": "2fab016c-68a0-4b59-b50f-3efa568834c4",
+            "type": "builds",
+            "attributes": {
+              "version": "26",
+              "uploadedDate": "2026-06-17T04:08:43-07:00",
+              "expirationDate": "2026-09-15T04:08:43-07:00",
+              "expired": true,
+              "processingState": "VALID"
+            },
+            "relationships": {
+              "preReleaseVersion": {
+                "type": "preReleaseVersions",
+                "id": "71dd189e-8393-45a9-b1ac-ffaef37bf105"
+              },
+              "buildBetaDetail": {
+                "type": "buildBetaDetails",
+                "id": "2fab016c-68a0-4b59-b50f-3efa568834c4"
+              }
+            }
+          },
+          {
+            "id": "0956972c-d348-45da-9f5e-8c8f807f8203",
+            "type": "builds",
+            "attributes": {
+              "version": "25",
+              "uploadedDate": "2026-06-16T22:26:13-07:00",
+              "expirationDate": "2026-09-14T22:26:13-07:00",
+              "expired": true,
+              "processingState": "VALID"
+            },
+            "relationships": {
+              "preReleaseVersion": {
+                "type": "preReleaseVersions",
+                "id": "71dd189e-8393-45a9-b1ac-ffaef37bf105"
+              },
+              "buildBetaDetail": {
+                "type": "buildBetaDetails",
+                "id": "0956972c-d348-45da-9f5e-8c8f807f8203"
+              }
+            }
+          },
+          {
+            "id": "b0368f70-859f-4235-9739-7d4ad8db692b",
+            "type": "builds",
+            "attributes": {
+              "version": "24",
+              "uploadedDate": "2026-06-16T22:01:01-07:00",
+              "expirationDate": "2026-09-14T22:01:01-07:00",
+              "expired": true,
+              "processingState": "VALID"
+            },
+            "relationships": {
+              "preReleaseVersion": {
+                "type": "preReleaseVersions",
+                "id": "71dd189e-8393-45a9-b1ac-ffaef37bf105"
+              },
+              "buildBetaDetail": {
+                "type": "buildBetaDetails",
+                "id": "b0368f70-859f-4235-9739-7d4ad8db692b"
+              }
+            }
+          },
+          {
+            "id": "808649ef-c887-416c-99e9-e3bbc6594560",
+            "type": "builds",
+            "attributes": {
+              "version": "23",
+              "uploadedDate": "2026-03-13T16:06:04-07:00",
+              "expirationDate": "2026-06-11T16:06:04-07:00",
+              "expired": true,
+              "processingState": "VALID"
+            },
+            "relationships": {
+              "preReleaseVersion": {
+                "type": "preReleaseVersions",
+                "id": "71dd189e-8393-45a9-b1ac-ffaef37bf105"
+              },
+              "buildBetaDetail": {
+                "type": "buildBetaDetails",
+                "id": "808649ef-c887-416c-99e9-e3bbc6594560"
+              }
+            }
+          },
+          {
+            "id": "b1cdc4c1-f0dc-4ddf-be5f-8179b5e7763e",
+            "type": "builds",
+            "attributes": {
+              "version": "22",
+              "uploadedDate": "2026-03-13T15:47:20-07:00",
+              "expirationDate": "2026-06-11T15:47:20-07:00",
+              "expired": true,
+              "processingState": "VALID"
+            },
+            "relationships": {
+              "preReleaseVersion": {
+                "type": "preReleaseVersions",
+                "id": "71dd189e-8393-45a9-b1ac-ffaef37bf105"
+              },
+              "buildBetaDetail": {
+                "type": "buildBetaDetails",
+                "id": "b1cdc4c1-f0dc-4ddf-be5f-8179b5e7763e"
+              }
+            }
+          },
+          {
+            "id": "f3c4087b-8872-4d07-bb3d-d62217e5329b",
+            "type": "builds",
+            "attributes": {
+              "version": "15",
+              "uploadedDate": "2026-03-13T09:45:16-07:00",
+              "expirationDate": "2026-06-11T09:45:16-07:00",
+              "expired": true,
+              "processingState": "VALID"
+            },
+            "relationships": {
+              "preReleaseVersion": {
+                "type": "preReleaseVersions",
+                "id": "71dd189e-8393-45a9-b1ac-ffaef37bf105"
+              },
+              "buildBetaDetail": {
+                "type": "buildBetaDetails",
+                "id": "f3c4087b-8872-4d07-bb3d-d62217e5329b"
+              }
+            }
+          },
+          {
+            "id": "9b86475f-d49c-4839-990f-147c48c9b656",
+            "type": "builds",
+            "attributes": {
+              "version": "14",
+              "uploadedDate": "2026-03-13T07:28:02-07:00",
+              "expirationDate": "2026-06-11T07:28:02-07:00",
+              "expired": true,
+              "processingState": "VALID"
+            },
+            "relationships": {
+              "preReleaseVersion": {
+                "type": "preReleaseVersions",
+                "id": "71dd189e-8393-45a9-b1ac-ffaef37bf105"
+              },
+              "buildBetaDetail": {
+                "type": "buildBetaDetails",
+                "id": "9b86475f-d49c-4839-990f-147c48c9b656"
+              }
+            }
+          },
+          {
+            "id": "a30698d2-45d2-4b02-8ac7-23d5e85b3082",
+            "type": "builds",
+            "attributes": {
+              "version": "13",
+              "uploadedDate": "2026-03-13T04:27:15-07:00",
+              "expirationDate": "2026-06-11T04:27:15-07:00",
+              "expired": true,
+              "processingState": "VALID"
+            },
+            "relationships": {
+              "preReleaseVersion": {
+                "type": "preReleaseVersions",
+                "id": "71dd189e-8393-45a9-b1ac-ffaef37bf105"
+              },
+              "buildBetaDetail": {
+                "type": "buildBetaDetails",
+                "id": "a30698d2-45d2-4b02-8ac7-23d5e85b3082"
+              }
+            }
+          },
+          {
+            "id": "c2c5f0d0-f5dc-4047-84fa-0b90a5070d1a",
+            "type": "builds",
+            "attributes": {
+              "version": "12",
+              "uploadedDate": "2026-03-13T02:57:33-07:00",
+              "expirationDate": "2026-06-11T02:57:33-07:00",
+              "expired": true,
+              "processingState": "VALID"
+            },
+            "relationships": {
+              "preReleaseVersion": {
+                "type": "preReleaseVersions",
+                "id": "71dd189e-8393-45a9-b1ac-ffaef37bf105"
+              },
+              "buildBetaDetail": {
+                "type": "buildBetaDetails",
+                "id": "c2c5f0d0-f5dc-4047-84fa-0b90a5070d1a"
+              }
+            }
+          },
+          {
+            "id": "c26828d8-ee23-4b2d-81db-293c9997a29d",
+            "type": "builds",
+            "attributes": {
+              "version": "1",
+              "uploadedDate": "2026-03-11T02:32:29-07:00",
+              "expirationDate": "2026-06-09T02:32:29-07:00",
+              "expired": true,
+              "processingState": "VALID"
+            },
+            "relationships": {
+              "preReleaseVersion": {
+                "type": "preReleaseVersions",
+                "id": "71dd189e-8393-45a9-b1ac-ffaef37bf105"
+              },
+              "buildBetaDetail": {
+                "type": "buildBetaDetails",
+                "id": "c26828d8-ee23-4b2d-81db-293c9997a29d"
+              }
+            }
+          },
+          {
+            "id": "71dd189e-8393-45a9-b1ac-ffaef37bf105",
+            "type": "preReleaseVersions",
+            "attributes": {
+              "version": "1.0.0",
+              "platform": "IOS"
+            }
+          },
+          {
+            "id": "b18c42bb-fe4b-4144-bdfd-3eddb123da03",
+            "type": "buildBetaDetails",
+            "attributes": {
+              "internalBuildState": "IN_BETA_TESTING",
+              "externalBuildState": "READY_FOR_BETA_SUBMISSION"
+            }
+          },
+          {
+            "id": "49b081c1-3012-4f67-a071-40ab1638830c",
+            "type": "buildBetaDetails",
+            "attributes": {
+              "internalBuildState": "EXPIRED",
+              "externalBuildState": "EXPIRED"
+            }
+          },
+          {
+            "id": "e6aa5f9e-9bfa-4a4d-80a0-c8060c175ee9",
+            "type": "buildBetaDetails",
+            "attributes": {
+              "internalBuildState": "EXPIRED",
+              "externalBuildState": "EXPIRED"
+            }
+          },
+          {
+            "id": "b7d8329d-55c8-4a41-82ef-ac31324e896e",
+            "type": "buildBetaDetails",
+            "attributes": {
+              "internalBuildState": "EXPIRED",
+              "externalBuildState": "EXPIRED"
+            }
+          },
+          {
+            "id": "63ade522-006f-428e-be54-b9d5637487fc",
+            "type": "buildBetaDetails",
+            "attributes": {
+              "internalBuildState": "EXPIRED",
+              "externalBuildState": "EXPIRED"
+            }
+          },
+          {
+            "id": "57b20705-aa23-482d-8809-6f97cbc4f0ed",
+            "type": "buildBetaDetails",
+            "attributes": {
+              "internalBuildState": "EXPIRED",
+              "externalBuildState": "EXPIRED"
+            }
+          },
+          {
+            "id": "09630945-28aa-4e2e-807a-8a8db052f798",
+            "type": "buildBetaDetails",
+            "attributes": {
+              "internalBuildState": "EXPIRED",
+              "externalBuildState": "EXPIRED"
+            }
+          },
+          {
+            "id": "309b4f6e-3793-4078-bd1e-558b1d310631",
+            "type": "buildBetaDetails",
+            "attributes": {
+              "internalBuildState": "EXPIRED",
+              "externalBuildState": "EXPIRED"
+            }
+          },
+          {
+            "id": "a586c636-75ad-4c0a-a6dd-42c7ce0bb039",
+            "type": "buildBetaDetails",
+            "attributes": {
+              "internalBuildState": "EXPIRED",
+              "externalBuildState": "EXPIRED"
+            }
+          },
+          {
+            "id": "05b43727-f4bd-4d2f-811b-cda12d6ddaf0",
+            "type": "buildBetaDetails",
+            "attributes": {
+              "internalBuildState": "EXPIRED",
+              "externalBuildState": "EXPIRED"
+            }
+          },
+          {
+            "id": "0d28308f-88e4-40bd-8ea8-bf453de3ed5d",
+            "type": "buildBetaDetails",
+            "attributes": {
+              "internalBuildState": "EXPIRED",
+              "externalBuildState": "EXPIRED"
+            }
+          },
+          {
+            "id": "f1d503ef-4959-4d16-9c99-68bcc0631b15",
+            "type": "buildBetaDetails",
+            "attributes": {
+              "internalBuildState": "EXPIRED",
+              "externalBuildState": "EXPIRED"
+            }
+          },
+          {
+            "id": "2fab016c-68a0-4b59-b50f-3efa568834c4",
+            "type": "buildBetaDetails",
+            "attributes": {
+              "internalBuildState": "EXPIRED",
+              "externalBuildState": "EXPIRED"
+            }
+          },
+          {
+            "id": "0956972c-d348-45da-9f5e-8c8f807f8203",
+            "type": "buildBetaDetails",
+            "attributes": {
+              "internalBuildState": "EXPIRED",
+              "externalBuildState": "EXPIRED"
+            }
+          },
+          {
+            "id": "b0368f70-859f-4235-9739-7d4ad8db692b",
+            "type": "buildBetaDetails",
+            "attributes": {
+              "internalBuildState": "EXPIRED",
+              "externalBuildState": "EXPIRED"
+            }
+          },
+          {
+            "id": "808649ef-c887-416c-99e9-e3bbc6594560",
+            "type": "buildBetaDetails",
+            "attributes": {
+              "internalBuildState": "EXPIRED",
+              "externalBuildState": "EXPIRED"
+            }
+          },
+          {
+            "id": "b1cdc4c1-f0dc-4ddf-be5f-8179b5e7763e",
+            "type": "buildBetaDetails",
+            "attributes": {
+              "internalBuildState": "EXPIRED",
+              "externalBuildState": "EXPIRED"
+            }
+          },
+          {
+            "id": "f3c4087b-8872-4d07-bb3d-d62217e5329b",
+            "type": "buildBetaDetails",
+            "attributes": {
+              "internalBuildState": "EXPIRED",
+              "externalBuildState": "EXPIRED"
+            }
+          },
+          {
+            "id": "9b86475f-d49c-4839-990f-147c48c9b656",
+            "type": "buildBetaDetails",
+            "attributes": {
+              "internalBuildState": "EXPIRED",
+              "externalBuildState": "EXPIRED"
+            }
+          },
+          {
+            "id": "a30698d2-45d2-4b02-8ac7-23d5e85b3082",
+            "type": "buildBetaDetails",
+            "attributes": {
+              "internalBuildState": "EXPIRED",
+              "externalBuildState": "EXPIRED"
+            }
+          },
+          {
+            "id": "c2c5f0d0-f5dc-4047-84fa-0b90a5070d1a",
+            "type": "buildBetaDetails",
+            "attributes": {
+              "internalBuildState": "EXPIRED",
+              "externalBuildState": "EXPIRED"
+            }
+          },
+          {
+            "id": "c26828d8-ee23-4b2d-81db-293c9997a29d",
+            "type": "buildBetaDetails",
+            "attributes": {
+              "internalBuildState": "EXPIRED",
+              "externalBuildState": "EXPIRED"
+            }
+          }
+        ]
+      },
+      "storeVersions": {
+        "status": 200,
+        "resources": [
+          {
+            "id": "4d9f41be-2333-4618-a12d-072950a86369",
+            "type": "appStoreVersions",
+            "attributes": {
+              "platform": "IOS",
+              "versionString": "1.0",
+              "appStoreState": "PREPARE_FOR_SUBMISSION",
+              "appVersionState": "PREPARE_FOR_SUBMISSION"
+            }
+          }
+        ]
+      },
+      "betaGroups": {
+        "status": 200,
+        "resources": [
+          {
+            "id": "7567a05f-03c7-48a5-863e-838585c568f0",
+            "type": "betaGroups",
+            "attributes": {
+              "name": "Team (Expo)",
+              "isInternalGroup": true,
+              "hasAccessToAllBuilds": true,
+              "publicLinkEnabled": null
+            }
+          },
+          {
+            "id": "3f396ad4-5f86-4d21-a3c0-a822042b3ddf",
+            "type": "betaGroups",
+            "attributes": {
+              "name": "papzi",
+              "isInternalGroup": false,
+              "hasAccessToAllBuilds": null,
+              "publicLinkEnabled": false
+            }
+          }
+        ]
+      },
+      "betaReviews": {
+        "status": 200,
+        "resources": [
+          {
+            "id": "b7d8329d-55c8-4a41-82ef-ac31324e896e",
+            "type": "betaAppReviewSubmissions",
+            "attributes": {
+              "betaReviewState": "APPROVED",
+              "submittedDate": null
+            }
+          },
+          {
+            "id": "63ade522-006f-428e-be54-b9d5637487fc",
+            "type": "betaAppReviewSubmissions",
+            "attributes": {
+              "betaReviewState": "APPROVED",
+              "submittedDate": null
+            }
+          }
         ]
       }
     },
     {
       "bundleIdentifier": "com.saicts.papzi",
       "appLookup": {
-        "status": 403,
-        "errorCodes": [
-          "FORBIDDEN.REQUIRED_AGREEMENTS_MISSING_OR_EXPIRED"
+        "status": 200,
+        "resources": [
+          {
+            "id": "6760158086",
+            "type": "apps",
+            "attributes": {
+              "name": "Papzi",
+              "bundleId": "com.saicts.papzi"
+            }
+          }
+        ]
+      },
+      "builds": {
+        "status": 200,
+        "resources": [
+          {
+            "id": "c74dd3a8-2bf7-4447-aaa6-0532de2be97e",
+            "type": "builds",
+            "attributes": {
+              "version": "4",
+              "uploadedDate": "2026-04-02T05:35:34-07:00",
+              "expirationDate": "2026-07-01T05:35:34-07:00",
+              "expired": true,
+              "processingState": "VALID"
+            },
+            "relationships": {
+              "preReleaseVersion": {
+                "type": "preReleaseVersions",
+                "id": "b31a3f7e-9055-484b-8db0-f747e8a089a7"
+              },
+              "buildBetaDetail": {
+                "type": "buildBetaDetails",
+                "id": "c74dd3a8-2bf7-4447-aaa6-0532de2be97e"
+              }
+            }
+          },
+          {
+            "id": "d9341881-72fc-4874-b360-6949337eb7c5",
+            "type": "builds",
+            "attributes": {
+              "version": "3",
+              "uploadedDate": "2026-04-02T04:34:56-07:00",
+              "expirationDate": "2026-07-01T04:34:56-07:00",
+              "expired": true,
+              "processingState": "VALID"
+            },
+            "relationships": {
+              "preReleaseVersion": {
+                "type": "preReleaseVersions",
+                "id": "b31a3f7e-9055-484b-8db0-f747e8a089a7"
+              },
+              "buildBetaDetail": {
+                "type": "buildBetaDetails",
+                "id": "d9341881-72fc-4874-b360-6949337eb7c5"
+              }
+            }
+          },
+          {
+            "id": "fa8d6fcf-a5b0-4a71-9ac8-824f920aa475",
+            "type": "builds",
+            "attributes": {
+              "version": "1.0.19",
+              "uploadedDate": "2026-03-18T06:31:50-07:00",
+              "expirationDate": "2026-03-18T07:03:45-07:00",
+              "expired": true,
+              "processingState": "VALID"
+            },
+            "relationships": {
+              "preReleaseVersion": {
+                "type": "preReleaseVersions",
+                "id": "b31a3f7e-9055-484b-8db0-f747e8a089a7"
+              },
+              "buildBetaDetail": {
+                "type": "buildBetaDetails",
+                "id": "fa8d6fcf-a5b0-4a71-9ac8-824f920aa475"
+              }
+            }
+          },
+          {
+            "id": "a4e2da43-fa87-4bc6-a092-c7f7d1fc3e42",
+            "type": "builds",
+            "attributes": {
+              "version": "1.0.18",
+              "uploadedDate": "2026-03-18T05:48:32-07:00",
+              "expirationDate": "2026-03-18T07:03:56-07:00",
+              "expired": true,
+              "processingState": "VALID"
+            },
+            "relationships": {
+              "preReleaseVersion": {
+                "type": "preReleaseVersions",
+                "id": "b31a3f7e-9055-484b-8db0-f747e8a089a7"
+              },
+              "buildBetaDetail": {
+                "type": "buildBetaDetails",
+                "id": "a4e2da43-fa87-4bc6-a092-c7f7d1fc3e42"
+              }
+            }
+          },
+          {
+            "id": "9e6f9434-f229-4a14-9773-0cd538e9fed5",
+            "type": "builds",
+            "attributes": {
+              "version": "1.0.17",
+              "uploadedDate": "2026-03-18T05:30:51-07:00",
+              "expirationDate": "2026-03-18T07:04:10-07:00",
+              "expired": true,
+              "processingState": "VALID"
+            },
+            "relationships": {
+              "preReleaseVersion": {
+                "type": "preReleaseVersions",
+                "id": "b31a3f7e-9055-484b-8db0-f747e8a089a7"
+              },
+              "buildBetaDetail": {
+                "type": "buildBetaDetails",
+                "id": "9e6f9434-f229-4a14-9773-0cd538e9fed5"
+              }
+            }
+          },
+          {
+            "id": "37eb079b-1478-435e-b09a-f05e35a99ac8",
+            "type": "builds",
+            "attributes": {
+              "version": "1.0.14",
+              "uploadedDate": "2026-03-18T04:49:42-07:00",
+              "expirationDate": "2026-03-18T07:04:23-07:00",
+              "expired": true,
+              "processingState": "VALID"
+            },
+            "relationships": {
+              "preReleaseVersion": {
+                "type": "preReleaseVersions",
+                "id": "b31a3f7e-9055-484b-8db0-f747e8a089a7"
+              },
+              "buildBetaDetail": {
+                "type": "buildBetaDetails",
+                "id": "37eb079b-1478-435e-b09a-f05e35a99ac8"
+              }
+            }
+          },
+          {
+            "id": "637c485b-95f3-4551-bba6-697fcabdc6b3",
+            "type": "builds",
+            "attributes": {
+              "version": "1.0.13",
+              "uploadedDate": "2026-03-18T04:30:40-07:00",
+              "expirationDate": "2026-03-18T07:05:03-07:00",
+              "expired": true,
+              "processingState": "VALID"
+            },
+            "relationships": {
+              "preReleaseVersion": {
+                "type": "preReleaseVersions",
+                "id": "b31a3f7e-9055-484b-8db0-f747e8a089a7"
+              },
+              "buildBetaDetail": {
+                "type": "buildBetaDetails",
+                "id": "637c485b-95f3-4551-bba6-697fcabdc6b3"
+              }
+            }
+          },
+          {
+            "id": "853da631-0083-4ef0-bc70-2c612efe6b0a",
+            "type": "builds",
+            "attributes": {
+              "version": "1.0.12",
+              "uploadedDate": "2026-03-18T03:35:04-07:00",
+              "expirationDate": "2026-03-18T07:05:24-07:00",
+              "expired": true,
+              "processingState": "VALID"
+            },
+            "relationships": {
+              "preReleaseVersion": {
+                "type": "preReleaseVersions",
+                "id": "b31a3f7e-9055-484b-8db0-f747e8a089a7"
+              },
+              "buildBetaDetail": {
+                "type": "buildBetaDetails",
+                "id": "853da631-0083-4ef0-bc70-2c612efe6b0a"
+              }
+            }
+          },
+          {
+            "id": "056d4ee3-2f32-4618-bd0d-fac293be6a30",
+            "type": "builds",
+            "attributes": {
+              "version": "1.0.11",
+              "uploadedDate": "2026-03-18T02:49:28-07:00",
+              "expirationDate": "2026-03-18T07:07:21-07:00",
+              "expired": true,
+              "processingState": "VALID"
+            },
+            "relationships": {
+              "preReleaseVersion": {
+                "type": "preReleaseVersions",
+                "id": "b31a3f7e-9055-484b-8db0-f747e8a089a7"
+              },
+              "buildBetaDetail": {
+                "type": "buildBetaDetails",
+                "id": "056d4ee3-2f32-4618-bd0d-fac293be6a30"
+              }
+            }
+          },
+          {
+            "id": "c7dd7f28-a6ba-4f72-99dd-92c83a19a95f",
+            "type": "builds",
+            "attributes": {
+              "version": "1.0.10",
+              "uploadedDate": "2026-03-17T09:14:58-07:00",
+              "expirationDate": "2026-06-15T09:14:58-07:00",
+              "expired": true,
+              "processingState": "VALID"
+            },
+            "relationships": {
+              "preReleaseVersion": {
+                "type": "preReleaseVersions",
+                "id": "b31a3f7e-9055-484b-8db0-f747e8a089a7"
+              },
+              "buildBetaDetail": {
+                "type": "buildBetaDetails",
+                "id": "c7dd7f28-a6ba-4f72-99dd-92c83a19a95f"
+              }
+            }
+          },
+          {
+            "id": "008f1691-584f-4ce6-8fd7-5bcb37cb9cfc",
+            "type": "builds",
+            "attributes": {
+              "version": "1.0.9",
+              "uploadedDate": "2026-03-06T07:12:04-08:00",
+              "expirationDate": "2026-06-04T08:12:04-07:00",
+              "expired": true,
+              "processingState": "VALID"
+            },
+            "relationships": {
+              "preReleaseVersion": {
+                "type": "preReleaseVersions",
+                "id": "b31a3f7e-9055-484b-8db0-f747e8a089a7"
+              },
+              "buildBetaDetail": {
+                "type": "buildBetaDetails",
+                "id": "008f1691-584f-4ce6-8fd7-5bcb37cb9cfc"
+              }
+            }
+          },
+          {
+            "id": "a64d92af-579f-4ae4-9199-96dec02819e0",
+            "type": "builds",
+            "attributes": {
+              "version": "1.0.7",
+              "uploadedDate": "2026-03-06T05:04:20-08:00",
+              "expirationDate": "2026-03-06T07:15:39-08:00",
+              "expired": true,
+              "processingState": "VALID"
+            },
+            "relationships": {
+              "preReleaseVersion": {
+                "type": "preReleaseVersions",
+                "id": "b31a3f7e-9055-484b-8db0-f747e8a089a7"
+              },
+              "buildBetaDetail": {
+                "type": "buildBetaDetails",
+                "id": "a64d92af-579f-4ae4-9199-96dec02819e0"
+              }
+            }
+          },
+          {
+            "id": "b31a3f7e-9055-484b-8db0-f747e8a089a7",
+            "type": "preReleaseVersions",
+            "attributes": {
+              "version": "1.0.0",
+              "platform": "IOS"
+            }
+          },
+          {
+            "id": "c74dd3a8-2bf7-4447-aaa6-0532de2be97e",
+            "type": "buildBetaDetails",
+            "attributes": {
+              "internalBuildState": "EXPIRED",
+              "externalBuildState": "EXPIRED"
+            }
+          },
+          {
+            "id": "d9341881-72fc-4874-b360-6949337eb7c5",
+            "type": "buildBetaDetails",
+            "attributes": {
+              "internalBuildState": "EXPIRED",
+              "externalBuildState": "EXPIRED"
+            }
+          },
+          {
+            "id": "fa8d6fcf-a5b0-4a71-9ac8-824f920aa475",
+            "type": "buildBetaDetails",
+            "attributes": {
+              "internalBuildState": "EXPIRED",
+              "externalBuildState": "EXPIRED"
+            }
+          },
+          {
+            "id": "a4e2da43-fa87-4bc6-a092-c7f7d1fc3e42",
+            "type": "buildBetaDetails",
+            "attributes": {
+              "internalBuildState": "EXPIRED",
+              "externalBuildState": "EXPIRED"
+            }
+          },
+          {
+            "id": "9e6f9434-f229-4a14-9773-0cd538e9fed5",
+            "type": "buildBetaDetails",
+            "attributes": {
+              "internalBuildState": "EXPIRED",
+              "externalBuildState": "EXPIRED"
+            }
+          },
+          {
+            "id": "37eb079b-1478-435e-b09a-f05e35a99ac8",
+            "type": "buildBetaDetails",
+            "attributes": {
+              "internalBuildState": "EXPIRED",
+              "externalBuildState": "EXPIRED"
+            }
+          },
+          {
+            "id": "637c485b-95f3-4551-bba6-697fcabdc6b3",
+            "type": "buildBetaDetails",
+            "attributes": {
+              "internalBuildState": "EXPIRED",
+              "externalBuildState": "EXPIRED"
+            }
+          },
+          {
+            "id": "853da631-0083-4ef0-bc70-2c612efe6b0a",
+            "type": "buildBetaDetails",
+            "attributes": {
+              "internalBuildState": "EXPIRED",
+              "externalBuildState": "EXPIRED"
+            }
+          },
+          {
+            "id": "056d4ee3-2f32-4618-bd0d-fac293be6a30",
+            "type": "buildBetaDetails",
+            "attributes": {
+              "internalBuildState": "EXPIRED",
+              "externalBuildState": "EXPIRED"
+            }
+          },
+          {
+            "id": "c7dd7f28-a6ba-4f72-99dd-92c83a19a95f",
+            "type": "buildBetaDetails",
+            "attributes": {
+              "internalBuildState": "EXPIRED",
+              "externalBuildState": "EXPIRED"
+            }
+          },
+          {
+            "id": "008f1691-584f-4ce6-8fd7-5bcb37cb9cfc",
+            "type": "buildBetaDetails",
+            "attributes": {
+              "internalBuildState": "EXPIRED",
+              "externalBuildState": "EXPIRED"
+            }
+          },
+          {
+            "id": "a64d92af-579f-4ae4-9199-96dec02819e0",
+            "type": "buildBetaDetails",
+            "attributes": {
+              "internalBuildState": "EXPIRED",
+              "externalBuildState": "EXPIRED"
+            }
+          }
+        ]
+      },
+      "storeVersions": {
+        "status": 200,
+        "resources": [
+          {
+            "id": "53f8b063-6aea-4c02-a070-6531029e9f46",
+            "type": "appStoreVersions",
+            "attributes": {
+              "platform": "IOS",
+              "versionString": "1.0",
+              "appStoreState": "PREPARE_FOR_SUBMISSION",
+              "appVersionState": "PREPARE_FOR_SUBMISSION"
+            }
+          }
+        ]
+      },
+      "betaGroups": {
+        "status": 200,
+        "resources": [
+          {
+            "id": "9d8e1f9b-9db6-4761-a1b2-35292d77b16e",
+            "type": "betaGroups",
+            "attributes": {
+              "name": "Team (Expo)",
+              "isInternalGroup": true,
+              "hasAccessToAllBuilds": true,
+              "publicLinkEnabled": null
+            }
+          },
+          {
+            "id": "fe32589c-ad68-4788-91be-88443b6eb67e",
+            "type": "betaGroups",
+            "attributes": {
+              "name": "us",
+              "isInternalGroup": false,
+              "hasAccessToAllBuilds": null,
+              "publicLinkEnabled": true
+            }
+          }
+        ]
+      },
+      "betaReviews": {
+        "status": 200,
+        "resources": [
+          {
+            "id": "c74dd3a8-2bf7-4447-aaa6-0532de2be97e",
+            "type": "betaAppReviewSubmissions",
+            "attributes": {
+              "betaReviewState": "APPROVED",
+              "submittedDate": null
+            }
+          }
         ]
       }
     }

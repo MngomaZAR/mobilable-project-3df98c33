@@ -3,7 +3,7 @@ const BRAND = require('./src/constants/brand.json');
 const APP_IDS = {
   slug: 'papzi',
   scheme: 'papzi',
-  bundleIdentifier: process.env.EXPO_IOS_BUNDLE_IDENTIFIER || 'com.saicts.papzi',
+  bundleIdentifier: process.env.EXPO_IOS_BUNDLE_IDENTIFIER || 'com.papzi.app',
   androidPackage: process.env.EXPO_ANDROID_PACKAGE || 'com.papziiii.paparazzi',
 };
 

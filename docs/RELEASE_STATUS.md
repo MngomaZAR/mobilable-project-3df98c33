@@ -19,13 +19,19 @@ that the backend used by an installed phone build passes acceptance.
 
 ## Current Store Blockers
 
-The existing authenticated EAS Apple API key returns HTTP 403 with
-`FORBIDDEN.REQUIRED_AGREEMENTS_MISSING_OR_EXPIRED`. The earlier GitHub Apple
-credential returned HTTP 401; its three existing secret entries were updated
-securely from the working EAS credential. No new secret names or keys were created.
-The account holder must review and accept the applicable Apple agreement.
-The subsequent GitHub read-only credential check (run `37159111198`) authenticated
-with the synchronized key and returned that same agreement error for both iOS IDs.
+Apple's agreement block has **cleared**. The latest read-only check returns HTTP
+200 for both iOS IDs. Earlier checks returned HTTP 403
+`FORBIDDEN.REQUIRED_AGREEMENTS_MISSING_OR_EXPIRED`; an older GitHub key returned
+HTTP 401 and its three existing secret entries were securely synchronized from EAS.
+No new secret names or keys were created.
+
+App Store Connect confirms `6760396864` is `com.papzi.app`, with valid build 38
+currently `IN_BETA_TESTING` internally and `READY_FOR_BETA_SUBMISSION` externally.
+The public store version remains `PREPARE_FOR_SUBMISSION`, not under review.
+The other app, `6760158086` / `com.saicts.papzi`, has expired build 4. The current
+iOS configuration now targets the existing, successful `com.papzi.app` record.
+The supplied active profile and local private certificate both match distribution
+certificate serial `6B1510798D94F4A667C8EF03788E793C`, expiring March 11, 2027.
 
 The existing Google service account authenticates, but the Android Publisher API
 returns HTTP 403 `SERVICE_DISABLED` for project `papz-601b5`. It also lacks
@@ -77,7 +83,7 @@ to obtain a green build or describe unit tests as full marketplace acceptance.
 ## Evidence Files
 
 - `store-history-20261003.json`: sanitized EAS build/submission history.
-- `apple-store-eas-8NSCTU6X72-20261004.json`: authenticated Apple agreement error.
+- `apple-store-eas-8NSCTU6X72-20261004.json`: latest successful Apple state queries.
 - `android-submission-audit-20261004.json`: sanitized Android failure classification.
 - `play-publisher-status-20261004.json`: current API/permission results.
 

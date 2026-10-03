@@ -39,9 +39,6 @@ jobs:
       MINIO_ACCESS_KEY: ci-minio-user
       MINIO_SECRET_KEY: ci-only-minio-password
       QA_API_URL: http://127.0.0.1:18000
-      QA_REPORT_PATH: ${{ runner.temp }}/role-load-report.json
-      QA_PAYMENT_REPORT_PATH: ${{ runner.temp }}/payment-protocol-report.json
-      QA_AUTH_REPORT_PATH: ${{ runner.temp }}/auth-protocol-report.json
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -52,6 +49,10 @@ jobs:
       - name: Install backend dependencies
         run: pip install -r backend/api/requirements.txt
       - name: Run isolated database, role, load and payment protocol checks
+        env:
+          QA_REPORT_PATH: ${{ runner.temp }}/role-load-report.json
+          QA_PAYMENT_REPORT_PATH: ${{ runner.temp }}/payment-protocol-report.json
+          QA_AUTH_REPORT_PATH: ${{ runner.temp }}/auth-protocol-report.json
         run: bash scripts/ci-backend.sh
       - uses: actions/upload-artifact@v4
         if: always()

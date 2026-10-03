@@ -71,7 +71,8 @@ const BookingDetailScreen: React.FC = () => {
   }
 
   const currentIndex = steps.indexOf(normaliseForStepper(booking.status));
-  const requiresPayment = !booking.dispatch_request_id && booking.status === 'pending';
+  const requiresPayment = booking.status === 'accepted' && booking.payment_status !== 'paid';
+  const canPay = requiresPayment && booking.client_id === state.currentUser?.id;
 
   // Chat with the most relevant person: model > photographer > general chat
   const openChatThread = async () => {
@@ -179,7 +180,7 @@ const BookingDetailScreen: React.FC = () => {
           <View style={[styles.noticeCard, { backgroundColor: isDark ? 'rgba(47,27,27,0.82)' : 'rgba(255,247,237,0.88)', borderColor: isDark ? 'rgba(127,29,29,0.58)' : 'rgba(254,215,170,0.9)' }]}>
             <Text style={[styles.noticeTitle, { color: isDark ? '#fca5a5' : '#c2410c' }]}>Payment required</Text>
             <Text style={[styles.noticeText, { color: isDark ? '#fecaca' : '#9a3412' }]}>
-              Complete payment to start dispatch and unlock live tracking.
+              Your creator accepted the request. Confirm payment for your scheduled shoot.
             </Text>
           </View>
         ) : null}
@@ -202,8 +203,9 @@ const BookingDetailScreen: React.FC = () => {
           <TouchableOpacity
             style={[styles.secondary, styles.rowButton, styles.rowButtonLast, { backgroundColor: colors.accent }]}
             onPress={() => navigation.navigate('Payment', { bookingId: booking.id })}
+            disabled={!canPay}
           >
-            <Text style={[styles.secondaryText, { color: isDark ? colors.bg : '#fff' }]}>Payments</Text>
+            <Text style={[styles.secondaryText, { color: isDark ? colors.bg : '#fff' }]}>{booking.payment_status === 'paid' ? 'Paid' : booking.status === 'pending' ? 'Awaiting acceptance' : 'Pay for shoot'}</Text>
           </TouchableOpacity>
         </View>
 

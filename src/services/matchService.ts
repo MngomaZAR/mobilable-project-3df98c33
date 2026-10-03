@@ -1,13 +1,8 @@
 import { backendDb } from './backendGateway';
 import { Photographer } from '../types';
+import { mapPhotographerRow } from '../utils/mappings';
 
-/**
- * Mocks an AI matching algorithm that scores photographers based on cosine similarity of 
- * styles, location, and budget constraints.
- * In a real-world scenario, this would be an edge function that leverages pgvector in Supabase
- * to do high-performance embeddings matching. For Phase 4 MVP, we will run the logic here
- * but structure it so it can be swapped out easily.
- */
+// Deterministic ranking of the visible, verified provider catalog, not an AI model.
 export const fetchRecommendedMatches = async (
     location: string, 
     preferredStyle: string, 
@@ -15,31 +10,27 @@ export const fetchRecommendedMatches = async (
     limit: number = 5
 ): Promise<Photographer[]> => {
     try {
-        // Fetch all photographers
         const { data, error } = await backendDb
             .from('photographers')
-            .select(`
-                *,
-                profiles (
-                   full_name, avatar_url, city, role, is_photographer, is_test_account
-                )
-            `);
+            .select('*')
+            .order('rating', { ascending: false })
+            .limit(120);
             
         if (error) throw error;
         
-        let matchables = (data || []).map((row: any) => ({
-            ...row,
-            name: row.profiles?.full_name || 'Photographer',
-            avatar_url: row.profiles?.avatar_url || '',
-            tags: row.tags || [],
-        })) as Photographer[];
-
-        matchables = matchables.filter((photographer: any) => {
-           const profile = photographer.profiles;
-           if (!profile) return true;
-           return !profile.is_test_account &&
-             (profile.is_photographer === true || profile.role === 'photographer');
-        });
+        const ids = [...new Set((data || []).map((row: any) => row.id).filter(Boolean))];
+        if (!ids.length) return [];
+        const { data: profiles, error: profileError } = await backendDb.from('profiles')
+            .select('id, full_name, avatar_url, city, bio, role, is_photographer, is_test_account, verified, kyc_status, age_verified')
+            .in('id', ids);
+        if (profileError) throw profileError;
+        const byId = new Map((profiles || []).map((profile: any) => [profile.id, profile]));
+        let matchables: Photographer[] = (data || []).filter((row: any) => {
+            const profile: any = byId.get(row.id);
+            return profile && !profile.is_test_account && profile.age_verified
+                && (profile.verified || profile.kyc_status === 'approved')
+                && (profile.is_photographer === true || profile.role === 'photographer');
+        }).map((row: any) => mapPhotographerRow({ ...row, profiles: [byId.get(row.id)] }));
         
         // Very basic matching heuristic
         matchables = matchables.map(photographer => {
@@ -57,16 +48,9 @@ export const fetchRecommendedMatches = async (
                if (photographer.tags?.some(tag => tag.toLowerCase().includes(lowerStyle))) score += 15;
            }
            
-           // Budget match (negative deduction if over budget)
            if (maxBudget > 0) {
-               // Assuming price_range is e.g '$$'
-               const estPrice = photographer.price_range.length * 500; // rough mapping: 1$ = 500
-               if (estPrice <= maxBudget) score += 10;
-               else score -= 10;
-               
-               if (photographer.hourly_rate && photographer.hourly_rate <= maxBudget) {
-                   score += 20;
-               }
+               const rate = photographer.hourly_rate;
+               score += typeof rate === 'number' && rate > 0 && rate <= maxBudget ? 20 : -10;
            }
            
            // Rating base score
@@ -78,10 +62,10 @@ export const fetchRecommendedMatches = async (
         // Sort by score
         matchables.sort((a, b) => ((b as any)._match_score || 0) - ((a as any)._match_score || 0));
         
-        return matchables.slice(0, limit);
+        return matchables.slice(0, Math.min(120, Math.max(0, Math.floor(limit))));
         
     } catch (err) {
         console.warn('Matching algorithm failed:', err);
-        return [];
+        throw err;
     }
 };

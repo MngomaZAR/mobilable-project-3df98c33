@@ -14,6 +14,9 @@ import { useAppData } from '../store/AppDataContext';
 import { useTheme } from '../store/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { uploadImage } from '../services/uploadService';
+import { environment } from '../config/environment';
+import { apiClient } from '../config/apiClient';
+import { getApiAccessToken } from '../config/apiSession';
 
 type DocType = 'id_book' | 'passport' | 'drivers_license' | 'selfie' | 'proof_of_address';
 type Nav = StackNavigationProp<RootStackParamList>;
@@ -63,12 +66,16 @@ const KYCScreen: React.FC = () => {
         { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG, base64: true }
       );
       if (!manipulated.base64) throw new Error('Could not read image');
-      const storagePath = await uploadImage(manipulated.uri, 'kyc-docs', { returnStorageRef: true });
-      const { error: dbErr } = await backendDb.from('kyc_documents').upsert(
+      const storagePath = await uploadImage(manipulated.uri, environment.backendProvider === 'api' ? 'kyc-documents' : 'kyc-docs', { returnStorageRef: true });
+      if (environment.backendProvider === 'api') {
+        await apiClient.post('/kyc/documents', { doc_type: slot.key, storage_path: storagePath }, { token: await getApiAccessToken() });
+      } else {
+        const { error: dbErr } = await backendDb.from('kyc_documents').upsert(
         { user_id: userId, doc_type: slot.key, storage_path: storagePath, status: 'pending' },
         { onConflict: 'user_id,doc_type' }
       );
-      if (dbErr) throw dbErr;
+        if (dbErr) throw dbErr;
+      }
       setDocs(prev => ({ ...prev, [slot.key]: { uri: result.assets[0].uri, status: 'pending' } }));
     } catch (err: any) {
       Alert.alert('Upload failed', err.message || 'Please try again.');
@@ -80,7 +87,12 @@ const KYCScreen: React.FC = () => {
     if (missing.length) { Alert.alert('Missing documents', `Please upload: ${missing.map(s => s.label).join(', ')}`); return; }
     setSubmitting(true);
     try {
-      await backendDb.from('profiles').update({ kyc_status: 'submitted' }).eq('id', userId);
+      if (environment.backendProvider === 'api') {
+        await apiClient.post('/kyc/submit', {}, { token: await getApiAccessToken() });
+      } else {
+        const { error } = await backendDb.from('profiles').update({ kyc_status: 'submitted' }).eq('id', userId);
+        if (error) throw error;
+      }
       Alert.alert('Submitted!', 'Documents sent for review. We usually respond within 24 hours.', [{ text: 'OK', onPress: () => navigation.goBack() }]);
     } catch (err: any) {
       Alert.alert('Error', err.message || 'Could not submit. Please try again.');

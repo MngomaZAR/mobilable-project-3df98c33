@@ -1,5 +1,8 @@
 import { backendDb } from './backendGateway';
 import { requireCurrentAuthenticatedUser } from '../config/currentUser';
+import { environment } from '../config/environment';
+import { apiClient } from '../config/apiClient';
+import { getApiAccessToken } from '../config/apiSession';
 
 export interface ReviewPayload {
   bookingId: string;
@@ -22,6 +25,9 @@ export interface ReviewRow {
 /** Submit a review for a completed booking */
 export const createReview = async (payload: ReviewPayload): Promise<ReviewRow> => {
   const user = await requireCurrentAuthenticatedUser();
+  if (environment.backendProvider === 'api') {
+    return apiClient.post<ReviewRow>('/reviews', { booking_id: payload.bookingId, rating: payload.rating, comment: payload.comment ?? '' }, { token: await getApiAccessToken() });
+  }
 
   const { data, error } = await backendDb
     .from('reviews')

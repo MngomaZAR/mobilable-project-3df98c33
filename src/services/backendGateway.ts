@@ -5,6 +5,7 @@ import {
   clearApiSession,
   getApiAccessToken,
   getApiSession,
+  refreshApiSession,
   setApiSession,
 } from '../config/apiSession';
 import {
@@ -250,11 +251,12 @@ const createApiBackendDb = () => {
     },
     getUser: async () => {
       try {
+        const token = await getApiAccessToken();
         const session = await getApiSession();
-        if (!session?.access_token) return { data: { user: null }, error: null };
-        const response = await apiClient.get<AuthResponse>('/auth/me', { token: session.access_token });
-        const user = response.user ?? session.user ?? null;
-        if (user) await setApiSession({ ...session, user });
+        if (!token) return { data: { user: null }, error: null };
+        const response = await apiClient.get<AuthResponse>('/auth/me', { token });
+        const user = response.user ?? session?.user ?? null;
+        if (user && session) await setApiSession({ ...session, user });
         return { data: { user }, error: null };
       } catch (error) {
         return { data: { user: null }, error: toBackendError(error, 'Unable to load current user.') };
@@ -321,13 +323,8 @@ const createApiBackendDb = () => {
     },
     refreshSession: async () => {
       try {
-        const session = await getApiSession();
-        const response = await apiClient.post<AuthResponse>('/auth/refresh', {
-          refresh_token: session?.refresh_token ?? null,
-        });
-        const nextSession = response.session ?? session ?? null;
-        await setApiSession(nextSession);
-        return { data: { session: nextSession, user: toAuthUser(nextSession, response.user) }, error: null };
+        const nextSession = await refreshApiSession();
+        return { data: { session: nextSession, user: nextSession?.user ?? null }, error: null };
       } catch (error) {
         return { data: { session: null, user: null }, error: toBackendError(error, 'Unable to refresh session.') };
       }

@@ -11,6 +11,11 @@ expo-env.d.ts
 papzshipped/
 test-results/
 
+# QA traces can contain test sessions and authentication payloads.
+/docs/qa-artifacts-*/
+__pycache__/
+*.pyc
+
 # Native
 .kotlin/
 *.orig.*

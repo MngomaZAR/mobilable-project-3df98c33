@@ -82,7 +82,7 @@ export const EarningsDashboardScreen: React.FC = () => {
       </View>
 
       <View style={styles.summaryCard}>
-        <Text style={styles.summaryLabel}>Total Earned</Text>
+        <Text style={styles.summaryLabel}>Recorded Earnings</Text>
         <Text style={styles.summaryValue}>R{totalEarnings.toLocaleString()}</Text>
       </View>
 
@@ -102,7 +102,7 @@ export const EarningsDashboardScreen: React.FC = () => {
               </View>
               <View style={styles.infoCol}>
                 <Text style={[styles.infoTitle, { color: colors.text }]}>
-                  {item.source_type.replace('_', ' ').toUpperCase()}
+                  {String(item.source_type || 'earnings').replace('_', ' ').toUpperCase()}
                 </Text>
                 <Text style={[styles.infoDate, { color: colors.textMuted }]}>
                   {new Date(item.created_at).toLocaleDateString()}

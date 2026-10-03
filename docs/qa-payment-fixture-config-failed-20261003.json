@@ -1,0 +1,21 @@
+{
+  "scope": "Real QA PostgreSQL + FastAPI ASGI; mocked PayFast remote VALID response; no money transferred",
+  "checks": [
+    {
+      "name": "Create quoted booking",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Creator accepts",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Outsider checkout denied",
+      "passed": false,
+      "status": 503
+    }
+  ],
+  "actual_gateway_payment_verified": false
+}

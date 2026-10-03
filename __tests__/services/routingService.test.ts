@@ -1,11 +1,18 @@
 import { routingService } from '../../src/services/routingService';
 import { environment } from '../../src/config/environment';
+import { apiClient } from '../../src/config/apiClient';
 
 describe('routingService', () => {
   const originalFetch = global.fetch;
+  const originalBackend = environment.backendProvider;
+
+  beforeEach(() => {
+    environment.backendProvider = 'supabase';
+  });
 
   afterEach(() => {
     global.fetch = originalFetch;
+    environment.backendProvider = originalBackend;
     jest.restoreAllMocks();
   });
 
@@ -47,7 +54,7 @@ describe('routingService', () => {
     expect(route.coordinates).toHaveLength(3);
   });
 
-  it('marks direct routes as fallback when OSRM is unavailable', async () => {
+  it('does not draw a straight line or fabricate ETA when routing is unavailable', async () => {
     jest.spyOn(console, 'warn').mockImplementation(() => {});
     global.fetch = jest.fn().mockResolvedValue({
       ok: false,
@@ -61,10 +68,17 @@ describe('routingService', () => {
     );
 
     expect(route.source).toBe('fallback');
-    expect(route.coordinates).toEqual([
-      [18.4241, -33.9249],
-      [18.4265, -33.9227],
-    ]);
+    expect(route.coordinates).toEqual([]);
+    expect(route.duration).toBe(0);
+    expect(route.warning).toContain('unavailable');
+  });
+
+  it('uses the Oracle API routing boundary for release builds', async () => {
+    environment.backendProvider = 'api';
+    const geometry = { coordinates: [[31.03, -29.85], [31.04, -29.87]], distance: 3, duration: 240, source: 'osrm' as const };
+    const request = jest.spyOn(apiClient, 'get').mockResolvedValue(geometry);
+    await expect(routingService.getRoute({ latitude: -29.85, longitude: 31.03 }, { latitude: -29.87, longitude: 31.04 })).resolves.toEqual(geometry);
+    expect(request).toHaveBeenCalledWith('/routing/route?start_lat=-29.85&start_lng=31.03&end_lat=-29.87&end_lng=31.04');
   });
 
   it('uses OpenRouteService road geometry when configured', async () => {

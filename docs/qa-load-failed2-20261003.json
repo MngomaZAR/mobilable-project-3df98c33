@@ -1,0 +1,602 @@
+{
+  "environment": "isolated Oracle QA",
+  "started_at": "2026-10-03T13:49:26.319145+00:00",
+  "checks": [
+    {
+      "name": "Database schema contract",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Release gate reports unavailable capabilities",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Anonymous bookings denied",
+      "passed": true,
+      "status": 401
+    },
+    {
+      "name": "Auth tables denied",
+      "passed": true,
+      "status": 403
+    },
+    {
+      "name": "Client cannot approve KYC",
+      "passed": true,
+      "status": 403
+    },
+    {
+      "name": "Admin can review queue",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Registration creates profile atomically",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Registered profile is not self-verified",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "client email sign-in",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "client authenticated identity",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "photographer email sign-in",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "photographer authenticated identity",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "model email sign-in",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "model authenticated identity",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "admin email sign-in",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "admin authenticated identity",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "photographer registration",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "photographer provider row exists",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "photographer underage declaration denied",
+      "passed": true,
+      "status": 400
+    },
+    {
+      "name": "photographer missing terms denied",
+      "passed": true,
+      "status": 422
+    },
+    {
+      "name": "photographer adult declaration persisted",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "photographer missing identity documents denied",
+      "passed": true,
+      "status": 409
+    },
+    {
+      "name": "photographer cannot bypass document review",
+      "passed": true,
+      "status": 409
+    },
+    {
+      "name": "photographer private passport upload",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "photographer records passport",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Outsider denied photographer passport",
+      "passed": true,
+      "status": 403
+    },
+    {
+      "name": "photographer private selfie upload",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "photographer records selfie",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Outsider denied photographer selfie",
+      "passed": true,
+      "status": 403
+    },
+    {
+      "name": "photographer submits identity review",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "photographer cannot approve own document",
+      "passed": true,
+      "status": 403
+    },
+    {
+      "name": "Admin reviews photographer passport",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Admin reviews photographer selfie",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Admin approves photographer identity",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Admin rejects revised photographer document",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "photographer verification revoked on rejection",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "photographer session refresh",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "photographer stale refresh rejected",
+      "passed": true,
+      "status": 401
+    },
+    {
+      "name": "photographer old access rejected",
+      "passed": true,
+      "status": 401
+    },
+    {
+      "name": "photographer rotated access works",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "model registration",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "model provider row exists",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "model underage declaration denied",
+      "passed": true,
+      "status": 400
+    },
+    {
+      "name": "model missing terms denied",
+      "passed": true,
+      "status": 422
+    },
+    {
+      "name": "model adult declaration persisted",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "model missing identity documents denied",
+      "passed": true,
+      "status": 409
+    },
+    {
+      "name": "model cannot bypass document review",
+      "passed": true,
+      "status": 409
+    },
+    {
+      "name": "model private passport upload",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "model records passport",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Outsider denied model passport",
+      "passed": true,
+      "status": 403
+    },
+    {
+      "name": "model private selfie upload",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "model records selfie",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Outsider denied model selfie",
+      "passed": true,
+      "status": 403
+    },
+    {
+      "name": "model submits identity review",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "model cannot approve own document",
+      "passed": true,
+      "status": 403
+    },
+    {
+      "name": "Admin reviews model passport",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Admin reviews model selfie",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Admin approves model identity",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Admin rejects revised model document",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "model verification revoked on rejection",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "model session refresh",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "model stale refresh rejected",
+      "passed": true,
+      "status": 401
+    },
+    {
+      "name": "model old access rejected",
+      "passed": true,
+      "status": 401
+    },
+    {
+      "name": "model rotated access works",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Client requests photographer",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Booking retry is idempotent",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Client cannot accept own request",
+      "passed": true,
+      "status": 403
+    },
+    {
+      "name": "Creator accepts booking",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Unpaid booking cannot complete",
+      "passed": true,
+      "status": 409
+    },
+    {
+      "name": "Client cannot write payment status",
+      "passed": true,
+      "status": 403
+    },
+    {
+      "name": "Outsider cannot read booking",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Decline photographer fixture releases slot",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Client requests model",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Model accepts booking",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Cancel model fixture",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Create client creator chat",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Chat creation is idempotent",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Send persistent message",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Creator receives conversation",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Outsider cannot enter chat",
+      "passed": true,
+      "status": 403
+    },
+    {
+      "name": "Fabricated message unlock denied",
+      "passed": true,
+      "status": 409
+    },
+    {
+      "name": "Incomplete booking review denied",
+      "passed": true,
+      "status": 409
+    },
+    {
+      "name": "Boolean availability filter",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Private attachment upload to MinIO",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Attach private media to chat",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Recipient can resolve chat attachment",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Signed media returns original bytes",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Outsider cannot resolve private media",
+      "passed": true,
+      "status": 403
+    },
+    {
+      "name": "Creator publishes into moderation",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Pending feed content hidden from clients",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Unapproved post cannot be liked by client",
+      "passed": true,
+      "status": 404
+    },
+    {
+      "name": "Admin approves feed content",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Approved feed content is discoverable",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Approved post can be liked",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Direct engagement counter bypass denied",
+      "passed": true,
+      "status": 403
+    },
+    {
+      "name": "Financial post entitlement write denied",
+      "passed": true,
+      "status": 403
+    },
+    {
+      "name": "Concurrent slot winner can cancel",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Concurrent slot protection",
+      "passed": true
+    }
+  ],
+  "blockers": [
+    {
+      "feature": "Video calls",
+      "status": 503,
+      "reason": "This service is not enabled for the scheduled-booking release."
+    },
+    {
+      "feature": "Instant dispatch",
+      "status": 503,
+      "reason": "This service is not enabled for the scheduled-booking release."
+    },
+    {
+      "feature": "Payment checkout",
+      "status": 503,
+      "reason": "Payments are unavailable until merchant credentials and HTTPS callbacks are configured."
+    }
+  ],
+  "load": {
+    "simultaneous_sessions": 300,
+    "roles": {
+      "clients": 100,
+      "photographers": 100,
+      "models": 100
+    },
+    "requests": 3000,
+    "errors": 0,
+    "error_examples": [],
+    "elapsed_seconds": 11.09,
+    "requests_per_second": 270.43,
+    "median_ms": 1049.91,
+    "p95_ms": 1391.9,
+    "max_ms": 1768.63,
+    "scope": "HTTP authenticated discovery/feed/bookings/chat inbox/notifications; no real-money or video load"
+  },
+  "release_capabilities": {
+    "environment": "qa",
+    "version": "0.1.0",
+    "required_capabilities_available": false,
+    "capabilities": {
+      "road_routing_configured": true,
+      "object_storage_configured": true,
+      "payment_checkout_configured": false,
+      "admin_access_configured": true,
+      "payment_refund_execution": false,
+      "bank_payout_execution": false,
+      "account_recovery_email": false,
+      "video_call_service": false,
+      "instant_dispatch_service": false
+    },
+    "blockers": [
+      "payment_checkout_configured",
+      "payment_refund_execution",
+      "bank_payout_execution",
+      "account_recovery_email",
+      "video_call_service",
+      "instant_dispatch_service"
+    ],
+    "external_evidence_required": [
+      "Real gateway payment, refund and bank settlement",
+      "Physical iPhone and Android acceptance tests",
+      "Push and video media delivery on real devices",
+      "All-screen accessibility and moderation acceptance"
+    ]
+  },
+  "routing": {
+    "geometry_points": 122,
+    "distance_km": 3.73,
+    "duration_seconds": 450.7,
+    "source": "osrm",
+    "passed": true
+  },
+  "write_load": {
+    "simultaneous_booking_journeys": 200,
+    "completed_journeys": 199,
+    "requests": 1398,
+    "errors": 1,
+    "error_examples": [
+      {
+        "role": "photographer",
+        "index": 58,
+        "error_type": "ReadError",
+        "error": ""
+      }
+    ],
+    "elapsed_seconds": 17.85,
+    "p95_ms": 6589.79,
+    "scope": "100 photographer and 100 model bookings: request, retry, accept, chat, send, receive, cancel; no real-money transactions"
+  },
+  "async_worker": {
+    "outbox": {
+      "done": 4065
+    },
+    "persisted_notifications": 4065,
+    "passed": true,
+    "scope": "Durable in-app delivery, not device push delivery"
+  },
+  "tested_scope_passed": false,
+  "ready_for_public_launch": false,
+  "unverified": [
+    "Actual card checkout and gateway settlement",
+    "Refund execution and bank payouts",
+    "Real device push delivery",
+    "Video media transport under 300-user load",
+    "All screens on physical iOS/Android devices",
+    "Identity verification operations",
+    "Store review approval"
+  ]
+}

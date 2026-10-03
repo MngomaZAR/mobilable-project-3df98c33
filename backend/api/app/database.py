@@ -1,6 +1,9 @@
+import asyncio
 import json
 import re
+import time
 from datetime import datetime
+from decimal import Decimal
 from typing import Any
 
 import asyncpg
@@ -53,6 +56,37 @@ JSON_COLUMNS = {
 }
 NUMERIC_SUFFIXES = ("_amount", "_count", "_fee", "_km", "_lat", "_latitude", "_lng", "_longitude", "_price", "_rate", "_score", "_total")
 TIMESTAMP_SUFFIXES = ("_at", "_datetime")
+_pools: dict[tuple[Any, str], asyncpg.Pool] = {}
+_pool_locks: dict[Any, asyncio.Lock] = {}
+_schema_cache: dict[tuple[Any, str, str], tuple[float, dict[str, str]]] = {}
+
+
+class DatabaseConnection:
+    def __init__(self, pool, connection):
+        self.pool, self.connection = pool, connection
+
+    def __getattr__(self, name):
+        return getattr(self.connection, name)
+
+    async def close(self):
+        if self.connection is not None:
+            connection, self.connection = self.connection, None
+            await self.pool.release(connection)
+
+
+async def close_pools() -> None:
+    loop = asyncio.get_running_loop()
+    for key in list(_pools):
+        if key[0] is loop:
+            await _pools.pop(key).close()
+    _pool_locks.pop(loop, None)
+    for key in list(_schema_cache):
+        if key[0] is loop:
+            _schema_cache.pop(key)
+
+
+async def configure_connection(conn):
+    await conn.set_type_codec("jsonb", encoder=lambda value: value if isinstance(value, str) else json.dumps(value), decoder=json.loads, schema="pg_catalog")
 
 
 def quote_ident(value: str) -> str:
@@ -103,13 +137,16 @@ def select_column_names(raw_select: str | None) -> list[str]:
 
 def append_select_name(columns: list[str], token: str) -> None:
     token = token.strip()
-    if not token or token == "*" or "(" in token or ")" in token:
+    if not token or token == "*":
         return
+    if "(" in token or ")" in token:
+        raise HTTPException(status_code=400, detail="Embedded relations are not supported by this endpoint. Fetch related records explicitly.")
     if ":" in token:
-        token = token.split(":", 1)[0]
+        alias, token = token.split(":", 1)
+        quote_ident(alias.strip())
     token = token.strip()
-    if token and token != "*" and IDENTIFIER_RE.match(token):
-        columns.append(token)
+    quote_ident(token)
+    columns.append(token)
 
 
 def append_select_token(columns: list[str], token: str) -> None:
@@ -119,9 +156,11 @@ def append_select_token(columns: list[str], token: str) -> None:
             columns.append("*")
         return
     if "(" in token or ")" in token:
-        return
+        raise HTTPException(status_code=400, detail="Embedded relations are not supported by this endpoint. Fetch related records explicitly.")
     if ":" in token:
-        token = token.split(":", 1)[0]
+        alias, column = token.split(":", 1)
+        columns.append(f"{quote_ident(column.strip())} AS {quote_ident(alias.strip())}")
+        return
     token = token.strip()
     if token and token != "*":
         columns.append(quote_ident(token))
@@ -153,6 +192,12 @@ def normalize_db_value_for_type(value: Any, column_type: str | None = None) -> A
     normalized = normalize_db_value(value)
     if normalized is None:
         return None
+    if column_type == "numeric":
+        return Decimal(str(normalized))
+    if column_type in {"double precision", "real"}:
+        return float(normalized)
+    if column_type in {"integer", "bigint", "smallint"}:
+        return int(normalized)
     if column_type in {"text", "character varying", "character"} and not isinstance(normalized, str):
         return json.dumps(normalized) if isinstance(normalized, (dict, list)) else str(normalized)
     return normalized
@@ -215,6 +260,21 @@ async def existing_columns(conn: asyncpg.Connection, table: str) -> dict[str, st
         table,
     )
     return {row["column_name"]: row["data_type"] for row in rows}
+
+
+async def query_column_types(conn, settings: Settings, table: str) -> dict[str, str]:
+    # Production schema changes are explicit migrations, not per-request DDL.
+    # A bounded cache removes repeated catalog scans under concurrent reads.
+    key = (asyncio.get_running_loop(), settings.postgres_url, table)
+    cached = _schema_cache.get(key)
+    if not settings.allow_runtime_schema_changes and cached and cached[0] > time.monotonic():
+        return cached[1]
+    current = await existing_columns(conn, table)
+    if current and not settings.allow_runtime_schema_changes:
+        if len(_schema_cache) >= 256:
+            _schema_cache.pop(next(iter(_schema_cache)))
+        _schema_cache[key] = (time.monotonic() + 60, current)
+    return current
 
 
 async def ensure_columns(
@@ -284,9 +344,10 @@ async def ensure_unique_constraint(conn: asyncpg.Connection, table: str, columns
 
 
 class SqlBuilder:
-    def __init__(self) -> None:
+    def __init__(self, column_types: dict[str, str] | None = None) -> None:
         self.values: list[Any] = []
         self.where: list[str] = []
+        self.column_types = column_types or {}
 
     def add_value(self, value: Any, column_type: str | None = None) -> str:
         self.values.append(normalize_db_value_for_type(value, column_type))
@@ -299,7 +360,7 @@ class SqlBuilder:
 
         if op == "match" and isinstance(value, dict):
             for key, val in value.items():
-                self.where.append(f"{quote_ident(str(key))} = {self.add_value(val)}")
+                self.where.append(f"{quote_ident(str(key))} = {self.add_value(val, self.column_types.get(key))}")
             return
 
         if op == "or" and isinstance(value, str):
@@ -311,21 +372,24 @@ class SqlBuilder:
         if not column:
             return
         col = quote_ident(str(column))
+        column_type = self.column_types.get(str(column))
 
         if op in FILTER_OPS:
-            self.where.append(f"{col} {FILTER_OPS[op]} {self.add_value(value)}")
+            self.where.append(f"{col} {FILTER_OPS[op]} {self.add_value(value, column_type)}")
         elif op == "in":
             values = value if isinstance(value, list) else []
             if len(values) == 0:
                 self.where.append("false")
             else:
-                placeholders = ", ".join(self.add_value(v) for v in values)
+                placeholders = ", ".join(self.add_value(v, column_type) for v in values)
                 self.where.append(f"{col} IN ({placeholders})")
         elif op == "is":
             if value is None:
                 self.where.append(f"{col} IS NULL")
+            elif isinstance(value, bool):
+                self.where.append(f"{col} IS {'TRUE' if value else 'FALSE'}")
             else:
-                self.where.append(f"{col} IS {self.add_value(value)}")
+                raise HTTPException(status_code=400, detail="IS filters accept only null or a boolean.")
         elif op == "contains":
             self.where.append(f"{col} @> {self.add_value(value)}::jsonb")
         elif op == "ilike":
@@ -343,7 +407,7 @@ class SqlBuilder:
             if op == "is" and raw_value == "null":
                 parts.append(f"{col} IS NULL")
             elif op in FILTER_OPS:
-                parts.append(f"{col} {FILTER_OPS[op]} {self.add_value(raw_value)}")
+                parts.append(f"{col} {FILTER_OPS[op]} {self.add_value(raw_value, self.column_types.get(column))}")
         return " OR ".join(parts)
 
     def where_sql(self, filters: list[dict[str, Any]]) -> str:
@@ -357,14 +421,28 @@ class SqlBuilder:
 async def connect(settings: Settings) -> asyncpg.Connection:
     if not settings.postgres_url:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Postgres is not configured.")
-    return await asyncpg.connect(settings.postgres_url)
+    loop = asyncio.get_running_loop()
+    key = (loop, settings.postgres_url)
+    async with _pool_locks.setdefault(loop, asyncio.Lock()):
+        if key not in _pools:
+            _pools[key] = await asyncpg.create_pool(settings.postgres_url, min_size=1, max_size=20, timeout=10, command_timeout=20, init=configure_connection)
+    try:
+        conn = await _pools[key].acquire(timeout=15)
+    except TimeoutError as error:
+        raise HTTPException(status_code=503, detail="The service is busy. Retry shortly.") from error
+    return DatabaseConnection(_pools[key], conn)
 
 
 def rows_to_dicts(records: list[asyncpg.Record]) -> list[dict[str, Any]]:
     return [dict(record) for record in records]
 
 
-async def execute_table_query(settings: Settings, table: str, payload: dict[str, Any]) -> dict[str, Any]:
+async def execute_table_query(
+    settings: Settings,
+    table: str,
+    payload: dict[str, Any],
+    scope: tuple[str, list[Any]] | None = None,
+) -> dict[str, Any]:
     table_sql = quote_ident(table)
     action = payload.get("action", "select")
     filters = payload.get("filters") if isinstance(payload.get("filters"), list) else []
@@ -375,7 +453,8 @@ async def execute_table_query(settings: Settings, table: str, payload: dict[str,
 
     conn = await connect(settings)
     try:
-        await ensure_table_exists(conn, table)
+        if settings.allow_runtime_schema_changes:
+            await ensure_table_exists(conn, table)
         query_columns: dict[str, tuple[str, Any] | bool | None] = {}
         query_columns.update({column: None for column in select_column_names(payload.get("select"))})
         query_columns.update(columns_from_filters(filters))
@@ -389,10 +468,19 @@ async def execute_table_query(settings: Settings, table: str, payload: dict[str,
         elif action == "update" and isinstance(payload.get("payload"), dict):
             for column, value in payload["payload"].items():
                 query_columns[column] = (column, value)
-        await ensure_columns(conn, table, query_columns)
-        current = await existing_columns(conn, table)
+        if settings.allow_runtime_schema_changes:
+            await ensure_columns(conn, table, query_columns)
+        current = await query_column_types(conn, settings, table)
+        if not current:
+            raise HTTPException(status_code=503, detail=f"Table {table} is missing. Apply the database migrations.")
+        missing = set(query_columns) - set(current)
+        if missing:
+            raise HTTPException(status_code=503, detail=f"Schema mismatch in {table}: {', '.join(sorted(missing))}. Apply the database migrations.")
 
-        builder = SqlBuilder()
+        builder = SqlBuilder(current)
+        if scope:
+            builder.where.append(f"({scope[0]})")
+            builder.values.extend(scope[1])
         where = builder.where_sql(filters)
 
         if action == "select":
@@ -406,9 +494,9 @@ async def execute_table_query(settings: Settings, table: str, payload: dict[str,
             if isinstance(payload.get("range"), dict):
                 start = int(payload["range"].get("from", 0))
                 end = int(payload["range"].get("to", start))
-                limit_sql = f" LIMIT {max(end - start + 1, 0)} OFFSET {max(start, 0)}"
-            elif payload.get("limit") is not None:
-                limit_sql = f" LIMIT {max(int(payload['limit']), 0)}"
+                limit_sql = f" LIMIT {min(max(end - start + 1, 0), 500)} OFFSET {max(start, 0)}"
+            else:
+                limit_sql = f" LIMIT {min(max(int(payload.get('limit') or 200), 0), 500)}"
 
             count_value = None
             if payload.get("count"):
@@ -442,11 +530,17 @@ async def execute_table_query(settings: Settings, table: str, payload: dict[str,
             conflict_sql = ""
             if action == "upsert" and payload.get("onConflict"):
                 conflict_cols = [quote_ident(col.strip()) for col in str(payload["onConflict"]).split(",") if col.strip()]
-                await ensure_unique_constraint(conn, table, [col.strip() for col in str(payload["onConflict"]).split(",") if col.strip()])
+                if settings.allow_runtime_schema_changes:
+                    await ensure_unique_constraint(conn, table, [col.strip() for col in str(payload["onConflict"]).split(",") if col.strip()])
                 update_cols = [col for col in columns if col not in {c.replace('"', "") for c in conflict_cols}]
                 if conflict_cols and update_cols:
                     assignments = ", ".join(f"{quote_ident(col)} = EXCLUDED.{quote_ident(col)}" for col in update_cols)
                     conflict_sql = f" ON CONFLICT ({', '.join(conflict_cols)}) DO UPDATE SET {assignments}"
+                    if scope:
+                        offset = len(insert_builder.values)
+                        scoped_sql = re.sub(r"\$(\d+)", lambda match: f"${offset + int(match[1])}", scope[0])
+                        insert_builder.values.extend(scope[1])
+                        conflict_sql += f" WHERE ({scoped_sql})"
                 elif conflict_cols:
                     conflict_sql = f" ON CONFLICT ({', '.join(conflict_cols)}) DO NOTHING"
             records = await conn.fetch(
@@ -502,9 +596,6 @@ async def execute_rpc(settings: Settings, name: str, params: dict[str, Any]) -> 
 async def schema_contract_status(settings: Settings, required_columns: dict[str, list[str]]) -> dict[str, Any]:
     conn = await connect(settings)
     try:
-        for table, columns in required_columns.items():
-            await ensure_columns(conn, table, {column: None for column in columns})
-
         table_names = list(required_columns.keys())
         table_rows = await conn.fetch(
             """

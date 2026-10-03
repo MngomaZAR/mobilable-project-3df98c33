@@ -6,14 +6,14 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from '../navigation/types';
-import { Booking, Photographer } from '../types';
+import { Booking } from '../types';
 import { useAppData } from '../store/AppDataContext';
-import { DEFAULT_CAPE_TOWN_COORDINATES, ensureSouthAfricanCoordinates, haversineDistanceKm } from '../utils/geo';
-import { hasBackendProvider, backendDb } from '../services/backendGateway';
-import { getDispatchState, getEta } from '../services/dispatchService';
+import { validateSouthAfricanLocation } from '../utils/geo';
+import { apiClient } from '../config/apiClient';
+import { getApiAccessToken } from '../config/apiSession';
+import { environment } from '../config/environment';
 import { MapLibreGL, isMapLibreNativeAvailable } from '../components/MapLibreWrapper';
 import { useTheme } from '../store/ThemeContext';
-import { getEffectiveRole, isPhotographerUser } from '../utils/userRole';
 import { routingService, RouteResponse } from '../services/routingService';
 
 type Route = RouteProp<RootStackParamList, 'BookingTracking'>;
@@ -22,8 +22,21 @@ type Navigation = StackNavigationProp<RootStackParamList, 'BookingTracking'>;
 const MAP_STYLE_LIGHT = 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json';
 const MAP_STYLE_DARK = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
 
+type LocationFix = {
+  booking_id: string; user_id: string; role: 'client' | 'provider';
+  latitude: number; longitude: number; accuracy_m: number; created_at: string; expires_at: string;
+};
+type LocationSnapshot = {
+  booking_id: string; locations: LocationFix[]; tracking_window_start: string; tracking_window_end: string;
+};
+
+const isFreshFix = (fix: LocationFix, now: number) =>
+  Number.isFinite(fix.latitude) && Number.isFinite(fix.longitude) && validateSouthAfricanLocation(fix.latitude, fix.longitude)
+  && Number.isFinite(fix.accuracy_m) && fix.accuracy_m > 0 && fix.accuracy_m <= 100
+  && Date.parse(fix.created_at) <= now && now - Date.parse(fix.created_at) < 300000 && Date.parse(fix.expires_at) > now;
+
 const toStatusLabel = (status: Booking['status']) => {
-  if (status === 'accepted') return 'En Route';
+  if (status === 'accepted') return 'Accepted';
   if (status === 'in_progress') return 'In Progress';
   if (status === 'pending') return 'Pending';
   if (status === 'completed') return 'Complete';
@@ -52,28 +65,33 @@ const BookingTrackingScreen: React.FC = () => {
     () => state.bookings.find((item) => item.id === params.bookingId),
     [params.bookingId, state.bookings]
   );
-  const photographer = useMemo(
-    () => state.photographers.find((p) => p.id === booking?.photographer_id),
-    [booking?.photographer_id, state.photographers]
+  const provider = useMemo(
+    () => booking?.model_id ? state.models.find(p => p.id === booking.model_id) : state.photographers.find(p => p.id === booking?.photographer_id),
+    [booking?.model_id, booking?.photographer_id, state.models, state.photographers]
   );
-
-  const [liveClientLocation, setLiveClientLocation] = useState(() =>
-    ensureSouthAfricanCoordinates({
-      latitude: booking?.user_latitude ?? photographer?.latitude ?? DEFAULT_CAPE_TOWN_COORDINATES.latitude,
-      longitude: booking?.user_longitude ?? photographer?.longitude ?? DEFAULT_CAPE_TOWN_COORDINATES.longitude,
-    })
-  );
-  const [livePhotographerLocation, setLivePhotographerLocation] = useState(() =>
-    ensureSouthAfricanCoordinates({
-      latitude: photographer?.latitude ?? DEFAULT_CAPE_TOWN_COORDINATES.latitude - 0.1,
-      longitude: photographer?.longitude ?? DEFAULT_CAPE_TOWN_COORDINATES.longitude - 0.1,
-    })
-  );
-  const [assignmentState, setAssignmentState] = useState<string>(booking?.assignment_state || 'queued');
-  const [etaMinutes, setEtaMinutes] = useState<number | null>(null);
-  const [etaConfidence, setEtaConfidence] = useState<number>(booking?.eta_confidence ?? 0.6);
-  const [countdownSec, setCountdownSec] = useState(0);
+  const [snapshot, setSnapshot] = useState<LocationSnapshot | null>(null);
+  const [trackingError, setTrackingError] = useState<string | null>(null);
+  const [sharingError, setSharingError] = useState<string | null>(null);
+  const [now, setNow] = useState(Date.now);
   const [trackingRoute, setTrackingRoute] = useState<RouteResponse | null>(null);
+  const usesApi = environment.backendProvider === 'api';
+  const providerId = booking?.model_id || booking?.photographer_id;
+  const isClient = state.currentUser?.id === booking?.client_id;
+  const isProvider = state.currentUser?.id === providerId;
+  const start = Date.parse(booking?.start_datetime ?? '');
+  const end = Date.parse(booking?.end_datetime ?? '');
+  const trackingAllowed = usesApi && booking?.payment_status === 'paid'
+    && ['accepted', 'in_progress'].includes(booking.status) && end > start && end - start <= 43200000
+    && start - 7200000 <= now && now < end;
+  const trackingEnabled = trackingAllowed && snapshot?.booking_id === booking?.id
+    && Date.parse(snapshot!.tracking_window_start) <= now && now < Date.parse(snapshot!.tracking_window_end);
+  const liveClientLocation = trackingEnabled ? snapshot?.locations.find(fix => fix.role === 'client' && fix.user_id === booking?.client_id && isFreshFix(fix, now)) ?? null : null;
+  const livePhotographerLocation = trackingEnabled ? snapshot?.locations.find(fix => fix.role === 'provider' && fix.user_id === providerId && isFreshFix(fix, now)) ?? null : null;
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     const loop = Animated.loop(
@@ -88,35 +106,40 @@ const BookingTrackingScreen: React.FC = () => {
   }, [pulse]);
 
   useEffect(() => {
-    if (!booking) return;
-    setLiveClientLocation(
-      ensureSouthAfricanCoordinates({
-        latitude: booking.user_latitude ?? DEFAULT_CAPE_TOWN_COORDINATES.latitude,
-        longitude: booking.user_longitude ?? DEFAULT_CAPE_TOWN_COORDINATES.longitude,
-      })
-    );
-  }, [booking?.id, booking?.user_latitude, booking?.user_longitude]);
+    setSnapshot(null);
+    setTrackingError(null);
+    if (!trackingAllowed || !booking?.id || !state.currentUser?.id) return;
+    let mounted = true;
+    let loading = false;
+    const readSnapshot = async () => {
+      if (loading) return;
+      loading = true;
+      try {
+        const token = await getApiAccessToken();
+        const next = await apiClient.get<LocationSnapshot>(`/bookings/${encodeURIComponent(booking.id)}/location`, { token });
+        if (mounted && next.booking_id === booking.id) { setSnapshot(next); setTrackingError(null); }
+      } catch (error: any) {
+        if (mounted) { setSnapshot(null); setTrackingError(error.message || 'Live location unavailable.'); }
+      } finally { loading = false; }
+    };
+    void readSnapshot();
+    const timer = setInterval(readSnapshot, 6000);
+    return () => { mounted = false; clearInterval(timer); };
+  }, [booking?.id, state.currentUser?.id, trackingAllowed]);
 
   useEffect(() => {
-    if (!photographer) return;
-    setLivePhotographerLocation(
-      ensureSouthAfricanCoordinates({
-        latitude: photographer.latitude,
-        longitude: photographer.longitude,
-      })
-    );
-  }, [photographer?.id, photographer?.latitude, photographer?.longitude]);
-
-  useEffect(() => {
-    if (!booking || !state.currentUser) return;
+    if (!trackingEnabled || !booking?.id || !(isClient || isProvider)) return;
     let mounted = true;
     let watcher: Location.LocationSubscription | null = null;
 
     const startLiveTracking = async () => {
       const permission = await Location.requestForegroundPermissionsAsync();
-      if (permission.status !== 'granted' || !mounted) return;
+      if (permission.status !== 'granted' || !mounted) {
+        if (mounted) setSharingError('Location permission is required to share your GPS fix.');
+        return;
+      }
 
-      watcher = await Location.watchPositionAsync(
+      const subscription = await Location.watchPositionAsync(
         {
           accuracy: Location.Accuracy.Balanced,
           distanceInterval: 20,
@@ -124,151 +147,61 @@ const BookingTrackingScreen: React.FC = () => {
         },
         async ({ coords }) => {
           if (!mounted) return;
-          const next = ensureSouthAfricanCoordinates({
-            latitude: coords.latitude,
-            longitude: coords.longitude,
-          });
           try {
-            if (getEffectiveRole(state.currentUser) === 'client') {
-              setLiveClientLocation(next);
-              await updateBookingClientLocation(booking.id, next.latitude, next.longitude, coords.accuracy ?? undefined);
-            } else if (isPhotographerUser(state.currentUser)) {
-              setLivePhotographerLocation(next);
-              await updatePhotographerLocation(next.latitude, next.longitude, booking.id, coords.accuracy ?? undefined);
+            if (isClient) {
+              await updateBookingClientLocation(booking.id, coords.latitude, coords.longitude, coords.accuracy ?? undefined);
+            } else {
+              await updatePhotographerLocation(coords.latitude, coords.longitude, booking.id, coords.accuracy ?? undefined);
             }
-          } catch {
-            // keep UI alive on intermittent sync failures
+            if (mounted) setSharingError(null);
+          } catch (error: any) {
+            if (mounted) setSharingError(error.message || 'Unable to share your GPS fix.');
           }
         }
       );
+      if (!mounted) subscription.remove();
+      else watcher = subscription;
     };
 
-    startLiveTracking();
+    void startLiveTracking().catch(error => { if (mounted) setSharingError(error.message || 'GPS is unavailable.'); });
 
     return () => {
       mounted = false;
       watcher?.remove();
     };
-  }, [booking, state.currentUser, updateBookingClientLocation, updatePhotographerLocation]);
-
-  useEffect(() => {
-    if (!hasBackendProvider || !booking) return;
-    const channel = backendDb
-      .channel(`booking-tracking-${booking.id}`)
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'bookings', filter: `id=eq.${booking.id}` },
-        (payload) => {
-          const next = payload.new as Partial<Booking>;
-          if (next?.user_latitude !== undefined && next?.user_longitude !== undefined) {
-            setLiveClientLocation(
-              ensureSouthAfricanCoordinates({
-                latitude: Number(next.user_latitude),
-                longitude: Number(next.user_longitude),
-              })
-            );
-          }
-        }
-      );
-
-    if (photographer?.id) {
-      channel.on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'photographers', filter: `id=eq.${photographer.id}` },
-        (payload) => {
-          const next = payload.new as Partial<Photographer>;
-          if (next?.latitude !== undefined && next?.longitude !== undefined) {
-            setLivePhotographerLocation(
-              ensureSouthAfricanCoordinates({
-                latitude: Number(next.latitude),
-                longitude: Number(next.longitude),
-              })
-            );
-          }
-        }
-      );
-    }
-
-    channel.subscribe();
-    return () => {
-      channel.unsubscribe();
-    };
-  }, [booking, photographer?.id]);
-
-  useEffect(() => {
-    if (!booking?.id) return;
-    let active = true;
-
-    const hydrateEtaAndDispatch = async () => {
-      try {
-        if (booking.dispatch_request_id) {
-          const dispatch = await getDispatchState(booking.dispatch_request_id);
-          if (!active) return;
-          setAssignmentState(dispatch.assignment_state || booking.assignment_state || 'queued');
-          if (dispatch.eta_confidence != null) setEtaConfidence(Number(dispatch.eta_confidence));
-        }
-      } catch {
-        // non-fatal
-      }
-
-      try {
-        const eta = await getEta(booking.id);
-        if (!active) return;
-        if (Number.isFinite(eta.eta_minutes)) {
-          const mins = Number(eta.eta_minutes);
-          setEtaMinutes(mins);
-          setCountdownSec(Math.max(60, Math.round(mins * 60)));
-        }
-        if (eta.eta_confidence != null) setEtaConfidence(Number(eta.eta_confidence));
-      } catch {
-        // non-fatal
-      }
-    };
-
-    hydrateEtaAndDispatch();
-    const timer = setInterval(hydrateEtaAndDispatch, 15000);
-    return () => {
-      active = false;
-      clearInterval(timer);
-    };
-  }, [booking?.id, booking?.dispatch_request_id, booking?.assignment_state, booking?.eta_confidence]);
-
-  useEffect(() => {
-    if (countdownSec <= 0) return;
-    const timer = setInterval(() => {
-      setCountdownSec((prev) => Math.max(0, prev - 1));
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [countdownSec]);
+  }, [booking?.id, trackingEnabled, isClient, isProvider, updateBookingClientLocation, updatePhotographerLocation]);
 
   useEffect(() => {
     let active = true;
+    setTrackingRoute(null);
+    if (!liveClientLocation || !livePhotographerLocation) return;
 
     const hydrateRoute = async () => {
       const route = await routingService.getRoute(livePhotographerLocation, liveClientLocation);
       if (!active) return;
-      setTrackingRoute(route);
+      if (route.source !== 'fallback' && route.coordinates.length >= 2 && Number.isFinite(route.duration) && Number.isFinite(route.distance)) setTrackingRoute(route);
     };
 
-    hydrateRoute();
+    void hydrateRoute().catch(() => { if (active) setTrackingRoute(null); });
     return () => {
       active = false;
     };
   }, [
-    liveClientLocation.latitude,
-    liveClientLocation.longitude,
-    livePhotographerLocation.latitude,
-    livePhotographerLocation.longitude,
+    liveClientLocation?.latitude,
+    liveClientLocation?.longitude,
+    livePhotographerLocation?.latitude,
+    livePhotographerLocation?.longitude,
   ]);
 
   const openChatThread = async () => {
-    if (!photographer) {
+    const partnerId = isClient ? providerId : booking?.client_id;
+    if (!partnerId) {
       navigation.navigate('Root', { screen: 'Chat' });
       return;
     }
 
     try {
-      const convo = await startConversationWithUser(photographer.id, photographer.name);
+      const convo = await startConversationWithUser(partnerId, isClient ? provider?.name ?? 'Creator' : 'Client');
       navigation.navigate('ChatThread', { conversationId: convo.id, title: convo.title });
     } catch {
       navigation.navigate('Root', { screen: 'Chat' });
@@ -303,31 +236,31 @@ const BookingTrackingScreen: React.FC = () => {
     );
   }
 
-  const centerLat = (liveClientLocation.latitude + livePhotographerLocation.latitude) / 2;
-  const centerLng = (liveClientLocation.longitude + livePhotographerLocation.longitude) / 2;
+  const knownLocations = [liveClientLocation, livePhotographerLocation].filter((fix): fix is LocationFix => fix !== null);
+  const centerLat = knownLocations.length ? knownLocations.reduce((sum, fix) => sum + fix.latitude, 0) / knownLocations.length : null;
+  const centerLng = knownLocations.length ? knownLocations.reduce((sum, fix) => sum + fix.longitude, 0) / knownLocations.length : null;
   const routeGeoJson = {
     type: 'Feature',
     geometry: {
       type: 'LineString',
-      coordinates:
-        trackingRoute?.coordinates ?? [
-          [livePhotographerLocation.longitude, livePhotographerLocation.latitude],
-          [liveClientLocation.longitude, liveClientLocation.latitude],
-        ],
+      coordinates: trackingRoute?.coordinates ?? [],
     },
     properties: {},
   };
 
-  const distanceKm = trackingRoute?.distance ?? haversineDistanceKm(livePhotographerLocation, liveClientLocation);
-  const routeSourceLabel = trackingRoute?.source === 'fallback' ? 'Direct estimate' : 'Road route';
-  const fallbackMins = Math.max(3, Math.round((distanceKm / 35) * 60));
-  const activeTimer = countdownSec > 0 ? countdownSec : Math.max(60, (etaMinutes ?? fallbackMins) * 60);
+  const hasRoadRoute = Boolean(liveClientLocation && livePhotographerLocation && trackingRoute && trackingRoute.source !== 'fallback' && trackingRoute.coordinates.length >= 2);
+  const distanceKm = hasRoadRoute ? trackingRoute!.distance : null;
+  const routeSourceLabel = hasRoadRoute ? 'Road route' : 'Navigation unavailable';
+  const activeTimer = hasRoadRoute ? Math.round(trackingRoute!.duration) : null;
   const isCancellable = booking.status === 'pending' || booking.status === 'accepted' || booking.status === 'in_progress';
   const statusLabel = toStatusLabel(booking.status);
+  const unavailableReason = !usesApi ? 'Live location unavailable.' : booking.payment_status !== 'paid' ? 'Payment required before live tracking.'
+    : !trackingAllowed ? 'Live tracking is unavailable outside the paid shoot travel window.'
+    : trackingError ?? (knownLocations.length === 0 ? 'Waiting for a fresh GPS fix.' : !liveClientLocation ? 'Client GPS unavailable.' : !livePhotographerLocation ? 'Creator GPS unavailable.' : null);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.bg }]}>
-      {isMapLibreNativeAvailable ? (
+      {isMapLibreNativeAvailable && centerLat !== null && centerLng !== null ? (
         <MapLibreGL.MapView
           style={StyleSheet.absoluteFill}
           mapStyle={isDark ? MAP_STYLE_DARK : MAP_STYLE_LIGHT}
@@ -343,7 +276,7 @@ const BookingTrackingScreen: React.FC = () => {
             animationDuration={700}
           />
 
-          <MapLibreGL.ShapeSource id="track-route" shape={routeGeoJson as any}>
+          {hasRoadRoute ? <MapLibreGL.ShapeSource id="track-route" shape={routeGeoJson as any}>
             <MapLibreGL.LineLayer
               id="track-route-glow"
               style={{
@@ -366,9 +299,9 @@ const BookingTrackingScreen: React.FC = () => {
                 lineJoin: 'round',
               }}
             />
-          </MapLibreGL.ShapeSource>
+          </MapLibreGL.ShapeSource> : null}
 
-          <MapLibreGL.PointAnnotation
+          {liveClientLocation ? <MapLibreGL.PointAnnotation
             id="tracking-client"
             coordinate={[liveClientLocation.longitude, liveClientLocation.latitude]}
           >
@@ -384,48 +317,49 @@ const BookingTrackingScreen: React.FC = () => {
               />
               <View style={styles.clientPinDot} />
             </View>
-          </MapLibreGL.PointAnnotation>
+          </MapLibreGL.PointAnnotation> : null}
 
-          <MapLibreGL.PointAnnotation
+          {livePhotographerLocation ? <MapLibreGL.PointAnnotation
             id="tracking-provider"
             coordinate={[livePhotographerLocation.longitude, livePhotographerLocation.latitude]}
           >
             <View style={[styles.providerPin, { borderColor: '#f5e3be' }]}>
-              {photographer?.avatar_url ? (
-                <Animated.Image source={{ uri: photographer.avatar_url }} style={styles.providerAvatar} />
+              {provider?.avatar_url ? (
+                <Animated.Image source={{ uri: provider.avatar_url }} style={styles.providerAvatar} />
               ) : (
                 <Ionicons name="person" size={22} color="#0f172a" />
               )}
             </View>
-          </MapLibreGL.PointAnnotation>
+          </MapLibreGL.PointAnnotation> : null}
         </MapLibreGL.MapView>
       ) : (
         <View style={[styles.webFallback, { backgroundColor: isDark ? '#0d1628' : '#eef2f7' }]}>
           <Ionicons name="map-outline" size={28} color={isDark ? '#a5b4cf' : '#56627a'} />
-          <Text style={[styles.webFallbackTitle, { color: colors.text }]}>Live tracking map is available on iOS and Android builds</Text>
-          <Text style={[styles.webFallbackText, { color: colors.textSecondary }]}>
+          <Text style={[styles.webFallbackTitle, { color: colors.text }]}>{unavailableReason ?? 'Live GPS locations'}</Text>
+          {liveClientLocation ? <Text style={[styles.webFallbackText, { color: colors.textSecondary }]}>
             Client: {liveClientLocation.latitude.toFixed(4)}, {liveClientLocation.longitude.toFixed(4)}
-          </Text>
-          <Text style={[styles.webFallbackText, { color: colors.textSecondary }]}>
+          </Text> : null}
+          {livePhotographerLocation ? <Text style={[styles.webFallbackText, { color: colors.textSecondary }]}>
             Provider: {livePhotographerLocation.latitude.toFixed(4)}, {livePhotographerLocation.longitude.toFixed(4)}
-          </Text>
+          </Text> : null}
         </View>
       )}
 
       <View style={[styles.bottomPanelWrap, { paddingBottom: Math.max(insets.bottom + 6, 18) }]}>
         <View style={[styles.bottomPanel, { backgroundColor: isDark ? 'rgba(12, 20, 38, 0.94)' : 'rgba(255, 250, 241, 0.96)', borderColor: isDark ? '#2a3755' : '#e8dbc4' }]}>
           <View style={[styles.avatarFloat, { backgroundColor: isDark ? '#101c34' : '#fff5e6', borderColor: isDark ? '#f0dbb7' : '#e7cb93' }]}>
-            {photographer?.avatar_url ? (
-              <Animated.Image source={{ uri: photographer.avatar_url }} style={styles.avatarFloatImage} />
+            {provider?.avatar_url ? (
+              <Animated.Image source={{ uri: provider.avatar_url }} style={styles.avatarFloatImage} />
             ) : (
               <Ionicons name="person" size={22} color={colors.text} />
             )}
           </View>
 
-          <Text style={[styles.timerText, { color: colors.text }]}>{formatTimer(activeTimer)}</Text>
+          <Text style={[styles.timerText, { color: colors.text }]}>{activeTimer === null ? 'ETA unavailable' : formatTimer(activeTimer)}</Text>
           <Text style={[styles.timerSub, { color: colors.textMuted }]}>
-            {statusLabel} • {assignmentState.replace('_', ' ')} • {routeSourceLabel} • {distanceKm.toFixed(1)} km • Confidence {(etaConfidence * 100).toFixed(0)}%
+            {statusLabel} | {routeSourceLabel}{distanceKm !== null ? ` | ${distanceKm.toFixed(1)} km` : ''}
           </Text>
+          {unavailableReason || sharingError ? <Text accessibilityRole="alert" style={[styles.timerSub, { color: colors.textMuted }]}>{unavailableReason || sharingError}</Text> : null}
 
           <View style={styles.actionRow}>
             <TouchableOpacity
@@ -483,6 +417,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 20,
+    paddingBottom: 220,
     gap: 8,
   },
   webFallbackTitle: {

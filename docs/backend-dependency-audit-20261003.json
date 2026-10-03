@@ -1,0 +1,981 @@
+{
+  "generated_at_utc": "2026-10-03T18:04:14.5660152Z",
+  "status": "approved pins applied; local verification completed",
+  "source_changes": [
+    "backend/api/requirements.txt",
+    "backend/worker/requirements.txt"
+  ],
+  "approved_pins": {
+    "api": [
+      "fastapi==0.133.0",
+      "starlette==1.3.1",
+      "cryptography==50.0.2"
+    ],
+    "worker": [
+      "cryptography==50.0.2"
+    ]
+  },
+  "requirements_sha256": {
+    "api": "fbfeda6c489018875e60d0e07917189e331a686b16d7d56e2289471aa3428d43",
+    "worker": "d2e7c527b16a736c63d66446bd2b0450b42d6ee805b99c35146e4edc79e72686"
+  },
+  "tooling": {
+    "test_python": "3.12.15",
+    "repository_environment_modified": false,
+    "pip_audit": "2.10.1",
+    "python_registry_modified": false,
+    "advisories_ignored": [],
+    "audit_fix_flag_used": false,
+    "uv": "0.12.22",
+    "advisory_service": "pypi",
+    "isolated": true,
+    "tool_config_discovery_disabled": true
+  },
+  "services": [
+    {
+      "name": "api",
+      "requirements": "backend/api/requirements.txt",
+      "resolve_check": "passed",
+      "installed_dependency_check": "passed",
+      "resolved_audit": {
+        "completed": true,
+        "exit_code": 1,
+        "target": "Linux x86_64 / Python 3.12 complete requirements resolution",
+        "packages_audited": 42,
+        "direct_packages": 11,
+        "transitive_packages": 31,
+        "raw_advisory_records": 2,
+        "unique_advisories": 1,
+        "duplicate_records_removed": 1,
+        "vulnerable_direct_packages": 0,
+        "vulnerable_transitive_packages": 1,
+        "severity": {
+          "moderate": 0,
+          "low": 0,
+          "high": 1,
+          "critical": 0
+        },
+        "findings": [
+          {
+            "package": "ecdsa",
+            "version": "0.19.2",
+            "relationship": "transitive",
+            "introduced_by": "python-jose[cryptography]==3.5.0",
+            "ghsa": "GHSA-wj6h-64fc-37mp",
+            "cve": "CVE-2024-23342",
+            "severity": "high",
+            "fixed_version": null,
+            "primary_advisory": "https://github.com/tlsfuzzer/python-ecdsa/security/advisories/GHSA-wj6h-64fc-37mp",
+            "primary_verified": true,
+            "applicability": "Affected private-key signing, key generation and ECDH not found in reviewed API JWT call sites; current call sites use RS256 verification and HS256 signing. Verification is not affected. No patched ecdsa release is planned.",
+            "exception_added": false
+          }
+        ],
+        "packages": [
+          {
+            "name": "annotated-doc",
+            "version": "0.0.5",
+            "direct": false
+          },
+          {
+            "name": "annotated-types",
+            "version": "0.8.0",
+            "direct": false
+          },
+          {
+            "name": "anyio",
+            "version": "4.15.1",
+            "direct": false
+          },
+          {
+            "name": "asyncpg",
+            "version": "0.30.0",
+            "direct": true
+          },
+          {
+            "name": "boto3",
+            "version": "1.41.5",
+            "direct": true
+          },
+          {
+            "name": "botocore",
+            "version": "1.41.6",
+            "direct": false
+          },
+          {
+            "name": "certifi",
+            "version": "2026.7.22",
+            "direct": false
+          },
+          {
+            "name": "cffi",
+            "version": "2.1.1",
+            "direct": false
+          },
+          {
+            "name": "charset-normalizer",
+            "version": "3.5.2",
+            "direct": false
+          },
+          {
+            "name": "click",
+            "version": "8.5.0",
+            "direct": false
+          },
+          {
+            "name": "cryptography",
+            "version": "50.0.2",
+            "direct": true
+          },
+          {
+            "name": "ecdsa",
+            "version": "0.19.2",
+            "direct": false
+          },
+          {
+            "name": "fastapi",
+            "version": "0.133.0",
+            "direct": true
+          },
+          {
+            "name": "h11",
+            "version": "0.16.0",
+            "direct": false
+          },
+          {
+            "name": "httpcore",
+            "version": "1.0.9",
+            "direct": false
+          },
+          {
+            "name": "httptools",
+            "version": "0.8.0",
+            "direct": false
+          },
+          {
+            "name": "httpx",
+            "version": "0.28.1",
+            "direct": true
+          },
+          {
+            "name": "idna",
+            "version": "3.20",
+            "direct": false
+          },
+          {
+            "name": "jmespath",
+            "version": "1.1.0",
+            "direct": false
+          },
+          {
+            "name": "nats-py",
+            "version": "2.11.0",
+            "direct": true
+          },
+          {
+            "name": "pyasn1",
+            "version": "0.6.4",
+            "direct": false
+          },
+          {
+            "name": "pycparser",
+            "version": "3.0",
+            "direct": false
+          },
+          {
+            "name": "pydantic",
+            "version": "2.13.5",
+            "direct": false
+          },
+          {
+            "name": "pydantic-core",
+            "version": "2.46.5",
+            "direct": false
+          },
+          {
+            "name": "pydantic-settings",
+            "version": "2.11.0",
+            "direct": true
+          },
+          {
+            "name": "python-dateutil",
+            "version": "2.9.0.post0",
+            "direct": false
+          },
+          {
+            "name": "python-dotenv",
+            "version": "1.2.4",
+            "direct": false
+          },
+          {
+            "name": "python-jose",
+            "version": "3.5.0",
+            "direct": true
+          },
+          {
+            "name": "pyyaml",
+            "version": "6.0.3",
+            "direct": false
+          },
+          {
+            "name": "requests",
+            "version": "2.34.2",
+            "direct": false
+          },
+          {
+            "name": "rsa",
+            "version": "4.9.1",
+            "direct": false
+          },
+          {
+            "name": "s3transfer",
+            "version": "0.15.0",
+            "direct": false
+          },
+          {
+            "name": "six",
+            "version": "1.17.0",
+            "direct": false
+          },
+          {
+            "name": "starlette",
+            "version": "1.3.1",
+            "direct": true
+          },
+          {
+            "name": "typesense",
+            "version": "1.1.1",
+            "direct": true
+          },
+          {
+            "name": "typing-extensions",
+            "version": "4.16.0",
+            "direct": false
+          },
+          {
+            "name": "typing-inspection",
+            "version": "0.4.4",
+            "direct": false
+          },
+          {
+            "name": "urllib3",
+            "version": "2.8.0",
+            "direct": false
+          },
+          {
+            "name": "uvicorn",
+            "version": "0.38.0",
+            "direct": true
+          },
+          {
+            "name": "uvloop",
+            "version": "0.23.0",
+            "direct": false
+          },
+          {
+            "name": "watchfiles",
+            "version": "1.3.0",
+            "direct": false
+          },
+          {
+            "name": "websockets",
+            "version": "17.2",
+            "direct": false
+          }
+        ]
+      },
+      "installed_audit": {
+        "completed": true,
+        "exit_code": 1,
+        "target": "Windows x86_64 / CPython 3.12.15 isolated service venv",
+        "packages_audited": 42,
+        "direct_packages": 11,
+        "transitive_packages": 31,
+        "raw_advisory_records": 2,
+        "unique_advisories": 1,
+        "duplicate_records_removed": 1,
+        "vulnerable_direct_packages": 0,
+        "vulnerable_transitive_packages": 1,
+        "severity": {
+          "moderate": 0,
+          "low": 0,
+          "high": 1,
+          "critical": 0
+        },
+        "findings": [
+          {
+            "package": "ecdsa",
+            "version": "0.19.2",
+            "relationship": "transitive",
+            "introduced_by": "python-jose[cryptography]==3.5.0",
+            "ghsa": "GHSA-wj6h-64fc-37mp",
+            "cve": "CVE-2024-23342",
+            "severity": "high",
+            "fixed_version": null,
+            "primary_advisory": "https://github.com/tlsfuzzer/python-ecdsa/security/advisories/GHSA-wj6h-64fc-37mp",
+            "primary_verified": true,
+            "applicability": "Affected private-key signing, key generation and ECDH not found in reviewed API JWT call sites; current call sites use RS256 verification and HS256 signing. Verification is not affected. No patched ecdsa release is planned.",
+            "exception_added": false
+          }
+        ],
+        "packages": [
+          {
+            "name": "annotated-doc",
+            "version": "0.0.5",
+            "direct": false
+          },
+          {
+            "name": "annotated-types",
+            "version": "0.8.0",
+            "direct": false
+          },
+          {
+            "name": "anyio",
+            "version": "4.15.1",
+            "direct": false
+          },
+          {
+            "name": "asyncpg",
+            "version": "0.30.0",
+            "direct": true
+          },
+          {
+            "name": "boto3",
+            "version": "1.41.5",
+            "direct": true
+          },
+          {
+            "name": "botocore",
+            "version": "1.41.6",
+            "direct": false
+          },
+          {
+            "name": "certifi",
+            "version": "2026.7.22",
+            "direct": false
+          },
+          {
+            "name": "cffi",
+            "version": "2.1.1",
+            "direct": false
+          },
+          {
+            "name": "charset-normalizer",
+            "version": "3.5.2",
+            "direct": false
+          },
+          {
+            "name": "click",
+            "version": "8.5.0",
+            "direct": false
+          },
+          {
+            "name": "colorama",
+            "version": "0.4.6",
+            "direct": false
+          },
+          {
+            "name": "cryptography",
+            "version": "50.0.2",
+            "direct": true
+          },
+          {
+            "name": "ecdsa",
+            "version": "0.19.2",
+            "direct": false
+          },
+          {
+            "name": "fastapi",
+            "version": "0.133.0",
+            "direct": true
+          },
+          {
+            "name": "h11",
+            "version": "0.16.0",
+            "direct": false
+          },
+          {
+            "name": "httpcore",
+            "version": "1.0.9",
+            "direct": false
+          },
+          {
+            "name": "httptools",
+            "version": "0.8.0",
+            "direct": false
+          },
+          {
+            "name": "httpx",
+            "version": "0.28.1",
+            "direct": true
+          },
+          {
+            "name": "idna",
+            "version": "3.20",
+            "direct": false
+          },
+          {
+            "name": "jmespath",
+            "version": "1.1.0",
+            "direct": false
+          },
+          {
+            "name": "nats-py",
+            "version": "2.11.0",
+            "direct": true
+          },
+          {
+            "name": "pyasn1",
+            "version": "0.6.4",
+            "direct": false
+          },
+          {
+            "name": "pycparser",
+            "version": "3.0",
+            "direct": false
+          },
+          {
+            "name": "pydantic",
+            "version": "2.13.5",
+            "direct": false
+          },
+          {
+            "name": "pydantic-core",
+            "version": "2.46.5",
+            "direct": false
+          },
+          {
+            "name": "pydantic-settings",
+            "version": "2.11.0",
+            "direct": true
+          },
+          {
+            "name": "python-dateutil",
+            "version": "2.9.0.post0",
+            "direct": false
+          },
+          {
+            "name": "python-dotenv",
+            "version": "1.2.4",
+            "direct": false
+          },
+          {
+            "name": "python-jose",
+            "version": "3.5.0",
+            "direct": true
+          },
+          {
+            "name": "pyyaml",
+            "version": "6.0.3",
+            "direct": false
+          },
+          {
+            "name": "requests",
+            "version": "2.34.2",
+            "direct": false
+          },
+          {
+            "name": "rsa",
+            "version": "4.9.1",
+            "direct": false
+          },
+          {
+            "name": "s3transfer",
+            "version": "0.15.0",
+            "direct": false
+          },
+          {
+            "name": "six",
+            "version": "1.17.0",
+            "direct": false
+          },
+          {
+            "name": "starlette",
+            "version": "1.3.1",
+            "direct": true
+          },
+          {
+            "name": "typesense",
+            "version": "1.1.1",
+            "direct": true
+          },
+          {
+            "name": "typing-extensions",
+            "version": "4.16.0",
+            "direct": false
+          },
+          {
+            "name": "typing-inspection",
+            "version": "0.4.4",
+            "direct": false
+          },
+          {
+            "name": "urllib3",
+            "version": "2.8.0",
+            "direct": false
+          },
+          {
+            "name": "uvicorn",
+            "version": "0.38.0",
+            "direct": true
+          },
+          {
+            "name": "watchfiles",
+            "version": "1.3.0",
+            "direct": false
+          },
+          {
+            "name": "websockets",
+            "version": "17.2",
+            "direct": false
+          }
+        ]
+      }
+    },
+    {
+      "name": "worker",
+      "requirements": "backend/worker/requirements.txt",
+      "resolve_check": "passed",
+      "installed_dependency_check": "passed",
+      "resolved_audit": {
+        "completed": true,
+        "exit_code": 0,
+        "target": "Linux x86_64 / Python 3.12 complete requirements resolution",
+        "packages_audited": 28,
+        "direct_packages": 7,
+        "transitive_packages": 21,
+        "raw_advisory_records": 0,
+        "unique_advisories": 0,
+        "duplicate_records_removed": 0,
+        "vulnerable_direct_packages": 0,
+        "vulnerable_transitive_packages": 0,
+        "severity": {
+          "moderate": 0,
+          "low": 0,
+          "high": 0,
+          "critical": 0
+        },
+        "findings": [],
+        "packages": [
+          {
+            "name": "annotated-types",
+            "version": "0.8.0",
+            "direct": false
+          },
+          {
+            "name": "anyio",
+            "version": "4.15.1",
+            "direct": false
+          },
+          {
+            "name": "asyncpg",
+            "version": "0.30.0",
+            "direct": true
+          },
+          {
+            "name": "boto3",
+            "version": "1.41.5",
+            "direct": true
+          },
+          {
+            "name": "botocore",
+            "version": "1.41.6",
+            "direct": false
+          },
+          {
+            "name": "certifi",
+            "version": "2026.7.22",
+            "direct": false
+          },
+          {
+            "name": "cffi",
+            "version": "2.1.1",
+            "direct": false
+          },
+          {
+            "name": "charset-normalizer",
+            "version": "3.5.2",
+            "direct": false
+          },
+          {
+            "name": "cryptography",
+            "version": "50.0.2",
+            "direct": true
+          },
+          {
+            "name": "h11",
+            "version": "0.16.0",
+            "direct": false
+          },
+          {
+            "name": "httpcore",
+            "version": "1.0.9",
+            "direct": false
+          },
+          {
+            "name": "httpx",
+            "version": "0.28.1",
+            "direct": true
+          },
+          {
+            "name": "idna",
+            "version": "3.20",
+            "direct": false
+          },
+          {
+            "name": "jmespath",
+            "version": "1.1.0",
+            "direct": false
+          },
+          {
+            "name": "nats-py",
+            "version": "2.11.0",
+            "direct": true
+          },
+          {
+            "name": "pycparser",
+            "version": "3.0",
+            "direct": false
+          },
+          {
+            "name": "pydantic",
+            "version": "2.13.5",
+            "direct": false
+          },
+          {
+            "name": "pydantic-core",
+            "version": "2.46.5",
+            "direct": false
+          },
+          {
+            "name": "pydantic-settings",
+            "version": "2.11.0",
+            "direct": true
+          },
+          {
+            "name": "python-dateutil",
+            "version": "2.9.0.post0",
+            "direct": false
+          },
+          {
+            "name": "python-dotenv",
+            "version": "1.2.4",
+            "direct": false
+          },
+          {
+            "name": "requests",
+            "version": "2.34.2",
+            "direct": false
+          },
+          {
+            "name": "s3transfer",
+            "version": "0.15.0",
+            "direct": false
+          },
+          {
+            "name": "six",
+            "version": "1.17.0",
+            "direct": false
+          },
+          {
+            "name": "typesense",
+            "version": "1.1.1",
+            "direct": true
+          },
+          {
+            "name": "typing-extensions",
+            "version": "4.16.0",
+            "direct": false
+          },
+          {
+            "name": "typing-inspection",
+            "version": "0.4.4",
+            "direct": false
+          },
+          {
+            "name": "urllib3",
+            "version": "2.8.0",
+            "direct": false
+          }
+        ]
+      },
+      "installed_audit": {
+        "completed": true,
+        "exit_code": 0,
+        "target": "Windows x86_64 / CPython 3.12.15 isolated service venv",
+        "packages_audited": 28,
+        "direct_packages": 7,
+        "transitive_packages": 21,
+        "raw_advisory_records": 0,
+        "unique_advisories": 0,
+        "duplicate_records_removed": 0,
+        "vulnerable_direct_packages": 0,
+        "vulnerable_transitive_packages": 0,
+        "severity": {
+          "moderate": 0,
+          "low": 0,
+          "high": 0,
+          "critical": 0
+        },
+        "findings": [],
+        "packages": [
+          {
+            "name": "annotated-types",
+            "version": "0.8.0",
+            "direct": false
+          },
+          {
+            "name": "anyio",
+            "version": "4.15.1",
+            "direct": false
+          },
+          {
+            "name": "asyncpg",
+            "version": "0.30.0",
+            "direct": true
+          },
+          {
+            "name": "boto3",
+            "version": "1.41.5",
+            "direct": true
+          },
+          {
+            "name": "botocore",
+            "version": "1.41.6",
+            "direct": false
+          },
+          {
+            "name": "certifi",
+            "version": "2026.7.22",
+            "direct": false
+          },
+          {
+            "name": "cffi",
+            "version": "2.1.1",
+            "direct": false
+          },
+          {
+            "name": "charset-normalizer",
+            "version": "3.5.2",
+            "direct": false
+          },
+          {
+            "name": "cryptography",
+            "version": "50.0.2",
+            "direct": true
+          },
+          {
+            "name": "h11",
+            "version": "0.16.0",
+            "direct": false
+          },
+          {
+            "name": "httpcore",
+            "version": "1.0.9",
+            "direct": false
+          },
+          {
+            "name": "httpx",
+            "version": "0.28.1",
+            "direct": true
+          },
+          {
+            "name": "idna",
+            "version": "3.20",
+            "direct": false
+          },
+          {
+            "name": "jmespath",
+            "version": "1.1.0",
+            "direct": false
+          },
+          {
+            "name": "nats-py",
+            "version": "2.11.0",
+            "direct": true
+          },
+          {
+            "name": "pycparser",
+            "version": "3.0",
+            "direct": false
+          },
+          {
+            "name": "pydantic",
+            "version": "2.13.5",
+            "direct": false
+          },
+          {
+            "name": "pydantic-core",
+            "version": "2.46.5",
+            "direct": false
+          },
+          {
+            "name": "pydantic-settings",
+            "version": "2.11.0",
+            "direct": true
+          },
+          {
+            "name": "python-dateutil",
+            "version": "2.9.0.post0",
+            "direct": false
+          },
+          {
+            "name": "python-dotenv",
+            "version": "1.2.4",
+            "direct": false
+          },
+          {
+            "name": "requests",
+            "version": "2.34.2",
+            "direct": false
+          },
+          {
+            "name": "s3transfer",
+            "version": "0.15.0",
+            "direct": false
+          },
+          {
+            "name": "six",
+            "version": "1.17.0",
+            "direct": false
+          },
+          {
+            "name": "typesense",
+            "version": "1.1.1",
+            "direct": true
+          },
+          {
+            "name": "typing-extensions",
+            "version": "4.16.0",
+            "direct": false
+          },
+          {
+            "name": "typing-inspection",
+            "version": "0.4.4",
+            "direct": false
+          },
+          {
+            "name": "urllib3",
+            "version": "2.8.0",
+            "direct": false
+          }
+        ]
+      }
+    }
+  ],
+  "tests": {
+    "all_backend_units": {
+      "parent_middleware_regressions_included": true,
+      "failures": 0,
+      "passed": true,
+      "errors": 0,
+      "count": 139,
+      "seconds": 2.688,
+      "discovery_pattern": "backend/api/tests/test_*.py"
+    },
+    "api_protocol_compatibility": {
+      "scope": "Local Python 3.12 installed candidate; actual ASGI and protocol parsing with mocked database/mail/payment boundaries. Not real PostgreSQL concurrency or gateway QA.",
+      "mode": "api",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "versions": {
+        "fastapi": "0.133.0",
+        "starlette": "1.3.1",
+        "cryptography": "50.0.2",
+        "httpx": "0.28.1"
+      },
+      "checks": [
+        {
+          "name": "__main__.RecoveryCompatibility.test_encryption_and_worker_can_decrypt_api_reset_token",
+          "passed": true
+        },
+        {
+          "name": "__main__.RecoveryCompatibility.test_worker_mail_uses_tls_without_real_delivery",
+          "passed": true
+        },
+        {
+          "name": "__main__.RecoveryCompatibility.test_wrong_key_tampering_and_expired_tokens_are_rejected",
+          "passed": true
+        },
+        {
+          "name": "__main__.ApiProtocolCompatibility.test_actual_protocol_modules_import_without_running_qa",
+          "passed": true
+        },
+        {
+          "name": "__main__.ApiProtocolCompatibility.test_asgi_openapi_and_authenticated_identity",
+          "passed": true
+        },
+        {
+          "name": "__main__.ApiProtocolCompatibility.test_paid_model_tracking_round_trip_and_expiry_serialization",
+          "passed": true
+        },
+        {
+          "name": "__main__.ApiProtocolCompatibility.test_raw_payment_notification_asgi_transport_and_validation",
+          "passed": true
+        },
+        {
+          "name": "__main__.ApiProtocolCompatibility.test_recovery_asgi_queues_encrypted_payload_and_preserves_generic_response",
+          "passed": true
+        }
+      ],
+      "qa_touched": false,
+      "actual_email_delivered": false,
+      "actual_money_transferred": false
+    },
+    "worker_recovery_compatibility": {
+      "scope": "Local Python 3.12 installed candidate; actual ASGI and protocol parsing with mocked database/mail/payment boundaries. Not real PostgreSQL concurrency or gateway QA.",
+      "mode": "worker",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "versions": {
+        "cryptography": "50.0.2",
+        "httpx": "0.28.1"
+      },
+      "checks": [
+        {
+          "name": "__main__.RecoveryCompatibility.test_encryption_and_worker_can_decrypt_api_reset_token",
+          "passed": true
+        },
+        {
+          "name": "__main__.RecoveryCompatibility.test_worker_mail_uses_tls_without_real_delivery",
+          "passed": true
+        },
+        {
+          "name": "__main__.RecoveryCompatibility.test_wrong_key_tampering_and_expired_tokens_are_rejected",
+          "passed": true
+        }
+      ],
+      "qa_touched": false,
+      "actual_email_delivered": false,
+      "actual_money_transferred": false
+    },
+    "actual_postgres_auth_payment_protocols_executed": false,
+    "reason": "Existing protocol scripts mutate QA PostgreSQL. They were imported and their payload/library boundaries exercised locally, not launched against the shared browser QA environment."
+  },
+  "installation_observations": [
+    "Initial unchanged nats-py sdist build failed importing a setuptools module under a deep Windows temporary path.",
+    "A temporary setuptools 80.9.0 build constraint did not fix that attempt.",
+    "Fresh shorter-path API and worker venvs then installed successfully with default build dependencies. No build-tool constraint was added to repository requirements."
+  ],
+  "warnings": [
+    "Starlette 1.3.1 emits an httpx-backed TestClient deprecation warning; all current unit and compatibility tests passed. No HTTP client upgrade was made."
+  ],
+  "resolved_vs_installed": "API Linux resolution includes uvloop; Windows installation includes colorama instead. All shared package versions match, including the approved pins. Worker resolved and installed package sets match.",
+  "limitations": [
+    "No Linux container runtime test or deployed-image SBOM audit was performed locally.",
+    "No QA deployment, restart, migrations, fixture seed, or load test was performed.",
+    "Local ASGI payment checks exercise transport and signature parsing, not actual gateway settlement or PostgreSQL ledger concurrency.",
+    "Auditing does not cover OS/base-image OpenSSL or any historical unpinned deployed dependencies."
+  ],
+  "primary_references": [
+    "https://pypi.org/pypi/fastapi/0.133.0/json",
+    "https://github.com/Kludex/starlette/security/advisories/GHSA-82w8-qh3p-5jfq",
+    "https://github.com/Kludex/starlette/security/advisories/GHSA-86qp-5c8j-p5mr",
+    "https://cryptography.io/en/latest/changelog/",
+    "https://github.com/tlsfuzzer/python-ecdsa/security/advisories/GHSA-wj6h-64fc-37mp"
+  ],
+  "all_install_audit_test_processes_completed": true,
+  "sanitizer": "Explicit public package/version/advisory metadata and check outcomes only. No environment values, credentials, recovery ciphertexts, request bodies, database URLs, deployment logs, or user-local paths."
+}

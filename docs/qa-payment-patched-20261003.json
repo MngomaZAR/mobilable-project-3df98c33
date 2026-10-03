@@ -1,0 +1,156 @@
+{
+  "scope": "Real QA PostgreSQL + FastAPI ASGI; mocked PayFast remote VALID response; no money transferred",
+  "checks": [
+    {
+      "name": "Create quoted booking",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Creator accepts",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Outsider checkout denied",
+      "passed": true,
+      "status": 403
+    },
+    {
+      "name": "Server amount checkout",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Checkout retry reuses payment",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Invalid signature rejected",
+      "passed": true,
+      "status": 400
+    },
+    {
+      "name": "Underpayment rejected",
+      "passed": true,
+      "status": 400
+    },
+    {
+      "name": "Gateway INVALID rejected",
+      "passed": true,
+      "status": 400
+    },
+    {
+      "name": "Mock-validated payment persisted",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Duplicate callback acknowledged",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Duplicate callback acknowledged",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Duplicate callback acknowledged",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Duplicate callback acknowledged",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Duplicate callback acknowledged",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Duplicate callback acknowledged",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Duplicate callback acknowledged",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Duplicate callback acknowledged",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Duplicate callback acknowledged",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Duplicate callback acknowledged",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Future paid shoot cannot complete",
+      "passed": true,
+      "status": 409
+    },
+    {
+      "name": "Future paid shoot cannot share live location early",
+      "passed": true,
+      "status": 409
+    },
+    {
+      "name": "Paid participant shares private live fix",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Paid participant shares private live fix",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Participants receive both fresh locations",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Outsider cannot read paid tracking",
+      "passed": true,
+      "status": 403
+    },
+    {
+      "name": "Stale locations disappear instead of displaying fabricated coordinates",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Completed shoot records pending earnings",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Completion retry is idempotent",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Completed booking stops location sharing",
+      "passed": true,
+      "status": 409
+    },
+    {
+      "name": "Client submits completed booking review",
+      "passed": true,
+      "status": 200
+    }
+  ],
+  "actual_gateway_payment_verified": false
+}

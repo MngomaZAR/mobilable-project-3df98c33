@@ -1,0 +1,103 @@
+{
+  "environment": "isolated Oracle QA",
+  "started_at": "2026-10-03T14:36:52.046222+00:00",
+  "checks": [
+    {
+      "name": "Database schema contract",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Release gate reports unavailable capabilities",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Anonymous bookings denied",
+      "passed": true,
+      "status": 401
+    },
+    {
+      "name": "Auth tables denied",
+      "passed": true,
+      "status": 403
+    },
+    {
+      "name": "Client cannot approve KYC",
+      "passed": true,
+      "status": 403
+    },
+    {
+      "name": "Admin can review queue",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Photographer equipment save",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Photographer equipment retry",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Equipment arrays round-trip",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Equipment tier updates provider atomically",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Equipment owner spoof denied",
+      "passed": true,
+      "status": 403
+    },
+    {
+      "name": "Model service typed save",
+      "passed": false,
+      "status": 500
+    }
+  ],
+  "blockers": [],
+  "load": {},
+  "release_capabilities": {
+    "environment": "qa",
+    "version": "0.1.0",
+    "required_capabilities_available": false,
+    "capabilities": {
+      "road_routing_configured": true,
+      "object_storage_configured": true,
+      "payment_checkout_configured": false,
+      "admin_access_configured": true,
+      "payment_refund_execution": false,
+      "bank_payout_execution": false,
+      "account_recovery_email": false,
+      "video_call_service": false,
+      "instant_dispatch_service": false
+    },
+    "blockers": [
+      "payment_checkout_configured",
+      "payment_refund_execution",
+      "bank_payout_execution",
+      "account_recovery_email",
+      "video_call_service",
+      "instant_dispatch_service"
+    ],
+    "external_evidence_required": [
+      "Real gateway payment, refund and bank settlement",
+      "Physical iPhone and Android acceptance tests",
+      "Push and video media delivery on real devices",
+      "All-screen accessibility and moderation acceptance"
+    ]
+  },
+  "failure": {
+    "type": "AssertionError",
+    "reason": "Model service typed save: HTTP 500: Internal Server Error"
+  },
+  "ready_for_public_launch": false
+}

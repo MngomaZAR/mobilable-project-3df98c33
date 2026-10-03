@@ -1,5 +1,8 @@
 import { backendDb } from './backendGateway';
 import { Booking, BookingStatus } from '../types';
+import { apiClient } from '../config/apiClient';
+import { getApiAccessToken } from '../config/apiSession';
+import { environment } from '../config/environment';
 
 const BOOKING_WRITE_TIMEOUT_MS = 20000;
 
@@ -25,6 +28,9 @@ export const createBookingRequest = async (params: {
   quoteToken?: string;
   assignmentState?: 'queued' | 'offered' | 'accepted' | 'expired' | 'cancelled';
   dispatchRequestId?: string | null;
+  idempotencyKey?: string;
+  notes?: string;
+  isInstant?: boolean;
 }) => {
   const payload = {
     photographer_id: params.talentType === 'photographer' ? params.talentId : null,
@@ -44,7 +50,15 @@ export const createBookingRequest = async (params: {
     quote_token: params.quoteToken ?? null,
     assignment_state: params.assignmentState ?? 'queued',
     dispatch_request_id: params.dispatchRequestId ?? null,
+    idempotency_key: params.idempotencyKey,
+    notes: params.notes ?? '',
+    is_instant: params.isInstant ?? false,
   };
+
+  if (environment.backendProvider === 'api') {
+    const token = await getApiAccessToken();
+    return apiClient.post<Booking>('/bookings', payload, { token, timeoutMs: BOOKING_WRITE_TIMEOUT_MS });
+  }
 
   const abort = createAbortSignal(BOOKING_WRITE_TIMEOUT_MS);
   try {
@@ -67,6 +81,10 @@ export const createBookingRequest = async (params: {
 };
 
 export const updateBookingStatusInDb = async (bookingId: string, status: BookingStatus) => {
+  if (environment.backendProvider === 'api') {
+    const token = await getApiAccessToken();
+    return apiClient.patch<Booking>(`/bookings/${encodeURIComponent(bookingId)}`, { status }, { token });
+  }
   const { data, error } = await backendDb
     .from('bookings')
     .update({ status })

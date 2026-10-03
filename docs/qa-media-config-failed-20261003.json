@@ -1,0 +1,213 @@
+{
+  "environment": "isolated Oracle QA",
+  "started_at": "2026-10-03T16:58:27.251052+00:00",
+  "checks": [
+    {
+      "name": "Database schema contract",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Release gate reports unavailable capabilities",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Anonymous bookings denied",
+      "passed": true,
+      "status": 401
+    },
+    {
+      "name": "Auth tables denied",
+      "passed": true,
+      "status": 403
+    },
+    {
+      "name": "Client cannot approve KYC",
+      "passed": true,
+      "status": 403
+    },
+    {
+      "name": "Admin can review queue",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Photographer equipment save",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Photographer equipment retry",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Equipment arrays round-trip",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Equipment tier updates provider atomically",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Equipment owner spoof denied",
+      "passed": true,
+      "status": 403
+    },
+    {
+      "name": "Model service typed save",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Model service retry",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Model service round-trip",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Explicit service rejected by API",
+      "passed": true,
+      "status": 422
+    },
+    {
+      "name": "Generic model service writes cannot bypass atomic command",
+      "passed": true,
+      "status": 403
+    },
+    {
+      "name": "Registration creates profile atomically",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Registered profile is not self-verified",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "client email sign-in",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "client authenticated identity",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "photographer email sign-in",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "photographer authenticated identity",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "model email sign-in",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "model authenticated identity",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "admin email sign-in",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "admin authenticated identity",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "photographer registration",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "photographer provider row exists",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "photographer underage declaration denied",
+      "passed": true,
+      "status": 400
+    },
+    {
+      "name": "photographer missing terms denied",
+      "passed": true,
+      "status": 422
+    },
+    {
+      "name": "photographer adult declaration persisted",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "photographer missing identity documents denied",
+      "passed": true,
+      "status": 409
+    },
+    {
+      "name": "photographer cannot bypass document review",
+      "passed": true,
+      "status": 409
+    },
+    {
+      "name": "photographer private passport upload",
+      "passed": false,
+      "status": 503
+    }
+  ],
+  "blockers": [],
+  "load": {},
+  "release_capabilities": {
+    "environment": "qa",
+    "version": "0.1.0",
+    "required_capabilities_available": false,
+    "capabilities": {
+      "road_routing_configured": true,
+      "object_storage_configured": true,
+      "payment_checkout_configured": false,
+      "admin_access_configured": true,
+      "payment_refund_execution": false,
+      "bank_payout_execution": false,
+      "account_recovery_email": false,
+      "video_call_service": false,
+      "instant_dispatch_service": false
+    },
+    "blockers": [
+      "payment_checkout_configured",
+      "payment_refund_execution",
+      "bank_payout_execution",
+      "account_recovery_email",
+      "video_call_service",
+      "instant_dispatch_service"
+    ],
+    "external_evidence_required": [
+      "Real gateway payment, refund and bank settlement",
+      "Physical iPhone and Android acceptance tests",
+      "Push and video media delivery on real devices",
+      "All-screen accessibility and moderation acceptance"
+    ]
+  },
+  "failure": {
+    "type": "AssertionError",
+    "reason": "photographer private passport upload: HTTP 503: {\"detail\":\"Public HTTPS media gateway is not configured.\"}"
+  },
+  "ready_for_public_launch": false
+}

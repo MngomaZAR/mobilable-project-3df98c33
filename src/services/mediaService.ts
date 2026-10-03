@@ -6,6 +6,7 @@ import { apiClient } from '../config/apiClient';
 import { getApiAccessToken } from '../config/apiSession';
 import { backendDb } from './backendGateway';
 import { MediaAsset } from '../types';
+import { resolveStorageRef } from './uploadService';
 
 const hasApiStorage = environment.backendProvider === 'api';
 
@@ -36,8 +37,7 @@ export const fetchCreatorMedia = async (creatorId: string): Promise<MediaAsset[]
   const assets = await Promise.all((data || []).map(async (asset: any) => ({
     ...asset,
     preview_url:
-      asset.preview_url ||
-      await resolveUrl(asset.bucket, asset.object_path),
+      asset.preview_url ? await resolveStorageRef(asset.preview_url) : await resolveUrl(asset.bucket, asset.object_path),
     full_url: asset.is_locked
       ? null
       : await resolveUrl(asset.bucket, asset.object_path),

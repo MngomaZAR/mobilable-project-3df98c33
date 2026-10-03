@@ -33,8 +33,10 @@ import { BRAND, PLACEHOLDER_IMAGE } from '../utils/constants';
 import { backendDb } from '../services/backendGateway';
 import { getCurrentAuthenticatedUser } from '../config/currentUser';
 import { getForYouRanking, recordRecommendationEvents } from '../services/dispatchService';
-import HowItWorksCard from './HowItWorksCard';
+import { environment } from '../config/environment';
+import { areDigitalPurchasesAllowed, getDigitalPurchaseRestrictionMessage } from '../config/commercePolicy';
 import { reportContent } from '../services/reportService';
+import { resolveStorageRef } from '../services/uploadService';
 
 type SocialFeedProps = {
   onCreatePost?: () => void;
@@ -47,7 +49,6 @@ const PAGE_SIZE = 10;
 const WEB_PROFILE_PAGE_SIZE = 24;
 const WEB_VISIBLE_FEED_ITEMS = 40;
 
-/** Enable stories feature - stories table and StoryViewer component are production-ready */
 const STORIES_ENABLED = true;
 
 const FeedVideo: React.FC<{ uri: string; paused?: boolean }> = ({ uri, paused = false }) => {
@@ -116,48 +117,30 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
     let mounted = true;
     const loadStories = async () => {
       try {
-        const { data } = await backendDb
+        const { data, error } = await backendDb
           .from('stories')
-          .select('id, author_id, media_url, media_type, duration, created_at, profiles:author_id(full_name, avatar_url)')
+          .select('id, author_id, media_url, media_type, duration, created_at')
           .gt('expires_at', new Date().toISOString())
           .order('created_at', { ascending: false })
           .limit(20);
+        if (error) throw error;
         if (!mounted || !data) return;
-        const mapped: Story[] = data.map((s: any) => ({
+        const authorIds = [...new Set(data.map((story: any) => story.author_id))];
+        const { data: authors, error: authorsError } = authorIds.length
+          ? await backendDb.from('profiles').select('id,full_name,avatar_url').in('id', authorIds)
+          : { data: [], error: null };
+        if (authorsError) throw authorsError;
+        const profiles = new Map((authors ?? []).map((author: any) => [author.id, author]));
+        const mapped: Story[] = await Promise.all(data.map(async (s: any) => ({
           id: s.id,
           author_id: s.author_id,
-          media_url: s.media_url,
+          media_url: await resolveStorageRef(s.media_url ?? ''),
           media_type: s.media_type ?? 'image',
           created_at: s.created_at,
           duration: s.duration ?? 5,
-          profile: s.profiles
-            ? { full_name: s.profiles.full_name, avatar_url: s.profiles.avatar_url }
-            : undefined,
-        }));
-        if (mapped.length === 0 && appState.photographers.length >= 2) {
-          setLiveStories([
-            {
-              id: 'ph-story-1',
-              author_id: appState.photographers[0].id,
-              media_url: appState.photographers[0].avatar_url || PLACEHOLDER_IMAGE,
-              media_type: 'image',
-              created_at: new Date().toISOString(),
-              duration: 5,
-              profile: { full_name: appState.photographers[0].name, avatar_url: appState.photographers[0].avatar_url },
-            },
-            {
-              id: 'ph-story-2',
-              author_id: appState.photographers[1].id,
-              media_url: appState.photographers[1].avatar_url || PLACEHOLDER_IMAGE,
-              media_type: 'image',
-              created_at: new Date().toISOString(),
-              duration: 5,
-              profile: { full_name: appState.photographers[1].name, avatar_url: appState.photographers[1].avatar_url },
-            },
-          ]);
-        } else {
-          setLiveStories(mapped);
-        }
+          profile: profiles.get(s.author_id) as Story['profile'],
+        })));
+        if (mounted) setLiveStories(mapped);
       } catch {
         // Stories are non-critical — silently skip on error
       }
@@ -290,7 +273,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
 
   useEffect(() => {
     const userId = appState.currentUser?.id;
-    if (!userId) {
+    if (!userId || !areDigitalPurchasesAllowed()) {
       setUnlockedPostIds(new Set());
       setSubscribedCreatorIds(new Set());
       return;
@@ -315,6 +298,10 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
   }, [appState.currentUser?.id]);
 
   const handleUnlockPost = async (post: Post) => {
+    if (environment.backendProvider === 'api' || !areDigitalPurchasesAllowed()) {
+      Alert.alert('Unavailable', getDigitalPurchaseRestrictionMessage());
+      return;
+    }
     const userId = appState.currentUser?.id;
     if (!userId) {
       Alert.alert('Sign in required', 'Please sign in to unlock premium content.');
@@ -553,18 +540,6 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
       </ScrollView>
       {appState.error && <Text style={[styles.errorText, { color: colors.destructive }]}>{appState.error}</Text>}
 
-      <View style={{ paddingHorizontal: 16, marginTop: 12 }}>
-        <HowItWorksCard
-          title="How Premium Unlocks Work"
-          persistKey="social-feed-ppv-how"
-          items={[
-            'Locked posts show a price or subscription requirement before media is revealed.',
-            'Unlocks are tied to your account entitlement and persist after successful payment.',
-            'Subscription-only content unlocks when your active tier matches the creator gate.',
-            'Report and block actions are reviewed by moderation and can remove unsafe content.',
-          ]}
-        />
-      </View>
       
       {STORIES_ENABLED && liveStories.length > 0 && (
          <View style={{ marginTop: 16 }}>

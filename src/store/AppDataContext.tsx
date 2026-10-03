@@ -6,8 +6,10 @@ import { initialState } from '../data/initialData';
 import { backendDb, hasBackendProvider } from '../services/backendGateway';
 import { getCurrentAuthenticatedUser } from '../config/currentUser';
 import { invokeBackendFunction } from '../config/backendFunctions';
+import { apiClient } from '../config/apiClient';
+import { getApiAccessToken } from '../config/apiSession';
 import { createBookingRequest, updateBookingStatusInDb } from '../services/bookingService';
-import { BUCKETS } from '../config/environment';
+import { BUCKETS, environment } from '../config/environment';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import { consumeNhostPkceVerifier, generateNhostPkcePair, storeNhostPkceVerifier } from '../config/nhostPkce';
@@ -15,7 +17,7 @@ import { AppState, AppUser, Booking, BookingStatus, Comment, ConversationSummary
 import { uid } from '../utils/id';
 import { formatAuthError, formatErrorMessage, logError } from '../utils/errors';
 import { PLACEHOLDER_IMAGE } from '../utils/constants';
-import { mapPhotographerRow, mapPostRow } from '../utils/mappings';
+import { mapModelRow, mapPhotographerRow, mapPostRow } from '../utils/mappings';
 import { mapProviderUser } from '../services/legacyMappers';
 import { startConversationViaEdge } from '../services/chatService';
 import {
@@ -31,6 +33,7 @@ import { recordConsent as recordComplianceConsent } from '../services/dispatchSe
 import { getEffectiveRole, getTalentTableForRole, isEffectiveModel, isEffectivePhotographer, isPhotographerUser, roleRequiresKyc } from '../utils/userRole';
 
 type CreateBookingInput = {
+  idempotency_key?: string;
   photographer_id?: string;
   talent_id?: string;
   model_id?: string;
@@ -187,6 +190,7 @@ const BOOKING_SELECT = `
   package_type, 
   notes, 
   status, 
+  payment_status,
   created_at, 
   user_latitude, 
   user_longitude,
@@ -229,6 +233,7 @@ type BookingRow = {
   package_type: string | null;
   notes: string | null;
   status: BookingStatus | null;
+  payment_status?: Booking['payment_status'];
   created_at: string | null;
   user_latitude: number | null;
   user_longitude: number | null;
@@ -282,6 +287,7 @@ const PHOTOGRAPHER_SELECT = `
   tier_id,
   equipment,
   is_available,
+  is_online,
   hourly_rate,
   experience_years,
   specialties,
@@ -299,6 +305,7 @@ const mapBookingRow = (row: any): Booking => ({
   package_type: row.package_type ?? 'Photography booking',
   notes: row.notes ?? '',
   status: (row.status ?? 'pending') as BookingStatus,
+  payment_status: row.payment_status,
   created_at: row.created_at ?? new Date().toISOString(),
   user_latitude: row.user_latitude ?? null,
   user_longitude: row.user_longitude ?? null,
@@ -394,6 +401,8 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   useEffect(() => {
     if (!hasBackendProvider || !state.currentUser?.id) return;
+    // Opening the app is not consent to be available for paid work.
+    if (environment.backendProvider === 'api') return;
     const userId = state.currentUser.id;
     const role = state.currentUser.role;
 
@@ -519,6 +528,8 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           tags,
           portfolio_urls,
           tier_id,
+          hourly_rate,
+          is_online,
           equipment
         `)
         .limit(MAX_PHOTOGRAPHERS)
@@ -536,22 +547,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const mapped = (rawModels ?? [])
         .map((row: any) => {
           row.profiles = profilesMap[row.id];
-          return {
-            id: row.id,
-            name: row.profiles?.full_name ?? 'Model',
-            style: row.style ?? 'Generic',
-            location: row.location ?? row.profiles?.city ?? 'Unknown',
-            latitude: row.latitude ?? 0,
-            longitude: row.longitude ?? 0,
-            avatar_url: row.profiles?.avatar_url ?? '',
-            bio: row.bio ?? '',
-            rating: row.rating ?? 5.0,
-            price_range: row.price_range ?? '$$',
-            tags: row.tags ?? [],
-            portfolio_urls: row.portfolio_urls ?? [],
-            tier_id: row.tier_id ?? null,
-            equipment: row.equipment ?? null,
-          };
+          return mapModelRow(row);
         })
         .filter((m: any) => {
           const profile = profilesMap[m.id];
@@ -1301,6 +1297,8 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
             quoteToken: payload.quote_token ?? undefined,
             assignmentState: payload.assignment_state ?? 'queued',
             dispatchRequestId: payload.dispatch_request_id ?? undefined,
+            idempotencyKey: payload.idempotency_key ?? booking.id,
+            notes: payload.notes,
           });
 
           persistedBooking = {
@@ -1312,6 +1310,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
             package_type: data.package_type ?? payload.package_type,
             notes: data.notes ?? payload.notes ?? '',
             status: data.status,
+            payment_status: data.payment_status,
             created_at: data.created_at ?? new Date().toISOString(),
             start_datetime: data.start_datetime ?? payload.start_datetime,
             end_datetime: data.end_datetime ?? payload.end_datetime,
@@ -1382,20 +1381,14 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     if (hasBackendProvider) {
         try {
-            const { error } = await backendDb
-                .from('bookings')
-                .update({ status: newStatus })
-                .eq('id', bookingId);
-            
-            if (error) {
-                // Revert optimistic update
-                setState({ bookings: originalBookings });
-                logError('updateBookingStatus', error);
-                setError(formatErrorMessage(error, 'Unable to update booking status.'));
-                throw error;
+            const savedBooking = await updateBookingStatusInDb(bookingId, newStatus);
+            if (savedBooking) {
+              updatedBooking = { ...updatedBooking!, ...savedBooking };
+              setState({ bookings: stateRef.current.bookings.map(item => item.id === bookingId ? updatedBooking! : item) });
             }
 
-            if (['accepted', 'completed'].includes(newStatus)) {
+            // API booking commands enqueue notifications transactionally on the server.
+            if (environment.backendProvider !== 'api' && ['accepted', 'completed'].includes(newStatus)) {
               const actorId = stateRef.current.currentUser?.id;
               const providerId = booking.model_id ?? booking.photographer_id;
               const targetUserId = actorId === booking.client_id ? providerId : booking.client_id;
@@ -1865,8 +1858,8 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
               ...p,
               liked: nowLiked,
               likes_count: nowLiked
-                ? p.likes_count + 1
-                : Math.max(0, p.likes_count - 1),
+                ? (originalPosts.find(post => post.id === postId)?.likes_count ?? 0) + 1
+                : Math.max(0, (originalPosts.find(post => post.id === postId)?.likes_count ?? 0) - 1),
             };
           }),
         });
@@ -1911,7 +1904,13 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     if (hasBackendProvider) {
         try {
-            const { data, error } = await backendDb
+            const { data, error } = environment.backendProvider === 'api'
+              ? await (async () => {
+                  const token = await getApiAccessToken();
+                  const result = await apiClient.post<{ comment: Comment }>('/social/comments', { post_id: postId, text, idempotency_key: comment.id }, { token });
+                  return { data: result.comment, error: null };
+                })()
+              : await backendDb
               .from('post_comments')
               .insert([{ post_id: postId, user_id: resolvedUserId, body: text }])
               .select('id, post_id, user_id, body, created_at')
@@ -1973,85 +1972,99 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const updateBookingClientLocation = useCallback(async (bookingId: string, latitude: number, longitude: number, accuracy?: number) => {
     if (!hasBackendProvider) return;
     const userId = stateRef.current.currentUser?.id;
-    if (!userId) return;
+    if (!userId) throw new Error('Sign in before sharing a booking location.');
 
-    // Reliability Assertion: Deterministic boundary check
     try {
       assertSouthAfricanLocation(latitude, longitude);
+      if (environment.backendProvider === 'api') {
+        if (!Number.isFinite(accuracy) || accuracy! <= 0 || accuracy! > 100) {
+          throw new Error('A GPS fix with accuracy within 100 metres is required.');
+        }
+        const token = await getApiAccessToken();
+        const result = await apiClient.post<{ location: { booking_id: string; user_id: string; role: string; latitude: number; longitude: number } }>(
+          `/bookings/${encodeURIComponent(bookingId)}/location`, { latitude, longitude, accuracy_m: accuracy }, { token }
+        );
+        if (result.location.booking_id !== bookingId || result.location.user_id !== userId || result.location.role !== 'client') {
+          throw new Error('The saved location does not belong to your client booking.');
+        }
+        latitude = result.location.latitude;
+        longitude = result.location.longitude;
+      } else {
+        const { error: bookingError } = await backendDb
+          .from('bookings')
+          .update({ user_latitude: latitude, user_longitude: longitude, updated_at: new Date().toISOString() })
+          .eq('id', bookingId)
+          .eq('client_id', userId);
+        if (bookingError) throw bookingError;
+        const { error: trackError } = await backendDb.from('location_tracks').insert({
+          booking_id: bookingId, user_id: userId, role: 'client', latitude, longitude,
+          accuracy_m: Number.isFinite(accuracy) ? accuracy : null, source: 'app',
+        });
+        if (trackError) throw trackError;
+      }
+
+      if (stateRef.current.currentUser?.id !== userId) return;
+      const updated = stateRef.current.bookings.map((booking) =>
+        booking.id === bookingId ? { ...booking, user_latitude: latitude, user_longitude: longitude } : booking
+      );
+      setState({ bookings: updated });
     } catch (err: any) {
-      logError('geo_assertion_client', err);
-      // Log and ignore invalid data to prevent out-of-bounds telemetry
-      return;
+      logError('updateBookingClientLocation', err);
+      setError(formatErrorMessage(err, 'Unable to share your booking location.'));
+      throw err;
     }
-
-    await backendDb
-      .from('bookings')
-      .update({ user_latitude: latitude, user_longitude: longitude, updated_at: new Date().toISOString() })
-      .eq('id', bookingId)
-      .eq('client_id', userId);
-
-    await backendDb
-      .from('location_tracks')
-      .insert({
-        booking_id: bookingId,
-        user_id: userId,
-        role: 'client',
-        latitude,
-        longitude,
-        accuracy_m: Number.isFinite(accuracy) ? accuracy : null,
-        source: 'app',
-      });
-
-    const updated = stateRef.current.bookings.map((booking) =>
-      booking.id === bookingId ? { ...booking, user_latitude: latitude, user_longitude: longitude } : booking
-    );
-    setState({ bookings: updated });
   }, []);
 
   const updatePhotographerLocation = useCallback(async (latitude: number, longitude: number, bookingId?: string, accuracy?: number) => {
     if (!hasBackendProvider) return;
     const user = stateRef.current.currentUser;
     const userId = user?.id;
-    if (!userId) return;
+    if (!userId) throw new Error('Sign in before sharing a creator location.');
 
     try {
       assertSouthAfricanLocation(latitude, longitude);
+      let table = getTalentTableForRole(user);
+      if (environment.backendProvider === 'api') {
+        if (!Number.isFinite(accuracy) || accuracy! <= 0 || accuracy! > 100) {
+          throw new Error('A GPS fix with accuracy within 100 metres is required.');
+        }
+        const token = await getApiAccessToken();
+        const path = bookingId ? `/bookings/${encodeURIComponent(bookingId)}/location` : '/providers/me/location';
+        const result = await apiClient.post<{ provider_type: 'model' | 'photographer'; location: { booking_id: string | null; user_id: string; role: string; latitude: number; longitude: number } }>(
+          path, { latitude, longitude, accuracy_m: accuracy }, { token }
+        );
+        if (result.location.user_id !== userId || result.location.role !== 'provider' || result.location.booking_id !== (bookingId ?? null)
+            || !['model', 'photographer'].includes(result.provider_type)) {
+          throw new Error('The saved location does not belong to your creator profile.');
+        }
+        table = result.provider_type === 'model' ? 'models' : 'photographers';
+        latitude = result.location.latitude;
+        longitude = result.location.longitude;
+      } else {
+        const { error: providerError } = await backendDb.from(table).update({ latitude, longitude }).eq('id', userId);
+        if (providerError) throw providerError;
+        if (bookingId) {
+          const { error: trackError } = await backendDb.from('location_tracks').insert({
+            booking_id: bookingId, user_id: userId, role: 'provider', latitude, longitude,
+            accuracy_m: Number.isFinite(accuracy) ? accuracy : null, source: 'app',
+          });
+          if (trackError) throw trackError;
+        }
+      }
+
+      if (stateRef.current.currentUser?.id !== userId) return;
+      const bookings = stateRef.current.bookings.map(booking =>
+        booking.id === bookingId ? { ...booking, provider_latitude: latitude, provider_longitude: longitude } : booking
+      );
+      if (table === 'models') {
+        setState({ bookings, models: stateRef.current.models.map(m => m.id === userId ? { ...m, latitude, longitude } : m) });
+      } else {
+        setState({ bookings, photographers: stateRef.current.photographers.map(p => p.id === userId ? { ...p, latitude, longitude } : p) });
+      }
     } catch (err: any) {
-      logError('geo_assertion', err);
-      return;
-    }
-
-    const table = getTalentTableForRole(user);
-    
-    await backendDb
-      .from(table)
-      .update({ latitude, longitude })
-      .eq('id', userId);
-
-    if (bookingId) {
-      await backendDb
-        .from('location_tracks')
-        .insert({
-          booking_id: bookingId,
-          user_id: userId,
-          role: 'provider',
-          latitude,
-          longitude,
-          accuracy_m: Number.isFinite(accuracy) ? accuracy : null,
-          source: 'app',
-        });
-    }
-
-    if (table === 'models') {
-      const updated = stateRef.current.models.map((m) =>
-        m.id === userId ? { ...m, latitude, longitude } : m
-      );
-      setState({ models: updated });
-    } else {
-      const updated = stateRef.current.photographers.map((p) =>
-        p.id === userId ? { ...p, latitude, longitude } : p
-      );
-      setState({ photographers: updated });
+      logError('updatePhotographerLocation', err);
+      setError(formatErrorMessage(err, 'Unable to share your creator location.'));
+      throw err;
     }
   }, []);
 
@@ -2410,7 +2423,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setSaving(true);
     try {
       const finalUrl = await uploadAvatar(uri, userId);
-      const versionedUrl = `${finalUrl}?v=${Date.now()}`;
+      const versionedUrl = finalUrl;
       const { error: authError } = await backendDb.auth.updateUser({
         data: { avatar_url: versionedUrl }
       });
@@ -2502,19 +2515,18 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (changes.role && changes.role !== currentRole) {
         const nextRole = getEffectiveRole(changes.role);
         if (isEffectivePhotographer(nextRole)) {
-          await backendDb.from('photographers').upsert({
+          const { error: providerError } = await backendDb.from('photographers').upsert({
             id: userId,
-            rating: 5.0,
             location: '',
             price_range: '$$',
             style: 'Portrait',
             bio: '',
             tags: [],
           }, { onConflict: 'id' });
+          if (providerError) throw providerError;
         } else if (isEffectiveModel(nextRole)) {
-          await backendDb.from('models').upsert({
+          const { error: providerError } = await backendDb.from('models').upsert({
             id: userId,
-            rating: 5.0,
             location: '',
             price_range: '$$',
             style: 'Commercial',
@@ -2522,6 +2534,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
             tags: [],
             portfolio_urls: [],
           }, { onConflict: 'id' });
+          if (providerError) throw providerError;
         }
       }
 

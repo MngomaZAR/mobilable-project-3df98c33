@@ -1,0 +1,1195 @@
+{
+  "config": {
+    "configFile": "C:\\Users\\27790\\Downloads\\papzii\\playwright.config.cjs",
+    "rootDir": "C:/Users/27790/Downloads/papzii/e2e-web",
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "C:/Users/27790/Downloads/papzii/docs/qa-artifacts-20261003/browser-verified",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "",
+        "name": "",
+        "testDir": "C:/Users/27790/Downloads/papzii/e2e-web",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 45000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "list"
+      ],
+      [
+        "json"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "runAgents": "none",
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.58.2",
+    "workers": 1,
+    "webServer": {
+      "command": "node scripts/serve-dist.cjs",
+      "url": "http://127.0.0.1:4173",
+      "timeout": 60000,
+      "reuseExistingServer": true
+    }
+  },
+  "suites": [
+    {
+      "title": "oracle.chat.spec.js",
+      "file": "oracle.chat.spec.js",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "Oracle inbox and send persist on 390px",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 7703,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('QA incoming 1791047789699-390', { exact: true })\nExpected: visible\nError: strict mode violation: getByText('QA incoming 1791047789699-390', { exact: true }) resolved to 2 elements:\n    1) <div dir=\"auto\" class=\"css-146c3p1 r-8akbws r-krxsd3 r-dnmrzs r-1qsk4np r-1udbk01 r-a023e6 r-10yl4k\">QA incoming 1791047789699-390</div> aka getByText('QA incoming 1791047789699-').first()\n    2) <div dir=\"auto\" class=\"css-146c3p1 r-ubezar r-rjixqe\">QA incoming 1791047789699-390</div> aka getByText('QA incoming 1791047789699-').nth(1)\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByText('QA incoming 1791047789699-390', { exact: true })\u001b[22m\n\u001b[2m    4 × locator resolved to <div dir=\"auto\" class=\"css-146c3p1 r-8akbws r-krxsd3 r-dnmrzs r-1qsk4np r-1udbk01 r-a023e6 r-10yl4k\">QA incoming 1791047789699-390</div>\u001b[22m\n\u001b[2m      - unexpected value \"hidden\"\u001b[22m\n",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('QA incoming 1791047789699-390', { exact: true })\nExpected: visible\nError: strict mode violation: getByText('QA incoming 1791047789699-390', { exact: true }) resolved to 2 elements:\n    1) <div dir=\"auto\" class=\"css-146c3p1 r-8akbws r-krxsd3 r-dnmrzs r-1qsk4np r-1udbk01 r-a023e6 r-10yl4k\">QA incoming 1791047789699-390</div> aka getByText('QA incoming 1791047789699-').first()\n    2) <div dir=\"auto\" class=\"css-146c3p1 r-ubezar r-rjixqe\">QA incoming 1791047789699-390</div> aka getByText('QA incoming 1791047789699-').nth(1)\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByText('QA incoming 1791047789699-390', { exact: true })\u001b[22m\n\u001b[2m    4 × locator resolved to <div dir=\"auto\" class=\"css-146c3p1 r-8akbws r-krxsd3 r-dnmrzs r-1qsk4np r-1udbk01 r-a023e6 r-10yl4k\">QA incoming 1791047789699-390</div>\u001b[22m\n\u001b[2m      - unexpected value \"hidden\"\u001b[22m\n\n    at C:\\Users\\27790\\Downloads\\papzii\\e2e-web\\oracle.chat.spec.js:36:61",
+                    "location": {
+                      "file": "C:\\Users\\27790\\Downloads\\papzii\\e2e-web\\oracle.chat.spec.js",
+                      "column": 61,
+                      "line": 36
+                    },
+                    "snippet": "  34 |     const input = page.getByPlaceholder('Type a message...');\n  35 |     await expect(input).toBeVisible({ timeout: 30000 });\n> 36 |     await expect(page.getByText(incoming, { exact: true })).toBeVisible();\n     |                                                             ^\n  37 |     const outgoing = `QA browser reply ${Date.now()}-${width}`;\n  38 |     await input.fill(outgoing);\n  39 |     const sent = page.waitForResponse(response => response.url() === `${API}/functions/chat-messages`"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "C:\\Users\\27790\\Downloads\\papzii\\e2e-web\\oracle.chat.spec.js",
+                        "column": 61,
+                        "line": 36
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('QA incoming 1791047789699-390', { exact: true })\nExpected: visible\nError: strict mode violation: getByText('QA incoming 1791047789699-390', { exact: true }) resolved to 2 elements:\n    1) <div dir=\"auto\" class=\"css-146c3p1 r-8akbws r-krxsd3 r-dnmrzs r-1qsk4np r-1udbk01 r-a023e6 r-10yl4k\">QA incoming 1791047789699-390</div> aka getByText('QA incoming 1791047789699-').first()\n    2) <div dir=\"auto\" class=\"css-146c3p1 r-ubezar r-rjixqe\">QA incoming 1791047789699-390</div> aka getByText('QA incoming 1791047789699-').nth(1)\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByText('QA incoming 1791047789699-390', { exact: true })\u001b[22m\n\u001b[2m    4 × locator resolved to <div dir=\"auto\" class=\"css-146c3p1 r-8akbws r-krxsd3 r-dnmrzs r-1qsk4np r-1udbk01 r-a023e6 r-10yl4k\">QA incoming 1791047789699-390</div>\u001b[22m\n\u001b[2m      - unexpected value \"hidden\"\u001b[22m\n\n\n  34 |     const input = page.getByPlaceholder('Type a message...');\n  35 |     await expect(input).toBeVisible({ timeout: 30000 });\n> 36 |     await expect(page.getByText(incoming, { exact: true })).toBeVisible();\n     |                                                             ^\n  37 |     const outgoing = `QA browser reply ${Date.now()}-${width}`;\n  38 |     await input.fill(outgoing);\n  39 |     const sent = page.waitForResponse(response => response.url() === `${API}/functions/chat-messages`\n    at C:\\Users\\27790\\Downloads\\papzii\\e2e-web\\oracle.chat.spec.js:36:61"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-03T17:16:28.412Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "C:\\Users\\27790\\Downloads\\papzii\\docs\\qa-artifacts-20261003\\browser-verified\\oracle.chat-Oracle-inbox-and-send-persist-on-390px\\test-failed-1.png"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "C:\\Users\\27790\\Downloads\\papzii\\docs\\qa-artifacts-20261003\\browser-verified\\oracle.chat-Oracle-inbox-and-send-persist-on-390px\\error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "C:\\Users\\27790\\Downloads\\papzii\\docs\\qa-artifacts-20261003\\browser-verified\\oracle.chat-Oracle-inbox-and-send-persist-on-390px\\trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "C:\\Users\\27790\\Downloads\\papzii\\e2e-web\\oracle.chat.spec.js",
+                    "column": 61,
+                    "line": 36
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "e94e1a351f5f31d8f49e-e2852015e3154646b06c",
+          "file": "oracle.chat.spec.js",
+          "line": 8,
+          "column": 3
+        },
+        {
+          "title": "Oracle inbox and send persist on 1440px",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 6291,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('QA incoming 1791047799737-1440', { exact: true })\nExpected: visible\nError: strict mode violation: getByText('QA incoming 1791047799737-1440', { exact: true }) resolved to 2 elements:\n    1) <div dir=\"auto\" class=\"css-146c3p1 r-8akbws r-krxsd3 r-dnmrzs r-1qsk4np r-1udbk01 r-a023e6 r-10yl4k\">QA incoming 1791047799737-1440</div> aka getByText('QA incoming 1791047799737-').first()\n    2) <div dir=\"auto\" class=\"css-146c3p1 r-ubezar r-rjixqe\">QA incoming 1791047799737-1440</div> aka getByText('QA incoming 1791047799737-').nth(1)\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByText('QA incoming 1791047799737-1440', { exact: true })\u001b[22m\n\u001b[2m    4 × locator resolved to <div dir=\"auto\" class=\"css-146c3p1 r-8akbws r-krxsd3 r-dnmrzs r-1qsk4np r-1udbk01 r-a023e6 r-10yl4k\">QA incoming 1791047799737-1440</div>\u001b[22m\n\u001b[2m      - unexpected value \"hidden\"\u001b[22m\n",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('QA incoming 1791047799737-1440', { exact: true })\nExpected: visible\nError: strict mode violation: getByText('QA incoming 1791047799737-1440', { exact: true }) resolved to 2 elements:\n    1) <div dir=\"auto\" class=\"css-146c3p1 r-8akbws r-krxsd3 r-dnmrzs r-1qsk4np r-1udbk01 r-a023e6 r-10yl4k\">QA incoming 1791047799737-1440</div> aka getByText('QA incoming 1791047799737-').first()\n    2) <div dir=\"auto\" class=\"css-146c3p1 r-ubezar r-rjixqe\">QA incoming 1791047799737-1440</div> aka getByText('QA incoming 1791047799737-').nth(1)\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByText('QA incoming 1791047799737-1440', { exact: true })\u001b[22m\n\u001b[2m    4 × locator resolved to <div dir=\"auto\" class=\"css-146c3p1 r-8akbws r-krxsd3 r-dnmrzs r-1qsk4np r-1udbk01 r-a023e6 r-10yl4k\">QA incoming 1791047799737-1440</div>\u001b[22m\n\u001b[2m      - unexpected value \"hidden\"\u001b[22m\n\n    at C:\\Users\\27790\\Downloads\\papzii\\e2e-web\\oracle.chat.spec.js:36:61",
+                    "location": {
+                      "file": "C:\\Users\\27790\\Downloads\\papzii\\e2e-web\\oracle.chat.spec.js",
+                      "column": 61,
+                      "line": 36
+                    },
+                    "snippet": "  34 |     const input = page.getByPlaceholder('Type a message...');\n  35 |     await expect(input).toBeVisible({ timeout: 30000 });\n> 36 |     await expect(page.getByText(incoming, { exact: true })).toBeVisible();\n     |                                                             ^\n  37 |     const outgoing = `QA browser reply ${Date.now()}-${width}`;\n  38 |     await input.fill(outgoing);\n  39 |     const sent = page.waitForResponse(response => response.url() === `${API}/functions/chat-messages`"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "C:\\Users\\27790\\Downloads\\papzii\\e2e-web\\oracle.chat.spec.js",
+                        "column": 61,
+                        "line": 36
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('QA incoming 1791047799737-1440', { exact: true })\nExpected: visible\nError: strict mode violation: getByText('QA incoming 1791047799737-1440', { exact: true }) resolved to 2 elements:\n    1) <div dir=\"auto\" class=\"css-146c3p1 r-8akbws r-krxsd3 r-dnmrzs r-1qsk4np r-1udbk01 r-a023e6 r-10yl4k\">QA incoming 1791047799737-1440</div> aka getByText('QA incoming 1791047799737-').first()\n    2) <div dir=\"auto\" class=\"css-146c3p1 r-ubezar r-rjixqe\">QA incoming 1791047799737-1440</div> aka getByText('QA incoming 1791047799737-').nth(1)\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByText('QA incoming 1791047799737-1440', { exact: true })\u001b[22m\n\u001b[2m    4 × locator resolved to <div dir=\"auto\" class=\"css-146c3p1 r-8akbws r-krxsd3 r-dnmrzs r-1qsk4np r-1udbk01 r-a023e6 r-10yl4k\">QA incoming 1791047799737-1440</div>\u001b[22m\n\u001b[2m      - unexpected value \"hidden\"\u001b[22m\n\n\n  34 |     const input = page.getByPlaceholder('Type a message...');\n  35 |     await expect(input).toBeVisible({ timeout: 30000 });\n> 36 |     await expect(page.getByText(incoming, { exact: true })).toBeVisible();\n     |                                                             ^\n  37 |     const outgoing = `QA browser reply ${Date.now()}-${width}`;\n  38 |     await input.fill(outgoing);\n  39 |     const sent = page.waitForResponse(response => response.url() === `${API}/functions/chat-messages`\n    at C:\\Users\\27790\\Downloads\\papzii\\e2e-web\\oracle.chat.spec.js:36:61"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-03T17:16:39.045Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "C:\\Users\\27790\\Downloads\\papzii\\docs\\qa-artifacts-20261003\\browser-verified\\oracle.chat-Oracle-inbox-and-send-persist-on-1440px\\test-failed-1.png"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "C:\\Users\\27790\\Downloads\\papzii\\docs\\qa-artifacts-20261003\\browser-verified\\oracle.chat-Oracle-inbox-and-send-persist-on-1440px\\error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "C:\\Users\\27790\\Downloads\\papzii\\docs\\qa-artifacts-20261003\\browser-verified\\oracle.chat-Oracle-inbox-and-send-persist-on-1440px\\trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "C:\\Users\\27790\\Downloads\\papzii\\e2e-web\\oracle.chat.spec.js",
+                    "column": 61,
+                    "line": 36
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "e94e1a351f5f31d8f49e-5c996522c0dd4cde8e9f",
+          "file": "oracle.chat.spec.js",
+          "line": 8,
+          "column": 3
+        }
+      ]
+    },
+    {
+      "title": "oracle.map.spec.js",
+      "file": "oracle.map.spec.js",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "Oracle map renders, navigates, selects and resizes on phone",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 19441,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-03T17:16:48.105Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "809cf2eeeafe9440aa82-3c0ff42aa04298be128b",
+          "file": "oracle.map.spec.js",
+          "line": 60,
+          "column": 3
+        },
+        {
+          "title": "Oracle map renders, navigates, selects and resizes on desktop",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 22530,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-03T17:17:07.766Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "809cf2eeeafe9440aa82-afb6b818c291e94a0432",
+          "file": "oracle.map.spec.js",
+          "line": 60,
+          "column": 3
+        },
+        {
+          "title": "Oracle road route uses returned road geometry and clears on map press",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 12539,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-03T17:17:30.326Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "809cf2eeeafe9440aa82-7adc06141a2eb1cafaee",
+          "file": "oracle.map.spec.js",
+          "line": 110,
+          "column": 1
+        },
+        {
+          "title": "Oracle routing failure shows no invented line or ETA",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 13054,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-03T17:17:42.905Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "809cf2eeeafe9440aa82-c3796120057ccd028352",
+          "file": "oracle.map.spec.js",
+          "line": 132,
+          "column": 1
+        },
+        {
+          "title": "map tile failure is visible and retry replaces the failed map",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 5131,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-03T17:17:55.983Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "809cf2eeeafe9440aa82-8980864c05ea26e29b95",
+          "file": "oracle.map.spec.js",
+          "line": 147,
+          "column": 1
+        },
+        {
+          "title": "unsupported WebGL is reported honestly without an uncaught crash",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 7544,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-03T17:18:01.146Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "809cf2eeeafe9440aa82-8af7241cb6f7ba7ac2af",
+          "file": "oracle.map.spec.js",
+          "line": 159,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "oracle.roles.spec.js",
+      "file": "oracle.roles.spec.js",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "client real Oracle navigation on phone",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 24214,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // deep equality\u001b[22m\n\n\u001b[32m- Expected  - 1\u001b[39m\n\u001b[31m+ Received  + 3\u001b[39m\n\n\u001b[32m- Array []\u001b[39m\n\u001b[31m+ Array [\u001b[39m\n\u001b[31m+   \"400 /data/photographers\",\u001b[39m\n\u001b[31m+ ]\u001b[39m",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // deep equality\u001b[22m\n\n\u001b[32m- Expected  - 1\u001b[39m\n\u001b[31m+ Received  + 3\u001b[39m\n\n\u001b[32m- Array []\u001b[39m\n\u001b[31m+ Array [\u001b[39m\n\u001b[31m+   \"400 /data/photographers\",\u001b[39m\n\u001b[31m+ ]\u001b[39m\n    at C:\\Users\\27790\\Downloads\\papzii\\e2e-web\\oracle.roles.spec.js:55:24",
+                    "location": {
+                      "file": "C:\\Users\\27790\\Downloads\\papzii\\e2e-web\\oracle.roles.spec.js",
+                      "column": 24,
+                      "line": 55
+                    },
+                    "snippet": "  53 |       }\n  54 |       expect(crashes).toEqual([]);\n> 55 |       expect(failures).toEqual([]);\n     |                        ^\n  56 |     });\n  57 |   }\n  58 | }"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "C:\\Users\\27790\\Downloads\\papzii\\e2e-web\\oracle.roles.spec.js",
+                        "column": 24,
+                        "line": 55
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // deep equality\u001b[22m\n\n\u001b[32m- Expected  - 1\u001b[39m\n\u001b[31m+ Received  + 3\u001b[39m\n\n\u001b[32m- Array []\u001b[39m\n\u001b[31m+ Array [\u001b[39m\n\u001b[31m+   \"400 /data/photographers\",\u001b[39m\n\u001b[31m+ ]\u001b[39m\n\n  53 |       }\n  54 |       expect(crashes).toEqual([]);\n> 55 |       expect(failures).toEqual([]);\n     |                        ^\n  56 |     });\n  57 |   }\n  58 | }\n    at C:\\Users\\27790\\Downloads\\papzii\\e2e-web\\oracle.roles.spec.js:55:24"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-03T17:18:08.734Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "C:\\Users\\27790\\Downloads\\papzii\\docs\\qa-artifacts-20261003\\browser-verified\\oracle.roles-client-real-Oracle-navigation-on-phone\\test-failed-1.png"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "C:\\Users\\27790\\Downloads\\papzii\\docs\\qa-artifacts-20261003\\browser-verified\\oracle.roles-client-real-Oracle-navigation-on-phone\\error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "C:\\Users\\27790\\Downloads\\papzii\\docs\\qa-artifacts-20261003\\browser-verified\\oracle.roles-client-real-Oracle-navigation-on-phone\\trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "C:\\Users\\27790\\Downloads\\papzii\\e2e-web\\oracle.roles.spec.js",
+                    "column": 24,
+                    "line": 55
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "007cce4881a9d52b4e78-6927f5719355570128c5",
+          "file": "oracle.roles.spec.js",
+          "line": 14,
+          "column": 5
+        },
+        {
+          "title": "photographer real Oracle navigation on phone",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 14324,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-03T17:18:39.880Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "007cce4881a9d52b4e78-3ae80f6d0cc5e7ac0131",
+          "file": "oracle.roles.spec.js",
+          "line": 14,
+          "column": 5
+        },
+        {
+          "title": "model real Oracle navigation on phone",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 10833,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-03T17:18:54.507Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "007cce4881a9d52b4e78-dd6648ece795921ff6f2",
+          "file": "oracle.roles.spec.js",
+          "line": 14,
+          "column": 5
+        },
+        {
+          "title": "admin real Oracle navigation on phone",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 10469,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-03T17:19:05.367Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "007cce4881a9d52b4e78-70e645d0ddb169e781e3",
+          "file": "oracle.roles.spec.js",
+          "line": 14,
+          "column": 5
+        },
+        {
+          "title": "client real Oracle navigation on tablet",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 19788,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // deep equality\u001b[22m\n\n\u001b[32m- Expected  - 1\u001b[39m\n\u001b[31m+ Received  + 3\u001b[39m\n\n\u001b[32m- Array []\u001b[39m\n\u001b[31m+ Array [\u001b[39m\n\u001b[31m+   \"400 /data/photographers\",\u001b[39m\n\u001b[31m+ ]\u001b[39m",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // deep equality\u001b[22m\n\n\u001b[32m- Expected  - 1\u001b[39m\n\u001b[31m+ Received  + 3\u001b[39m\n\n\u001b[32m- Array []\u001b[39m\n\u001b[31m+ Array [\u001b[39m\n\u001b[31m+   \"400 /data/photographers\",\u001b[39m\n\u001b[31m+ ]\u001b[39m\n    at C:\\Users\\27790\\Downloads\\papzii\\e2e-web\\oracle.roles.spec.js:55:24",
+                    "location": {
+                      "file": "C:\\Users\\27790\\Downloads\\papzii\\e2e-web\\oracle.roles.spec.js",
+                      "column": 24,
+                      "line": 55
+                    },
+                    "snippet": "  53 |       }\n  54 |       expect(crashes).toEqual([]);\n> 55 |       expect(failures).toEqual([]);\n     |                        ^\n  56 |     });\n  57 |   }\n  58 | }"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "C:\\Users\\27790\\Downloads\\papzii\\e2e-web\\oracle.roles.spec.js",
+                        "column": 24,
+                        "line": 55
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // deep equality\u001b[22m\n\n\u001b[32m- Expected  - 1\u001b[39m\n\u001b[31m+ Received  + 3\u001b[39m\n\n\u001b[32m- Array []\u001b[39m\n\u001b[31m+ Array [\u001b[39m\n\u001b[31m+   \"400 /data/photographers\",\u001b[39m\n\u001b[31m+ ]\u001b[39m\n\n  53 |       }\n  54 |       expect(crashes).toEqual([]);\n> 55 |       expect(failures).toEqual([]);\n     |                        ^\n  56 |     });\n  57 |   }\n  58 | }\n    at C:\\Users\\27790\\Downloads\\papzii\\e2e-web\\oracle.roles.spec.js:55:24"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-03T17:19:15.861Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "C:\\Users\\27790\\Downloads\\papzii\\docs\\qa-artifacts-20261003\\browser-verified\\oracle.roles-client-real-Oracle-navigation-on-tablet\\test-failed-1.png"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "C:\\Users\\27790\\Downloads\\papzii\\docs\\qa-artifacts-20261003\\browser-verified\\oracle.roles-client-real-Oracle-navigation-on-tablet\\error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "C:\\Users\\27790\\Downloads\\papzii\\docs\\qa-artifacts-20261003\\browser-verified\\oracle.roles-client-real-Oracle-navigation-on-tablet\\trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "C:\\Users\\27790\\Downloads\\papzii\\e2e-web\\oracle.roles.spec.js",
+                    "column": 24,
+                    "line": 55
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "007cce4881a9d52b4e78-031aacc64f46bbb62beb",
+          "file": "oracle.roles.spec.js",
+          "line": 14,
+          "column": 5
+        },
+        {
+          "title": "photographer real Oracle navigation on tablet",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 4,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 12244,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-03T17:19:41.037Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "007cce4881a9d52b4e78-87a54d64e1f611ee47d4",
+          "file": "oracle.roles.spec.js",
+          "line": 14,
+          "column": 5
+        },
+        {
+          "title": "model real Oracle navigation on tablet",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 4,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 11990,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-03T17:19:53.565Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "007cce4881a9d52b4e78-95cdebdada21993168b8",
+          "file": "oracle.roles.spec.js",
+          "line": 14,
+          "column": 5
+        },
+        {
+          "title": "admin real Oracle navigation on tablet",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 4,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 10596,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-03T17:20:05.590Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "007cce4881a9d52b4e78-1ded848addf2811ad620",
+          "file": "oracle.roles.spec.js",
+          "line": 14,
+          "column": 5
+        },
+        {
+          "title": "client real Oracle navigation on desktop",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 4,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 43497,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('tab', { name: /Feed/ })\nExpected: visible\nTimeout: 40000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 40000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('tab', { name: /Feed/ })\u001b[22m\n",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('tab', { name: /Feed/ })\nExpected: visible\nTimeout: 40000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 40000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('tab', { name: /Feed/ })\u001b[22m\n\n    at C:\\Users\\27790\\Downloads\\papzii\\e2e-web\\oracle.roles.spec.js:34:61",
+                    "location": {
+                      "file": "C:\\Users\\27790\\Downloads\\papzii\\e2e-web\\oracle.roles.spec.js",
+                      "column": 61,
+                      "line": 34
+                    },
+                    "snippet": "  32 |       await page.getByPlaceholder('Password').fill('QA-only-not-a-real-user-2026!');\n  33 |       await page.getByText('Sign In', { exact: true }).last().click();\n> 34 |       await expect(page.getByRole('tab', { name: /Feed/ })).toBeVisible({ timeout: 40000 });\n     |                                                             ^\n  35 |       for (const name of [role === 'client' ? 'Home' : 'Dashboard', 'Bookings', 'Feed', ...(role === 'client' ? [] : ['Chat']), 'Settings']) {\n  36 |         await page.getByRole('tab', { name: new RegExp(name) }).click();\n  37 |         await page.waitForTimeout(1000);"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "C:\\Users\\27790\\Downloads\\papzii\\e2e-web\\oracle.roles.spec.js",
+                        "column": 61,
+                        "line": 34
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('tab', { name: /Feed/ })\nExpected: visible\nTimeout: 40000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 40000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('tab', { name: /Feed/ })\u001b[22m\n\n\n  32 |       await page.getByPlaceholder('Password').fill('QA-only-not-a-real-user-2026!');\n  33 |       await page.getByText('Sign In', { exact: true }).last().click();\n> 34 |       await expect(page.getByRole('tab', { name: /Feed/ })).toBeVisible({ timeout: 40000 });\n     |                                                             ^\n  35 |       for (const name of [role === 'client' ? 'Home' : 'Dashboard', 'Bookings', 'Feed', ...(role === 'client' ? [] : ['Chat']), 'Settings']) {\n  36 |         await page.getByRole('tab', { name: new RegExp(name) }).click();\n  37 |         await page.waitForTimeout(1000);\n    at C:\\Users\\27790\\Downloads\\papzii\\e2e-web\\oracle.roles.spec.js:34:61"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-03T17:20:16.213Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "C:\\Users\\27790\\Downloads\\papzii\\docs\\qa-artifacts-20261003\\browser-verified\\oracle.roles-client-real-Oracle-navigation-on-desktop\\test-failed-1.png"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "C:\\Users\\27790\\Downloads\\papzii\\docs\\qa-artifacts-20261003\\browser-verified\\oracle.roles-client-real-Oracle-navigation-on-desktop\\error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "C:\\Users\\27790\\Downloads\\papzii\\docs\\qa-artifacts-20261003\\browser-verified\\oracle.roles-client-real-Oracle-navigation-on-desktop\\trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "C:\\Users\\27790\\Downloads\\papzii\\e2e-web\\oracle.roles.spec.js",
+                    "column": 61,
+                    "line": 34
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "007cce4881a9d52b4e78-84958ea471f18f4ba1be",
+          "file": "oracle.roles.spec.js",
+          "line": 14,
+          "column": 5
+        },
+        {
+          "title": "photographer real Oracle navigation on desktop",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 5,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 11805,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-03T17:21:03.988Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "007cce4881a9d52b4e78-659195bb84ba6be68a62",
+          "file": "oracle.roles.spec.js",
+          "line": 14,
+          "column": 5
+        },
+        {
+          "title": "model real Oracle navigation on desktop",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 5,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 11562,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-03T17:21:16.080Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "007cce4881a9d52b4e78-be9b07ad5ba820479188",
+          "file": "oracle.roles.spec.js",
+          "line": 14,
+          "column": 5
+        },
+        {
+          "title": "admin real Oracle navigation on desktop",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 5,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 11610,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-03T17:21:27.666Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "007cce4881a9d52b4e78-cb2aa2bbdcfc0e19db34",
+          "file": "oracle.roles.spec.js",
+          "line": 14,
+          "column": 5
+        },
+        {
+          "title": "new client can register and leave the age gate against Oracle",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 5,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4432,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-03T17:21:39.300Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "007cce4881a9d52b4e78-eefd386e67f7c05055e5",
+          "file": "oracle.roles.spec.js",
+          "line": 60,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "oracle.settings.spec.js",
+      "file": "oracle.settings.spec.js",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "client real Oracle settings entry points on phone",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 180000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 5,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 42549,
+                  "error": {
+                    "message": "TimeoutError: locator.click: Timeout 40000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('tab', { name: /Settings/ })\u001b[22m\n",
+                    "stack": "TimeoutError: locator.click: Timeout 40000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('tab', { name: /Settings/ })\u001b[22m\n\n    at C:\\Users\\27790\\Downloads\\papzii\\e2e-web\\oracle.settings.spec.js:32:55",
+                    "location": {
+                      "file": "C:\\Users\\27790\\Downloads\\papzii\\e2e-web\\oracle.settings.spec.js",
+                      "column": 55,
+                      "line": 32
+                    },
+                    "snippet": "  30 |     await page.getByPlaceholder('Password').fill('QA-only-not-a-real-user-2026!');\n  31 |     await page.getByText('Sign In', { exact: true }).last().click();\n> 32 |     await page.getByRole('tab', { name: /Settings/ }).click({ timeout: 40000 });\n     |                                                       ^\n  33 |     const provider = role === 'photographer' || role === 'model';\n  34 |     const routes = [...common,\n  35 |       ...(provider ? [['Identity Verification (KYC)', 'Identity Verification'], ['Payout Methods', 'Payout Methods']] : []),"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "C:\\Users\\27790\\Downloads\\papzii\\e2e-web\\oracle.settings.spec.js",
+                        "column": 55,
+                        "line": 32
+                      },
+                      "message": "TimeoutError: locator.click: Timeout 40000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('tab', { name: /Settings/ })\u001b[22m\n\n\n  30 |     await page.getByPlaceholder('Password').fill('QA-only-not-a-real-user-2026!');\n  31 |     await page.getByText('Sign In', { exact: true }).last().click();\n> 32 |     await page.getByRole('tab', { name: /Settings/ }).click({ timeout: 40000 });\n     |                                                       ^\n  33 |     const provider = role === 'photographer' || role === 'model';\n  34 |     const routes = [...common,\n  35 |       ...(provider ? [['Identity Verification (KYC)', 'Identity Verification'], ['Payout Methods', 'Payout Methods']] : []),\n    at C:\\Users\\27790\\Downloads\\papzii\\e2e-web\\oracle.settings.spec.js:32:55"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-03T17:21:43.769Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "C:\\Users\\27790\\Downloads\\papzii\\docs\\qa-artifacts-20261003\\browser-verified\\oracle.settings-client-rea-3b61d-tings-entry-points-on-phone\\test-failed-1.png"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "C:\\Users\\27790\\Downloads\\papzii\\docs\\qa-artifacts-20261003\\browser-verified\\oracle.settings-client-rea-3b61d-tings-entry-points-on-phone\\error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "C:\\Users\\27790\\Downloads\\papzii\\docs\\qa-artifacts-20261003\\browser-verified\\oracle.settings-client-rea-3b61d-tings-entry-points-on-phone\\trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "C:\\Users\\27790\\Downloads\\papzii\\e2e-web\\oracle.settings.spec.js",
+                    "column": 55,
+                    "line": 32
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "2d6fa9586050586778a6-29438928319e09e43d55",
+          "file": "oracle.settings.spec.js",
+          "line": 14,
+          "column": 3
+        },
+        {
+          "title": "photographer real Oracle settings entry points on phone",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 180000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 6,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 15586,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-03T17:22:32.845Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "2d6fa9586050586778a6-df481819ac49a4f13024",
+          "file": "oracle.settings.spec.js",
+          "line": 14,
+          "column": 3
+        },
+        {
+          "title": "model real Oracle settings entry points on phone",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 180000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 6,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 13365,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-03T17:22:48.814Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "2d6fa9586050586778a6-66036ca17a1933a252ec",
+          "file": "oracle.settings.spec.js",
+          "line": 14,
+          "column": 3
+        },
+        {
+          "title": "admin real Oracle settings entry points on phone",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 180000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 6,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 12070,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-03T17:23:02.202Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "2d6fa9586050586778a6-c1fe24397dcb27db134b",
+          "file": "oracle.settings.spec.js",
+          "line": 14,
+          "column": 3
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-10-03T17:16:25.824Z",
+    "duration": 409798.492,
+    "expected": 19,
+    "skipped": 0,
+    "unexpected": 6,
+    "flaky": 0
+  }
+}

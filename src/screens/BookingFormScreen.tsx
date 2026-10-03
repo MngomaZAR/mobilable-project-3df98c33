@@ -12,16 +12,33 @@ import { haversineDistanceKm } from '../utils/geo';
 import { SERVICE_TYPES, TIER_OPTIONS, CAMERA_OPTIONS, LENS_OPTIONS, LIGHTING_OPTIONS, EXTRA_OPTIONS } from '../constants/bookingOptions';
 import LocationPickerModal from '../components/LocationPickerModal';
 import HowItWorksCard from '../components/HowItWorksCard';
+import { apiClient } from '../config/apiClient';
+import { getApiAccessToken } from '../config/apiSession';
+import { environment } from '../config/environment';
+import { scheduledShootStart } from '../utils/bookingTime';
+import { uid } from '../utils/id';
 
 type Route = RouteProp<RootStackParamList, 'BookingForm'>;
 type Navigation = StackNavigationProp<RootStackParamList, 'BookingForm'>;
 type PaymentDispatchIntent = NonNullable<RootStackParamList['Payment']['dispatchIntent']>;
 
+type ProviderBookingOptions = {
+  role: 'model' | 'photographer';
+  packages: { id: string; label: string; rate_zar: number; pricing_basis: string }[];
+  services: { id: string; label: string; rate_zar: number; pricing_basis: string }[];
+  equipment: Record<'camera' | 'lenses' | 'lighting' | 'extras', { id: string; label: string; price: number }[]>;
+};
+
+type ServerQuote = {
+  total_amount: number; commission_amount: number; payout_amount: number;
+  base_amount: number; equipment_amount: number; travel_amount: number; distance_km: number;
+  commandFingerprint: string;
+};
 
 const BookingFormScreen: React.FC = () => {
   const { params } = useRoute<Route>();
   const navigation = useNavigation<Navigation>();
-  const { state, createBooking } = useAppData();
+  const { state, createBooking, refresh } = useAppData();
   const { startConversationWithUser } = useMessaging();
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [timeSlot, setTimeSlot] = useState('Golden hour (4-7)');
@@ -40,6 +57,13 @@ const BookingFormScreen: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [fanoutCount, setFanoutCount] = useState(1);
   const [intensityLevel, setIntensityLevel] = useState(1);
+  const [serverQuote, setServerQuote] = useState<ServerQuote | null>(null);
+  const [providerOptions, setProviderOptions] = useState<ProviderBookingOptions | null>(null);
+  const [optionsError, setOptionsError] = useState<string | null>(null);
+  const [quoteRevision, setQuoteRevision] = useState(0);
+  const [quoteError, setQuoteError] = useState<string | null>(null);
+  const [quoteLoading, setQuoteLoading] = useState(false);
+  const requestRef = React.useRef({ fingerprint: '', key: uid('booking') });
 
   const toggleSetValue = (set: Set<string>, setter: (next: Set<string>) => void, id: string) => {
     const next = new Set(set);
@@ -51,6 +75,38 @@ const BookingFormScreen: React.FC = () => {
   const bookingServiceType = params.serviceType ?? (params.modelId ? 'modeling' : 'photography');
   const talentId = bookingServiceType === 'modeling' ? params.modelId : params.photographerId;
   const isModelTalent = bookingServiceType === 'modeling';
+  const usesApi = environment.backendProvider === 'api';
+  const serviceOptions = usesApi && isModelTalent
+    ? (providerOptions?.services ?? []).map(service => ({ id: service.id, label: service.label, detail: `R${Number(service.rate_zar).toLocaleString('en-ZA')} / session` }))
+    : usesApi ? SERVICE_TYPES.filter(service => service.id !== 'video') : SERVICE_TYPES;
+  const tierOptions = usesApi
+    ? (providerOptions?.packages ?? []).map(tier => ({ id: tier.id, label: tier.label, basePrice: Number(tier.rate_zar), summary: 'Hourly rate' }))
+    : TIER_OPTIONS;
+  const cameraOptions = usesApi ? providerOptions?.equipment.camera ?? [] : CAMERA_OPTIONS;
+  const lensOptions = usesApi ? providerOptions?.equipment.lenses ?? [] : LENS_OPTIONS;
+  const lightingOptions = usesApi ? providerOptions?.equipment.lighting ?? [] : LIGHTING_OPTIONS;
+  const extraOptions = usesApi ? providerOptions?.equipment.extras ?? [] : EXTRA_OPTIONS;
+
+  React.useEffect(() => {
+    if (!usesApi || !talentId) return;
+    let cancelled = false;
+    setProviderOptions(null);
+    setOptionsError(null);
+    setSelectedServiceType(null);
+    setSelectedCamera(new Set());
+    setSelectedLenses(new Set());
+    setSelectedLighting(new Set());
+    setSelectedExtras(new Set());
+    void getApiAccessToken().then(token => apiClient.get<ProviderBookingOptions>(`/providers/${encodeURIComponent(talentId)}/booking-options`, { token }))
+      .then(options => {
+        if (cancelled) return;
+        if (options.role !== (isModelTalent ? 'model' : 'photographer')) throw new Error('Creator type does not match this booking.');
+        setProviderOptions(options);
+        setSelectedTierId(options.packages[0]?.id ?? '');
+      })
+      .catch(error => { if (!cancelled) setOptionsError(error.message || 'Unable to load creator prices.'); });
+    return () => { cancelled = true; };
+  }, [usesApi, talentId, isModelTalent]);
 
   const talent = useMemo(
     () =>
@@ -68,11 +124,10 @@ const BookingFormScreen: React.FC = () => {
   const canBookTalent = talentKycApproved && talentAgeVerified;
 
   const validationError = useMemo(() => {
+    if (usesApi && !providerOptions) return optionsError || 'Loading creator prices...';
+    if (usesApi && isModelTalent && !providerOptions?.services.length) return 'This model has no active services.';
     if (!selectedServiceType) return 'Select a service type to continue.';
-    if (!selectedTierId) return 'Select a tier to continue.';
-    if (selectedCamera.size === 0) return 'Select a camera requirement.';
-    if (selectedLenses.size === 0) return 'Select a lens requirement.';
-    if (selectedLighting.size === 0) return 'Select a lighting requirement.';
+    if (!(usesApi && isModelTalent) && !selectedTierId) return 'Select a tier to continue.';
     if (!locationCoords) return 'Pick a location on the map or use GPS to continue.';
     if (bookingTimeMode === 'schedule' && !selectedDate) return 'Pick a date for your booking.';
     if (!canBookTalent) return 'This provider is not verified for bookings yet.';
@@ -87,6 +142,7 @@ const BookingFormScreen: React.FC = () => {
     bookingTimeMode,
     selectedDate,
     canBookTalent,
+    usesApi, providerOptions, optionsError, isModelTalent,
   ]);
 
   React.useEffect(() => {
@@ -103,13 +159,48 @@ const BookingFormScreen: React.FC = () => {
   const formattedDate = useMemo(() => {
     if (bookingTimeMode === 'now') return 'Now (dispatch)';
     if (!selectedDate) return 'Pick a date and time slot below';
-    return `${selectedDate.toDateString()} · ${timeSlot}`;
+    return `${selectedDate.toDateString()} - ${timeSlot}`;
   }, [bookingTimeMode, selectedDate, timeSlot]);
 
   const selectedTier = useMemo(
-    () => TIER_OPTIONS.find((tier) => tier.id === selectedTierId) ?? TIER_OPTIONS[0],
-    [selectedTierId]
+    () => tierOptions.find((tier) => tier.id === selectedTierId) ?? { id: '', label: '', basePrice: 0, summary: '' },
+    [selectedTierId, tierOptions]
   );
+  const quoteCommand = useMemo(() => {
+    if (!selectedDate || !locationCoords || !talentId || !selectedServiceType || (usesApi && !providerOptions)) return null;
+    const start = scheduledShootStart(selectedDate, timeSlot);
+    return {
+      photographer_id: isModelTalent ? null : talentId,
+      model_id: isModelTalent ? talentId : null,
+      package_id: isModelTalent && usesApi ? null : selectedTierId,
+      model_service_type: isModelTalent && usesApi ? selectedServiceType : null,
+      photography_service_type: isModelTalent ? 'photoshoot' : selectedServiceType,
+      equipment_selection: {
+        camera: [...selectedCamera].sort(), lenses: [...selectedLenses].sort(),
+        lighting: [...selectedLighting].sort(), extras: [...selectedExtras].sort(),
+      },
+      start_datetime: start.toISOString(),
+      end_datetime: new Date(start.getTime() + 3600000).toISOString(),
+      user_latitude: locationCoords.lat,
+      user_longitude: locationCoords.lng,
+    };
+  }, [selectedDate, locationCoords, talentId, isModelTalent, selectedTierId, timeSlot, selectedServiceType,
+    selectedCamera, selectedLenses, selectedLighting, selectedExtras, usesApi, providerOptions]);
+  const commandFingerprint = JSON.stringify(quoteCommand);
+  const currentQuote = serverQuote?.commandFingerprint === commandFingerprint ? serverQuote : null;
+
+  React.useEffect(() => {
+    if (!usesApi || !quoteCommand) { setServerQuote(null); setQuoteLoading(false); return; }
+    let cancelled = false;
+    setServerQuote(null);
+    setQuoteError(null);
+    setQuoteLoading(true);
+    void getApiAccessToken().then(token => apiClient.post<ServerQuote>('/bookings/quote', { ...quoteCommand, idempotency_key: requestRef.current.key }, { token }))
+      .then(quote => { if (!cancelled) setServerQuote({ ...quote, commandFingerprint }); })
+      .catch(error => { if (!cancelled) setQuoteError(error.message || 'Unable to price this shoot.'); })
+      .finally(() => { if (!cancelled) setQuoteLoading(false); });
+    return () => { cancelled = true; };
+  }, [quoteCommand, commandFingerprint, usesApi, quoteRevision]);
 
   const selectedEquipmentTotal = useMemo(() => {
     const sumBy = (items: { id: string; price: number }[], selected: Set<string>) =>
@@ -137,8 +228,8 @@ const BookingFormScreen: React.FC = () => {
   }, [selectedServiceType]);
 
   const serviceTypeLabel = useMemo(
-    () => SERVICE_TYPES.find((service) => service.id === selectedServiceType)?.label ?? 'Service',
-    [selectedServiceType]
+    () => serviceOptions.find((service) => service.id === selectedServiceType)?.label ?? 'Service',
+    [selectedServiceType, serviceOptions]
   );
 
   const timeMultiplier = bookingTimeMode === 'now' ? 1.15 : 1;
@@ -147,14 +238,14 @@ const BookingFormScreen: React.FC = () => {
   const travelAmount = Math.max(0, Math.round(distanceKm * 12));
 
   const priceBeforeExtras = baseTierAmount + serviceAdjustment + timeAdjustment;
-  const estimatedTotalAmount = priceBeforeExtras + selectedEquipmentTotal + travelAmount;
+  const estimatedTotalAmount = currentQuote?.total_amount ?? (usesApi ? 0 : selectedTier.basePrice + travelAmount);
 
-  const estimatedRate = `From R${estimatedTotalAmount.toLocaleString('en-ZA')}`;
+  const estimatedRate = usesApi && !currentQuote ? 'Quote pending' : `R${estimatedTotalAmount.toLocaleString('en-ZA')}`;
   const intensityMultiplier = useMemo(() => 1 + ((intensityLevel - 1) * 0.15) + ((fanoutCount - 1) * 0.05), [fanoutCount, intensityLevel]);
-  const previewQuoteTotal = Math.round(estimatedTotalAmount * intensityMultiplier);
-  const commissionAmount = Math.round(estimatedTotalAmount * 0.30);
-  const vatAmount = Math.round(commissionAmount * 0.15);
-  const photographerPayout = estimatedTotalAmount - commissionAmount - vatAmount;
+  const previewQuoteTotal = estimatedTotalAmount;
+  const commissionAmount = currentQuote?.commission_amount ?? Math.round(estimatedTotalAmount * 0.20);
+  const vatAmount = 0;
+  const photographerPayout = currentQuote?.payout_amount ?? (estimatedTotalAmount - commissionAmount);
 
   if (!talent) {
     return (
@@ -165,6 +256,10 @@ const BookingFormScreen: React.FC = () => {
   }
 
   const handleSubmit = async () => {
+    if (usesApi && (!currentQuote || !quoteCommand || quoteLoading || quoteError)) {
+      Alert.alert('Quote unavailable', quoteError || 'Wait for your shoot quote before sending the request.');
+      return;
+    }
     if (validationError) {
       Alert.alert('Complete your booking', validationError);
       return;
@@ -172,7 +267,7 @@ const BookingFormScreen: React.FC = () => {
 
     try {
       setSubmitting(true);
-      const bookingDateSource = bookingTimeMode === 'now' ? new Date() : selectedDate!;
+      const bookingDateSource = scheduledShootStart(selectedDate!, timeSlot);
       const normalizedDate = new Date(bookingDateSource);
       normalizedDate.setUTCHours(12, 0, 0, 0);
       const bookingDate = normalizedDate.toISOString().split('T')[0];
@@ -187,9 +282,9 @@ const BookingFormScreen: React.FC = () => {
       const resolvedLocation = locationLabel.trim() || (locationCoords ? `${locationCoords.lat.toFixed(5)}, ${locationCoords.lng.toFixed(5)}` : '');
       const finalNotes = [
         `Service: ${serviceTypeLabel}`,
-        `Tier: ${selectedTier.label}`,
+        selectedTier.label ? `Tier: ${selectedTier.label}` : null,
         resolvedLocation ? `Location: ${resolvedLocation}` : null,
-        `Distance: ${distanceKm} km`,
+        `Distance: ${currentQuote?.distance_km ?? distanceKm} km`,
         `Time: ${bookingTimeMode === 'now' ? 'Now' : timeSlot}`,
         equipmentSummary,
         notes ? `Notes: ${notes}` : null,
@@ -197,12 +292,20 @@ const BookingFormScreen: React.FC = () => {
 
       const baseAmount = priceBeforeExtras + selectedEquipmentTotal;
 
-      const booking = await createBooking({
+      const fingerprint = JSON.stringify({ quoteCommand, finalNotes, expectedTotal: currentQuote?.total_amount });
+      if (requestRef.current.fingerprint && requestRef.current.fingerprint !== fingerprint) requestRef.current.key = uid('booking');
+      requestRef.current.fingerprint = fingerprint;
+      // Send the same structured selections as the quote without legacy client-price fields.
+      const booking = usesApi ? await apiClient.post<{ id: string }>('/bookings', {
+        ...quoteCommand, notes: finalNotes, idempotency_key: requestRef.current.key,
+        expected_total_amount: currentQuote!.total_amount,
+      }, { token: await getApiAccessToken() }) : await createBooking({
+        idempotency_key: requestRef.current.key,
         talent_id: talent.id,
         talent_type: isModelTalent ? 'model' : 'photographer',
         service_type: isModelTalent ? 'modeling' : selectedServiceType === 'video' ? 'combined' : 'photography',
         booking_date: bookingDate,
-        package_type: `${serviceTypeLabel} • ${selectedTier.label} • ${bookingTimeMode === 'now' ? 'Now' : timeSlot}`,
+        package_type: `${serviceTypeLabel} - ${selectedTier.label} - ${bookingTimeMode === 'now' ? 'Now' : timeSlot}`,
         package_id: selectedTier.id,
         notes: finalNotes,
         base_amount: baseAmount,
@@ -215,6 +318,7 @@ const BookingFormScreen: React.FC = () => {
         start_datetime: bookingDateSource.toISOString(),
         end_datetime: new Date(bookingDateSource.getTime() + 60 * 60 * 1000).toISOString(),
       });
+      if (usesApi) void refresh().catch(() => undefined);
 
       const dispatchIntent: RootStackParamList['Payment']['dispatchIntent'] = bookingTimeMode === 'now'
         ? {
@@ -236,13 +340,14 @@ const BookingFormScreen: React.FC = () => {
         : undefined;
 
       Alert.alert(
-        'Booking created',
-        'Payment is required to dispatch your request.',
+        'Booking requested',
+        'Your creator will review the request. Payment becomes available after they accept.',
         [
-          { text: 'Continue to payment', onPress: () => navigation.replace('Payment', { bookingId: booking.id, dispatchIntent }) },
+          { text: 'View booking', onPress: () => navigation.replace('BookingDetail', { bookingId: booking.id }) },
         ]
       );
     } catch (err: any) {
+      if (usesApi && err?.status === 409) setQuoteRevision(value => value + 1);
       Alert.alert('Unable to save', err?.message || 'Please try again.');
     } finally {
       setSubmitting(false);
@@ -262,7 +367,9 @@ const BookingFormScreen: React.FC = () => {
     <ScrollView contentContainerStyle={styles.container}>
       <View style={styles.heroCard}>
         <Text style={styles.heroTitle}>Book {talent.name}</Text>
-        <Text style={styles.heroMeta}>{talent.style} · {talent.location}</Text>
+        <Text style={styles.heroMeta}>{talent.style} - {talent.location}</Text>
+        {quoteError ? <Text accessibilityRole="alert" style={styles.muted}>{quoteError}</Text> : null}
+        {quoteLoading ? <Text style={styles.muted}>Pricing shoot...</Text> : null}
         <View style={styles.heroFooter}>
           <Text style={styles.heroPrice}>{estimatedRate}</Text>
           <TouchableOpacity style={styles.msgBadge} onPress={handleMessage}>
@@ -283,7 +390,7 @@ const BookingFormScreen: React.FC = () => {
 
       <Text style={styles.label}>Service type</Text>
       <View style={styles.choiceGrid}>
-        {SERVICE_TYPES.map((service) => {
+        {serviceOptions.map((service) => {
           const active = selectedServiceType === service.id;
           return (
             <TouchableOpacity
@@ -298,11 +405,11 @@ const BookingFormScreen: React.FC = () => {
         })}
       </View>
 
-      <View style={styles.detailsCard}>
+      {!(usesApi && isModelTalent) ? <View style={styles.detailsCard}>
         <Text style={styles.label}>Tier</Text>
         <Text style={styles.packageHint}>Select the service tier that matches your budget.</Text>
         <View style={styles.tierGrid}>
-          {TIER_OPTIONS.map((tier) => {
+          {tierOptions.map((tier) => {
             const active = tier.id === selectedTierId;
             return (
               <TouchableOpacity
@@ -317,14 +424,14 @@ const BookingFormScreen: React.FC = () => {
             );
           })}
         </View>
-      </View>
+      </View> : null}
 
-      <View style={styles.detailsCard}>
-        <Text style={styles.label}>Equipment requirements</Text>
-        <Text style={styles.packageHint}>All equipment sections are required to continue.</Text>
+      {!isModelTalent && (!usesApi || [cameraOptions, lensOptions, lightingOptions, extraOptions].some(items => items.length)) ? <View style={styles.detailsCard}>
+        <Text style={styles.label}>Equipment requests</Text>
+        <Text style={styles.packageHint}>Optional preferences for your creator.</Text>
         <Text style={styles.equipmentLabel}>Camera</Text>
         <View style={styles.equipmentRow}>
-          {CAMERA_OPTIONS.map(option => {
+          {cameraOptions.map(option => {
             const active = selectedCamera.has(option.id);
             return (
               <TouchableOpacity
@@ -341,7 +448,7 @@ const BookingFormScreen: React.FC = () => {
 
         <Text style={styles.equipmentLabel}>Lenses</Text>
         <View style={styles.equipmentRow}>
-          {LENS_OPTIONS.map(option => {
+          {lensOptions.map(option => {
             const active = selectedLenses.has(option.id);
             return (
               <TouchableOpacity
@@ -358,7 +465,7 @@ const BookingFormScreen: React.FC = () => {
 
         <Text style={styles.equipmentLabel}>Lighting</Text>
         <View style={styles.equipmentRow}>
-          {LIGHTING_OPTIONS.map(option => {
+          {lightingOptions.map(option => {
             const active = selectedLighting.has(option.id);
             return (
               <TouchableOpacity
@@ -375,7 +482,7 @@ const BookingFormScreen: React.FC = () => {
 
         <Text style={styles.equipmentLabel}>Extras</Text>
         <View style={styles.equipmentRow}>
-          {EXTRA_OPTIONS.map(option => {
+          {extraOptions.map(option => {
             const active = selectedExtras.has(option.id);
             return (
               <TouchableOpacity
@@ -391,15 +498,16 @@ const BookingFormScreen: React.FC = () => {
         </View>
       </View>
 
+      : null}
       <View style={styles.detailsCard}>
         <Text style={styles.label}>Time</Text>
         <View style={styles.choiceRow}>
-          <TouchableOpacity
+          {environment.backendProvider !== 'api' ? <TouchableOpacity
             style={[styles.choiceChip, bookingTimeMode === 'now' && styles.choiceChipActive]}
             onPress={() => { Haptics.selectionAsync(); setBookingTimeMode('now'); }}
           >
             <Text style={[styles.choiceChipText, bookingTimeMode === 'now' && styles.choiceChipTextActive]}>Now</Text>
-          </TouchableOpacity>
+          </TouchableOpacity> : null}
           <TouchableOpacity
             style={[styles.choiceChip, bookingTimeMode === 'schedule' && styles.choiceChipActive]}
             onPress={() => { Haptics.selectionAsync(); setBookingTimeMode('schedule'); }}
@@ -460,7 +568,8 @@ const BookingFormScreen: React.FC = () => {
           <Text style={styles.packageHint}>Distance (km)</Text>
           <TextInput
             placeholder="0"
-            value={String(distanceKm)}
+            value={String(usesApi ? currentQuote?.distance_km ?? distanceKm : distanceKm)}
+            editable={!usesApi}
             onChangeText={(val) => setDistanceKm(Number(val.replace(/[^0-9]/g, '') || 0))}
             keyboardType="numeric"
             style={[styles.input, styles.distanceInput]}
@@ -481,44 +590,44 @@ const BookingFormScreen: React.FC = () => {
       </View>
 
       {/* Price Breakdown */}
-      <View style={styles.breakdownCard}>
+      {!usesApi || currentQuote ? <View style={styles.breakdownCard}>
         <Text style={styles.breakdownTitle}>Estimated Cost</Text>
         <View style={styles.breakdownRow}>
-          <Text style={styles.breakdownLabel}>Tier base</Text>
-          <Text style={styles.breakdownValue}>R{baseTierAmount.toLocaleString('en-ZA')}</Text>
+          <Text style={styles.breakdownLabel}>{isModelTalent ? 'Session rate' : 'Tier base'}</Text>
+          <Text style={styles.breakdownValue}>R{(currentQuote?.base_amount ?? baseTierAmount).toLocaleString('en-ZA')}</Text>
         </View>
-        <View style={styles.breakdownRow}>
+        {!usesApi ? <View style={styles.breakdownRow}>
           <Text style={styles.breakdownLabel}>Service type</Text>
           <Text style={styles.breakdownValue}>R{serviceAdjustment.toLocaleString('en-ZA')}</Text>
-        </View>
-        <View style={styles.breakdownRow}>
+        </View> : null}
+        {!usesApi ? <View style={styles.breakdownRow}>
           <Text style={styles.breakdownLabel}>Time / dispatch</Text>
           <Text style={styles.breakdownValue}>R{timeAdjustment.toLocaleString('en-ZA')}</Text>
-        </View>
+        </View> : null}
         <View style={styles.breakdownRow}>
           <Text style={styles.breakdownLabel}>Equipment</Text>
-          <Text style={styles.breakdownValue}>R{selectedEquipmentTotal.toLocaleString('en-ZA')}</Text>
+          <Text style={styles.breakdownValue}>R{(currentQuote?.equipment_amount ?? selectedEquipmentTotal).toLocaleString('en-ZA')}</Text>
         </View>
         <View style={styles.breakdownRow}>
           <Text style={styles.breakdownLabel}>Travel</Text>
-          <Text style={styles.breakdownValue}>R{travelAmount.toLocaleString('en-ZA')}</Text>
+          <Text style={styles.breakdownValue}>R{(currentQuote?.travel_amount ?? travelAmount).toLocaleString('en-ZA')}</Text>
         </View>
         <View style={styles.breakdownRow}>
           <Text style={styles.breakdownLabel}>Platform fee</Text>
           <Text style={[styles.breakdownValue, { color: '#ef4444' }]}>-R{commissionAmount.toLocaleString('en-ZA')}</Text>
         </View>
-        <View style={styles.breakdownRow}>
+        {!usesApi ? <View style={styles.breakdownRow}>
           <Text style={styles.breakdownLabel}>VAT (15% on fee)</Text>
           <Text style={[styles.breakdownValue, { color: '#ef4444' }]}>-R{vatAmount.toLocaleString('en-ZA')}</Text>
-        </View>
+        </View> : null}
         <View style={[styles.breakdownRow, styles.breakdownTotal]}>
         <Text style={[styles.breakdownLabel, { fontWeight: '800', color: '#f8fafc' }]}>Talent payout</Text>
           <Text style={[styles.breakdownValue, { color: '#16a34a', fontWeight: '800' }]}>R{photographerPayout.toLocaleString('en-ZA')}</Text>
         </View>
-        <Text style={styles.breakdownNote}>* Exact total calculated at checkout based on final scope. You will be charged R{estimatedTotalAmount.toLocaleString('en-ZA')}</Text>
-      </View>
+        <Text style={styles.breakdownNote}>{usesApi ? 'Quoted total' : 'Estimated total'}: R{estimatedTotalAmount.toLocaleString('en-ZA')}</Text>
+      </View> : null}
 
-      <View style={{ marginTop: 12 }}>
+      {!usesApi ? <View style={{ marginTop: 12 }}>
         <HowItWorksCard
           title="How Booking Works"
           persistKey="booking-form-how"
@@ -529,7 +638,7 @@ const BookingFormScreen: React.FC = () => {
             'Cancellation and refund timing is shown on your booking detail screen.',
           ]}
         />
-      </View>
+      </View> : null}
 
       {validationError ? (
         <Text style={styles.validationText}>{validationError}</Text>

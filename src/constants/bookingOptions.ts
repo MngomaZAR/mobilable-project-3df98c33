@@ -6,11 +6,11 @@ export const SERVICE_TYPES = [
 ];
 
 export const TIER_OPTIONS = [
-  { id: 'essential', label: 'Essential', basePrice: 1400, summary: 'UberX' },
-  { id: 'standard', label: 'Standard', basePrice: 2200, summary: 'Comfort' },
-  { id: 'professional', label: 'Professional', basePrice: 3400, summary: 'Business' },
-  { id: 'premium', label: 'Premium', basePrice: 5200, summary: 'Uber Black' },
-  { id: 'studio', label: 'Studio', basePrice: 8200, summary: 'Production' },
+  { id: 'essential', label: 'Essential', basePrice: 1400, summary: 'One-hour session' },
+  { id: 'standard', label: 'Standard', basePrice: 2200, summary: 'One-hour session' },
+  { id: 'professional', label: 'Professional', basePrice: 3400, summary: 'One-hour session' },
+  { id: 'premium', label: 'Premium', basePrice: 5200, summary: 'One-hour session' },
+  { id: 'studio', label: 'Studio', basePrice: 8200, summary: 'One-hour session' },
 ];
 
 export const CAMERA_OPTIONS = [

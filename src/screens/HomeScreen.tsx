@@ -24,7 +24,7 @@ import { useTheme } from '../store/ThemeContext';
 import { useAppData } from '../store/AppDataContext';
 import { useMessaging } from '../store/MessagingContext';
 import { RootStackParamList, TabParamList } from '../navigation/types';
-import { Photographer, Model } from '../types';
+import { AppUser, Photographer, Model } from '../types';
 import { AppLogo } from '../components/AppLogo';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
@@ -34,19 +34,40 @@ import { resolveUserRole } from '../utils/userRole';
 
 type Navigation = BottomTabNavigationProp<TabParamList, 'Home'>;
 const MAX_HOME_CARDS = 120;
-const randPerTier = 600;
 const SHOWCASE_PRIORITY_NAMES = ['Olivia Harris', 'Michael Scott', 'Anna Gomez', 'Jason Lee'];
+const HOURLY_BUDGET_OPTIONS = [
+  { label: 'Any budget', maximum: null },
+  { label: 'Up to R1,000/hr', maximum: 1000 },
+  { label: 'Up to R2,000/hr', maximum: 2000 },
+];
 
-const toHourlyRateRand = (price_range: string) => {
-  const tiers = ((price_range || '').match(/\$/g) || []).length || 2;
-  const amount = tiers * randPerTier + 600;
-  return `R${amount.toLocaleString('en-ZA')}/hr`;
+export const getPublishedHourlyRate = (value: unknown): number | null => {
+  if (typeof value !== 'number' && typeof value !== 'string') return null;
+  const rate = Number(value);
+  return Number.isFinite(rate) && rate > 0 ? rate : null;
+};
+
+export const formatPublishedHourlyRate = (value: unknown): string => {
+  const rate = getPublishedHourlyRate(value);
+  return rate === null ? 'Pricing not published' : `R${rate.toLocaleString('en-ZA', { maximumFractionDigits: 2 })}/hr`;
+};
+
+export const isWithinHourlyBudget = (value: unknown, maximum: number | null): boolean => {
+  if (maximum === null) return true;
+  const rate = getPublishedHourlyRate(value);
+  return rate !== null && rate <= maximum;
+};
+
+export const isHomeProviderOnline = (
+  provider: Pick<Photographer, 'is_online'>,
+  profile?: Pick<AppUser, 'availability_status' | 'kyc_status'>,
+): boolean => {
+  return provider.is_online === true && profile?.availability_status === 'online' && profile?.kyc_status === 'approved';
 };
 
 const toSafeLower = (value: unknown) => String(value ?? '').toLowerCase();
 const toSafeTags = (value: unknown): string[] => (Array.isArray(value) ? value.filter((tag): tag is string => typeof tag === 'string') : []);
 const toSafeRating = (value: unknown) => (Number.isFinite(Number(value)) ? Number(value) : 0);
-const isOnlineStatus = (value: unknown) => ['online', 'available', 'active'].includes(toSafeLower(value));
 
 const HomeScreen: React.FC = () => {
   const { state, loading, error, refresh } = useAppData();
@@ -58,7 +79,7 @@ const HomeScreen: React.FC = () => {
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const [category, setCategory] = useState('All Categories');
-  const [priceRange, setPriceRange] = useState('Any budget');
+  const [maxHourlyRate, setMaxHourlyRate] = useState<number | null>(null);
   const [sort, setSort] = useState('Highest Rated');
   const [location, setLocation] = useState('');
   const [discoveryMode, setDiscoveryMode] = useState<'photographers' | 'models'>('photographers');
@@ -67,12 +88,29 @@ const HomeScreen: React.FC = () => {
   const [recommended, setRecommended] = useState<Photographer[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const lastSearchTagRef = useRef<string | null>(null);
+  const recommendationRequestRef = useRef(0);
+  const budgetLabel = HOURLY_BUDGET_OPTIONS.find((option) => option.maximum === maxHourlyRate)!.label;
+
+  const loadRecommendations = React.useCallback(async (city: string, specialty: string, budget: number | null) => {
+    const request = ++recommendationRequestRef.current;
+    setIsSearching(true);
+    try {
+      const matches = await fetchRecommendedMatches(city, specialty, budget ?? 0);
+      if (request === recommendationRequestRef.current) setRecommended(matches);
+    } catch {
+      if (request === recommendationRequestRef.current) {
+        setRecommended([]);
+        Alert.alert('Search unavailable', 'Could not refresh recommendations. Please try again.');
+      }
+    } finally {
+      if (request === recommendationRequestRef.current) setIsSearching(false);
+    }
+  }, []);
 
   React.useEffect(() => {
-     // Use logged-in user's city for initial recommendations
-     const userCity = state.currentUser?.city ?? '';
-     fetchRecommendedMatches(userCity, '', 0).then(setRecommended);
-  }, [state.currentUser?.city]);
+    void loadRecommendations(state.currentUser?.city ?? '', '', null);
+    return () => { recommendationRequestRef.current += 1; };
+  }, [state.currentUser?.id, state.currentUser?.city, loadRecommendations]);
 
   React.useEffect(() => {
     const rawTag = route.params?.searchTag?.trim();
@@ -80,29 +118,17 @@ const HomeScreen: React.FC = () => {
     if (lastSearchTagRef.current === rawTag) return;
     lastSearchTagRef.current = rawTag;
     const nextLocation = location.trim() || state.currentUser?.city || '';
-    const budget = priceRange.includes('$$') ? 1000 : 2000;
     setDiscoveryMode('photographers');
     setCategory(rawTag);
     if (!location.trim()) setLocation(nextLocation);
-    setIsSearching(true);
-    fetchRecommendedMatches(nextLocation, rawTag, budget)
-      .then(setRecommended)
-      .finally(() => setIsSearching(false));
-  }, [route.params?.searchTag, location, priceRange, state.currentUser?.city]);
+    void loadRecommendations(nextLocation, rawTag, maxHourlyRate);
+  }, [route.params?.searchTag, location, maxHourlyRate, state.currentUser?.city, loadRecommendations]);
 
   const handleSmartSearch = async () => {
-      Keyboard.dismiss();
-      setIsSearching(true);
-      try {
-          // In a real app we'd parse budget from string, but here we just pass simple params
-          const budget = priceRange.includes('$$') ? 1000 : 2000;
-          const matches = await fetchRecommendedMatches(location, category === 'All Categories' ? '' : category, budget);
-          setRecommended(matches);
-      } catch (e) {
-          console.warn(e);
-      } finally {
-          setIsSearching(false);
-      }
+    Keyboard.dismiss();
+    if (discoveryMode === 'photographers') {
+      await loadRecommendations(location.trim(), category === 'All Categories' ? '' : category, maxHourlyRate);
+    }
   };
 
   const columns = width > 900 ? 3 : width > 700 ? 2 : 1;
@@ -121,37 +147,27 @@ const HomeScreen: React.FC = () => {
     return map;
   }, [state.profiles]);
 
-  const hasProfileData = profileById.size > 0;
-  const isTalentEligible = (item: any) => {
-    if (!hasProfileData) return true;
-    const profile = profileById.get(item.id);
-    const kycApproved = profile?.kyc_status === 'approved' || profile?.verified === true;
-    const ageVerified = Boolean(profile?.age_verified);
-    const hasTier = String(item?.tier_id ?? item?.price_range ?? '').trim().length > 0;
-    const hasEquipment = Array.isArray(item?.equipment?.camera)
-      ? item.equipment.camera.length > 0
-      : Array.isArray(item?.tags) && item.tags.length > 0;
-    return kycApproved && ageVerified && hasTier && hasEquipment;
-  };
-
   const filteredTalent = useMemo(() => {
     let list = discoveryMode === 'photographers' ? [...state.photographers] : [...state.models];
-    list = list.filter(isTalentEligible);
+    list = list.filter((item) => {
+      const profile = profileById.get(item.id);
+      const expectedRole = discoveryMode === 'photographers' ? 'photographer' : 'model';
+      return profile?.role === expectedRole && profile?.kyc_status === 'approved'
+        && profile?.age_verified === true && profile?.is_test_account !== true;
+    });
 
     if (category !== 'All Categories') {
       const categoryLower = toSafeLower(category);
       list = list.filter((item: any) =>
-        toSafeTags(item?.tags).some((tag) => categoryLower.includes(toSafeLower(tag)))
+        toSafeTags(item?.tags).some((tag) => toSafeLower(tag).includes(categoryLower))
+          || toSafeLower(item?.style).includes(categoryLower)
       );
     }
 
-    if (priceRange !== 'Any budget') {
-      const priceFilter = priceRange.replace(/[^$]/g, '');
-      list = list.filter((item: any) => String(item?.price_range ?? '').includes(priceFilter));
-    }
+    list = list.filter((item) => isWithinHourlyBudget(item.hourly_rate, maxHourlyRate));
 
     if (location.trim().length > 0) {
-      const query = toSafeLower(location);
+      const query = toSafeLower(location.trim());
       list = list.filter((item: any) => toSafeLower(item?.location).includes(query));
     }
 
@@ -166,17 +182,18 @@ const HomeScreen: React.FC = () => {
     }
 
     return list;
-  }, [state.photographers, state.models, category, priceRange, sort, location, discoveryMode]);
+  }, [state.photographers, state.models, profileById, category, maxHourlyRate, sort, location, discoveryMode]);
 
   const visibleTalent = useMemo(() => filteredTalent.slice(0, MAX_HOME_CARDS), [filteredTalent]);
-  const featuredPhotographer = discoveryMode === 'photographers' ? visibleTalent[0] ?? state.photographers[0] ?? null : null;
-  const models = state.models ?? [];
-  const onlineNearbyCount = useMemo(
-    () => (state.profiles ?? []).filter((p: any) => isOnlineStatus(p?.availability_status)).length,
-    [state.profiles]
+  const featuredPhotographer = discoveryMode === 'photographers' ? visibleTalent[0] ?? null : null;
+  const onlineCount = useMemo(
+    () => filteredTalent.filter((item) => isHomeProviderOnline(item, profileById.get(item.id))).length,
+    [filteredTalent, profileById]
   );
   const showcaseItems = useMemo(() => {
-    const byName = new Map((state.photographers ?? []).map((p) => [p.name, p]));
+    if (discoveryMode !== 'photographers') return [];
+    const photographers = filteredTalent as Photographer[];
+    const byName = new Map(photographers.map((p) => [p.name, p]));
     const priorityItems = SHOWCASE_PRIORITY_NAMES
       .map((name) => {
         const item = byName.get(name);
@@ -194,7 +211,7 @@ const HomeScreen: React.FC = () => {
 
     if (priorityItems.length > 0) return priorityItems;
 
-    return [...(state.photographers ?? [])]
+    return [...photographers]
       .sort((a, b) => toSafeRating(b.rating) - toSafeRating(a.rating))
       .slice(0, 4)
       .map((item) => ({
@@ -205,12 +222,20 @@ const HomeScreen: React.FC = () => {
           item.style ??
           'Photography',
       }));
-  }, [state.photographers]);
+  }, [filteredTalent, discoveryMode]);
+
+  const filteredRecommendations = useMemo(() => {
+    if (discoveryMode !== 'photographers') return [];
+    // Reuse current catalog rows so stale ranking results cannot bypass filters or pricing.
+    const eligibleById = new Map(filteredTalent.map((item) => [item.id, item]));
+    return recommended.map((item) => eligibleById.get(item.id)).filter((item): item is Photographer => !!item);
+  }, [recommended, filteredTalent, discoveryMode]);
 
   const recommendedPhotographers = useMemo(() => {
-    const list = (recommended?.length ? recommended : filteredTalent).filter((item: any) => item?.avatar_url);
+    if (discoveryMode !== 'photographers') return [];
+    const list = (filteredRecommendations.length ? filteredRecommendations : filteredTalent).filter((item) => item.avatar_url);
     return list.slice(0, 8);
-  }, [recommended, filteredTalent]);
+  }, [filteredRecommendations, filteredTalent, discoveryMode]);
 
   const startModelBooking = (model: Model) => {
     parentNavigation?.navigate('BookingForm', { modelId: model.id, serviceType: 'modeling' });
@@ -259,23 +284,27 @@ const HomeScreen: React.FC = () => {
 
   const handlePrimaryCTA = (mode: 'photographers' | 'models') => {
     setDiscoveryMode(mode);
+    const nextLocation = location.trim() || state.currentUser?.city || '';
     if (!location.trim()) {
-      setLocation(state.currentUser?.city ?? '');
+      setLocation(nextLocation);
     }
-    handleSmartSearch();
+    Keyboard.dismiss();
+    if (mode === 'photographers') {
+      void loadRecommendations(nextLocation, category === 'All Categories' ? '' : category, maxHourlyRate);
+    }
   };
 
   const renderCard = (item: any) => {
     const profile = profileById.get(item.id);
-    const isOnline = isOnlineStatus(profile?.availability_status);
-    const rate = Number(item?.hourly_rate ?? 0);
-    const priceLabel = rate > 0 ? `R${rate.toLocaleString('en-ZA')}/hr` : toHourlyRateRand(String(item?.price_range ?? '$$'));
+    const isOnline = isHomeProviderOnline(item, profile);
+    const priceLabel = formatPublishedHourlyRate(item?.hourly_rate);
     const requestButtonBackground = isOnline ? colors.accent : (isDark ? '#0f172a' : '#1f2937');
     const requestButtonTextColor = isOnline ? accentButtonTextColor : '#fffaf2';
 
     return (
       <View
         key={item.id}
+        testID={`home-provider-${item.id}`}
         style={[
           styles.card,
           {
@@ -295,7 +324,7 @@ const HomeScreen: React.FC = () => {
           </View>
           {isOnline && (
             <View style={styles.availabilityBadge}>
-              <Text style={styles.availabilityText}>{discoveryMode === 'models' ? 'Ready to Shoot' : 'Available Today'}</Text>
+              <Text style={styles.availabilityText}>Online</Text>
             </View>
           )}
         </View>
@@ -311,8 +340,6 @@ const HomeScreen: React.FC = () => {
         </View>
         <View style={styles.metaRow}>
           <Text style={[styles.price, { color: colors.text }]}>{priceLabel}</Text>
-          <Text style={[styles.dot, { color: colors.textMuted }]}>|</Text>
-          <Text style={[styles.duration, { color: colors.textMuted }]}>{discoveryMode === 'models' ? 'Min 2 hours' : '~1 hour'}</Text>
         </View>
         <View style={styles.actions}>
           <TouchableOpacity 
@@ -336,8 +363,10 @@ const HomeScreen: React.FC = () => {
             style={[styles.buttonPrimary, { backgroundColor: requestButtonBackground }, !isOnline && { opacity: 0.82 }]}
             onPress={() => (discoveryMode === 'models' ? startModelBooking(item) : startBooking(item))}
             disabled={!isOnline}
+            accessibilityRole="button"
+            accessibilityLabel={`${isOnline ? 'Request' : 'Unavailable'} ${item.name}`}
           >
-            <Text style={[styles.buttonPrimaryText, { color: requestButtonTextColor }]}>{isOnline ? 'Request' : 'Offline'}</Text>
+            <Text style={[styles.buttonPrimaryText, { color: requestButtonTextColor }]}>{isOnline ? 'Request' : 'Unavailable'}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -389,7 +418,7 @@ const HomeScreen: React.FC = () => {
 
       <View style={[styles.livePill, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <View style={styles.liveDot} />
-        <Text style={[styles.livePillText, { color: colors.text }]}>Live • {onlineNearbyCount} online nearby</Text>
+        <Text style={[styles.livePillText, { color: colors.text }]}>{onlineCount} online</Text>
       </View>
 
       <View style={[styles.discoverySwitch, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -523,7 +552,7 @@ const HomeScreen: React.FC = () => {
             >
               <Ionicons name="search" size={18} color={accentButtonTextColor} />
               <Text style={[styles.ctaText, { color: accentButtonTextColor }]}>
-                {isSearching ? 'Matching...' : discoveryMode === 'photographers' ? 'Find Photographers' : 'Find Models'}
+                {isSearching ? 'Searching...' : discoveryMode === 'photographers' ? 'Find Photographers' : 'Find Models'}
               </Text>
             </Pressable>
           </BlurView>
@@ -640,10 +669,12 @@ const HomeScreen: React.FC = () => {
         <View style={styles.filtersGrid}>
           <TouchableOpacity
             style={[styles.filterBox, styles.filterBoxSpacer, { backgroundColor: colors.bg, borderColor: colors.border }]}
-            onPress={() => setPriceRange(priceRange === 'Any budget' ? '$$' : 'Any budget')}
+            onPress={() => setFilterModalVisible(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Hourly budget"
           >
-            <Text style={[styles.filterLabel, { color: colors.textMuted }]}>Price Range</Text>
-            <Text style={[styles.filterValue, { color: colors.text }]}>{priceRange === 'Any budget' ? 'R1,200+' : 'R1,800+'}</Text>
+            <Text style={[styles.filterLabel, { color: colors.textMuted }]}>Hourly budget</Text>
+            <Text style={[styles.filterValue, { color: colors.text }]}>{budgetLabel}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.filterBox, { backgroundColor: colors.bg, borderColor: colors.border }]} onPress={() => setSort(sort === 'Highest Rated' ? 'Most Recent' : 'Highest Rated')}>
             <Text style={[styles.filterLabel, { color: colors.textMuted }]}>Sort By</Text>
@@ -702,10 +733,10 @@ const HomeScreen: React.FC = () => {
       <View style={styles.sectionHeader}>
         <View>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>
-            {discoveryMode === 'photographers' ? 'Available Photographers' : 'Featured Models'}
+            {discoveryMode === 'photographers' ? 'Photographers' : 'Models'}
           </Text>
           <Text style={[styles.sectionSubtitle, { color: colors.textMuted }]}>
-            {filteredTalent.length} options in your area
+            {filteredTalent.length} matching profiles
             {filteredTalent.length > MAX_HOME_CARDS ? ` (showing top ${MAX_HOME_CARDS})` : ''}
           </Text>
         </View>
@@ -715,14 +746,14 @@ const HomeScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
 
-      {recommended.length > 0 && discoveryMode === 'photographers' && (
+      {filteredRecommendations.length > 0 && discoveryMode === 'photographers' && (
          <View style={styles.recommendedSection}>
             <View style={styles.recommendedHeader}>
                 <Ionicons name="sparkles" size={20} color={colors.accent} />
                 <Text style={[styles.recommendedTitle, { color: colors.text }]}>Recommended for you</Text>
             </View>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recommendedScroll}>
-                {recommended.map((item, index) => (
+                {filteredRecommendations.map((item, index) => (
                     <View key={`rec-${item.id}-${index}`} style={{ width: width * 0.7, maxWidth: 320 }}>
                         {renderCard(item)}
                     </View>
@@ -744,7 +775,7 @@ const HomeScreen: React.FC = () => {
       </View>
 
       {visibleTalent.length === 0 && (
-        <Text style={styles.empty}>No {discoveryMode} found in this area.</Text>
+        <Text style={styles.empty}>No {discoveryMode} match these filters.</Text>
       )}
 
       {/* Advanced Filters Modal */}
@@ -759,15 +790,18 @@ const HomeScreen: React.FC = () => {
              </View>
 
              <ScrollView style={styles.modalScroll}>
-                <Text style={[styles.filterLabel, { color: colors.text }]}>Budget (ZAR)</Text>
-                <View style={styles.filtersGrid}>
-                    {['Any budget', '$$', '$$$'].map(item => (
+                <Text style={[styles.filterLabel, { color: colors.text }]}>Hourly budget (ZAR/hr)</Text>
+                <View style={styles.budgetOptions}>
+                    {HOURLY_BUDGET_OPTIONS.map(option => (
                         <TouchableOpacity
-                            key={`modal-price-${item}`}
-                            style={[styles.filterBox, { backgroundColor: priceRange === item ? colors.accent : colors.card, borderColor: colors.border }]}
-                            onPress={() => setPriceRange(item)}
+                            key={`modal-price-${option.label}`}
+                            style={[styles.filterBox, styles.budgetOption, { backgroundColor: maxHourlyRate === option.maximum ? colors.accent : colors.card, borderColor: colors.border }]}
+                            onPress={() => setMaxHourlyRate(option.maximum)}
+                            accessibilityRole="radio"
+                            accessibilityLabel={option.label}
+                            accessibilityState={{ selected: maxHourlyRate === option.maximum }}
                         >
-                            <Text style={[{ color: priceRange === item ? accentButtonTextColor : colors.text, textAlign: 'center', fontWeight: '600' }]}>{item}</Text>
+                            <Text style={[{ color: maxHourlyRate === option.maximum ? accentButtonTextColor : colors.text, textAlign: 'center', fontWeight: '600' }]}>{option.label}</Text>
                         </TouchableOpacity>
                     ))}
                 </View>
@@ -1404,6 +1438,16 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#0f172a',
   },
+  budgetOptions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 6,
+  },
+  budgetOption: {
+    flexBasis: 140,
+    flexGrow: 1,
+  },
   sectionBlock: {
     marginBottom: 22,
   },
@@ -1650,6 +1694,7 @@ const styles = StyleSheet.create({
   price: {
     fontWeight: '800',
     color: '#0f172a',
+    flexShrink: 1,
   },
   dot: {
     color: '#94a3b8',

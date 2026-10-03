@@ -56,10 +56,11 @@ export const apiRequest = async <T>(path: string, options: ApiRequestOptions = {
     });
     const body = await readResponseBody(response);
     if (!response.ok) {
-      const message =
-        body && typeof body === 'object' && 'detail' in body
-          ? String((body as { detail?: unknown }).detail ?? `Request failed (${response.status})`)
-          : `Request failed (${response.status})`;
+      const detail = body && typeof body === 'object' && 'detail' in body ? (body as { detail?: unknown }).detail : null;
+      const message = typeof detail === 'string' ? detail
+        : Array.isArray(detail) ? detail.map(item => item?.msg ?? 'Invalid request').join('; ')
+        : detail && typeof detail === 'object' && 'message' in detail ? String(detail.message)
+        : `Request failed (${response.status})`;
       throw new ApiClientError(message, response.status, body);
     }
     return body as T;

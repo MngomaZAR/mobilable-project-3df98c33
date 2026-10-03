@@ -28,6 +28,10 @@ const validateHostedUrl = (name, value) => {
   try {
     const url = new URL(value);
     if (url.protocol !== 'https:') {
+      if (mode === 'release') {
+        errors.push(`${name} must use https in release mode`);
+        return null;
+      }
       warnings.push(`${name} should use https`);
     }
     const hostname = url.hostname.toLowerCase();
@@ -35,9 +39,11 @@ const validateHostedUrl = (name, value) => {
       hostname === 'localhost' ||
       hostname === '127.0.0.1' ||
       hostname === '0.0.0.0' ||
+      hostname === '[::1]' ||
       hostname.endsWith('.localhost');
     if (mode === 'release' && isLocalhost) {
       errors.push(`${name} must not point to a local development host in release mode`);
+      return null;
     }
     return url;
   } catch {
@@ -109,8 +115,39 @@ const checkApiContract = async (apiBaseUrl) => {
   }
 };
 
+const checkApiReadiness = async (apiBaseUrl) => {
+  if (!apiBaseUrl) return;
+  try {
+    const response = await fetch(new URL('/health/readiness', apiBaseUrl), {
+      signal: AbortSignal.timeout(12000),
+      headers: { Accept: 'application/json' },
+    });
+    const body = await response.json().catch(() => null);
+    if (!response.ok || !body || body.required_capabilities_available !== true) {
+      errors.push(`Public release readiness failed: ${body?.blockers?.join(', ') || `HTTP ${response.status}; no capability evidence`}. A healthy API is not a complete marketplace.`);
+    }
+  } catch {
+    errors.push('Public release readiness endpoint is unreachable. Do not submit an unverified backend.');
+  }
+};
+
+const checkApiRouting = async (apiBaseUrl) => {
+  if (!apiBaseUrl) return;
+  try {
+    const endpoint = new URL('/routing/route?start_lat=-29.85&start_lng=31.03&end_lat=-29.87&end_lng=31.04', apiBaseUrl);
+    const response = await fetch(endpoint, { signal: AbortSignal.timeout(12000) });
+    const route = await response.json().catch(() => null);
+    if (!response.ok || !Array.isArray(route?.coordinates) || route.coordinates.length <= 2 || !(route.duration > 0) || !(route.distance > 0)) {
+      errors.push(`Backend road routing failed its real-geometry probe (HTTP ${response.status}). Configure OSRM_BASE_URL on Oracle, not a mobile public key.`);
+    }
+  } catch {
+    errors.push('Backend road routing is unreachable. Do not ship invented routes or ETAs.');
+  }
+};
+
 const allowedStoreTargets = new Set(['development', 'web', 'internal', 'appstore', 'play', 'both']);
 const allowedBillingProviders = new Set(['iap', 'external', 'disabled']);
+const publicOsrmHosts = new Set(['router.project-osrm.org']);
 
 const backendProvider = read('EXPO_PUBLIC_BACKEND_PROVIDER').toLowerCase() || 'api';
 if (!['api', 'supabase', 'nhost'].includes(backendProvider)) {
@@ -168,14 +205,35 @@ if (mode === 'release') {
   }
   if (!disableDigital) {
     errors.push('EXPO_PUBLIC_DISABLE_DIGITAL_PURCHASES is required for release mode');
+  } else if (!['true', 'false'].includes(disableDigital.toLowerCase())) {
+    errors.push('EXPO_PUBLIC_DISABLE_DIGITAL_PURCHASES must be true or false in release mode');
   }
 
   const targetsStore = storeTarget === 'appstore' || storeTarget === 'play' || storeTarget === 'both';
+  if (targetsStore && backendProvider === 'api') await checkApiReadiness(apiBaseUrl);
   const digitalDisabled = isTruthy(disableDigital);
   if (targetsStore && !digitalDisabled && billingProvider !== 'iap') {
     errors.push(
       'Store-targeted release has non-IAP digital billing enabled. Set EXPO_PUBLIC_DISABLE_DIGITAL_PURCHASES=true or EXPO_PUBLIC_DIGITAL_BILLING_PROVIDER=iap.'
     );
+  }
+
+  const routingProvider = read('EXPO_PUBLIC_ROUTING_PROVIDER').toLowerCase() || 'osrm';
+  if (!['osrm', 'ors'].includes(routingProvider)) {
+    errors.push("EXPO_PUBLIC_ROUTING_PROVIDER must be one of 'osrm' or 'ors'");
+  }
+  if (backendProvider === 'api') {
+    await checkApiRouting(apiBaseUrl);
+  } else if (routingProvider === 'osrm') {
+    const osrmBaseUrl = validateHostedUrl('EXPO_PUBLIC_OSRM_BASE_URL', requireEnv('EXPO_PUBLIC_OSRM_BASE_URL'));
+    if (targetsStore && osrmBaseUrl && publicOsrmHosts.has(osrmBaseUrl.hostname.toLowerCase())) {
+      errors.push(
+        'Store-targeted releases must not use the public OSRM demo server. Set EXPO_PUBLIC_OSRM_BASE_URL to a self-hosted OSRM endpoint or use EXPO_PUBLIC_ROUTING_PROVIDER=ors with a production key.'
+      );
+    }
+  }
+  if (backendProvider !== 'api' && routingProvider === 'ors') {
+    requireEnv('EXPO_PUBLIC_OPENROUTESERVICE_API_KEY');
   }
 }
 

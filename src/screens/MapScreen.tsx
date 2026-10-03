@@ -16,7 +16,7 @@ import { useAppData } from '../store/AppDataContext';
 import { useTheme } from '../store/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { BOOKING_PACKAGES } from '../constants/pricing';
-import { haversineDistanceKm } from '../utils/geo';
+import { haversineDistanceKm, validateSouthAfricanLocation } from '../utils/geo';
 import { backendDb } from '../services/backendGateway';
 import { routingService } from '../services/routingService';
 import * as Haptics from 'expo-haptics';
@@ -37,11 +37,6 @@ const SCREEN_HEIGHT = Dimensions.get('window').height;
 const SHEET_COLLAPSED = 100;
 const SHEET_HALF = SCREEN_HEIGHT * 0.38;
 const SHEET_FULL = SCREEN_HEIGHT * 0.82;
-
-const SA_BOUNDS = { minLat: -35, maxLat: -22, minLng: 16, maxLng: 33 };
-const isWithinSA = (lat: number, lng: number) =>
-  lat >= SA_BOUNDS.minLat && lat <= SA_BOUNDS.maxLat &&
-  lng >= SA_BOUNDS.minLng && lng <= SA_BOUNDS.maxLng;
 
 const formatAccuracy = (a?: number | null) => {
   if (!a) return 'Approximate';
@@ -272,7 +267,13 @@ const MapScreen: React.FC = () => {
       ];
     }
     const seen = new Set<string>();
-    return result.filter(m => { if (seen.has(m.id)) return false; seen.add(m.id); return true; });
+    return result.filter(m => {
+      // Missing provider locations are mapped to zero upstream, not a real pin.
+      if (!Number.isFinite(m.latitude) || !Number.isFinite(m.longitude) ||
+          !validateSouthAfricanLocation(m.latitude, m.longitude) || seen.has(m.id)) return false;
+      seen.add(m.id);
+      return true;
+    });
   }, [role, state.photographers, state.models]);
 
   const filteredMarkers = useMemo(() => {
@@ -332,7 +333,7 @@ const MapScreen: React.FC = () => {
       }
       const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Highest });
       const { latitude, longitude, accuracy } = pos.coords;
-      if (!isWithinSA(latitude, longitude)) {
+      if (!validateSouthAfricanLocation(latitude, longitude)) {
         setLocationError('Currently supporting South African locations only.');
         return;
       }

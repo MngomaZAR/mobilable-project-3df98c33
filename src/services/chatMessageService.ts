@@ -8,9 +8,37 @@
 // ============================================================
 
 import { invokeBackendFunction } from '../config/backendFunctions';
+import { uid } from '../utils/id';
+
+// Retain this ID with the draft and reuse it for every attempt of the same send.
+export const createClientMessageId = (): string => uid('msg');
+
+export class MessageSendError extends Error {
+  constructor(message: string, readonly clientMessageId: string) {
+    super(message);
+    this.name = 'MessageSendError';
+  }
+}
+
+const invokeMessageSend = async (
+  payload: Record<string, unknown>,
+  clientMessageId: string,
+  fallback: string
+) => {
+  try {
+    const { data, error } = await invokeBackendFunction('chat-messages', payload);
+    if (error) throw new Error(error.message || fallback);
+    const message = data?.message ?? data;
+    if (!message?.id) throw new Error('Message service did not return a valid message.');
+    return message;
+  } catch (error) {
+    throw new MessageSendError(error instanceof Error ? error.message : fallback, clientMessageId);
+  }
+};
 
 export type MessageRow = {
   id: string;
+  client_message_id?: string | null;
   conversation_id: string;
   sender_id: string;
   body: string;
@@ -41,6 +69,7 @@ export const listConversationMessages = async (
 
   return messages.map((msg: any) => ({
     id: msg.id,
+    client_message_id: msg.clientMessageId ?? msg.client_message_id ?? null,
     conversation_id: msg.chatId ?? msg.chat_id ?? msg.conversation_id ?? conversationId,
     sender_id: msg.senderId ?? msg.sender_id,
     body: msg.body ?? msg.text ?? '',
@@ -59,28 +88,26 @@ export const listConversationMessages = async (
 export const sendConversationTextMessage = async ({
   conversationId,
   text,
+  clientMessageId = createClientMessageId(),
 }: {
   conversationId: string;
   text: string;
+  clientMessageId?: string;
 }): Promise<MessageRow> => {
   // BUG FIX: Use the Edge Function which handles auth + DB insert correctly
-  const { data, error } = await invokeBackendFunction('chat-messages', {
+  const msg = await invokeMessageSend({
     action: 'send',
     conversation_id: conversationId,
+    client_message_id: clientMessageId,
     text,
     message_type: 'text',
-  });
-
-  if (error) throw new Error(error.message || 'Failed to send message.');
-
-  // Edge function wraps response in { message: {...} } with camelCase keys
-  const msg = data?.message ?? data;
-  if (!msg?.id) throw new Error('Message service did not return a valid message.');
+  }, clientMessageId, 'Failed to send message.');
 
   return {
     id: msg.id,
+    client_message_id: msg.clientMessageId ?? msg.client_message_id ?? clientMessageId,
     conversation_id: msg.chatId ?? msg.chat_id ?? msg.conversation_id ?? conversationId,
-    sender_id: msg.senderId ?? msg.senderId,
+    sender_id: msg.sender_id ?? msg.senderId,
     body: msg.body ?? msg.text ?? text,
     message_type: msg.message_type ?? msg.messageType ?? 'text',
     media_url: msg.media_url ?? msg.mediaUrl ?? null,
@@ -93,6 +120,73 @@ export const sendConversationTextMessage = async ({
   };
 };
 
+export const sendConversationMediaMessage = async ({
+  conversationId,
+  mediaUrl,
+  previewUrl,
+  text = '',
+  clientMessageId = createClientMessageId(),
+}: {
+  conversationId: string;
+  mediaUrl: string;
+  previewUrl?: string;
+  text?: string;
+  clientMessageId?: string;
+}): Promise<MessageRow> => {
+  // Only durable references cross the write boundary, never signed URLs.
+  for (const reference of [mediaUrl, previewUrl]) {
+    if (reference !== undefined && !reference.startsWith('chat-media::')) {
+      throw new MessageSendError('Use a chat-media storage reference for attachments.', clientMessageId);
+    }
+  }
+  const msg = await invokeMessageSend({
+    action: 'send',
+    conversation_id: conversationId,
+    client_message_id: clientMessageId,
+    text,
+    message_type: 'media',
+    media_url: mediaUrl,
+    preview_url: previewUrl,
+  }, clientMessageId, 'Failed to send media message.');
+  return {
+    id: msg.id,
+    client_message_id: msg.clientMessageId ?? msg.client_message_id ?? clientMessageId,
+    conversation_id: msg.chatId ?? msg.chat_id ?? msg.conversation_id ?? conversationId,
+    sender_id: msg.sender_id ?? msg.senderId,
+    body: msg.body ?? msg.text ?? text,
+    message_type: 'media',
+    media_url: msg.media_url ?? msg.mediaUrl ?? mediaUrl,
+    preview_url: msg.preview_url ?? msg.previewUrl ?? previewUrl ?? null,
+    locked: msg.locked ?? false,
+    unlocked: msg.unlocked ?? true,
+    unlock_booking_id: msg.unlock_booking_id ?? msg.unlockBookingId ?? null,
+    unlock_price: msg.unlock_price ?? msg.unlockPrice ?? null,
+    timestamp: msg.created_at ?? msg.timestamp ?? new Date().toISOString(),
+  };
+};
+
+export const getConversationAttachmentUrl = async ({
+  conversationId,
+  messageId,
+  field = 'media_url',
+}: {
+  conversationId: string;
+  messageId: string;
+  field?: 'media_url' | 'preview_url';
+}): Promise<string> => {
+  const { data, error } = await invokeBackendFunction('chat-messages', {
+    action: 'media-url',
+    conversation_id: conversationId,
+    message_id: messageId,
+    field,
+  });
+  if (error) throw new Error(error.message || 'Unable to load attachment.');
+  if (typeof data?.url !== 'string' || !data.url.startsWith('https://')) {
+    throw new Error('Message service did not return a valid attachment URL.');
+  }
+  return data.url;
+};
+
 // ── Send a locked media message ────────────────────────────────
 export const sendConversationLockedMediaMessage = async ({
   conversationId,
@@ -101,6 +195,7 @@ export const sendConversationLockedMediaMessage = async ({
   text,
   unlockBookingId,
   unlockPrice,
+  clientMessageId = createClientMessageId(),
 }: {
   conversationId: string;
   mediaUrl: string;
@@ -108,10 +203,12 @@ export const sendConversationLockedMediaMessage = async ({
   text?: string;
   unlockBookingId?: string;
   unlockPrice?: number;
+  clientMessageId?: string;
 }): Promise<MessageRow> => {
-  const { data, error } = await invokeBackendFunction('chat-messages', {
+  const msg = await invokeMessageSend({
     action: 'send',
     conversation_id: conversationId,
+    client_message_id: clientMessageId,
     text: text ?? 'Shared a locked photo',
     message_type: 'media',
     media_url: mediaUrl,
@@ -119,16 +216,11 @@ export const sendConversationLockedMediaMessage = async ({
     locked: true,
     unlock_booking_id: unlockBookingId,
     unlock_price: unlockPrice,
-  });
-
-  if (error) throw new Error(error.message || 'Failed to send media message.');
-
-  // Edge function wraps response in { message: {...} } with camelCase keys
-  const msg = data?.message ?? data;
-  if (!msg?.id) throw new Error('Message service did not return a valid message.');
+  }, clientMessageId, 'Failed to send media message.');
 
   return {
     id: msg.id,
+    client_message_id: msg.clientMessageId ?? msg.client_message_id ?? clientMessageId,
     conversation_id: msg.chatId ?? msg.chat_id ?? msg.conversation_id ?? conversationId,
     sender_id: msg.sender_id ?? msg.senderId,
     body: msg.body ?? msg.text ?? text ?? '',

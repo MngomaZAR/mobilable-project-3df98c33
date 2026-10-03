@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import * as ImagePicker from 'expo-image-picker';
 import {
   Alert,
@@ -9,11 +9,12 @@ import {
   TouchableOpacity,
   View,
   Image,
-  Linking,
+  ActivityIndicator,
+  Modal,
+  Platform,
+  Share,
 } from 'react-native';
-import * as LocalAuthentication from 'expo-local-authentication';
 import QRCode from 'react-native-qrcode-svg';
-import * as WebBrowser from 'expo-web-browser';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -29,8 +30,16 @@ import { BRAND, PLACEHOLDER_AVATAR } from '../utils/constants';
 import { backendDb } from '../services/backendGateway';
 import { registerForPushNotificationsAsync, savePushTokenAsync } from '../services/notificationService';
 import { isModelUser, isPhotographerUser, isProviderUser } from '../utils/userRole';
+import { apiClient } from '../config/apiClient';
+import { getApiAccessToken } from '../config/apiSession';
 
 type Navigation = StackNavigationProp<RootStackParamList, 'Root'>;
+type LoginSession = { id: string; created_at: string; expires_at: string; current: boolean };
+
+const formatSessionDate = (value: string) => {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? 'Unknown' : date.toLocaleString();
+};
 
 const THEME_OPTIONS: { label: string; value: ThemeMode; icon: string }[] = [
   { label: 'Light', value: 'light', icon: 'sunny' },
@@ -44,8 +53,13 @@ const SettingsScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<Navigation>();
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
-  const [biometricsEnabled, setBiometricsEnabled] = useState(false);
-  const [language, setLanguage] = useState('English');
+  const [sessionsVisible, setSessionsVisible] = useState(false);
+  const [sessions, setSessions] = useState<LoginSession[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [sessionsError, setSessionsError] = useState<string | null>(null);
+  const [sessionsRefresh, setSessionsRefresh] = useState(0);
+  const [revokingSessionId, setRevokingSessionId] = useState<string | null>(null);
+  const sessionsRequest = useRef(0);
   const [avatarPreviewUri, setAvatarPreviewUri] = useState<string | null>(null);
   const userMetadata =
     currentUser && typeof currentUser === 'object' && 'user_metadata' in currentUser
@@ -54,6 +68,62 @@ const SettingsScreen: React.FC = () => {
   const isModelAccount = isModelUser(currentUser);
   const isPhotographerAccount = isPhotographerUser(currentUser);
   const isProviderAccount = isProviderUser(currentUser);
+  const profileLink = currentUser?.id ? `papzi://profile/${encodeURIComponent(currentUser.id)}` : null;
+  const canShareProfile = Platform.OS !== 'web' ||
+    (typeof navigator !== 'undefined' && typeof navigator.share === 'function');
+  const canCopyProfile = Platform.OS === 'web' && typeof navigator !== 'undefined' &&
+    typeof navigator.clipboard?.writeText === 'function';
+
+  useEffect(() => {
+    const request = ++sessionsRequest.current;
+    setSessions([]);
+    setSessionsError(null);
+    setRevokingSessionId(null);
+    setSessionsLoading(false);
+    if (sessionsVisible && currentUser?.id) {
+      setSessionsLoading(true);
+      const loadSessions = async () => {
+        try {
+          const token = await getApiAccessToken();
+          if (request !== sessionsRequest.current) return;
+          if (!token) throw new Error('Please sign in again.');
+          const response = await apiClient.get<{ sessions: LoginSession[] }>('/auth/sessions', { token });
+          if (!Array.isArray(response.sessions) || response.sessions.some(session =>
+            !session || typeof session.id !== 'string' || !session.id ||
+            typeof session.current !== 'boolean' || typeof session.created_at !== 'string' ||
+            typeof session.expires_at !== 'string'
+          )) throw new Error('Invalid sessions response.');
+          if (request === sessionsRequest.current) setSessions(response.sessions);
+        } catch {
+          if (request === sessionsRequest.current) setSessionsError('Could not load sessions. Please try again.');
+        } finally {
+          if (request === sessionsRequest.current) setSessionsLoading(false);
+        }
+      };
+      void loadSessions();
+    } else if (!currentUser?.id) {
+      setSessionsVisible(false);
+    }
+    return () => { sessionsRequest.current += 1; };
+  }, [sessionsVisible, currentUser?.id, sessionsRefresh]);
+
+  const handleRevokeSession = async (session: LoginSession) => {
+    if (session.current || revokingSessionId) return;
+    const request = sessionsRequest.current;
+    setRevokingSessionId(session.id);
+    setSessionsError(null);
+    try {
+      const token = await getApiAccessToken();
+      if (request !== sessionsRequest.current) return;
+      if (!token) throw new Error('Please sign in again.');
+      await apiClient.post('/auth/sessions/revoke', { session_id: session.id }, { token });
+      if (request === sessionsRequest.current) setSessionsRefresh(value => value + 1);
+    } catch {
+      if (request === sessionsRequest.current) setSessionsError('Could not revoke this session. Please try again.');
+    } finally {
+      if (request === sessionsRequest.current) setRevokingSessionId(null);
+    }
+  };
 
   useEffect(() => {
     const checkStatus = async () => {
@@ -144,54 +214,45 @@ const SettingsScreen: React.FC = () => {
     });
   };
 
-  const handleToggleBiometrics = async (value: boolean) => {
-    if (value) {
-      const hasHardware = await LocalAuthentication.hasHardwareAsync();
-      if (!hasHardware) {
-        Alert.alert('Not Supported', 'Your device does not support biometric authentication.');
-        return;
+  const handleShareProfile = async () => {
+    if (!profileLink) return;
+    try {
+      if (canShareProfile) {
+        await Share.share({ title: `${BRAND.name} Profile`, message: profileLink });
+      } else if (canCopyProfile) {
+        await navigator.clipboard.writeText(profileLink);
+        setModalState({
+          visible: true,
+          title: 'Profile Link Copied',
+          message: profileLink,
+          onConfirm: () => setModalState(value => ({ ...value, visible: false })),
+          onCancel: () => setModalState(value => ({ ...value, visible: false })),
+        });
       }
-      const isEnrolled = await LocalAuthentication.isEnrolledAsync();
-      if (!isEnrolled) {
-        Alert.alert('Not Enrolled', 'Please set up FaceID or Fingerprint in your device settings first.');
-        return;
-      }
-      const result = await LocalAuthentication.authenticateAsync({
-        promptMessage: 'Enable Biometric Lock',
-        fallbackLabel: 'Enter Passcode',
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') return;
+      setModalState({
+        visible: true,
+        title: 'Sharing Failed',
+        message: 'Could not share your profile link. Please try again.',
+        onConfirm: () => setModalState(value => ({ ...value, visible: false })),
+        onCancel: () => setModalState(value => ({ ...value, visible: false })),
       });
-      if (result.success) {
-        setBiometricsEnabled(true);
-        Alert.alert('Enabled', 'Biometric lock will be required when opening the app.');
-      }
-    } else {
-      setBiometricsEnabled(false);
     }
-  };
-
-  const handleOpen2FA = () => {
-    Alert.alert(
-      'Two-factor authentication',
-      'Two-factor authentication is managed through PAPZII account security and will open from the production account API once it is enabled.'
-    );
-  };
-
-  const handleDownloadData = () => {
-     Alert.alert('Request Data Export', 'A copy of your data will be emailed to you within 24 hours.');
   };
 
   const handleDeleteAccount = () => {
     setModalState({
       visible: true,
       title: 'Request Account Deletion',
-      message: 'This will submit a formal request to delete your account and all associated data. This action is permanent. Continue?',
+      message: 'Submit an account deletion request to support? Your account remains active until the request is processed. Records required for payments or legal obligations may need to be retained.',
       isDestructive: true,
       onConfirm: async () => {
         setModalState(p => ({ ...p, visible: false }));
         try {
           setIsDeleting(true);
           await requestAccountDeletion('User requested via settings');
-          Alert.alert('Request Sent', 'Your account deletion request has been submitted and will be processed within 30 days.');
+          Alert.alert('Request Sent', 'Your account deletion request has been saved for support. Your account has not yet been deleted. Contact support for the request status.');
         } catch (err) {
           Alert.alert('Error', 'Failed to submit request. Please contact support.');
         } finally {
@@ -352,30 +413,31 @@ const SettingsScreen: React.FC = () => {
       <View style={s.section}>
         <Text style={s.sectionHeader}>SECURITY & ACCOUNT</Text>
         <View style={s.group}>
-          <View style={[s.groupItem, s.groupItemBorder]}>
+          <View style={[s.groupItem, s.groupItemBorder]} accessibilityLabel="Biometric Lock: unavailable" accessibilityState={{ disabled: true }}>
             <View style={s.itemLeft}>
               <View style={[s.iconContainer, { backgroundColor: '#10b981' }]}>
                 <Ionicons name="finger-print" size={16} color="#fff" />
               </View>
               <Text style={s.itemText}>Biometric Lock</Text>
             </View>
-            <Switch
-              value={biometricsEnabled}
-              onValueChange={handleToggleBiometrics}
-              trackColor={{ false: colors.border, true: colors.successGreen }}
-              thumbColor="#fff"
-            />
+            <Text style={s.unavailableText}>Unavailable</Text>
           </View>
-          <TouchableOpacity style={[s.groupItem, s.groupItemBorder]} onPress={handleOpen2FA}>
+          <View style={[s.groupItem, s.groupItemBorder]} accessibilityLabel="Two-Factor Auth (2FA): unavailable" accessibilityState={{ disabled: true }}>
             <View style={s.itemLeft}>
               <View style={[s.iconContainer, { backgroundColor: '#6366f1' }]}>
                 <Ionicons name="shield-checkmark" size={16} color="#fff" />
               </View>
               <Text style={s.itemText}>Two-Factor Auth (2FA)</Text>
             </View>
-            <Ionicons name="open-outline" size={18} color={colors.textMuted} />
-          </TouchableOpacity>
-          <TouchableOpacity style={s.groupItem} onPress={() => Alert.alert('Sessions', 'Showing active login sessions...')}>
+            <Text style={s.unavailableText}>Unavailable</Text>
+          </View>
+          <TouchableOpacity
+            style={s.groupItem}
+            accessibilityRole="button"
+            accessibilityLabel="Active Sessions"
+            disabled={!currentUser?.id}
+            onPress={() => setSessionsVisible(true)}
+          >
             <View style={s.itemLeft}>
               <View style={[s.iconContainer, { backgroundColor: '#475569' }]}>
                 <Ionicons name="list" size={16} color="#fff" />
@@ -388,55 +450,57 @@ const SettingsScreen: React.FC = () => {
       </View>
 
       {/* DISCOVERY */}
-      <View style={s.section}>
+      {profileLink && <View style={s.section}>
         <Text style={s.sectionHeader}>DISCOVERY</Text>
         <View style={s.group}>
           <View style={[s.groupItem, { paddingVertical: 20, flexDirection: 'column', alignItems: 'center' }]}>
             <Text style={[s.itemText, { marginBottom: 16 }]}>Your Profile QR Code</Text>
-            <View style={{ padding: 16, backgroundColor: '#fff', borderRadius: 16 }}>
+            <View style={{ padding: 16, backgroundColor: '#fff', borderRadius: 8 }}>
               <QRCode
-                value={`papzi://profile/${currentUser?.id}`}
+                value={profileLink}
                 size={140}
                 color="#0f172a"
                 backgroundColor="#fff"
               />
             </View>
-            <TouchableOpacity style={{ marginTop: 16 }} onPress={() => {}}>
-              <Text style={{ color: colors.accent, fontWeight: '700' }}>Share QR Code</Text>
+            <TouchableOpacity
+              style={s.shareProfileButton}
+              accessibilityRole="button"
+              accessibilityLabel={canShareProfile ? 'Share Profile Link' : canCopyProfile ? 'Copy Profile Link' : 'Sharing unavailable'}
+              disabled={!canShareProfile && !canCopyProfile}
+              onPress={handleShareProfile}
+            >
+              <Ionicons name={canShareProfile ? 'share-outline' : 'copy-outline'} size={18} color={colors.accent} />
+              <Text style={{ color: colors.accent, fontWeight: '700' }}>
+                {canShareProfile ? 'Share Profile Link' : canCopyProfile ? 'Copy Profile Link' : 'Sharing unavailable'}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
-      </View>
+      </View>}
 
       {/* ADVANCED */}
       <View style={s.section}>
         <Text style={s.sectionHeader}>ADVANCED</Text>
         <View style={s.group}>
-          <TouchableOpacity style={[s.groupItem, s.groupItemBorder]} onPress={() => {
-            Alert.alert('Select Language', 'Choose your preferred language', [
-              { text: 'English', onPress: () => setLanguage('English') },
-              { text: 'Zulu (isiZulu)', onPress: () => setLanguage('Zulu (isiZulu)') },
-              { text: 'Afrikaans', onPress: () => setLanguage('Afrikaans') },
-              { text: 'Cancel', style: 'cancel' },
-            ]);
-          }}>
+          <View style={[s.groupItem, s.groupItemBorder]} accessibilityLabel="Language: English">
             <View style={s.itemLeft}>
               <View style={[s.iconContainer, { backgroundColor: '#94a3b8' }]}>
                 <Ionicons name="language" size={16} color="#fff" />
               </View>
               <Text style={s.itemText}>Language</Text>
             </View>
-            <Text style={{ color: colors.textSecondary, fontWeight: '600' }}>{language}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={s.groupItem} onPress={handleDownloadData}>
+            <Text style={{ color: colors.textSecondary, fontWeight: '600' }}>English</Text>
+          </View>
+          <View style={s.groupItem} accessibilityLabel="Download My Data (GDPR): unavailable" accessibilityState={{ disabled: true }}>
             <View style={s.itemLeft}>
               <View style={[s.iconContainer, { backgroundColor: '#1e293b' }]}>
                 <Ionicons name="download-outline" size={16} color="#fff" />
               </View>
               <Text style={s.itemText}>Download My Data (GDPR)</Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-          </TouchableOpacity>
+            <Text style={s.unavailableText}>Unavailable</Text>
+          </View>
         </View>
       </View>
 
@@ -606,6 +670,70 @@ const SettingsScreen: React.FC = () => {
       </View>
 
       <Text style={s.footerText}>{BRAND.name} Marketplace</Text>
+
+      <Modal
+        visible={sessionsVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSessionsVisible(false)}
+      >
+        <View style={s.modalBackdrop}>
+          <View style={s.sessionsModal} accessibilityViewIsModal>
+            <View style={s.sessionsHeader}>
+              <Text style={s.sessionsTitle}>Active Sessions</Text>
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Close Active Sessions"
+                onPress={() => setSessionsVisible(false)}
+                style={s.sessionIconButton}
+              >
+                <Ionicons name="close" size={24} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+            {sessionsError && <Text accessibilityRole="alert" style={s.sessionsError}>{sessionsError}</Text>}
+            {sessionsLoading ? (
+              <ActivityIndicator accessibilityLabel="Loading sessions" color={colors.accent} style={{ margin: 24 }} />
+            ) : (
+              <ScrollView contentContainerStyle={{ paddingHorizontal: 20 }}>
+                {!sessionsError && sessions.length === 0 && <Text style={s.sessionDetail}>No active sessions.</Text>}
+                {sessions.map(session => (
+                  <View key={session.id} style={s.sessionRow}>
+                    <View style={s.sessionInfo}>
+                      <Text style={s.sessionName}>{session.current ? 'Current Session' : 'Other Session'}</Text>
+                      <Text style={s.sessionDetail}>Signed in: {formatSessionDate(session.created_at)}</Text>
+                      <Text style={s.sessionDetail}>Access expires: {formatSessionDate(session.expires_at)}</Text>
+                    </View>
+                    {!session.current && (
+                      <TouchableOpacity
+                        accessibilityRole="button"
+                        accessibilityLabel={`Revoke session ${session.id}`}
+                        disabled={revokingSessionId !== null}
+                        onPress={() => { void handleRevokeSession(session); }}
+                        style={s.sessionRevokeButton}
+                      >
+                        {revokingSessionId === session.id ? (
+                          <ActivityIndicator color={colors.destructive} />
+                        ) : <Ionicons name="log-out-outline" size={22} color={colors.destructive} />}
+                        <Text style={{ color: colors.destructive, fontSize: 13, fontWeight: '600' }}>Revoke</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Refresh sessions"
+              disabled={sessionsLoading || revokingSessionId !== null}
+              onPress={() => setSessionsRefresh(value => value + 1)}
+              style={s.shareProfileButton}
+            >
+              <Ionicons name="refresh" size={18} color={colors.accent} />
+              <Text style={{ color: colors.accent, fontWeight: '700' }}>Refresh</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
       
       <ActionModal
         visible={modalState.visible}
@@ -740,7 +868,7 @@ const makeStyles = (colors: Colors, isDark: boolean) =>
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.border,
     },
-    itemLeft: { flexDirection: 'row', alignItems: 'center' },
+    itemLeft: { flexDirection: 'row', alignItems: 'center', flexShrink: 1, marginRight: 12 },
     iconContainer: {
       width: 30,
       height: 30,
@@ -749,7 +877,40 @@ const makeStyles = (colors: Colors, isDark: boolean) =>
       justifyContent: 'center',
       marginRight: 14,
     },
-    itemText: { fontSize: 17, color: colors.text, fontWeight: '600' },
+    itemText: { fontSize: 17, color: colors.text, fontWeight: '600', flexShrink: 1 },
+    unavailableText: { fontSize: 13, color: colors.textMuted, maxWidth: 100 },
+    shareProfileButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      minHeight: 44,
+      marginVertical: 8,
+    },
+    modalBackdrop: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 20,
+    },
+    sessionsModal: {
+      width: '100%',
+      maxWidth: 560,
+      maxHeight: '85%',
+      backgroundColor: colors.bg,
+      borderRadius: 8,
+      paddingBottom: 8,
+    },
+    sessionsHeader: { flexDirection: 'row', alignItems: 'center', padding: 16 },
+    sessionsTitle: { fontSize: 24, fontWeight: '700', color: colors.text, flex: 1 },
+    sessionsError: { color: colors.destructive, paddingHorizontal: 20, paddingBottom: 12 },
+    sessionRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+    sessionInfo: { flex: 1 },
+    sessionName: { fontSize: 16, fontWeight: '600', color: colors.text },
+    sessionDetail: { fontSize: 13, color: colors.textSecondary, marginTop: 4 },
+    sessionIconButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+    sessionRevokeButton: { width: 88, height: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
     versionText: { fontSize: 15, color: colors.textMuted },
     destructiveText: { fontSize: 16, color: colors.destructive, fontWeight: '600' },
     footerText: { textAlign: 'center', color: colors.textMuted, fontSize: 13, marginTop: 12 },

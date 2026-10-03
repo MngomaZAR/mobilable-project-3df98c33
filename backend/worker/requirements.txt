@@ -3,3 +3,5 @@ asyncpg==0.30.0
 boto3==1.41.5
 nats-py==2.11.0
 typesense==1.1.1
+httpx==0.28.1
+cryptography==50.0.2

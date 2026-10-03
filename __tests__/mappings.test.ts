@@ -1,6 +1,6 @@
 // FIX: mapPostRow lives in mappings.ts, not feedMappings (file doesn't exist)
 // FIX: Photographer uses avatar_url not avatar
-import { mapPhotographerRow, mapSupabaseUser, mapPostRow } from '../src/utils/mappings';
+import { mapModelRow, mapPhotographerRow, mapSupabaseUser, mapPostRow } from '../src/utils/mappings';
 
 describe('mapping helpers', () => {
   test('mapPhotographerRow maps DB row to Photographer', () => {
@@ -11,6 +11,8 @@ describe('mapping helpers', () => {
       latitude: -33.9,
       longitude: 18.4,
       price_range: 'R2000',
+      hourly_rate: '2300.50',
+      is_online: true,
       style: 'Wedding',
       bio: 'Bio',
       tags: ['wedding', 'portrait'],
@@ -22,6 +24,26 @@ describe('mapping helpers', () => {
     expect(out.avatar_url).toBe('https://example.com/a.png'); // FIX: was out.avatar
     expect(out.location).toContain('Cape Town');
     expect(out.latitude).toBeCloseTo(-33.9);
+    expect(out.hourly_rate).toBe(2300.5);
+    expect(out.is_online).toBe(true);
+  });
+
+  test('missing published rates remain unavailable rather than invented', () => {
+    const out = mapPhotographerRow({ id: 'p1', profiles: [] } as any);
+    expect(out.hourly_rate).toBeNull();
+    expect(out.price_range).toBe('');
+    expect(out.is_online).toBe(false);
+  });
+
+  test('model mapping preserves published pricing and availability, without fake ratings', () => {
+    const out = mapModelRow({ id: 'm1', hourly_rate: '2200', is_online: true,
+      portfolio_urls: ['model-media::users/m1/one.jpg'], profiles: [{ full_name: 'QA model', city: 'Durban' }] } as any);
+    expect(out.hourly_rate).toBe(2200);
+    expect(out.is_online).toBe(true);
+    expect(out.rating).toBe(0);
+    expect(out.portfolio_urls).toHaveLength(1);
+    expect(out.name).toBe('QA model');
+    expect(mapModelRow({ id: 'm2', profiles: [] } as any).hourly_rate).toBeNull();
   });
 
   test('mapSupabaseUser respects profile and metadata', () => {

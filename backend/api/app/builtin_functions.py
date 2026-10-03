@@ -10,6 +10,9 @@ from jose import jwt
 from .config import Settings
 from .database import execute_table_query
 from .local_auth import user_from_access_token
+from .access_control import require_admin
+from .payments import checkout
+from .messaging import start_conversation, chat_messages
 
 
 def now_iso() -> str:
@@ -218,12 +221,15 @@ async def handle_status_leaderboard(settings: Settings, payload: dict[str, Any])
 
 
 async def handle_for_you_ranking(settings: Settings, payload: dict[str, Any]) -> dict[str, Any]:
-    limit = int(payload.get("limit") or 50)
+    try:
+        limit = min(max(int(payload.get("limit") or 50), 1), 100)
+    except (ValueError, TypeError) as error:
+        raise HTTPException(status_code=400, detail="Invalid ranking limit.") from error
     posts = await select_rows(
         settings,
         "posts",
         "id, created_at, likes_count, comment_count",
-        [],
+        [{"op": "eq", "column": "moderation_status", "value": "approved"}, {"op": "is", "column": "is_locked", "value": False}],
         limit=limit,
         order=[{"column": "created_at", "ascending": False}],
     )
@@ -521,15 +527,11 @@ async def handle_admin_review(settings: Settings, payload: dict[str, Any]) -> di
         )
         payout_methods = await select_rows(settings, "payout_methods", "*", [{"op": "eq", "column": "verified", "value": False}], limit=200)
         kyc_documents = await select_rows(settings, "kyc_documents", "*", [{"op": "in", "column": "status", "value": ["pending", "submitted"]}], limit=200)
-        return {"verifications": verifications, "payout_methods": payout_methods, "kyc_documents": kyc_documents}
+        content = {table: await select_rows(settings, table, '*', [{"op": "eq", "column": "moderation_status", "value": "pending"}], limit=200) for table in ['posts', 'stories', 'post_comments', 'reviews']}
+        return {"verifications": verifications, "payout_methods": payout_methods, "kyc_documents": kyc_documents, 'content': content}
     if action == "decide_verification":
-        rows = await update_rows(
-            settings,
-            "profiles",
-            {"kyc_status": payload.get("decision"), "verified": payload.get("decision") == "approved"},
-            [{"op": "eq", "column": "id", "value": payload.get("user_id")}],
-        )
-        return {"profile": rows[0] if rows else None}
+        from .onboarding import decide_identity
+        return await decide_identity(settings, str(payload.get("user_id") or ""), str(payload.get("decision") or ""))
     if action == "decide_payout":
         rows = await update_rows(
             settings,
@@ -539,13 +541,8 @@ async def handle_admin_review(settings: Settings, payload: dict[str, Any]) -> di
         )
         return {"method": rows[0] if rows else None}
     if action == "decide_kyc_document":
-        rows = await update_rows(
-            settings,
-            "kyc_documents",
-            {"status": payload.get("decision")},
-            [{"op": "eq", "column": "id", "value": payload.get("document_id")}],
-        )
-        return {"document": rows[0] if rows else None}
+        from .onboarding import decide_document
+        return await decide_document(settings, str(payload.get("document_id") or ""), str(payload.get("decision") or ""))
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Unsupported admin review action: {action}")
 
 
@@ -609,6 +606,21 @@ async def handle_send_app_email(payload: dict[str, Any]) -> dict[str, Any]:
 async def handle_builtin_function(settings: Settings, name: str, token: str | None, payload: dict[str, Any]) -> dict[str, Any] | None:
     if not settings.postgres_url:
         return None
+    user = await require_user(settings, token)
+    if name in {"dispatch-create", "dispatch-respond", "dispatch-state", "eta", "heatmap", "status-leaderboard", "livekit-token", "escrow-release", "send-app-email"}:
+        raise HTTPException(status_code=503, detail="This service is not enabled for the scheduled-booking release.")
+    if name == "admin-review":
+        require_admin(settings, user)
+        if payload.get("action", "").startswith("decide_") and payload.get("decision") not in {"approved", "rejected", "verified", "unverified"}:
+            raise HTTPException(status_code=400, detail="Invalid review decision.")
+    if name == "conversation-start":
+        return await start_conversation(settings, user, payload)
+    if name == "chat-messages":
+        return await chat_messages(settings, user, payload)
+    if name == "payfast-handler":
+        return await checkout(settings, str(payload.get("booking_id") or ""), user)
+    if name == "recommendation-events" and len(payload.get("events") or []) > 100:
+        raise HTTPException(status_code=400, detail="Too many recommendation events.")
     handlers = {
         "dispatch-create": lambda: handle_dispatch_create(settings, token, payload),
         "dispatch-respond": lambda: handle_dispatch_respond(settings, payload),

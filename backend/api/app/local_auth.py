@@ -1,4 +1,5 @@
 import base64
+import asyncio
 import hashlib
 import hmac
 import json
@@ -12,6 +13,8 @@ from fastapi import HTTPException, status
 
 from .config import Settings
 from .database import connect
+from .access_control import PUBLIC_ROLES
+from .auth_security import rate_limit, token_digest
 
 
 HASH_ITERATIONS = 260_000
@@ -58,12 +61,14 @@ def normalize_email(email: Any) -> str:
 
 def normalize_password(password: Any) -> str:
     value = str(password or "")
-    if len(value) < 8:
+    if len(value) < 8 or len(value) > 256:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Password must be at least 8 characters.")
     return value
 
 
 async def ensure_local_auth_schema(settings: Settings) -> None:
+    if not settings.allow_runtime_schema_changes:
+        return
     conn = await connect(settings)
     try:
         await conn.execute("CREATE EXTENSION IF NOT EXISTS pgcrypto")
@@ -140,8 +145,8 @@ async def create_session(settings: Settings, user: asyncpg.Record | dict[str, An
             INSERT INTO api_sessions (access_token, refresh_token, user_id, expires_at, refresh_expires_at)
             VALUES ($1, $2, $3, $4, $5)
             """,
-            access_token,
-            refresh_token,
+            token_digest(access_token),
+            token_digest(refresh_token),
             user_id,
             expires_at,
             refresh_expires_at,
@@ -159,30 +164,42 @@ async def create_session(settings: Settings, user: asyncpg.Record | dict[str, An
 async def local_sign_up(settings: Settings, payload: dict[str, Any]) -> dict[str, Any]:
     await ensure_local_auth_schema(settings)
     email = normalize_email(payload.get("email"))
+    await rate_limit(settings, f"signup:{email}", 5)
     password = normalize_password(payload.get("password"))
     options = payload.get("options") if isinstance(payload.get("options"), dict) else {}
-    metadata = metadata_from_options(options)
+    supplied = metadata_from_options(options)
+    metadata = {key: supplied[key] for key in ("role", "full_name", "name", "avatar_url", "date_of_birth", "city", "phone", "gender") if key in supplied}
+    if metadata.get("role", "client") not in PUBLIC_ROLES:
+        raise HTTPException(status_code=403, detail="This role cannot be assigned during registration.")
     merged_metadata = {
         **metadata,
         "role": metadata.get("role") or "client",
         "full_name": options.get("displayName") or metadata.get("full_name") or metadata.get("name"),
         "avatar_url": metadata.get("avatar_url"),
         "date_of_birth": metadata.get("date_of_birth"),
-        "age_verified": bool(metadata.get("date_of_birth") or metadata.get("age_verified")),
+        "age_verified": False,
     }
+    password_hash = await asyncio.to_thread(hash_password, password)
     conn = await connect(settings)
     try:
-        user = await conn.fetchrow(
-            """
-            INSERT INTO api_users (id, email, password_hash, metadata)
-            VALUES ($1, $2, $3, $4::jsonb)
-            RETURNING id, email, metadata, created_at
-            """,
-            str(uuid.uuid4()),
-            email,
-            hash_password(password),
-            json.dumps(merged_metadata),
-        )
+        async with conn.transaction():
+            user = await conn.fetchrow(
+                """INSERT INTO api_users (id, email, password_hash, metadata)
+                VALUES ($1, $2, $3, $4::jsonb) RETURNING id, email, metadata, created_at""",
+                str(uuid.uuid4()), email, password_hash, json.dumps(merged_metadata),
+            )
+            await conn.execute(
+                """INSERT INTO profiles (id,email,role,full_name,avatar_url,city,phone,date_of_birth,age_verified,verified,kyc_status,availability_status)
+                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,false,false,'pending','offline')""",
+                user["id"], email, merged_metadata["role"], merged_metadata["full_name"],
+                merged_metadata["avatar_url"], metadata.get("city"), metadata.get("phone"), metadata.get("date_of_birth"),
+            )
+            if merged_metadata["role"] in {"photographer", "model"}:
+                table = "photographers" if merged_metadata["role"] == "photographer" else "models"
+                await conn.execute(
+                    f"INSERT INTO {table} (id,name,rating,review_count) VALUES ($1,$2,0,0)",
+                    user["id"], merged_metadata["full_name"],
+                )
     except asyncpg.UniqueViolationError as error:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email is already registered.") from error
     finally:
@@ -194,6 +211,7 @@ async def local_sign_up(settings: Settings, payload: dict[str, Any]) -> dict[str
 async def local_sign_in(settings: Settings, payload: dict[str, Any]) -> dict[str, Any]:
     await ensure_local_auth_schema(settings)
     email = normalize_email(payload.get("email"))
+    await rate_limit(settings, f"signin:{email}", 10)
     password = str(payload.get("password") or "")
     conn = await connect(settings)
     try:
@@ -203,7 +221,9 @@ async def local_sign_in(settings: Settings, payload: dict[str, Any]) -> dict[str
         )
     finally:
         await conn.close()
-    if not user or not verify_password(password, user["password_hash"]):
+    stored = user["password_hash"] if user else f"pbkdf2_sha256${HASH_ITERATIONS}$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    valid = await asyncio.to_thread(verify_password, password[:256], stored)
+    if not user or not valid or len(password) > 256:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password.")
     session = await create_session(settings, user)
     return {"session": session, "user": session["user"]}
@@ -221,7 +241,7 @@ async def user_from_access_token(settings: Settings, token: str) -> dict[str, An
             WHERE s.access_token = $1
               AND s.expires_at > now()
             """,
-            token,
+            token_digest(token),
         )
     finally:
         await conn.close()
@@ -236,23 +256,25 @@ async def local_refresh(settings: Settings, refresh_token: str | None) -> dict[s
     await ensure_local_auth_schema(settings)
     conn = await connect(settings)
     try:
-        row = await conn.fetchrow(
-            """
-            SELECT u.id, u.email, u.metadata, u.created_at, s.access_token
-            FROM api_sessions s
-            JOIN api_users u ON u.id = s.user_id
-            WHERE s.refresh_token = $1
-              AND s.refresh_expires_at > now()
-            """,
-            refresh_token,
-        )
-        if row:
-            await conn.execute("DELETE FROM api_sessions WHERE access_token = $1", row["access_token"])
+        async with conn.transaction():
+            row = await conn.fetchrow(
+                """SELECT u.id, u.email, u.metadata, u.created_at, s.access_token
+                FROM api_sessions s JOIN api_users u ON u.id = s.user_id
+                WHERE s.refresh_token = $1 AND s.refresh_expires_at > now()
+                FOR UPDATE OF s""", token_digest(refresh_token),
+            )
+            if not row:
+                raise HTTPException(status_code=401, detail="Refresh token expired or invalid.")
+            access_token, next_refresh = secrets.token_urlsafe(48), secrets.token_urlsafe(48)
+            expires_at = _now() + ACCESS_TOKEN_TTL
+            await conn.execute(
+                """UPDATE api_sessions SET access_token=$2,refresh_token=$3,expires_at=$4
+                WHERE access_token=$1""", row["access_token"], token_digest(access_token), token_digest(next_refresh), expires_at,
+            )
     finally:
         await conn.close()
-    if not row:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token expired or invalid.")
-    session = await create_session(settings, row)
+    session = {"access_token": access_token, "refresh_token": next_refresh,
+               "expires_at": int(expires_at.timestamp()), "user": user_response(row)}
     return {"session": session, "user": session["user"]}
 
 
@@ -262,7 +284,7 @@ async def local_sign_out(settings: Settings, token: str | None) -> None:
     await ensure_local_auth_schema(settings)
     conn = await connect(settings)
     try:
-        await conn.execute("DELETE FROM api_sessions WHERE access_token = $1", token)
+        await conn.execute("DELETE FROM api_sessions WHERE access_token = $1", token_digest(token))
     finally:
         await conn.close()
 
@@ -272,7 +294,11 @@ async def local_update_user(settings: Settings, token: str, attributes: dict[str
     metadata = dict(current.get("user_metadata") or {})
     user_metadata = attributes.get("data") or attributes.get("metadata") or attributes.get("user_metadata") or {}
     if isinstance(user_metadata, dict):
+        if not set(user_metadata) <= {"full_name", "name", "avatar_url", "city", "phone", "gender"}:
+            raise HTTPException(status_code=403, detail="Verification and privileges are managed by administrators.")
         metadata.update(user_metadata)
+    if attributes.get("email") and normalize_email(attributes["email"]) != current["email"]:
+        raise HTTPException(status_code=409, detail="Email changes require a verified email-change flow.")
     if attributes.get("email"):
         email = normalize_email(attributes["email"])
     else:

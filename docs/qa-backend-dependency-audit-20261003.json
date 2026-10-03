@@ -1,0 +1,135 @@
+{
+  "generated_at_utc": "2026-10-03T17:43:24.3386072Z",
+  "repository_changes_made_by_audit": false,
+  "repository_environment_mutated": false,
+  "all_audit_processes_completed": true,
+  "coverage": "Fresh full Linux/Python 3.12 requirements resolution; not installed-image or runtime SBOM; OS/base-image packages and deployed versions were not audited.",
+  "deduplication": "Package plus canonical GHSA; raw duplicate aliases/records retained as counts, not distinct vulnerabilities.",
+  "services": [
+    {
+      "service": "api",
+      "proposed": {
+        "packages": 42,
+        "direct_packages": 9,
+        "transitive_packages": 33,
+        "vulnerable_packages": 1,
+        "vulnerable_direct_packages": 0,
+        "vulnerable_transitive_packages": 1,
+        "raw_advisory_records": 2,
+        "unique_advisories": 1,
+        "duplicate_records_removed": 1,
+        "critical": 0,
+        "high": 1,
+        "moderate": 0,
+        "low": 0,
+        "linux_platform_excluded": 0
+      },
+      "evidence": "api-audit.sanitized.json",
+      "proposed_evidence": "api-proposed-audit.sanitized.json",
+      "current": {
+        "packages": 41,
+        "direct_packages": 9,
+        "transitive_packages": 32,
+        "vulnerable_packages": 2,
+        "vulnerable_direct_packages": 0,
+        "vulnerable_transitive_packages": 2,
+        "raw_advisory_records": 14,
+        "unique_advisories": 7,
+        "duplicate_records_removed": 7,
+        "critical": 0,
+        "high": 4,
+        "moderate": 2,
+        "low": 1,
+        "linux_platform_excluded": 1
+      }
+    },
+    {
+      "service": "worker",
+      "proposed": {
+        "packages": 28,
+        "direct_packages": 7,
+        "transitive_packages": 21,
+        "vulnerable_packages": 0,
+        "vulnerable_direct_packages": 0,
+        "vulnerable_transitive_packages": 0,
+        "raw_advisory_records": 0,
+        "unique_advisories": 0,
+        "duplicate_records_removed": 0,
+        "critical": 0,
+        "high": 0,
+        "moderate": 0,
+        "low": 0,
+        "linux_platform_excluded": 0
+      },
+      "evidence": "worker-audit.sanitized.json",
+      "proposed_evidence": "worker-proposed-audit.sanitized.json",
+      "current": {
+        "packages": 28,
+        "direct_packages": 7,
+        "transitive_packages": 21,
+        "vulnerable_packages": 1,
+        "vulnerable_direct_packages": 1,
+        "vulnerable_transitive_packages": 0,
+        "raw_advisory_records": 7,
+        "unique_advisories": 4,
+        "duplicate_records_removed": 3,
+        "critical": 0,
+        "high": 0,
+        "moderate": 2,
+        "low": 2,
+        "linux_platform_excluded": 0
+      }
+    }
+  ],
+  "proposed_remediation": [
+    {
+      "applied": false,
+      "primary_metadata": "https://pypi.org/pypi/fastapi/0.133.0/json",
+      "direct_pin": "fastapi==0.133.0",
+      "application_tests_run": false,
+      "resolver_verified": true,
+      "service": "api",
+      "reason": "Current FastAPI pin requires starlette>=0.40.0,<0.49.0, which excludes every reported Starlette fix. The proposed pair resolves on Linux/Python 3.12 and removes all six reported Starlette advisories.",
+      "transitive_pin": "starlette==1.3.1"
+    },
+    {
+      "applied": false,
+      "direct_pin": "cryptography==50.0.2",
+      "primary_changelog": "https://cryptography.io/en/latest/changelog/",
+      "minimum_covering_reported_fixes": "50.0.0",
+      "resolver_verified": true,
+      "service": "worker",
+      "reason": "46.0.7 has four distinct reported advisories. 48.0.1 fixes the wheel advisory, 49.0.0 fixes the two verifier advisories, and 50.0.0 fixes the PKCS7 oracle. Proposed 50.0.2 resolves and re-audits clean; major upgrade needs application approval and regression tests.",
+      "application_tests_run": false
+    },
+    {
+      "pin_fix": null,
+      "applied": false,
+      "service": "api",
+      "dependency_chain": [
+        "python-jose[cryptography]==3.5.0",
+        "ecdsa==0.19.2"
+      ],
+      "primary_metadata": "https://pypi.org/pypi/python-jose/3.5.0/json",
+      "reason": "No patched ecdsa release is planned. Crypto extra does not remove the mandatory dependency. Assess a documented bounded exception for current non-ECDSA use or a separately reviewed JWT dependency replacement; do not claim this is fixed by pinning or blind suppression."
+    }
+  ],
+  "urgent_parent_review": {
+    "advisory": "GHSA-86qp-5c8j-p5mr",
+    "inference": "Malformed Host may bypass the IP rate-limit gate because it uses reconstructed request.url.path. This is a rate-limit gate finding, not proof of login authorization bypass.",
+    "function": "authentication_abuse_guard",
+    "observed_lines": [
+      166,
+      172
+    ],
+    "suggested_followup": "Parent should assess raw ASGI scope path for gating/keying, reject malformed Host upstream or in trusted-host validation, and add a crafted-Host regression test. No parent file edited and no live exploit attempted.",
+    "file": "backend/api/app/main.py"
+  },
+  "additional_primary_references": [
+    "https://fastapi.tiangolo.com/release-notes/#01330",
+    "https://pypi.org/pypi/fastapi/0.118.2/json",
+    "https://openssl-library.org/news/secadv/20260609.txt",
+    "https://cryptography.io/en/latest/changelog/#v46-0-7"
+  ],
+  "sanitizer": "Explicit allowlist of public package/version/advisory metadata and repository-relative source references. No environment values, credentials, request payloads, or deployment logs are included."
+}

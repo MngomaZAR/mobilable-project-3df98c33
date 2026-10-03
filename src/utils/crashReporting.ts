@@ -1,9 +1,8 @@
 /**
- * Self-hosted crash reporting — stores error details in Supabase `crash_logs`.
- * No external accounts, no API keys needed.
+ * Self-hosted crash reporting — stores error details through the active backend boundary.
  */
-import { supabase } from '../config/supabaseClient';
 import { Platform } from 'react-native';
+import { backendDb } from '../services/backendGateway';
 
 const APP_VERSION = '1.0.0';
 
@@ -13,7 +12,7 @@ export const captureError = async (
 ) => {
   const err = error instanceof Error ? error : new Error(String(error));
   try {
-    await supabase.from('crash_logs').insert({
+    await backendDb.from('crash_logs').insert({
       user_id: context.userId ?? null,
       error_message: err.message ?? 'Unknown error',
       error_stack: err.stack ?? null,

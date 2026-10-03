@@ -1,5 +1,4 @@
-import { AppUser, Photographer, Post, ProfileSummary } from '../types';
-import { supabase } from '../config/supabaseClient';
+import { AppUser, Model, Photographer, Post, ProfileSummary } from '../types';
 import { PLACEHOLDER_AVATAR, PLACEHOLDER_IMAGE } from './constants';
 import { resolveUserRole } from './userRole';
 
@@ -38,6 +37,8 @@ type PhotographerRow = {
   latitude: number | null;
   longitude: number | null;
   price_range: string | null;
+  hourly_rate?: number | string | null;
+  is_online?: boolean | null;
   style: string | null;
   bio: string | null;
   tags: string[] | null;
@@ -103,13 +104,24 @@ export const mapPhotographerRow = (row: PhotographerRow): Photographer => {
     longitude: row.longitude ?? 0,
     style: row.style ?? '',
     bio: profile?.bio ?? row.bio ?? '', // Prefer profile bio
-    price_range: row.price_range ?? 'R1500',
+    price_range: row.price_range ?? '',
+    hourly_rate: Number.isFinite(Number(row.hourly_rate)) && Number(row.hourly_rate) > 0 ? Number(row.hourly_rate) : null,
+    is_online: row.is_online === true,
     tags: row.tags ?? [],
     tier_id: row.tier_id ?? null,
     equipment: row.equipment ?? null,
     review_count: typeof row.review_count === 'number' ? row.review_count : 0,
     total_bookings: typeof row.total_bookings === 'number' ? row.total_bookings : 0,
     created_at: row.created_at,
+  };
+};
+
+export const mapModelRow = (row: PhotographerRow & { portfolio_urls?: string[] | null }): Model => {
+  const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
+  return {
+    ...mapPhotographerRow(row),
+    name: profile?.full_name ?? 'New model',
+    portfolio_urls: Array.isArray(row.portfolio_urls) ? row.portfolio_urls : [],
   };
 };
 

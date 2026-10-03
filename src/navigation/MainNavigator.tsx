@@ -55,6 +55,7 @@ import { RootStackParamList, TabParamList } from './types';
 import { useAppData } from '../store/AppDataContext';
 import { useTheme } from '../store/ThemeContext';
 import { getEffectiveRole, isEffectiveModel, isEffectivePhotographer, roleRequiresKyc } from '../utils/userRole';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const Tab = createBottomTabNavigator<TabParamList>();
 const Stack = createStackNavigator<RootStackParamList>();
@@ -99,6 +100,7 @@ const tabBarIcon = (
 const TabsNavigator = () => {
   const { currentUser, state } = useAppData();
   const { colors, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
   const unreadNotifications = state.notifications.filter(n => n.status === 'queued').length;
 
   const role = getEffectiveRole(currentUser);
@@ -123,35 +125,24 @@ const TabsNavigator = () => {
           tabBarIcon: ({ focused, color, size }) => tabBarIcon(route.name, focused, color, size, homeIcon),
           tabBarActiveTintColor: colors.accent,
           tabBarInactiveTintColor: colors.textMuted,
+          tabBarLabelPosition: 'below-icon',
           tabBarStyle: {
-            position: 'absolute',
-            left: 8,
-            right: 8,
-            bottom: 10,
-            borderRadius: 24,
-            height: 74,
-            paddingBottom: 10,
+            height: 64 + insets.bottom,
+            paddingBottom: Math.max(8, insets.bottom),
             paddingTop: 6,
-            borderTopWidth: 0,
-            borderWidth: StyleSheet.hairlineWidth,
+            borderTopWidth: StyleSheet.hairlineWidth,
             borderColor: colors.border,
-            overflow: 'hidden',
-            elevation: 16,
-            shadowColor: '#000',
-            shadowOpacity: 0.14,
-            shadowRadius: 20,
-            shadowOffset: { width: 0, height: 10 },
             backgroundColor: colors.card,
           },
           tabBarItemStyle: {
-            paddingHorizontal: 4,
-            marginVertical: 6,
-            borderRadius: 16,
+            paddingHorizontal: 0,
+            minHeight: 44,
+            borderRadius: 8,
           },
           tabBarLabelStyle: {
             fontSize: 10,
             fontWeight: '600',
-            letterSpacing: 0.2,
+            letterSpacing: 0,
           },
           tabBarHideOnKeyboard: true,
           headerShown: false,

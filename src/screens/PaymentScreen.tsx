@@ -10,14 +10,12 @@ import { createDispatch } from '../services/dispatchService';
 import { updateBookingDispatchInDb } from '../services/bookingService';
 import HowItWorksCard from '../components/HowItWorksCard';
 import { getDefaultPayfastNotifyUrl } from '../config/commercePolicy';
-import { BookingStatus } from '../types';
 
 type Route = RouteProp<RootStackParamList, 'Payment'>;
 type Navigation = StackNavigationProp<RootStackParamList, 'Payment'>;
 
 const PAYMENT_SUCCESS_URL = 'papzi://payfast/success';
 const PAYMENT_CANCEL_URL = 'papzi://payfast/cancel';
-const VERIFIED_BOOKING_STATUSES: BookingStatus[] = ['accepted', 'in_progress', 'completed', 'reviewed', 'paid_out'];
 
 const PaymentScreen: React.FC = () => {
   const { params } = useRoute<Route>();
@@ -38,8 +36,8 @@ const PaymentScreen: React.FC = () => {
   const bookingId = params?.bookingId;
   const dispatchIntent = params?.dispatchIntent;
   const checkoutItemName = booking?.package_type ?? 'Photography booking';
-  const checkoutAmount = booking?.total_amount ? `R${booking.total_amount.toLocaleString()}` : 'R1,200';
-  const paymentConfirmed = Boolean(booking && VERIFIED_BOOKING_STATUSES.includes(booking.status));
+  const checkoutAmount = booking?.total_amount ? `R${booking.total_amount.toLocaleString()}` : 'Unavailable';
+  const paymentConfirmed = booking?.payment_status === 'paid';
 
   const clearVerificationTimer = useCallback(() => {
     if (verificationTimerRef.current) {
@@ -134,8 +132,7 @@ const PaymentScreen: React.FC = () => {
       if (cancelled) return;
 
       const latestBooking = state.bookings.find((item) => item.id === bookingId) ?? booking;
-      const latestStatus = latestBooking?.status;
-      if (latestStatus && VERIFIED_BOOKING_STATUSES.includes(latestStatus)) {
+      if (latestBooking?.payment_status === 'paid') {
         clearVerificationTimer();
         setAwaitingVerification(false);
         setStatusMessage('Payment confirmed. Booking status is syncing now.');

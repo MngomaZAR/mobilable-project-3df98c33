@@ -1,0 +1,257 @@
+{
+  "config": {
+    "configFile": "C:\\Users\\27790\\Downloads\\papzii\\playwright.config.cjs",
+    "rootDir": "C:/Users/27790/Downloads/papzii/e2e-web",
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "C:/Users/27790/Downloads/papzii/docs/qa-artifacts-20261003/settings",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "",
+        "name": "",
+        "testDir": "C:/Users/27790/Downloads/papzii/e2e-web",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 45000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "list"
+      ],
+      [
+        "json"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "runAgents": "none",
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.58.2",
+    "workers": 1,
+    "webServer": {
+      "command": "node scripts/serve-dist.cjs",
+      "url": "http://127.0.0.1:4173",
+      "timeout": 60000,
+      "reuseExistingServer": true
+    }
+  },
+  "suites": [
+    {
+      "title": "oracle.settings.spec.js",
+      "file": "oracle.settings.spec.js",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "client real Oracle settings entry points on phone",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 180000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 10734,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-03T14:28:01.986Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "2d6fa9586050586778a6-29438928319e09e43d55",
+          "file": "oracle.settings.spec.js",
+          "line": 14,
+          "column": 3
+        },
+        {
+          "title": "photographer real Oracle settings entry points on phone",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 180000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 14379,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // deep equality\u001b[22m\n\n\u001b[32m- Expected  - 1\u001b[39m\n\u001b[31m+ Received  + 3\u001b[39m\n\n\u001b[32m- Array []\u001b[39m\n\u001b[31m+ Array [\u001b[39m\n\u001b[31m+   \"403 /data/photographer_equipment\",\u001b[39m\n\u001b[31m+ ]\u001b[39m",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // deep equality\u001b[22m\n\n\u001b[32m- Expected  - 1\u001b[39m\n\u001b[31m+ Received  + 3\u001b[39m\n\n\u001b[32m- Array []\u001b[39m\n\u001b[31m+ Array [\u001b[39m\n\u001b[31m+   \"403 /data/photographer_equipment\",\u001b[39m\n\u001b[31m+ ]\u001b[39m\n    at C:\\Users\\27790\\Downloads\\papzii\\e2e-web\\oracle.settings.spec.js:49:22",
+                    "location": {
+                      "file": "C:\\Users\\27790\\Downloads\\papzii\\e2e-web\\oracle.settings.spec.js",
+                      "column": 22,
+                      "line": 49
+                    },
+                    "snippet": "  47 |     }\n  48 |     expect(crashes).toEqual([]);\n> 49 |     expect(failures).toEqual([]);\n     |                      ^\n  50 |   });\n  51 | }\n  52 |"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "C:\\Users\\27790\\Downloads\\papzii\\e2e-web\\oracle.settings.spec.js",
+                        "column": 22,
+                        "line": 49
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // deep equality\u001b[22m\n\n\u001b[32m- Expected  - 1\u001b[39m\n\u001b[31m+ Received  + 3\u001b[39m\n\n\u001b[32m- Array []\u001b[39m\n\u001b[31m+ Array [\u001b[39m\n\u001b[31m+   \"403 /data/photographer_equipment\",\u001b[39m\n\u001b[31m+ ]\u001b[39m\n\n  47 |     }\n  48 |     expect(crashes).toEqual([]);\n> 49 |     expect(failures).toEqual([]);\n     |                      ^\n  50 |   });\n  51 | }\n  52 |\n    at C:\\Users\\27790\\Downloads\\papzii\\e2e-web\\oracle.settings.spec.js:49:22"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-03T14:28:12.961Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "C:\\Users\\27790\\Downloads\\papzii\\docs\\qa-artifacts-20261003\\settings\\oracle.settings-photograph-bb5fe-tings-entry-points-on-phone\\test-failed-1.png"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "C:\\Users\\27790\\Downloads\\papzii\\docs\\qa-artifacts-20261003\\settings\\oracle.settings-photograph-bb5fe-tings-entry-points-on-phone\\error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "C:\\Users\\27790\\Downloads\\papzii\\docs\\qa-artifacts-20261003\\settings\\oracle.settings-photograph-bb5fe-tings-entry-points-on-phone\\trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "C:\\Users\\27790\\Downloads\\papzii\\e2e-web\\oracle.settings.spec.js",
+                    "column": 22,
+                    "line": 49
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "2d6fa9586050586778a6-df481819ac49a4f13024",
+          "file": "oracle.settings.spec.js",
+          "line": 14,
+          "column": 3
+        },
+        {
+          "title": "model real Oracle settings entry points on phone",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 180000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 14949,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-03T14:28:30.826Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "2d6fa9586050586778a6-66036ca17a1933a252ec",
+          "file": "oracle.settings.spec.js",
+          "line": 14,
+          "column": 3
+        },
+        {
+          "title": "admin real Oracle settings entry points on phone",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 180000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 10700,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-03T14:28:46.018Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "2d6fa9586050586778a6-c1fe24397dcb27db134b",
+          "file": "oracle.settings.spec.js",
+          "line": 14,
+          "column": 3
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-10-03T14:27:59.288Z",
+    "duration": 57939.175,
+    "expected": 3,
+    "skipped": 0,
+    "unexpected": 1,
+    "flaky": 0
+  }
+}

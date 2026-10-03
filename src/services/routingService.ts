@@ -1,5 +1,6 @@
 import { haversineDistanceKm } from '../utils/geo';
 import { environment } from '../config/environment';
+import { apiClient } from '../config/apiClient';
 
 type Coordinate = {
   latitude: number;
@@ -25,6 +26,9 @@ class RoutingService {
    * Fetches a route between two points following streets.
    */
   async getRoute(start: Coordinate, end: Coordinate): Promise<RouteResponse> {
+    if (environment.backendProvider === 'api') {
+      return this.getRouteWithFallback(() => apiClient.get<RouteResponse>(`/routing/route?start_lat=${start.latitude}&start_lng=${start.longitude}&end_lat=${end.latitude}&end_lng=${end.longitude}`), start, end);
+    }
     const provider = String(environment.routingProvider || 'osrm').toLowerCase();
     if (provider === 'ors') {
       return this.getRouteWithFallback(() => this.getOpenRouteServiceRoute(start, end), start, end);
@@ -36,7 +40,7 @@ class RoutingService {
     try {
       return await fetchRoute();
     } catch (error) {
-      console.warn('RoutingService: Failed to fetch street route, falling back to direct estimate.', error);
+      console.warn('RoutingService: Road routing unavailable.', error);
       return this.getFallbackRoute(start, end);
     }
   }
@@ -125,18 +129,15 @@ class RoutingService {
   }
 
   /**
-   * Fallback to a simple straight line if the API is down or no route found.
+   * Preserve direct-distance information without inventing a road or ETA.
    */
   private getFallbackRoute(start: Coordinate, end: Coordinate): RouteResponse {
     return {
-      coordinates: [
-        [start.longitude, start.latitude],
-        [end.longitude, end.latitude],
-      ],
+      coordinates: [],
       distance: haversineDistanceKm(start, end),
-      duration: (haversineDistanceKm(start, end) / 40) * 3600, // Approx 40km/h
+      duration: 0,
       source: 'fallback',
-      warning: 'Road routing unavailable. Showing direct distance estimate only.',
+      warning: 'Road routing unavailable. Direct distance only; navigation and ETA are unavailable.',
     };
   }
 }

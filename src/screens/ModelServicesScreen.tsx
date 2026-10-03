@@ -11,6 +11,9 @@ import { backendDb } from '../services/backendGateway';
 import { useAppData } from '../store/AppDataContext';
 import { useTheme } from '../store/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
+import { environment } from '../config/environment';
+import { apiClient } from '../config/apiClient';
+import { getApiAccessToken } from '../config/apiSession';
 
 type Nav = StackNavigationProp<RootStackParamList>;
 
@@ -37,22 +40,32 @@ const ModelServicesScreen: React.FC = () => {
   const { state } = useAppData();
   const userId = state.currentUser?.id;
   const isAgeVerified = state.currentUser?.age_verified === true;
+  const templates = SERVICE_TEMPLATES.filter(template => !template.adult || (environment.backendProvider !== 'api' && !['appstore', 'play', 'both'].includes(environment.EXPO_PUBLIC_STORE_TARGET)));
 
   const [services, setServices] = useState<Record<string, { active: boolean; rate: number }>>({});
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!userId) { setLoading(false); return; }
     let active = true;
+    setLoading(true);
+    setLoadError(null);
 
     void (async () => {
       try {
-        const { data } = await backendDb.from('model_services').select('service_type, is_active, rate_zar').eq('model_id', userId);
+        const { data, error } = await backendDb.from('model_services').select('service_type, is_active, rate_zar').eq('model_id', userId);
         if (!active) return;
+        if (error) throw error;
         const map: typeof services = {};
         (data ?? []).forEach((r: any) => { map[r.service_type] = { active: r.is_active, rate: Number(r.rate_zar ?? 0) }; });
         setServices(map);
+      } catch (error: any) {
+        if (active) {
+          setLoadError(error.message || 'Could not load your services.');
+          Alert.alert('Services unavailable', error.message || 'Could not load your services.');
+        }
       } finally {
         if (active) setLoading(false);
       }
@@ -78,33 +91,44 @@ const ModelServicesScreen: React.FC = () => {
   };
 
   const setRate = (key: string, val: string) => {
-    const n = parseInt(val.replace(/\D/g, ''), 10) || 0;
+    const n = Number(val.trim());
     setServices(prev => ({ ...prev, [key]: { ...(prev[key] ?? { active: false }), rate: n } }));
   };
 
   const handleSave = async () => {
-    if (!userId) return;
+    if (!userId || loading || loadError) return;
     setSaving(true);
     try {
-      await backendDb.from('model_services').update({ is_active: false }).eq('model_id', userId);
-      const active = Object.entries(services).filter(([, v]) => v.active).map(([key, v]) => ({
+      const active = Object.entries(services).filter(([key, v]) => v.active && templates.some(template => template.key === key)).map(([key, v]) => ({
         model_id: userId,
         service_type: key,
         rate_zar: v.rate,
         is_active: true,
         requires_age_verification: SERVICE_TEMPLATES.find(t => t.key === key)?.adult ?? false,
       }));
-      if (active.length > 0) {
-        const { error } = await backendDb.from('model_services').upsert(active, { onConflict: 'model_id,service_type' });
-        if (error) throw error;
+      if (active.some(service => !Number.isFinite(service.rate_zar) || service.rate_zar <= 0 || service.rate_zar > 100000)) {
+        throw new Error('Set a positive rate of at most R100000 for each enabled service.');
       }
-      Alert.alert('Saved!', 'Your services are now visible to clients.', [{ text: 'OK', onPress: () => navigation.goBack() }]);
+      if (environment.backendProvider === 'api') {
+        const token = await getApiAccessToken();
+        await apiClient.post('/providers/me/model-services', {
+          services: active.map(({ service_type, rate_zar }) => ({ service_type, rate_zar })),
+        }, { token });
+      } else {
+        const { error: resetError } = await backendDb.from('model_services').update({ is_active: false }).eq('model_id', userId);
+        if (resetError) throw resetError;
+        if (active.length > 0) {
+          const { error } = await backendDb.from('model_services').upsert(active, { onConflict: 'model_id,service_type' });
+          if (error) throw error;
+        }
+      }
+      Alert.alert('Saved', 'Your services have been saved.', [{ text: 'OK', onPress: () => navigation.goBack() }]);
     } catch (err: any) {
       Alert.alert('Error', err.message || 'Could not save. Try again.');
     } finally { setSaving(false); }
   };
 
-  const categories = [...new Set(SERVICE_TEMPLATES.map(t => t.cat))];
+  const categories = [...new Set(templates.map(t => t.cat))];
 
   if (loading) return <View style={[s.center, { backgroundColor: colors.bg }]}><ActivityIndicator color="#c9a44a" size="large" /></View>;
 
@@ -113,9 +137,9 @@ const ModelServicesScreen: React.FC = () => {
       <ScrollView contentContainerStyle={[s.scroll, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 60 }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={s.back}><Ionicons name="arrow-back" size={22} color={colors.text} /></TouchableOpacity>
         <Text style={[s.title, { color: colors.text }]}>Services & Rates</Text>
-        <Text style={[s.sub, { color: colors.textSecondary }]}>Enable what you offer and set your rate per session. Clients book directly based on what's active.</Text>
+        <Text style={[s.sub, { color: colors.textSecondary }]}>Services and session rates</Text>
 
-        {!isAgeVerified && (
+        {!isAgeVerified && templates.some(template => template.adult) && (
           <TouchableOpacity style={[s.verifyBanner, { borderColor: '#f59e0b', backgroundColor: '#f59e0b18' }]} onPress={() => navigation.navigate('AgeVerification')}>
             <Ionicons name="alert-circle-outline" size={16} color="#f59e0b" />
             <Text style={s.verifyText}>Complete age verification to unlock adult content services →</Text>
@@ -125,7 +149,7 @@ const ModelServicesScreen: React.FC = () => {
         {categories.map(cat => (
           <View key={cat}>
             <Text style={[s.catLabel, { color: colors.text }]}>{cat}</Text>
-            {SERVICE_TEMPLATES.filter(t => t.cat === cat).map(template => {
+            {templates.filter(t => t.cat === cat).map(template => {
               const svc = services[template.key] ?? { active: false, rate: template.rate };
               const locked = template.adult && !isAgeVerified;
               return (
@@ -158,10 +182,11 @@ const ModelServicesScreen: React.FC = () => {
           </View>
         ))}
 
-        <TouchableOpacity style={[s.saveBtn, saving && { opacity: 0.6 }]} onPress={handleSave} disabled={saving}>
+        {loadError ? <Text accessibilityRole="alert" style={{ color: colors.textSecondary }}>{loadError}</Text> : null}
+        <TouchableOpacity style={[s.saveBtn, (saving || !!loadError) && { opacity: 0.6 }]} onPress={handleSave} disabled={saving || !!loadError}>
           {saving ? <ActivityIndicator color="#fff" /> : <><Ionicons name="checkmark-circle" size={20} color="#fff" /><Text style={s.saveBtnText}>Save Services</Text></>}
         </TouchableOpacity>
-        <Text style={[s.legal, { color: colors.textMuted }]}>By enabling services you confirm you are legally permitted to offer them and consent to our Terms of Service. Adult content requires POPIA compliance and verified age.</Text>
+        <Text style={[s.legal, { color: colors.textMuted }]}>By enabling services you confirm you are legally permitted to offer them and consent to our Terms of Service.{templates.some(template => template.adult) ? ' Adult content requires POPIA compliance and verified age.' : ''}</Text>
       </ScrollView>
     </SafeAreaView>
   );

@@ -13,7 +13,12 @@ export const fetchCreatorEarnings = async (userId: string): Promise<Earning[]> =
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
     if (error) throw error;
-    return data || [];
+    return (data || []).map((row: any) => ({
+      ...row,
+      amount: Number(row.amount ?? 0),
+      source_type: row.source_type ?? (row.booking_id ? 'booking' : 'other'),
+      source_id: row.source_id ?? row.booking_id ?? row.id,
+    }));
   } catch (err: any) {
     if (err.message?.includes('relation "earnings" does not exist')) return [];
     throw err;

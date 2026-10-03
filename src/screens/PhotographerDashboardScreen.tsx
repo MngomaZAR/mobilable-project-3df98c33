@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert, RefreshControl, ScrollView, StyleSheet, Text,
   TouchableOpacity, View, Image, Switch, Modal, TextInput,
@@ -22,9 +22,13 @@ import { NewMessageModal } from '../components/NewMessageModal';
 import HowItWorksCard from '../components/HowItWorksCard';
 import { PLACEHOLDER_AVATAR } from '../utils/constants';
 import { isModelUser } from '../utils/userRole';
+import { summarizeRecordedEarnings } from '../utils/earningsSummary';
+import { environment } from '../config/environment';
+import { apiClient } from '../config/apiClient';
+import { getApiAccessToken } from '../config/apiSession';
 
 type Navigation = StackNavigationProp<RootStackParamList, 'Root'>;
-type AvailabilityProfile = { id: string; availability_status?: string | null };
+type ProviderAvailability = { is_online: boolean; availability_status: string; kyc_status: string | null };
 
 const PhotographerDashboardScreen: React.FC = () => {
   const navigation = useNavigation<Navigation>();
@@ -35,14 +39,20 @@ const PhotographerDashboardScreen: React.FC = () => {
   const currentUser = authUser ?? state.currentUser;
   const isModelAccount = isModelUser(currentUser);
   const insets = useSafeAreaInsets();
-  const [isOnline, setIsOnline] = useState(true);
+  const [isOnline, setIsOnline] = useState(false);
+  const [availabilityReady, setAvailabilityReady] = useState(false);
+  const [availabilityLoading, setAvailabilityLoading] = useState(false);
+  const [availabilityBusy, setAvailabilityBusy] = useState(false);
+  const [availabilityKycApproved, setAvailabilityKycApproved] = useState(false);
+  const availabilityWriting = useRef(false);
+  const availabilityRequest = useRef(0);
   const [refreshing, setRefreshing] = useState(false);
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
   const [showEarningsDetail, setShowEarningsDetail] = useState(false);
   const [showNewMessage, setShowNewMessage] = useState(false);
 
   const activeBooking = useMemo(
-    () => bookings.find(b => b.status === 'accepted') ?? bookings.find(b => b.status === 'pending'),
+    () => bookings.find(b => b.status === 'accepted' && b.payment_status === 'paid') ?? bookings.find(b => b.status === 'pending'),
     [bookings]
   );
   const pendingBookings = useMemo(() => bookings.filter(b => b.status === 'pending'), [bookings]);
@@ -50,35 +60,61 @@ const PhotographerDashboardScreen: React.FC = () => {
   const completedBookings = useMemo(() => bookings.filter(b => b.status === 'completed' || b.status === 'paid_out'), [bookings]);
   const kycApproved = (currentUser?.kyc_status ?? state.currentUser?.kyc_status) === 'approved';
 
-  useEffect(() => {
-    const profile = state.profiles.find((p) => p.id === currentUser?.id) as AvailabilityProfile | undefined;
-    if (profile?.availability_status) {
-      setIsOnline(profile.availability_status === 'online');
+  const loadAvailability = useCallback(async () => {
+    if (availabilityWriting.current || !currentUser?.id) return;
+    const request = ++availabilityRequest.current;
+    setAvailabilityLoading(true);
+    try {
+      let result: ProviderAvailability;
+      if (environment.backendProvider === 'api') {
+        const token = await getApiAccessToken();
+        if (request !== availabilityRequest.current) return;
+        if (!token) throw new Error('Please sign in again.');
+        result = await apiClient.get<ProviderAvailability>('/providers/me/availability', { token });
+        if (typeof result.is_online !== 'boolean' || result.availability_status !== (result.is_online ? 'online' : 'offline') ||
+            (result.is_online && result.kyc_status !== 'approved')) throw new Error('Invalid availability response.');
+      } else {
+        const [profile, provider] = await Promise.all([
+          backendDb.from('profiles').select('availability_status,kyc_status').eq('id', currentUser.id).maybeSingle(),
+          backendDb.from(isModelAccount ? 'models' : 'photographers').select('is_online').eq('id', currentUser.id).maybeSingle(),
+        ]);
+        if (profile.error) throw profile.error;
+        if (provider.error) throw provider.error;
+        if (!profile.data || !provider.data || (provider.data.is_online != null && typeof provider.data.is_online !== 'boolean')) throw new Error('Provider availability is not configured.');
+        result = {
+          is_online: profile.data.kyc_status === 'approved' && profile.data.availability_status === 'online' && provider.data.is_online === true,
+          availability_status: profile.data.availability_status,
+          kyc_status: profile.data.kyc_status,
+        };
+      }
+      if (request === availabilityRequest.current) {
+        setIsOnline(result.is_online);
+        setAvailabilityKycApproved(result.kyc_status === 'approved');
+        setAvailabilityReady(true);
+      }
+    } catch {
+      if (request === availabilityRequest.current) {
+        setIsOnline(false);
+        setAvailabilityReady(false);
+      }
+    } finally {
+      if (request === availabilityRequest.current) setAvailabilityLoading(false);
     }
-  }, [currentUser?.id, state.profiles]);
+  }, [currentUser?.id, isModelAccount]);
+
+  useEffect(() => {
+    availabilityRequest.current += 1;
+    availabilityWriting.current = false;
+    setIsOnline(false);
+    setAvailabilityReady(false);
+    setAvailabilityLoading(false);
+    setAvailabilityBusy(false);
+    setAvailabilityKycApproved(false);
+    return () => { availabilityRequest.current += 1; };
+  }, [currentUser?.id, isModelAccount]);
 
   const earnings = useMemo(() => {
-    const earningsRows = state.earnings ?? [];
-    if (earningsRows.length > 0) {
-      return earningsRows.reduce((acc, e) => {
-        const amount = Number(e.amount || 0);
-        const gross = Number((e as any).gross_amount || amount / 0.7);
-        return {
-          total: acc.total + gross,
-          commission: acc.commission + (gross - amount),
-          net: acc.net + amount,
-          count: acc.count + 1,
-        };
-      }, { total: 0, net: 0, commission: 0, count: 0 });
-    }
-    return bookings
-      .filter(b => b.status === 'completed' || b.status === 'paid_out' || b.status === 'accepted')
-      .reduce((acc, b) => ({
-        total: acc.total + (b.total_amount || 0),
-        net: acc.net + (b.payout_amount || 0),
-        commission: acc.commission + (b.commission_amount || 0),
-        count: acc.count + 1,
-      }), { total: 0, net: 0, commission: 0, count: 0 });
+    return summarizeRecordedEarnings(state.earnings ?? [], bookings);
   }, [bookings, state.earnings]);
 
   const talentProfile = useMemo(() => {
@@ -102,9 +138,9 @@ const PhotographerDashboardScreen: React.FC = () => {
     longitude: activeBooking?.user_longitude ?? DEFAULT_CAPE_TOWN_COORDINATES.longitude,
   }), [activeBooking?.user_latitude, activeBooking?.user_longitude]);
 
-  // GPS tracking for accepted bookings
+  // Acceptance reserves the booking; tracking starts only after confirmed payment.
   useEffect(() => {
-    if (!currentUser || !isOnline || activeBooking?.status !== 'accepted') return;
+    if (!currentUser || !isOnline || !availabilityReady || activeBooking?.status !== 'accepted' || activeBooking.payment_status !== 'paid') return;
     let mounted = true;
     let subscription: Location.LocationSubscription | null = null;
 
@@ -124,39 +160,57 @@ const PhotographerDashboardScreen: React.FC = () => {
 
     startTracking();
     return () => { mounted = false; subscription?.remove(); };
-  }, [activeBooking?.status, currentUser, isOnline, updatePhotographerLocation]);
-
-  useEffect(() => {
-    if (!kycApproved) {
-      setIsOnline(false);
-    }
-  }, [kycApproved]);
+  }, [activeBooking?.status, activeBooking?.payment_status, availabilityReady, currentUser, isOnline, updatePhotographerLocation]);
 
   const handleOnlineToggle = async (nextValue: boolean) => {
-    if (!kycApproved) {
+    const userId = currentUser?.id;
+    if (!userId || availabilityWriting.current || availabilityLoading || !availabilityReady) return;
+    if (nextValue && !availabilityKycApproved) {
       Alert.alert('Verification required', 'Complete KYC to go online and accept jobs.');
       return;
     }
-    setIsOnline(nextValue);
+    const previous = isOnline;
+    const request = ++availabilityRequest.current;
+    availabilityWriting.current = true;
+    setAvailabilityBusy(true);
     try {
-      const providerTable = isModelAccount ? 'models' : 'photographers';
-      await backendDb
-        .from('profiles')
-        .update({ availability_status: nextValue ? 'online' : 'offline' })
-        .eq('id', currentUser?.id);
-      await backendDb
-        .from(providerTable)
-        .update({ is_online: nextValue })
-        .eq('id', currentUser?.id);
-      const userId = currentUser?.id;
+      if (environment.backendProvider === 'api') {
+        const token = await getApiAccessToken();
+        if (request !== availabilityRequest.current) return;
+        if (!token) throw new Error('Please sign in again.');
+        const result = await apiClient.post<ProviderAvailability>('/providers/me/availability', { is_online: nextValue }, { token });
+        if (result.is_online !== nextValue || result.availability_status !== (nextValue ? 'online' : 'offline') ||
+            (nextValue && result.kyc_status !== 'approved')) throw new Error('Availability could not be confirmed.');
+        if (request !== availabilityRequest.current) return;
+        setAvailabilityKycApproved(result.kyc_status === 'approved');
+      } else {
+        const profile = await backendDb.from('profiles').update({ availability_status: nextValue ? 'online' : 'offline' }).eq('id', userId).select('id').single();
+        if (profile.error) throw profile.error;
+        if (!profile.data) throw new Error('Your profile could not be updated.');
+        const provider = await backendDb.from(isModelAccount ? 'models' : 'photographers').update({ is_online: nextValue }).eq('id', userId).select('id').single();
+        if (provider.error) throw provider.error;
+        if (!provider.data) throw new Error('Your provider profile could not be updated.');
+      }
+      if (request !== availabilityRequest.current) return;
+      setIsOnline(nextValue);
       await Promise.allSettled([
         fetchBookings(userId),
         userId ? fetchEarnings(userId) : Promise.resolve(),
         userId ? fetchSubscriptions(userId) : Promise.resolve(),
         userId ? fetchCredits(userId) : Promise.resolve(),
       ]);
-    } catch {
-      // soft-fail
+    } catch (error) {
+      if (request === availabilityRequest.current) {
+        setIsOnline(previous);
+        setAvailabilityReady(false);
+        const message = error && typeof error === 'object' && 'message' in error ? String(error.message) : 'Could not update availability.';
+        Alert.alert('Availability Update Failed', `${message} Refresh to confirm your status before retrying.`);
+      }
+    } finally {
+      if (request === availabilityRequest.current) {
+        availabilityWriting.current = false;
+        setAvailabilityBusy(false);
+      }
     }
   };
 
@@ -164,7 +218,7 @@ const PhotographerDashboardScreen: React.FC = () => {
     setAcceptingId(bookingId);
     try {
       await acceptBooking(bookingId);
-      Alert.alert('Booking Accepted', 'The client has been notified. Navigate to their location.');
+      Alert.alert('Booking Accepted', 'Waiting for the client to pay before the session can begin.');
     } catch (err: any) {
       Alert.alert('Error', err?.message ?? 'Could not accept booking.');
     } finally {
@@ -173,7 +227,7 @@ const PhotographerDashboardScreen: React.FC = () => {
   };
 
   const handleDeclineBooking = async (bookingId: string) => {
-    Alert.alert('Decline Booking', 'Are you sure? The client will be refunded.', [
+    Alert.alert('Decline Booking', 'Decline this booking request?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Decline', style: 'destructive', onPress: async () => {
@@ -188,7 +242,11 @@ const PhotographerDashboardScreen: React.FC = () => {
   };
 
   const handleCompleteBooking = async (bookingId: string) => {
-    Alert.alert('Mark Complete', 'Confirm this session is done? Payment will be processed.', [
+    if (bookings.find(booking => booking.id === bookingId)?.payment_status !== 'paid') {
+      Alert.alert('Payment Required', 'Waiting for the client to pay before the session can begin.');
+      return;
+    }
+    Alert.alert('Mark Complete', 'Confirm this paid session is done?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Complete', onPress: async () => {
@@ -205,7 +263,7 @@ const PhotographerDashboardScreen: React.FC = () => {
             }
 
             await refreshBookings();
-            Alert.alert('Session Complete', 'Your earnings have been recorded.');
+            Alert.alert('Session Complete', 'The session has been marked complete.');
           } catch (err: any) {
             Alert.alert('Error', err?.message ?? 'Could not mark as complete.');
           }
@@ -232,6 +290,7 @@ const PhotographerDashboardScreen: React.FC = () => {
     const userId = currentUser?.id;
     try {
       await Promise.allSettled([
+        loadAvailability(),
         refreshBookings(),
         fetchBookings(userId),
         userId ? fetchEarnings(userId) : Promise.resolve(),
@@ -250,6 +309,7 @@ const PhotographerDashboardScreen: React.FC = () => {
         if (!active) return;
         const userId = currentUser?.id;
         await Promise.allSettled([
+          loadAvailability(),
           refreshBookings(),
           fetchBookings(userId),
           userId ? fetchEarnings(userId) : Promise.resolve(),
@@ -263,7 +323,7 @@ const PhotographerDashboardScreen: React.FC = () => {
         active = false;
         clearInterval(timer);
       };
-    }, [currentUser?.id, fetchCredits, fetchEarnings, fetchSubscriptions, refreshBookings]),
+    }, [currentUser?.id, fetchBookings, fetchCredits, fetchEarnings, fetchSubscriptions, loadAvailability, refreshBookings]),
   );
 
   return (
@@ -284,13 +344,14 @@ const PhotographerDashboardScreen: React.FC = () => {
             <Ionicons name="chatbubble-ellipses-outline" size={18} color="#fff" />
           </TouchableOpacity>
           <View style={s.onlineRow}>
-            <Text style={[s.onlineLabel, { color: isOnline ? '#10b981' : '#64748b' }]}>
-              {isOnline ? 'LIVE' : 'OFFLINE'}
+            <Text style={[s.onlineLabel, { color: availabilityReady && isOnline ? '#10b981' : '#64748b' }]}>
+              {availabilityBusy ? 'SAVING' : availabilityLoading ? 'CHECKING' : !availabilityReady ? 'UNKNOWN' : isOnline ? 'LIVE' : 'OFFLINE'}
             </Text>
             <Switch
-              value={isOnline}
+              value={availabilityReady && isOnline}
+              accessibilityLabel="Provider online availability"
               onValueChange={handleOnlineToggle}
-              disabled={!kycApproved}
+              disabled={availabilityBusy || availabilityLoading || !availabilityReady || (!isOnline && !availabilityKycApproved)}
               trackColor={{ false: '#334155', true: '#10b981' }}
               thumbColor="#fff"
             />
@@ -309,7 +370,7 @@ const PhotographerDashboardScreen: React.FC = () => {
             <Text style={[s.statValue, { color: pendingBookings.length > 0 ? '#f59e0b' : '#fff' }]}>
               {pendingBookings.length}
             </Text>
-            <Text style={s.statMeta}>{acceptedBookings.length} active | {completedBookings.length} done</Text>
+            <Text style={s.statMeta}>{acceptedBookings.length} accepted | {completedBookings.length} done</Text>
           </View>
         </View>
 
@@ -322,10 +383,10 @@ const PhotographerDashboardScreen: React.FC = () => {
             </View>
             <View style={s.priorityPill}>
               <Text style={s.priorityValue}>{acceptedBookings.length}</Text>
-              <Text style={s.priorityLabel}>Active</Text>
+              <Text style={s.priorityLabel}>Accepted</Text>
             </View>
             <View style={s.priorityPill}>
-              <Text style={[s.priorityValue, { color: isOnline ? '#10b981' : '#64748b' }]}>{isOnline ? 'ON' : 'OFF'}</Text>
+              <Text style={[s.priorityValue, { color: availabilityReady && isOnline ? '#10b981' : '#64748b' }]}>{!availabilityReady ? '--' : isOnline ? 'ON' : 'OFF'}</Text>
               <Text style={s.priorityLabel}>Availability</Text>
             </View>
           </View>
@@ -335,7 +396,7 @@ const PhotographerDashboardScreen: React.FC = () => {
           title="How Request Actions Work"
           persistKey="photographer-dashboard-actions-how"
           items={[
-            'Accept reserves the session and updates client tracking + ETA flows.',
+            'Accept reserves the session; it begins after the client pays.',
             'Decline closes the request and returns client flow to matching immediately.',
             'Mark Done records completion and triggers payout release processing.',
             'Disputes or policy issues should be opened from booking detail for audit tracking.',
@@ -390,7 +451,7 @@ const PhotographerDashboardScreen: React.FC = () => {
         {/* Active accepted bookings */}
         {acceptedBookings.length > 0 && (
           <View style={s.card}>
-            <Text style={s.cardTitle}>Active Bookings</Text>
+            <Text style={s.cardTitle}>Accepted Bookings</Text>
             {acceptedBookings.map(booking => (
               <View key={booking.id} style={s.activeCard}>
                 <View style={{ flex: 1 }}>
@@ -398,13 +459,15 @@ const PhotographerDashboardScreen: React.FC = () => {
                   <Text style={s.requestDate}>
                     {booking.booking_date
                       ? new Date(booking.booking_date).toLocaleString('en-ZA', { dateStyle: 'medium', timeStyle: 'short' })
-                      : 'In progress'}
+                      : 'Date TBD'}
                   </Text>
+                  {booking.payment_status !== 'paid' && <Text style={s.requestDate}>Awaiting Payment</Text>}
                 </View>
                 <View style={s.activeActions}>
                   <TouchableOpacity
                     style={s.completeBtn}
                     onPress={() => handleCompleteBooking(booking.id)}
+                    disabled={booking.payment_status !== 'paid'}
                   >
                     <Text style={s.completeBtnText}>Mark Done</Text>
                   </TouchableOpacity>
@@ -422,7 +485,7 @@ const PhotographerDashboardScreen: React.FC = () => {
         )}
 
         {/* Live map */}
-        <View style={s.mapCard}>
+        {activeBooking?.status === 'accepted' && activeBooking.payment_status === 'paid' && <View style={s.mapCard}>
           <View style={s.cardHeader}>
             <Text style={s.cardTitle}>Live Route</Text>
             {activeBooking && (
@@ -440,7 +503,7 @@ const PhotographerDashboardScreen: React.FC = () => {
             <Ionicons name="navigate" size={16} color="#8b5cf6" />
             <Text style={s.navBtnText}>Open Full Map</Text>
           </TouchableOpacity>
-        </View>
+        </View>}
 
         {/* Quick tools */}
         <View style={s.card}>

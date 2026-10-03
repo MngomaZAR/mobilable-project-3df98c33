@@ -9,5 +9,6 @@ COPY backend/worker/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
 COPY backend/worker/app /app/app
+COPY backend/shared /app/shared
 
 CMD ["python", "-m", "app.main"]

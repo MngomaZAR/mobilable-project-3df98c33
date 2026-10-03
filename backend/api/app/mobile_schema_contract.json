@@ -1,0 +1,446 @@
+{
+  "bookings": [
+    "assignment_state",
+    "booking_date",
+    "client_id",
+    "commission_amount",
+    "created_at",
+    "dispatch_request_id",
+    "end_datetime",
+    "eta_confidence",
+    "fanout_count",
+    "id",
+    "idempotency_key",
+    "intensity_level",
+    "is_instant",
+    "model_id",
+    "notes",
+    "package_id",
+    "package_type",
+    "payment_status",
+    "photographer_id",
+    "photographer_payout",
+    "price_total",
+    "pricing_mode",
+    "quote_token",
+    "service_type",
+    "start_datetime",
+    "status",
+    "updated_at",
+    "user_latitude",
+    "user_longitude"
+  ],
+  "stories": [
+    "author_id",
+    "created_at",
+    "duration",
+    "expires_at",
+    "id",
+    "media_type",
+    "media_url"
+  ],
+  "post_bookmarks": [
+    "post_id",
+    "user_id"
+  ],
+  "post_unlocks": [
+    "amount_paid",
+    "post_id",
+    "user_id"
+  ],
+  "subscriptions": [
+    "created_at",
+    "creator_id",
+    "current_period_end",
+    "current_period_start",
+    "id",
+    "status",
+    "subscriber_id",
+    "tier_id"
+  ],
+  "user_blocks": [
+    "blocked_id",
+    "blocker_id"
+  ],
+  "earnings": [
+    "amount",
+    "created_at",
+    "user_id"
+  ],
+  "dispatch_requests": [
+    "id",
+    "status"
+  ],
+  "eta_snapshots": [
+    "created_at",
+    "eta_confidence"
+  ],
+  "moderation_cases": [
+    "created_at",
+    "id",
+    "reason",
+    "reporter_id",
+    "severity",
+    "sla_due_at",
+    "status",
+    "target_id",
+    "target_type",
+    "target_user_id"
+  ],
+  "payments": [
+    "amount",
+    "booking_id",
+    "created_at",
+    "currency",
+    "customer_id",
+    "description",
+    "id",
+    "processed_at",
+    "provider",
+    "provider_payment_id",
+    "provider_status",
+    "status"
+  ],
+  "policy_violations": [
+    "created_at",
+    "entity_id",
+    "entity_type",
+    "id",
+    "policy_code",
+    "severity",
+    "status",
+    "user_id"
+  ],
+  "profiles": [
+    "age_verified",
+    "age_verified_at",
+    "availability_status",
+    "avatar_url",
+    "bio",
+    "city",
+    "contact_details",
+    "date_of_birth",
+    "full_name",
+    "id",
+    "instagram",
+    "is_model",
+    "is_photographer",
+    "is_test_account",
+    "kyc_status",
+    "phone",
+    "push_token",
+    "role",
+    "updated_at",
+    "username",
+    "verified",
+    "website"
+  ],
+  "photographer_equipment": [
+    "camera_body",
+    "extras",
+    "lenses",
+    "lighting",
+    "photographer_id",
+    "tier_id",
+    "updated_at"
+  ],
+  "photographers": [
+    "avatar_url",
+    "bio",
+    "equipment",
+    "experience_years",
+    "hourly_rate",
+    "id",
+    "is_available",
+    "is_online",
+    "latitude",
+    "location",
+    "longitude",
+    "name",
+    "price_range",
+    "rating",
+    "review_count",
+    "specialties",
+    "style",
+    "tags",
+    "tier_id",
+    "total_bookings"
+  ],
+  "kyc_documents": [
+    "doc_type",
+    "status",
+    "storage_path",
+    "user_id"
+  ],
+  "subscription_tiers": [
+    "color",
+    "created_at",
+    "creator_id",
+    "description",
+    "id",
+    "is_active",
+    "max_subscribers",
+    "name",
+    "perks",
+    "price"
+  ],
+  "tip_goals": [
+    "created_at",
+    "creator_id",
+    "id",
+    "is_active",
+    "target_amount",
+    "title"
+  ],
+  "models": [
+    "bio",
+    "equipment",
+    "id",
+    "is_online",
+    "latitude",
+    "location",
+    "longitude",
+    "portfolio_urls",
+    "price_range",
+    "rating",
+    "style",
+    "tags",
+    "tier_id"
+  ],
+  "model_services": [
+    "is_active",
+    "model_id",
+    "rate_zar",
+    "requires_age_verification",
+    "service_type"
+  ],
+  "notification_events": [
+    "action_payload",
+    "action_type",
+    "body",
+    "category",
+    "created_at",
+    "event_type",
+    "id",
+    "status",
+    "title",
+    "user_id"
+  ],
+  "posts": [
+    "author_id",
+    "caption",
+    "comment_count",
+    "created_at",
+    "id",
+    "image_url",
+    "likes_count",
+    "location"
+  ],
+  "post_likes": [
+    "id",
+    "post_id",
+    "user_id"
+  ],
+  "push_tokens": [
+    "enabled",
+    "expo_push_token",
+    "last_seen_at",
+    "platform",
+    "user_id"
+  ],
+  "status_scores": [
+    "scene_rank",
+    "seen_score",
+    "user_id"
+  ],
+  "account_deletion_requests": [
+    "created_by",
+    "reason",
+    "status"
+  ],
+  "availability": [
+    "user_id"
+  ],
+  "blocked_dates": [
+    "blocked_date",
+    "user_id"
+  ],
+  "contracts": [
+    "body",
+    "booking_id",
+    "client_id",
+    "client_signature",
+    "client_signed_at",
+    "content",
+    "contract_type",
+    "creator_id",
+    "creator_signature",
+    "id",
+    "model_id",
+    "model_signature",
+    "model_signed_at",
+    "photographer_id",
+    "photographer_signed_at",
+    "signed_at",
+    "signed_by_client",
+    "signed_by_model",
+    "signed_by_photographer",
+    "status",
+    "title"
+  ],
+  "consent_events": [
+    "captured_at",
+    "consent_type",
+    "consent_version",
+    "context",
+    "enabled",
+    "legal_basis",
+    "user_id"
+  ],
+  "user_consents": [
+    "accepted",
+    "accepted_at",
+    "consent_type",
+    "granted",
+    "granted_at",
+    "legal_basis",
+    "metadata",
+    "user_id",
+    "version"
+  ],
+  "follows": [
+    "follower_id",
+    "following_id"
+  ],
+  "media_assets": [
+    "booking_id",
+    "bucket",
+    "created_at",
+    "id",
+    "is_locked",
+    "mime_type",
+    "object_path",
+    "owner_id",
+    "preview_url",
+    "price_zar",
+    "title"
+  ],
+  "media_access_logs": [
+    "action",
+    "asset_id",
+    "user_id"
+  ],
+  "tips": [
+    "amount",
+    "message",
+    "receiver_id",
+    "sender_id",
+    "status"
+  ],
+  "reports": [
+    "created_by",
+    "details",
+    "reason",
+    "status",
+    "target_id",
+    "target_type"
+  ],
+  "reviews": [
+    "booking_id",
+    "client_id",
+    "comment",
+    "created_at",
+    "id",
+    "moderation_status",
+    "photographer_id",
+    "rating"
+  ],
+  "support_tickets": [
+    "category",
+    "created_at",
+    "created_by",
+    "description",
+    "status",
+    "subject"
+  ],
+  "conversation_participants": [
+    "conversation_id",
+    "last_read_at",
+    "user_id"
+  ],
+  "conversations": [
+    "created_at",
+    "created_by",
+    "id",
+    "last_message",
+    "last_message_at",
+    "title"
+  ],
+  "credits_wallets": [
+    "balance",
+    "updated_at",
+    "user_id"
+  ],
+  "credits_ledger": [
+    "amount",
+    "created_at",
+    "direction",
+    "id",
+    "reason",
+    "ref_id",
+    "ref_type",
+    "user_id"
+  ],
+  "post_comments": [
+    "body",
+    "created_at",
+    "id",
+    "post_id",
+    "user_id"
+  ],
+  "location_tracks": [
+    "accuracy_m",
+    "booking_id",
+    "latitude",
+    "longitude",
+    "role",
+    "source",
+    "user_id"
+  ],
+  "messages": [
+    "audio_duration_seconds",
+    "audio_url",
+    "body",
+    "chat_id",
+    "created_at",
+    "deleted_at",
+    "id",
+    "locked",
+    "media_url",
+    "message_type",
+    "preview_url",
+    "read_at",
+    "reply_preview",
+    "reply_to_id",
+    "sender_id",
+    "unlock_booking_id",
+    "unlock_price",
+    "unlocked"
+  ],
+  "message_reactions": [
+    "emoji",
+    "message_id",
+    "user_id"
+  ],
+  "analytics_events": [],
+  "crash_logs": [
+    "app_version",
+    "context",
+    "created_at",
+    "error_message",
+    "error_stack",
+    "platform",
+    "screen",
+    "user_id"
+  ]
+}

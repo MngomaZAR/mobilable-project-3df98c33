@@ -17,9 +17,9 @@ import { RootStackParamList } from '../navigation/types';
 import { Ionicons } from '@expo/vector-icons';
 import { PLACEHOLDER_IMAGE } from '../utils/constants';
 import { uploadBlurredPreview, uploadImage } from '../services/uploadService';
-import { BUCKETS } from '../config/environment';
+import { BUCKETS, environment } from '../config/environment';
+import { getConversationAttachmentUrl } from '../services/chatMessageService';
 import { reportContent } from '../services/reportService';
-import HowItWorksCard from '../components/HowItWorksCard';
 
 type Route = RouteProp<RootStackParamList, 'ChatThread'>;
 type Navigation = StackNavigationProp<RootStackParamList, 'ChatThread'>;
@@ -30,7 +30,7 @@ const ChatScreen: React.FC = () => {
   const navigation = useNavigation<Navigation>();
   const { currentUser } = useAuth();
   const {
-    messages: allMessages, sendMessage, sendLockedMediaMessage,
+    messages: allMessages, sendMessage, sendMediaMessage, sendLockedMediaMessage,
     fetchMessages, subscribeToMessages, unlockPremiumMessage,
     typingUsers, broadcastTyping, markMessagesRead, reactions,
     addReaction, removeReaction, deleteMessage
@@ -43,8 +43,11 @@ const ChatScreen: React.FC = () => {
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [messagesLoadError, setMessagesLoadError] = useState<string | null>(null);
   const [lightboxUri, setLightboxUri] = useState<string | null>(null);
-  const [pendingMedia, setPendingMedia] = useState<{ uri: string; preview: string } | null>(null);
-  const [isLockedPending, setIsLockedPending] = useState(true);
+  const [pendingMedia, setPendingMedia] = useState<{ uri: string; preview?: string; uploadedMediaRef?: string } | null>(null);
+  const pendingMediaRef = useRef<typeof pendingMedia>(null);
+  const sendBusy = useRef(false);
+  const isApiMessaging = environment.backendProvider === 'api';
+  const [isLockedPending, setIsLockedPending] = useState(!isApiMessaging);
   const [unlockPriceInput, setUnlockPriceInput] = useState('50');
   
   // Chat UX states
@@ -56,6 +59,13 @@ const ChatScreen: React.FC = () => {
   const chatId = route.params.conversationId;
   const messages = useMemo(() => allMessages[chatId] ?? [], [chatId, allMessages]);
   const currentTypers = typingUsers[chatId] ?? [];
+
+  useEffect(() => {
+    pendingMediaRef.current = null;
+    setPendingMedia(null);
+    setText('');
+    setReplyTo(null);
+  }, [chatId, currentUser?.id]);
 
 
   const otherAvatar = route.params?.avatarUrl ?? PLACEHOLDER_IMAGE;
@@ -69,14 +79,17 @@ const ChatScreen: React.FC = () => {
     const load = async () => {
       setMessagesLoading(true);
       setMessagesLoadError(null);
+      let timer: ReturnType<typeof setTimeout> | undefined;
       try {
         await Promise.race([
           fetchMessages?.(chatId),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Messages are taking too long to load. Pull to retry.')), 12000)),
+          new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Messages are taking too long to load. Pull to retry.')), 12000); }),
         ]);
+        await markMessagesRead(chatId);
       } catch (err: any) {
         setMessagesLoadError(err?.message || 'Could not load messages.');
       } finally {
+        if (timer) clearTimeout(timer);
         if (mounted) setMessagesLoading(false);
       }
     };
@@ -93,30 +106,49 @@ const ChatScreen: React.FC = () => {
       mounted = false;
       if (typeof unsubscribe === 'function') unsubscribe();
     };
-  }, [chatId]);
+  }, [chatId, currentUser?.id]);
 
 
 
   const handleSend = async () => {
-    if (!text.trim()) return;
+    if (!text.trim() || sendBusy.current) return;
+    sendBusy.current = true;
     setSending(true);
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       await sendMessage(chatId, text, replyTo?.id);
-      setText('');
-      setReplyTo(null);
+      setText(current => current === text ? '' : current);
+      setReplyTo((current: any) => current?.id === replyTo?.id ? null : current);
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
     } catch (err: any) {
       Alert.alert('Message blocked', err?.message || 'Unable to send this message right now.');
     } finally {
+      sendBusy.current = false;
       setSending(false);
     }
   };
 
   const handleReaction = async (msgId: string, emoji: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    await addReaction(chatId, msgId, emoji);
-    setActiveMenuMsg(null);
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      if (reactions[msgId]?.some(reaction => reaction.emoji === emoji && reaction.myReaction)) {
+        await removeReaction(chatId, msgId, emoji);
+      } else {
+        await addReaction(chatId, msgId, emoji);
+      }
+      setActiveMenuMsg(null);
+    } catch (err: any) {
+      Alert.alert('Reaction failed', err?.message || 'Unable to update this reaction.');
+    }
+  };
+
+  const handleDeleteMessage = async (messageId: string) => {
+    try {
+      await deleteMessage(chatId, messageId);
+      setActiveMenuMsg(null);
+    } catch (err: any) {
+      Alert.alert('Delete failed', err?.message || 'Unable to delete this message.');
+    }
   };
 
   const handlePickMedia = async () => {
@@ -139,14 +171,22 @@ const ChatScreen: React.FC = () => {
         Alert.alert('Image too large', 'Please choose an image under 5MB.');
         return;
       }
-      // Generate a real blurred low-res preview for locked content
+      if (isApiMessaging) {
+        const draft = { uri: asset.uri };
+        pendingMediaRef.current = draft;
+        setPendingMedia(draft);
+        setIsLockedPending(false);
+        return;
+      }
       setSending(true);
       try {
         const previewRes = await uploadBlurredPreview(asset.uri);
-        setPendingMedia({
+        const draft = {
           uri: asset.uri,
-          preview: previewRes.success ? previewRes.data : asset.uri,
-        });
+          preview: previewRes.success ? previewRes.data : undefined,
+        };
+        pendingMediaRef.current = draft;
+        setPendingMedia(draft);
       } finally {
         setSending(false);
       }
@@ -155,32 +195,46 @@ const ChatScreen: React.FC = () => {
   };
 
   const confirmSendMedia = async () => {
-    if (!pendingMedia) return;
+    const draft = pendingMediaRef.current;
+    if (!draft || sendBusy.current) return;
 
     const priceNum = Number(unlockPriceInput);
-    if (isLockedPending && (isNaN(priceNum) || priceNum <= 0)) {
+    if (!isApiMessaging && isLockedPending && (isNaN(priceNum) || priceNum <= 0)) {
       Alert.alert('Invalid Price', 'Please enter a valid price to lock this photo.');
       return;
     }
 
+    sendBusy.current = true;
     setSending(true);
     try {
-      // Upload original media first so receivers don't get local file:// URIs.
-      const uploadedMediaRef = await uploadImage(pendingMedia.uri, BUCKETS.previews, { returnStorageRef: true });
-      await sendLockedMediaMessage(chatId, {
-        mediaUrl: uploadedMediaRef,
-        previewUrl: pendingMedia.preview,
-        text: text.trim() || (isLockedPending ? 'Locked Photo' : 'Shared Photo'),
-        unlockPrice: isLockedPending ? priceNum : undefined,
-      });
+      let prepared = draft;
+      if (!prepared.uploadedMediaRef) {
+        const uploadedMediaRef = await uploadImage(prepared.uri, BUCKETS.previews, { returnStorageRef: true });
+        if (pendingMediaRef.current !== draft) return;
+        prepared = { ...draft, uploadedMediaRef };
+        pendingMediaRef.current = prepared;
+        setPendingMedia(prepared);
+      }
+      const payload = {
+        mediaUrl: prepared.uploadedMediaRef!,
+        previewUrl: isApiMessaging ? prepared.uploadedMediaRef : prepared.preview,
+        text: text.trim() || (!isApiMessaging && isLockedPending ? 'Locked Photo' : 'Shared Photo'),
+      };
+      if (isApiMessaging || !isLockedPending) {
+        await sendMediaMessage(chatId, payload);
+      } else {
+        await sendLockedMediaMessage(chatId, { ...payload, unlockPrice: priceNum });
+      }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      if (pendingMediaRef.current !== prepared) return;
+      pendingMediaRef.current = null;
       setPendingMedia(null);
-      setText('');
+      setText(current => current === text ? '' : current);
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
-      setText('');
     } catch (err: any) {
       Alert.alert('Upload failed', err.message || 'Could not upload image.');
     } finally {
+      sendBusy.current = false;
       setSending(false);
     }
   };
@@ -238,31 +292,24 @@ const ChatScreen: React.FC = () => {
           ref={listRef}
           data={messages}
           keyExtractor={(item) => item.id}
-          onRefresh={() => fetchMessages(chatId)}
+          onRefresh={async () => {
+            setMessagesLoading(true);
+            setMessagesLoadError(null);
+            try { await fetchMessages(chatId); await markMessagesRead(chatId); }
+            catch (err: any) { setMessagesLoadError(err?.message || 'Could not load messages.'); }
+            finally { setMessagesLoading(false); }
+          }}
           refreshing={messagesLoading}
           onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
           onLayout={() => listRef.current?.scrollToEnd({ animated: true })}
           contentContainerStyle={[styles.listContent, { paddingBottom: currentTypers.length > 0 ? 40 : 20 }]}
           ListHeaderComponent={
-            <View style={[styles.banner, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Text style={[styles.bannerTitle, { color: colors.text }]}>Conversations</Text>
-              <Text style={[styles.bannerText, { color: colors.textSecondary }]}>Messages stay synced to your account and booking activity.</Text>
               <View style={styles.bannerActions}>
-                <TouchableOpacity style={[styles.reportBtn, { borderColor: colors.border }]} onPress={handleReportConversation}>
+                <TouchableOpacity accessibilityLabel="Report conversation" style={[styles.reportBtn, { borderColor: colors.border }]} onPress={handleReportConversation}>
                   <Ionicons name="flag-outline" size={14} color={colors.text} />
                   <Text style={[styles.reportBtnText, { color: colors.text }]}>Report chat</Text>
                 </TouchableOpacity>
               </View>
-              <HowItWorksCard
-                title="How Safe Messaging Works"
-                persistKey={`chat-how-${chatId}`}
-                items={[
-                  'Unknown contacts can send only one intro message until you reply or book together.',
-                  'Report chat creates a moderation case with SLA tracking and audit history.',
-                  'Blocked or policy-violating users can lose messaging access after review.',
-                ]}
-              />
-            </View>
           }
           renderItem={({ item }) => {
             const isMe = item.from_user;
@@ -272,7 +319,7 @@ const ChatScreen: React.FC = () => {
 
             const MessageContent = () => (
               <View style={[styles.messageRow, isMe ? styles.meRow : styles.otherRow, { zIndex: showMenu ? 10 : 1 }]}>
-                <View style={[isMe ? { alignItems: 'flex-end' } : { alignItems: 'flex-start' }]}>
+                <View style={[styles.messageContent, isMe ? { alignItems: 'flex-end' } : { alignItems: 'flex-start' }]}>
                   {item.reply_preview && (
                     <View style={styles.inlineReplyPreview}>
                       <Ionicons name="arrow-undo" size={12} color={colors.textSecondary} />
@@ -286,10 +333,19 @@ const ChatScreen: React.FC = () => {
                       style={styles.mediaBubble}
                       activeOpacity={0.8}
                       onLongPress={() => { Haptics.selectionAsync(); setActiveMenuMsg(item.id); }}
-                      onPress={() => {
+                      onPress={async () => {
                         if (item.unlocked) {
-                          setLightboxUri(item.media_url || null);
+                          try {
+                            const uri = isApiMessaging ? await getConversationAttachmentUrl({ conversationId: chatId, messageId: item.id }) : item.media_url;
+                            setLightboxUri(uri || null);
+                          } catch (err: any) {
+                            Alert.alert('Attachment unavailable', err?.message || 'Unable to load this attachment.');
+                          }
                         } else if (!isMe) {
+                          if (isApiMessaging) {
+                            Alert.alert('Unavailable', 'Paid message unlocking is not enabled.');
+                            return;
+                          }
                           if (item.unlock_price) {
                             Alert.alert('Unlock Message', `Would you like to unlock this message for R${item.unlock_price}?`, [
                               { text: 'Cancel', style: 'cancel' },
@@ -315,7 +371,7 @@ const ChatScreen: React.FC = () => {
                         <View style={[styles.lockedOverlay, { padding: 10 }]}>
                           <Ionicons name="lock-closed" size={32} color="#fff" />
                           <Text style={styles.unlockPrice}>{item.unlock_price ? `R${item.unlock_price}` : 'LOCKED'}</Text>
-                          <Text style={styles.unlockHint}>{item.unlock_price ? 'Tap here to unlock' : 'Unlock after payment'}</Text>
+                          <Text style={styles.unlockHint}>{isApiMessaging ? 'Unavailable' : item.unlock_price ? 'Tap here to unlock' : 'Unlock after payment'}</Text>
                         </View>
                       )}
                       {item.body ? <Text style={[styles.messageText, isMe ? styles.meText : styles.otherText, styles.mediaCaption]}>{item.body}</Text> : null}
@@ -355,8 +411,9 @@ const ChatScreen: React.FC = () => {
                       {msgReactions.map(r => (
                         <TouchableOpacity 
                           key={r.emoji} 
+                          accessibilityLabel={`${r.myReaction ? 'Remove' : 'Add'} ${r.emoji} reaction`}
                           style={[styles.reactionPill, r.myReaction && { borderColor: colors.accent, borderWidth: 1 }]}
-                          onPress={() => r.myReaction ? removeReaction(chatId, item.id, r.emoji) : addReaction(chatId, item.id, r.emoji)}
+                          onPress={() => handleReaction(item.id, r.emoji)}
                         >
                           <Text style={styles.reactionEmoji}>{r.emoji}</Text>
                           {r.count > 1 && <Text style={styles.reactionCount}>{r.count}</Text>}
@@ -378,7 +435,7 @@ const ChatScreen: React.FC = () => {
                   <View style={[styles.contextMenu, isMe ? { right: 16 } : { left: 16 }]}>
                     <View style={styles.reactionRow}>
                       {['❤️','😂','😮','😢','🔥','💯'].map(emoji => (
-                        <TouchableOpacity key={emoji} onPress={() => handleReaction(item.id, emoji)} style={styles.reactionBtn}>
+                        <TouchableOpacity key={emoji} accessibilityLabel={`React with ${emoji}`} onPress={() => handleReaction(item.id, emoji)} style={styles.reactionBtn}>
                           <Text style={{ fontSize: 24 }}>{emoji}</Text>
                         </TouchableOpacity>
                       ))}
@@ -394,7 +451,8 @@ const ChatScreen: React.FC = () => {
                       {isMe && (
                         <TouchableOpacity 
                           style={styles.menuItem} 
-                          onPress={() => { deleteMessage(chatId, item.id); setActiveMenuMsg(null); }}
+                          accessibilityLabel="Delete message"
+                          onPress={() => handleDeleteMessage(item.id)}
                         >
                           <Ionicons name="trash" size={18} color="#ef4444" />
                           <Text style={[styles.menuText, { color: '#ef4444' }]}>Delete</Text>
@@ -423,7 +481,7 @@ const ChatScreen: React.FC = () => {
           <View style={[styles.previewCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Text style={[styles.previewTitle, { color: colors.text }]}>Review Attachment</Text>
             <Image source={{ uri: pendingMedia.uri }} style={styles.previewImage} />
-            <View style={styles.previewOptions}>
+            {!isApiMessaging && <View style={styles.previewOptions}>
               <TouchableOpacity 
                 style={[styles.lockToggle, { backgroundColor: colors.bg }, isLockedPending && [styles.lockToggleActive, { backgroundColor: colors.accent }]]}
                 onPress={() => setIsLockedPending(!isLockedPending)}
@@ -446,9 +504,9 @@ const ChatScreen: React.FC = () => {
                   />
                 </View>
               )}
-            </View>
+            </View>}
             <View style={styles.previewActions}>
-              <TouchableOpacity style={[styles.cancelBtn, { backgroundColor: colors.bg }]} onPress={() => setPendingMedia(null)}>
+              <TouchableOpacity style={[styles.cancelBtn, { backgroundColor: colors.bg }]} disabled={sending} onPress={() => { pendingMediaRef.current = null; setPendingMedia(null); }}>
                 <Text style={[styles.cancelBtnText, { color: colors.textSecondary }]}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.confirmBtn, { backgroundColor: colors.accent }]} onPress={confirmSendMedia} disabled={sending}>
@@ -482,6 +540,7 @@ const ChatScreen: React.FC = () => {
         <View style={[styles.inputContainer, { backgroundColor: colors.bg, borderColor: colors.border }]}>
           <TouchableOpacity 
             style={styles.attachButton} 
+            accessibilityLabel="Attach photo"
             onPress={handlePickMedia}
             disabled={sending}
           >
@@ -496,6 +555,7 @@ const ChatScreen: React.FC = () => {
             multiline
           />
           <TouchableOpacity
+            accessibilityLabel="Send message"
             onPress={handleSend}
             disabled={sending || !text.trim()}
             style={[styles.sendButton, { backgroundColor: text.trim() ? colors.accent : colors.border }, (!text.trim() || sending) && styles.sendButtonDisabled]}
@@ -521,21 +581,6 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     paddingBottom: 20,
   },
-  banner: {
-    padding: 16,
-    borderRadius: 16,
-    marginBottom: 20,
-    borderWidth: 1,
-  },
-  bannerTitle: {
-    fontWeight: '800',
-    fontSize: 16,
-    marginBottom: 4,
-  },
-  bannerText: {
-    fontSize: 13,
-    lineHeight: 18,
-  },
   bannerActions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
@@ -560,6 +605,12 @@ const styles = StyleSheet.create({
   },
   messageRow: {
     flexDirection: 'row',
+    width: '100%',
+  },
+  messageContent: {
+    flexShrink: 1,
+    minWidth: 0,
+    maxWidth: '100%',
   },
   meRow: {
     alignSelf: 'flex-end',
@@ -577,6 +628,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     overflow: 'hidden',
     minWidth: 80,
+    maxWidth: '100%',
   },
   meBubble: {
     borderBottomRightRadius: 4,
@@ -598,6 +650,9 @@ const styles = StyleSheet.create({
   messageText: {
     fontSize: 16,
     lineHeight: 20,
+    minWidth: 0,
+    maxWidth: '100%',
+    ...Platform.select({ web: { overflowWrap: 'anywhere' as const, wordBreak: 'break-word' as const } }),
   },
   meText: {
   },

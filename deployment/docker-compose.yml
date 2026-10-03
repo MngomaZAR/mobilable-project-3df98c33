@@ -7,6 +7,17 @@ services:
       APP_ENV: ${APP_ENV:-production}
       APP_VERSION: ${APP_VERSION:-0.1.0}
       API_PUBLIC_URL: ${API_PUBLIC_URL}
+      ALLOW_RUNTIME_SCHEMA_CHANGES: "false"
+      ADMIN_USER_IDS: ${ADMIN_USER_IDS:-}
+      COMMISSION_RATE: ${COMMISSION_RATE:-0.20}
+      OSRM_BASE_URL: ${OSRM_BASE_URL:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_SSL: ${SMTP_SSL:-false}
+      RECOVERY_ENCRYPTION_KEY: ${RECOVERY_ENCRYPTION_KEY:-}
       NEON_DATABASE_URL: ${NEON_DATABASE_URL}
       DATABASE_URL: ${DATABASE_URL}
       KEYCLOAK_URL: ${KEYCLOAK_URL}
@@ -36,12 +47,12 @@ services:
       PAYFAST_MERCHANT_KEY: ${PAYFAST_MERCHANT_KEY}
       PAYFAST_PASSPHRASE: ${PAYFAST_PASSPHRASE}
     depends_on:
-      - keycloak
-      - minio
-      - nats
-      - typesense
+      migrate:
+        condition: service_completed_successfully
+      minio:
+        condition: service_started
     ports:
-      - "${API_PORT:-8000}:8000"
+      - "127.0.0.1:${API_PORT:-8000}:8000"
     healthcheck:
       test:
         [
@@ -53,6 +64,15 @@ services:
       retries: 3
       start_period: 20s
 
+  migrate:
+    image: ${PAPZI_API_IMAGE:-ghcr.io/mngomazar/papzi-api:latest}
+    pull_policy: always
+    restart: "no"
+    command: ["python", "-m", "app.migrate"]
+    environment:
+      NEON_DATABASE_URL: ${NEON_DATABASE_URL:-}
+      DATABASE_URL: ${DATABASE_URL:-}
+
   worker:
     image: ${PAPZI_WORKER_IMAGE:-ghcr.io/mngomazar/papzi-worker:latest}
     pull_policy: always
@@ -61,6 +81,14 @@ services:
       APP_ENV: ${APP_ENV:-production}
       NEON_DATABASE_URL: ${NEON_DATABASE_URL}
       DATABASE_URL: ${DATABASE_URL}
+      EXPO_ACCESS_TOKEN: ${EXPO_ACCESS_TOKEN:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_SSL: ${SMTP_SSL:-false}
+      RECOVERY_ENCRYPTION_KEY: ${RECOVERY_ENCRYPTION_KEY:-}
       KEYCLOAK_URL: ${KEYCLOAK_URL}
       KEYCLOAK_REALM: ${KEYCLOAK_REALM}
       NHOST_SUBDOMAIN: ${NHOST_SUBDOMAIN}
@@ -80,6 +108,7 @@ services:
       - typesense
 
   keycloak:
+    profiles: ["external-auth"]
     image: quay.io/keycloak/keycloak:26.0
     restart: unless-stopped
     command: ["start", "--http-enabled=true", "--hostname-strict=false"]
@@ -88,10 +117,10 @@ services:
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
       KC_PROXY_HEADERS: xforwarded
     ports:
-      - "${KEYCLOAK_PORT:-8080}:8080"
+      - "127.0.0.1:${KEYCLOAK_PORT:-8080}:8080"
 
   minio:
-    image: minio/minio:latest
+    image: quay.io/minio/minio:latest
     restart: unless-stopped
     command: ["server", "/data", "--console-address", ":9001"]
     environment:
@@ -100,8 +129,8 @@ services:
     volumes:
       - minio-data:/data
     ports:
-      - "${MINIO_PORT:-9000}:9000"
-      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+      - "127.0.0.1:${MINIO_PORT:-9000}:9000"
+      - "127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001"
 
   nats:
     image: nats:2.12-alpine
@@ -110,7 +139,7 @@ services:
     volumes:
       - nats-data:/data
     ports:
-      - "${NATS_PORT:-4222}:4222"
+      - "127.0.0.1:${NATS_PORT:-4222}:4222"
 
   typesense:
     image: typesense/typesense:29.0
@@ -121,7 +150,7 @@ services:
     volumes:
       - typesense-data:/data
     ports:
-      - "${TYPESENSE_PORT:-8108}:8108"
+      - "127.0.0.1:${TYPESENSE_PORT:-8108}:8108"
 
 volumes:
   minio-data:

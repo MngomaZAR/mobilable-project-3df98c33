@@ -1,12 +1,21 @@
+import asyncio
+import json
+from pathlib import Path
+from contextlib import asynccontextmanager
 from typing import Annotated, Any, NoReturn
 from urllib.parse import urlencode
 
 import httpx
 from fastapi import Body, Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
+from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
 from .config import Settings, get_settings
+from .access_control import authorize_query, redact_result
+from .booking_engine import BookingInput, BookingTransition, create_booking, quote_booking, transition_booking
+from .builtin_functions import require_user
 from .builtin_functions import handle_builtin_function
 from .database import execute_rpc, execute_table_query, schema_contract_status as postgres_schema_contract_status
 from .local_auth import (
@@ -22,7 +31,21 @@ from .nhost_graphql import (
     execute_nhost_table_query,
     schema_contract_status as nhost_schema_contract_status,
 )
-from .storage import put_object, signed_url
+from .storage import PUBLIC_BUCKETS, put_object, read_object, read_public_avatar, signed_url, validate_path
+from .payments import checkout, confirm_notification
+from .routing import router as routing_router
+from .reviews import router as reviews_router
+from .social import toggle_post_like, create_comment
+from .onboarding import router as onboarding_router
+from .database import connect
+from .database import close_pools
+from .access_control import is_admin, require_admin
+from .readiness import release_capabilities
+from .auth_security import rate_limit, token_digest, recover_password, reset_password
+from .provider_settings import router as provider_settings_router
+from .reporting import router as reporting_router
+from .provider_availability import router as provider_availability_router
+from .location_tracking import router as location_tracking_router
 
 
 REQUIRED_SCHEMA_COLUMNS = {
@@ -87,6 +110,8 @@ REQUIRED_SCHEMA_COLUMNS = {
     "credits_wallets": ["user_id", "balance", "updated_at"],
     "credits_ledger": ["id", "user_id", "amount", "direction", "reason", "created_at"],
 }
+for _table, _columns in json.loads(Path(__file__).with_name("mobile_schema_contract.json").read_text()).items():
+    REQUIRED_SCHEMA_COLUMNS[_table] = sorted(set(REQUIRED_SCHEMA_COLUMNS.get(_table, [])) | set(_columns))
 
 
 class HealthResponse(BaseModel):
@@ -107,10 +132,17 @@ class AuthMeResponse(BaseModel):
     roles: list[str]
 
 
+@asynccontextmanager
+async def lifespan(_app):
+    yield
+    await close_pools()
+
+
 app = FastAPI(
     title="PAPZII API",
     version="0.1.0",
     description="Public backend API boundary for PAPZII mobile clients.",
+    lifespan=lifespan,
 )
 app.add_middleware(
     CORSMiddleware,
@@ -119,6 +151,29 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.include_router(routing_router)
+app.include_router(reviews_router)
+app.include_router(onboarding_router)
+app.include_router(provider_settings_router)
+app.include_router(reporting_router)
+app.include_router(provider_availability_router)
+app.include_router(location_tracking_router)
+
+
+@app.middleware('http')
+async def authentication_abuse_guard(request: Request, call_next):
+    protected = {'/auth/sign-in', '/auth/sign-up', '/auth/refresh', '/auth/recover-password', '/auth/reset-password', '/functions/auth-signup'}
+    path = request.scope.get('path', '')
+    if request.method == 'POST' and path in protected:
+        settings = get_settings()
+        if settings.postgres_url:
+            # Do not trust arbitrary client-supplied forwarding headers.
+            remote = request.client.host if request.client else 'unknown'
+            try:
+                await rate_limit(settings, f'auth-ip:{path}:{remote}', 120)
+            except HTTPException as error:
+                return JSONResponse({'detail': error.detail}, status_code=error.status_code, headers=error.headers)
+    return await call_next(request)
 
 
 def raise_upstream_unreachable(provider: str, url: str, error: httpx.RequestError) -> NoReturn:
@@ -146,6 +201,11 @@ async def health(settings: Annotated[Settings, Depends(get_settings)]) -> Health
 @app.get("/version", response_model=VersionResponse, tags=["system"])
 async def version(settings: Annotated[Settings, Depends(get_settings)]) -> VersionResponse:
     return VersionResponse(name=settings.app_name, version=settings.app_version, environment=settings.app_env)
+
+
+@app.get("/health/readiness", tags=["system"])
+async def health_readiness(settings: Annotated[Settings, Depends(get_settings)]):
+    return release_capabilities(settings)
 
 
 @app.get("/health/contract", tags=["system"])
@@ -319,11 +379,7 @@ async def auth_sign_up(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> dict[str, Any]:
     if settings.postgres_url:
-        result = await local_sign_up(settings, payload)
-        options = payload.get("options") if isinstance(payload.get("options"), dict) else {}
-        if result.get("user"):
-            await ensure_signup_profile(settings, result["user"], options, result.get("session", {}).get("access_token"))
-        return result
+        return await local_sign_up(settings, payload)
     options = payload.get("options") if isinstance(payload.get("options"), dict) else {}
     body = await nhost_auth_request(
         settings,
@@ -385,6 +441,43 @@ async def auth_oauth(payload: Annotated[dict[str, Any], Body()], settings: Annot
     return {"url": f"{settings.resolved_nhost_auth_url}/signin/provider/{provider}{query}"}
 
 
+@app.post('/auth/recover-password', tags=['auth'])
+async def auth_recover(payload: Annotated[dict[str, Any], Body()], settings: Annotated[Settings, Depends(get_settings)]):
+    if not settings.postgres_url:
+        raise HTTPException(status_code=503, detail='Password recovery is unavailable on this backend.')
+    return await recover_password(settings, str(payload.get('email') or ''))
+
+
+@app.post('/auth/reset-password', tags=['auth'])
+async def auth_reset(payload: Annotated[dict[str, Any], Body()], settings: Annotated[Settings, Depends(get_settings)]):
+    return await reset_password(settings, str(payload.get('token') or ''), str(payload.get('password') or ''))
+
+
+@app.get('/auth/sessions', tags=['auth'])
+async def auth_sessions(request: Request, settings: Annotated[Settings, Depends(get_settings)]):
+    user = await require_user(settings, bearer_token(request))
+    conn = await connect(settings)
+    try:
+        rows = await conn.fetch('SELECT id,created_at,expires_at,access_token FROM api_sessions WHERE user_id=$1 AND refresh_expires_at>now() ORDER BY created_at DESC', user['id'])
+        current = token_digest(bearer_token(request))
+        return {'sessions': [{'id': row['id'], 'created_at': row['created_at'], 'expires_at': row['expires_at'], 'current': row['access_token'] == current} for row in rows]}
+    finally:
+        await conn.close()
+
+
+@app.post('/auth/sessions/revoke', tags=['auth'])
+async def auth_revoke_session(request: Request, payload: Annotated[dict[str, Any], Body()], settings: Annotated[Settings, Depends(get_settings)]):
+    user = await require_user(settings, bearer_token(request))
+    conn = await connect(settings)
+    try:
+        result = await conn.execute('DELETE FROM api_sessions WHERE id=$1 AND user_id=$2', str(payload.get('session_id') or ''), user['id'])
+        if result == 'DELETE 0':
+            raise HTTPException(status_code=404, detail='Session not found.')
+        return {'revoked': True}
+    finally:
+        await conn.close()
+
+
 @app.post("/auth/exchange", tags=["auth"])
 async def auth_exchange(
     payload: Annotated[dict[str, Any], Body()],
@@ -436,8 +529,56 @@ async def data_query(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> dict[str, Any]:
     if settings.postgres_url:
-        return await execute_table_query(settings, table, payload)
+        token = bearer_token(request)
+        user = await user_from_access_token(settings, token) if token else None
+        if table == 'model_services' and payload.get('action', 'select') != 'select':
+            if not user:
+                raise HTTPException(status_code=401, detail='Authentication is required.')
+            raise HTTPException(status_code=403, detail='Use the model-services replacement command to save services atomically.')
+        records = payload.get('payload')
+        records = records if isinstance(records, list) else [records]
+        fields = {field for row in records if isinstance(row, dict) for field in row}
+        if payload.get('action', 'select') != 'select' and (
+            table == 'location_tracks'
+            or (table == 'profiles' and 'availability_status' in fields)
+            or (table in {'photographers', 'models'} and 'is_online' in fields)
+        ):
+            await require_user(settings, token)
+            raise HTTPException(status_code=403, detail='Use the authenticated provider availability or booking location command.')
+        if table == "bookings" and payload.get("action") == "insert":
+            user = await require_user(settings, token)
+            row = await create_booking(settings, BookingInput.model_validate(payload.get("payload")), user)
+            return {"data": row if payload.get("single") else [row], "error": None}
+        if table == "bookings" and payload.get("action") == "update" and set(payload.get("payload") or {}) == {"status"}:
+            user = await require_user(settings, token)
+            booking_id = next((str(item.get("value")) for item in payload.get("filters", []) if item.get("op") == "eq" and item.get("column") == "id"), None)
+            if not booking_id:
+                raise HTTPException(status_code=400, detail="A specific booking ID is required.")
+            target = BookingTransition.model_validate(payload["payload"])
+            row = await transition_booking(settings, booking_id, target.status, user)
+            return {"data": row if payload.get("single") else [row], "error": None}
+        authorized, scope = authorize_query(settings, table, payload, user)
+        result = await execute_table_query(settings, table, authorized, scope)
+        return redact_result(settings, table, result, user)
     return await execute_nhost_table_query(settings, table, payload, bearer_token(request))
+
+
+@app.post("/bookings/quote", tags=["bookings"])
+async def booking_quote(command: BookingInput, request: Request, settings: Annotated[Settings, Depends(get_settings)]):
+    user = await require_user(settings, bearer_token(request))
+    return await quote_booking(settings, command, user)
+
+
+@app.post("/bookings", tags=["bookings"])
+async def booking_create(command: BookingInput, request: Request, settings: Annotated[Settings, Depends(get_settings)]):
+    user = await require_user(settings, bearer_token(request))
+    return await create_booking(settings, command, user)
+
+
+@app.patch("/bookings/{booking_id}", tags=["bookings"])
+async def booking_transition(booking_id: str, command: BookingTransition, request: Request, settings: Annotated[Settings, Depends(get_settings)]):
+    user = await require_user(settings, bearer_token(request))
+    return await transition_booking(settings, booking_id, command.status, user)
 
 
 @app.post("/rpc/{name}", tags=["data"])
@@ -448,8 +589,36 @@ async def rpc_query(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> dict[str, Any]:
     if settings.postgres_url:
-        return await execute_rpc(settings, name, payload)
+        if name == "toggle_post_like":
+            user = await require_user(settings, bearer_token(request))
+            return await toggle_post_like(settings, user, payload)
+        raise HTTPException(status_code=403, detail="Direct database functions are not exposed. Use the application services.")
     return await execute_nhost_rpc(settings, name, payload, bearer_token(request))
+
+
+@app.post('/social/comments', tags=['social'])
+async def social_comment(request: Request, payload: Annotated[dict[str, Any], Body()], settings: Annotated[Settings, Depends(get_settings)]):
+    user = await require_user(settings, bearer_token(request))
+    return await create_comment(settings, user, payload)
+
+
+@app.post('/moderation/review', tags=['moderation'])
+async def moderate_content(request: Request, payload: Annotated[dict[str, Any], Body()], settings: Annotated[Settings, Depends(get_settings)]):
+    user = await require_user(settings, bearer_token(request))
+    require_admin(settings, user)
+    table = str(payload.get('table') or '')
+    decision = str(payload.get('decision') or '')
+    if table not in {'posts', 'stories', 'post_comments', 'reviews'} or decision not in {'approved', 'rejected'}:
+        raise HTTPException(status_code=400, detail='Select supported content and an approval or rejection decision.')
+    conn = await connect(settings)
+    try:
+        async with conn.transaction():
+            row = await conn.fetchrow(f'UPDATE {table} SET moderation_status=$2,updated_at=now() WHERE id=$1 RETURNING id', str(payload.get('id') or ''), decision)
+            if not row:
+                raise HTTPException(status_code=404, detail='Content not found.')
+            return {'id': row['id'], 'moderation_status': decision}
+    finally:
+        await conn.close()
 
 
 @app.post("/graphql", tags=["graphql"])
@@ -464,8 +633,6 @@ async def graphql_proxy(
     token = bearer_token(request)
     if token:
         headers["Authorization"] = f"Bearer {token}"
-    if settings.nhost_admin_secret:
-        headers["x-hasura-admin-secret"] = settings.nhost_admin_secret
     try:
         async with httpx.AsyncClient(timeout=20) as client:
             response = await client.post(settings.resolved_nhost_graphql_url, json=payload, headers=headers)
@@ -478,18 +645,92 @@ async def graphql_proxy(
 
 @app.post("/storage/upload", tags=["storage"])
 async def storage_upload(
+    request: Request,
     payload: Annotated[dict[str, Any], Body()],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> dict[str, Any]:
-    return put_object(settings, payload)
+    user = await require_user(settings, bearer_token(request))
+    return await run_in_threadpool(put_object, settings, payload, user["id"])
 
 
 @app.post("/storage/signed-url", tags=["storage"])
 async def storage_signed_url(
+    request: Request,
     payload: Annotated[dict[str, Any], Body()],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> dict[str, str]:
-    return signed_url(settings, str(payload.get("bucket") or ""), str(payload.get("path") or ""))
+    user = await require_user(settings, bearer_token(request))
+    bucket, path = str(payload.get("bucket") or ""), str(payload.get("path") or "")
+    validate_path(bucket, path)
+    own = path.startswith(f"users/{user['id']}/")
+    if bucket not in PUBLIC_BUCKETS and not own and not is_admin(settings, user):
+        conn = await connect(settings)
+        try:
+            shared = await conn.fetchval(
+                """SELECT EXISTS(SELECT 1 FROM media_assets m JOIN bookings b ON b.id=m.booking_id
+                WHERE m.object_path=$1 AND m.bucket=$3 AND (b.client_id=$2 OR b.photographer_id=$2 OR b.model_id=$2))""", path, user["id"], bucket,
+            )
+            if not shared and bucket == "chat-media":
+                shared = await conn.fetchval(
+                    """SELECT EXISTS(SELECT 1 FROM messages m
+                    JOIN conversation_participants p ON p.conversation_id=m.conversation_id
+                    WHERE m.media_url=$1 AND p.user_id=$2 AND m.deleted_at IS NULL
+                    AND NOT EXISTS(SELECT 1 FROM conversation_participants other JOIN user_blocks b
+                    ON (b.blocker_id=$2 AND b.blocked_id=other.user_id) OR (b.blocked_id=$2 AND b.blocker_id=other.user_id)
+                    WHERE other.conversation_id=m.conversation_id))""",
+                    f"{bucket}::{path}", user["id"],
+                )
+        finally:
+            await conn.close()
+        if not shared or bucket == "kyc-documents":
+            raise HTTPException(status_code=403, detail="This media belongs to another user.")
+    return signed_url(settings, bucket, path)
+
+
+@app.get("/storage/object", tags=["storage"])
+async def storage_object(bucket: str, path: str, expiry: int, signature: str, settings: Annotated[Settings, Depends(get_settings)]):
+    obj = await run_in_threadpool(read_object, settings, bucket, path, expiry, signature)
+    def chunks():
+        try:
+            yield from obj["Body"].iter_chunks(chunk_size=65536)
+        finally:
+            obj["Body"].close()
+    return StreamingResponse(chunks(), media_type=obj.get("ContentType", "application/octet-stream"),
+                             headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=300"})
+
+
+@app.get('/storage/avatar', tags=['storage'])
+async def storage_avatar(path: str, settings: Annotated[Settings, Depends(get_settings)]):
+    obj = await run_in_threadpool(read_public_avatar, settings, path)
+    def chunks():
+        try:
+            yield from obj['Body'].iter_chunks(chunk_size=65536)
+        finally:
+            obj['Body'].close()
+    return StreamingResponse(chunks(), media_type=obj.get('ContentType', 'application/octet-stream'),
+                             headers={'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'public, max-age=86400, immutable'})
+
+
+@app.post("/payments/checkout", tags=["payments"])
+async def payment_checkout(request: Request, payload: Annotated[dict[str, Any], Body()], settings: Annotated[Settings, Depends(get_settings)]):
+    user = await require_user(settings, bearer_token(request))
+    return await checkout(settings, str(payload.get("booking_id") or ""), user)
+
+
+@app.post("/payments/payfast/itn", tags=["payments"])
+async def payment_notification(request: Request, settings: Annotated[Settings, Depends(get_settings)]):
+    await confirm_notification(settings, await request.body())
+    return {"received": True}
+
+
+@app.get("/payments/return", response_class=HTMLResponse, tags=["payments"])
+async def payment_return():
+    return '<html><body><h1>Return to PAPZII</h1><p>Payment confirmation is checked with the payment gateway, not this page.</p><a href="papzi://payfast/success">Open your booking</a></body></html>'
+
+
+@app.get("/payments/cancel", response_class=HTMLResponse, tags=["payments"])
+async def payment_cancel():
+    return '<html><body><h1>Checkout cancelled</h1><a href="papzi://payfast/cancel">Return to PAPZII</a></body></html>'
 
 
 @app.post("/functions/{name}", tags=["functions"])
@@ -523,6 +764,9 @@ async def function_proxy(
     builtin = await handle_builtin_function(settings, name, bearer_token(request), payload)
     if builtin is not None:
         return builtin
+
+    if settings.postgres_url:
+        raise HTTPException(status_code=404, detail=f"Application service {name} is not available.")
 
     if not settings.resolved_nhost_functions_url:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=f"Function {name} is not configured.")

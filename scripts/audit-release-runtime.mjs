@@ -17,6 +17,17 @@ const runtimeTargets = [
 const sourceExts = new Set(['.ts', '.tsx', '.js', '.jsx', '.json', '.yml', '.yaml', '.toml']);
 const localEndpointPattern =
   /\b(?:https?:\/\/)?(?:localhost|127\.0\.0\.1|0\.0\.0\.0|10\.0\.2\.2|192\.168\.\d{1,3}\.\d{1,3})(?::\d+)?(?:\/[^\s'"`]*)?/gi;
+const providerClientImportPattern = /from\s+['"][^'"]*(supabaseClient|nhostClient)['"]/g;
+const allowedProviderClientImportFiles = new Set([
+  'src/config/backendFunctions.ts',
+  'src/config/currentUser.ts',
+  'src/config/hasuraClient.ts',
+  'src/config/supabaseClient.ts',
+  'src/config/nhostClient.ts',
+  'src/services/legacyProviderClient.ts',
+  'src/services/mediaService.ts',
+  'src/services/uploadService.ts',
+]);
 
 const walkFiles = async (target) => {
   const absolute = path.join(root, target);
@@ -43,11 +54,22 @@ for (const target of runtimeTargets) files.push(...(await walkFiles(target)));
 const findings = [];
 for (const file of files) {
   const content = await fs.readFile(file, 'utf8');
+  const relativeFile = path.relative(root, file).replaceAll(path.sep, '/');
   for (const match of content.matchAll(localEndpointPattern)) {
     findings.push({
-      file: path.relative(root, file),
+      type: 'local-endpoint',
+      file: relativeFile,
       line: lineNumberForIndex(content, match.index ?? 0),
       endpoint: match[0],
+    });
+  }
+  for (const match of content.matchAll(providerClientImportPattern)) {
+    if (allowedProviderClientImportFiles.has(relativeFile)) continue;
+    findings.push({
+      type: 'direct-provider-client-import',
+      file: relativeFile,
+      line: lineNumberForIndex(content, match.index ?? 0),
+      provider: match[1],
     });
   }
 }
@@ -63,6 +85,6 @@ const result = {
 console.log(JSON.stringify(result, null, 2));
 
 if (findings.length > 0) {
-  console.error('Release runtime audit failed: local endpoints are not allowed in app/runtime deployment paths.');
+  console.error('Release runtime audit failed: local endpoints and direct provider client imports are not allowed in app/runtime deployment paths.');
   process.exit(1);
 }

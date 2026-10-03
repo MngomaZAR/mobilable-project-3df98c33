@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect, useCallback } from 'react';
+import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import {
   Alert, RefreshControl, ScrollView, StyleSheet, Text,
   TouchableOpacity, View, Image, Modal, TextInput, Switch,
@@ -8,7 +8,6 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../store/AuthContext';
 import { useBooking } from '../store/BookingContext';
 import { useAppData } from '../store/AppDataContext';
@@ -17,16 +16,23 @@ import { RootStackParamList } from '../navigation/types';
 import { backendDb } from '../services/backendGateway';
 import CreatePremiumBox from './CreatePremiumBox';
 import { NewMessageModal } from '../components/NewMessageModal';
-import { sendTip } from '../services/monetisationService';
-import HowItWorksCard from '../components/HowItWorksCard';
 import { PLACEHOLDER_AVATAR } from '../utils/constants';
+import { environment } from '../config/environment';
+import { areDigitalPurchasesAllowed } from '../config/commercePolicy';
+import { useTheme } from '../store/ThemeContext';
+import { summarizeRecordedEarnings } from '../utils/earningsSummary';
+import { apiClient } from '../config/apiClient';
+import { getApiAccessToken } from '../config/apiSession';
 
 type Navigation = StackNavigationProp<RootStackParamList, 'Root'>;
-type AvailabilityProfile = { id: string; availability_status?: string | null };
+type ProviderAvailability = { is_online: boolean; availability_status: string; kyc_status: string | null };
 type SubscriberProfile = { avatar_url?: string | null; full_name?: string | null } | null | undefined;
 
 const ModelPremiumDashboard: React.FC = () => {
   const navigation = useNavigation<Navigation>();
+  const { colors } = useTheme();
+  const s = makeStyles(colors);
+  const digitalEnabled = environment.backendProvider !== 'api' && areDigitalPurchasesAllowed();
   const { width } = useWindowDimensions();
   const { currentUser: authUser } = useAuth();
   const { bookings, refreshBookings, acceptBooking, declineBooking } = useBooking();
@@ -35,7 +41,6 @@ const ModelPremiumDashboard: React.FC = () => {
   const insets = useSafeAreaInsets();
   const [showPremiumBox, setShowPremiumBox] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [tierPayoutRate, setTierPayoutRate] = useState(0.70);
   const [showSubscribers, setShowSubscribers] = useState(false);
   const [subscribers, setSubscribers] = useState<any[]>([]);
   const [tiers, setTiers] = useState<any[]>([]);
@@ -51,7 +56,13 @@ const ModelPremiumDashboard: React.FC = () => {
   const [tierPerksInput, setTierPerksInput] = useState('');
   const [savingTier, setSavingTier] = useState(false);
   const [showNewMessage, setShowNewMessage] = useState(false);
-  const [isOnline, setIsOnline] = useState(true);
+  const [isOnline, setIsOnline] = useState(false);
+  const [availabilityReady, setAvailabilityReady] = useState(false);
+  const [availabilityLoading, setAvailabilityLoading] = useState(false);
+  const [availabilityBusy, setAvailabilityBusy] = useState(false);
+  const [availabilityKycApproved, setAvailabilityKycApproved] = useState(false);
+  const availabilityWriting = useRef(false);
+  const availabilityRequest = useRef(0);
   const currentUser = authUser ?? state.currentUser;
   const kycApproved = (currentUser?.kyc_status ?? state.currentUser?.kyc_status) === 'approved';
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
@@ -65,7 +76,7 @@ const ModelPremiumDashboard: React.FC = () => {
   }, [tiers]);
 
   const loadTiers = useCallback(async () => {
-    if (!currentUser?.id) return;
+    if (!currentUser?.id || !digitalEnabled) return;
     try {
       const { data } = await backendDb
         .from('subscription_tiers')
@@ -76,10 +87,10 @@ const ModelPremiumDashboard: React.FC = () => {
     } catch {
       setTiers([]);
     }
-  }, [currentUser?.id]);
+  }, [currentUser?.id, digitalEnabled]);
 
   const loadTipGoal = useCallback(async () => {
-    if (!currentUser?.id) return;
+    if (!currentUser?.id || !digitalEnabled) return;
     try {
       const { data } = await backendDb
         .from('tip_goals')
@@ -93,19 +104,65 @@ const ModelPremiumDashboard: React.FC = () => {
     } catch {
       setTipGoal(null);
     }
-  }, [currentUser?.id]);
+  }, [currentUser?.id, digitalEnabled]);
 
   useEffect(() => {
     loadTiers();
     loadTipGoal();
   }, [loadTiers, loadTipGoal]);
 
-  useEffect(() => {
-    const profile = state.profiles.find((p) => p.id === currentUser?.id) as AvailabilityProfile | undefined;
-    if (profile?.availability_status) {
-      setIsOnline(profile.availability_status === 'online');
+  const loadAvailability = useCallback(async () => {
+    if (availabilityWriting.current || !currentUser?.id) return;
+    const request = ++availabilityRequest.current;
+    setAvailabilityLoading(true);
+    try {
+      let result: ProviderAvailability;
+      if (environment.backendProvider === 'api') {
+        const token = await getApiAccessToken();
+        if (request !== availabilityRequest.current) return;
+        if (!token) throw new Error('Please sign in again.');
+        result = await apiClient.get<ProviderAvailability>('/providers/me/availability', { token });
+        if (typeof result.is_online !== 'boolean' || result.availability_status !== (result.is_online ? 'online' : 'offline') ||
+            (result.is_online && result.kyc_status !== 'approved')) throw new Error('Invalid availability response.');
+      } else {
+        const [profile, provider] = await Promise.all([
+          backendDb.from('profiles').select('availability_status,kyc_status').eq('id', currentUser.id).maybeSingle(),
+          backendDb.from('models').select('is_online').eq('id', currentUser.id).maybeSingle(),
+        ]);
+        if (profile.error) throw profile.error;
+        if (provider.error) throw provider.error;
+        if (!profile.data || !provider.data || (provider.data.is_online != null && typeof provider.data.is_online !== 'boolean')) throw new Error('Provider availability is not configured.');
+        result = {
+          is_online: profile.data.kyc_status === 'approved' && profile.data.availability_status === 'online' && provider.data.is_online === true,
+          availability_status: profile.data.availability_status,
+          kyc_status: profile.data.kyc_status,
+        };
+      }
+      if (request === availabilityRequest.current) {
+        setIsOnline(result.is_online);
+        setAvailabilityKycApproved(result.kyc_status === 'approved');
+        setAvailabilityReady(true);
+      }
+    } catch {
+      if (request === availabilityRequest.current) {
+        setIsOnline(false);
+        setAvailabilityReady(false);
+      }
+    } finally {
+      if (request === availabilityRequest.current) setAvailabilityLoading(false);
     }
-  }, [currentUser?.id, state.profiles]);
+  }, [currentUser?.id]);
+
+  useEffect(() => {
+    availabilityRequest.current += 1;
+    availabilityWriting.current = false;
+    setIsOnline(false);
+    setAvailabilityReady(false);
+    setAvailabilityLoading(false);
+    setAvailabilityBusy(false);
+    setAvailabilityKycApproved(false);
+    return () => { availabilityRequest.current += 1; };
+  }, [currentUser?.id]);
 
   const fetchSubscribers = useCallback(async () => {
     if (!currentUser?.id) return;
@@ -127,24 +184,22 @@ const ModelPremiumDashboard: React.FC = () => {
     const subEarnings = earningRows
       .filter((e: any) => e.source_type === 'subscription')
       .reduce((s: number, e: any) => s + Number(e.amount || 0), 0);
-    const bookingEarnings = bookings
-      .filter(b => b.status === 'completed' || b.status === 'paid_out' || b.status === 'accepted')
-      .reduce((s, b) => s + (b.payout_amount || 0), 0);
     const activeSubs = (state.subscriptions ?? []).filter((s: any) => s.status === 'active').length;
 
     return {
-      net: bookingEarnings + tipEarnings + subEarnings,
+      net: summarizeRecordedEarnings(earningRows, bookings).net,
       activeSubscribers: activeSubs,
       tipsTotal: tipEarnings,
       bookingCount: bookings.filter(b => b.status === 'completed' || b.status === 'paid_out').length,
     };
-  }, [bookings, state.earnings, state.subscriptions, tierPayoutRate]);
+  }, [bookings, state.earnings, state.subscriptions]);
 
   const onRefresh = async () => {
     setRefreshing(true);
     const userId = currentUser?.id;
     try {
       await Promise.allSettled([
+        loadAvailability(),
         refreshBookings(),
         fetchBookings(userId),
         loadTiers(),
@@ -159,21 +214,36 @@ const ModelPremiumDashboard: React.FC = () => {
   };
 
   const handleOnlineToggle = async (nextValue: boolean) => {
-    if (!kycApproved) {
+    const userId = currentUser?.id;
+    if (!userId || availabilityWriting.current || availabilityLoading || !availabilityReady) return;
+    if (nextValue && !availabilityKycApproved) {
       Alert.alert('Verification required', 'Complete KYC to go online and accept jobs.');
       return;
     }
-    setIsOnline(nextValue);
+    const previous = isOnline;
+    const request = ++availabilityRequest.current;
+    availabilityWriting.current = true;
+    setAvailabilityBusy(true);
     try {
-      await backendDb
-        .from('profiles')
-        .update({ availability_status: nextValue ? 'online' : 'offline' })
-        .eq('id', currentUser?.id);
-      await backendDb
-        .from('models')
-        .update({ is_online: nextValue })
-        .eq('id', currentUser?.id);
-      const userId = currentUser?.id;
+      if (environment.backendProvider === 'api') {
+        const token = await getApiAccessToken();
+        if (request !== availabilityRequest.current) return;
+        if (!token) throw new Error('Please sign in again.');
+        const result = await apiClient.post<ProviderAvailability>('/providers/me/availability', { is_online: nextValue }, { token });
+        if (result.is_online !== nextValue || result.availability_status !== (nextValue ? 'online' : 'offline') ||
+            (nextValue && result.kyc_status !== 'approved')) throw new Error('Availability could not be confirmed.');
+        if (request !== availabilityRequest.current) return;
+        setAvailabilityKycApproved(result.kyc_status === 'approved');
+      } else {
+        const profile = await backendDb.from('profiles').update({ availability_status: nextValue ? 'online' : 'offline' }).eq('id', userId).select('id').single();
+        if (profile.error) throw profile.error;
+        if (!profile.data) throw new Error('Your profile could not be updated.');
+        const provider = await backendDb.from('models').update({ is_online: nextValue }).eq('id', userId).select('id').single();
+        if (provider.error) throw provider.error;
+        if (!provider.data) throw new Error('Your provider profile could not be updated.');
+      }
+      if (request !== availabilityRequest.current) return;
+      setIsOnline(nextValue);
       await Promise.allSettled([
         refreshBookings(),
         fetchBookings(userId),
@@ -181,8 +251,18 @@ const ModelPremiumDashboard: React.FC = () => {
         userId ? fetchSubscriptions(userId) : Promise.resolve(),
         userId ? fetchCredits(userId) : Promise.resolve(),
       ]);
-    } catch {
-      // soft-fail
+    } catch (error) {
+      if (request === availabilityRequest.current) {
+        setIsOnline(previous);
+        setAvailabilityReady(false);
+        const message = error && typeof error === 'object' && 'message' in error ? String(error.message) : 'Could not update availability.';
+        Alert.alert('Availability Update Failed', `${message} Refresh to confirm your status before retrying.`);
+      }
+    } finally {
+      if (request === availabilityRequest.current) {
+        availabilityWriting.current = false;
+        setAvailabilityBusy(false);
+      }
     }
   };
 
@@ -199,6 +279,7 @@ const ModelPremiumDashboard: React.FC = () => {
         if (!active) return;
         const userId = currentUser?.id;
         await Promise.allSettled([
+          loadAvailability(),
           refreshBookings(),
           fetchBookings(userId),
           loadTiers(),
@@ -214,7 +295,7 @@ const ModelPremiumDashboard: React.FC = () => {
         active = false;
         clearInterval(timer);
       };
-    }, [currentUser?.id, fetchBookings, fetchCredits, fetchEarnings, fetchSubscriptions, loadTipGoal, loadTiers, refreshBookings]),
+    }, [currentUser?.id, fetchBookings, fetchCredits, fetchEarnings, fetchSubscriptions, loadAvailability, loadTipGoal, loadTiers, refreshBookings]),
   );
 
   const openChatWithClient = async (clientId?: string | null, clientName?: string) => {
@@ -234,7 +315,7 @@ const ModelPremiumDashboard: React.FC = () => {
     setAcceptingId(bookingId);
     try {
       await acceptBooking(bookingId);
-      Alert.alert('Booking Accepted', 'The client has been notified. Navigate to their location.');
+      Alert.alert('Booking Accepted', 'Waiting for the client to pay before the session can begin.');
     } catch (err: any) {
       Alert.alert('Error', err?.message ?? 'Could not accept booking.');
     } finally {
@@ -243,7 +324,7 @@ const ModelPremiumDashboard: React.FC = () => {
   };
 
   const handleDeclineBooking = async (bookingId: string) => {
-    Alert.alert('Decline Booking', 'Are you sure? The client will be refunded.', [
+    Alert.alert('Decline Booking', 'Decline this booking request?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Decline',
@@ -368,20 +449,21 @@ const ModelPremiumDashboard: React.FC = () => {
         {/* Header */}
         <View style={s.header}>
           <View style={{ flex: 1 }}>
-            <Text style={s.greeting}>Elite Creator Dashboard</Text>
+            <Text style={s.greeting}>Model Dashboard</Text>
             <Text style={s.title}>
               Welcome, {currentUser?.full_name?.split(' ')[0] ?? 'Creator'}
             </Text>
           </View>
           <View style={s.headerActions}>
             <View style={s.onlineRow}>
-              <Text style={[s.onlineLabel, { color: isOnline ? '#10b981' : '#64748b' }]}>
-                {isOnline ? 'LIVE' : 'OFFLINE'}
+              <Text style={[s.onlineLabel, { color: availabilityReady && isOnline ? '#10b981' : '#64748b' }]}>
+                {availabilityBusy ? 'SAVING' : availabilityLoading ? 'CHECKING' : !availabilityReady ? 'UNKNOWN' : isOnline ? 'AVAILABLE' : 'OFFLINE'}
               </Text>
               <Switch
-                value={isOnline}
+                value={availabilityReady && isOnline}
+                accessibilityLabel="Provider online availability"
                 onValueChange={handleOnlineToggle}
-                disabled={!kycApproved}
+                disabled={availabilityBusy || availabilityLoading || !availabilityReady || (!isOnline && !availabilityKycApproved)}
                 trackColor={{ false: '#334155', true: '#10b981' }}
                 thumbColor="#fff"
               />
@@ -400,27 +482,27 @@ const ModelPremiumDashboard: React.FC = () => {
 
         {/* Hero earnings card */}
         <TouchableOpacity activeOpacity={0.9} onPress={() => navigation.navigate('EarningsDashboard')}>
-          <LinearGradient colors={['#7c3aed', '#db2777']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.heroCard}>
+          <View style={s.heroCard}>
             <View style={{ flex: 1 }}>
-              <Text style={s.heroLabel}>Total Earnings</Text>
+              <Text style={s.heroLabel}>Recorded Earnings</Text>
               <Text style={s.heroValue}>R{earnings.net.toLocaleString('en-ZA')}</Text>
               <View style={s.heroStats}>
-                <TouchableOpacity style={s.hStat} onPress={() => { fetchSubscribers(); setShowSubscribers(true); }}>
+                {digitalEnabled && <TouchableOpacity style={s.hStat} onPress={() => { fetchSubscribers(); setShowSubscribers(true); }}>
                   <Text style={s.hStatVal}>{earnings.activeSubscribers}</Text>
                   <Text style={s.hStatLabel}>Subscribers</Text>
-                </TouchableOpacity>
-                <View style={s.hStat}>
+                </TouchableOpacity>}
+                {digitalEnabled && <View style={s.hStat}>
                   <Text style={s.hStatVal}>R{earnings.tipsTotal.toLocaleString('en-ZA')}</Text>
                   <Text style={s.hStatLabel}>Tips</Text>
-                </View>
+                </View>}
                 <View style={s.hStat}>
                   <Text style={s.hStatVal}>{earnings.bookingCount}</Text>
                   <Text style={s.hStatLabel}>Sessions</Text>
                 </View>
               </View>
             </View>
-            <Ionicons name="arrow-forward-circle" size={36} color="rgba(255,255,255,0.5)" />
-          </LinearGradient>
+            <Ionicons name="arrow-forward-circle" size={30} color={colors.accent} />
+          </View>
         </TouchableOpacity>
 
         <View style={s.priorityCard}>
@@ -430,14 +512,14 @@ const ModelPremiumDashboard: React.FC = () => {
               <Text style={s.priorityValue}>{pendingBookings.length}</Text>
               <Text style={s.priorityLabel}>Pending</Text>
             </View>
-            <View style={s.priorityPill}>
+            {digitalEnabled && <View style={s.priorityPill}>
               <Text style={s.priorityValue}>{earnings.activeSubscribers}</Text>
               <Text style={s.priorityLabel}>Subscribers</Text>
-            </View>
-            <View style={s.priorityPill}>
+            </View>}
+            {digitalEnabled && <View style={s.priorityPill}>
               <Text style={s.priorityValue}>R{earnings.tipsTotal.toLocaleString('en-ZA')}</Text>
               <Text style={s.priorityLabel}>Tips</Text>
-            </View>
+            </View>}
           </View>
         </View>
 
@@ -486,7 +568,7 @@ const ModelPremiumDashboard: React.FC = () => {
         <View style={s.actionsGrid}>
           {[
             { icon: 'eye', label: 'Availability', color: '#db2777', bg: '#fdf2f8', onPress: () => navigation.navigate('Availability') },
-            { icon: 'add-circle', label: 'Post', color: '#7c3aed', bg: '#f5f3ff', onPress: () => setShowPremiumBox(true) },
+            { icon: 'add-circle', label: 'Post', color: '#7c3aed', bg: '#f5f3ff', onPress: () => digitalEnabled ? setShowPremiumBox(true) : navigation.navigate('CreatePost') },
             { icon: 'people', label: 'Subscribers', color: '#059669', bg: '#ecfdf5', onPress: () => currentUser?.id && navigation.navigate('CreatorSubscriptions', { creatorId: currentUser.id }) },
             { icon: 'chatbubbles', label: 'Messages', color: '#ea580c', bg: '#fff7ed', onPress: () => navigation.navigate('Root', { screen: 'Chat' }) },
             { icon: 'images', label: 'Media', color: '#0284c7', bg: '#eff6ff', onPress: () => currentUser?.id && navigation.navigate('MediaLibrary', { creatorId: currentUser.id }) },
@@ -494,7 +576,7 @@ const ModelPremiumDashboard: React.FC = () => {
             { icon: 'list', label: 'Services', color: '#ec4899', bg: '#fdf2f8', onPress: () => navigation.navigate('ModelServices') },
             { icon: kycApproved ? 'shield-checkmark' : 'shield-outline', label: kycApproved ? 'Verified' : 'Verify ID', color: kycApproved ? '#22c55e' : '#f59e0b', bg: '#fffbeb', onPress: () => navigation.navigate('KYC') },
             { icon: 'settings', label: 'Profile', color: '#6366f1', bg: '#eef2ff', onPress: () => navigation.navigate('AccountConfig') },
-          ].map(a => (
+          ].filter(a => digitalEnabled || a.label !== 'Subscribers').map(a => (
             <TouchableOpacity key={a.label} style={[s.actionBtn, { width: actionItemWidth }]} onPress={a.onPress}>
               <View style={[s.actionIcon, { backgroundColor: a.bg }]}>
                 <Ionicons name={a.icon as any} size={24} color={a.color} />
@@ -505,7 +587,7 @@ const ModelPremiumDashboard: React.FC = () => {
         </View>
 
         {/* Tip Goal Bar */}
-        <View style={s.section}>
+        {digitalEnabled && <View style={s.section}>
           <View style={s.sectionHeader}>
             <Text style={s.sectionTitle}>Tip Goal</Text>
             <TouchableOpacity onPress={openGoalModal}>
@@ -534,10 +616,10 @@ const ModelPremiumDashboard: React.FC = () => {
               </TouchableOpacity>
             </View>
           )}
-        </View>
+        </View>}
 
         {/* Subscription Tiers */}
-        <View style={s.section}>
+        {digitalEnabled && <View style={s.section}>
           <View style={s.sectionHeader}>
             <Text style={s.sectionTitle}>Subscription Tiers</Text>
             <TouchableOpacity onPress={() => openTierModal()}>
@@ -570,7 +652,7 @@ const ModelPremiumDashboard: React.FC = () => {
               ))}
             </ScrollView>
           )}
-        </View>
+        </View>}
 
         {/* Recent bookings */}
         <View style={s.section}>
@@ -604,7 +686,7 @@ const ModelPremiumDashboard: React.FC = () => {
                   <Text style={[s.statusText, {
                     color: booking.status === 'completed' ? '#10b981' :
                       booking.status === 'accepted' ? '#3b82f6' : '#f59e0b',
-                  }]}>{booking.status}</Text>
+                  }]}>{booking.status === 'accepted' && booking.payment_status !== 'paid' ? 'Awaiting Payment' : booking.status}</Text>
                 </View>
                 <TouchableOpacity
                   style={s.chatBtn}
@@ -615,28 +697,6 @@ const ModelPremiumDashboard: React.FC = () => {
               </TouchableOpacity>
             ))
           )}
-        </View>
-
-        {/* Fan Leaderboard */}
-        <View style={s.section}>
-          <View style={s.sectionHeader}>
-            <Text style={s.sectionTitle}>Top Fans (This Month)</Text>
-            <Ionicons name="trophy-outline" size={18} color="#f59e0b" />
-          </View>
-          <View style={s.leaderboardCard}>
-            {[
-              { name: 'John Doe', amount: 2400, rank: 1, avatar: PLACEHOLDER_AVATAR },
-              { name: 'Sarah W.', amount: 1850, rank: 2, avatar: PLACEHOLDER_AVATAR },
-              { name: 'Mike R.', amount: 900, rank: 3, avatar: PLACEHOLDER_AVATAR },
-            ].map((fan, i) => (
-              <View key={fan.name} style={[s.fanRow, i === 2 && { borderBottomWidth: 0 }]}>
-                <Text style={s.fanRank}>{fan.rank}</Text>
-                <Image source={{ uri: fan.avatar }} style={s.fanAvatar} />
-                <Text style={s.fanName}>{fan.name}</Text>
-                <Text style={s.fanAmount}>R{fan.amount.toLocaleString('en-ZA')}</Text>
-              </View>
-            ))}
-          </View>
         </View>
 
         {/* Top photographers to collaborate */}
@@ -662,32 +722,6 @@ const ModelPremiumDashboard: React.FC = () => {
             </ScrollView>
           </View>
         )}
-
-        {/* Upgrade banner */}
-        <TouchableOpacity style={s.upgradeBanner} onPress={() => navigation.navigate('Support')}>
-          <LinearGradient colors={['#1e1b4b', '#312e81']} style={s.upgradeBannerInner}>
-            <Ionicons name="diamond" size={28} color="#fbbf24" />
-            <View style={{ flex: 1, marginLeft: 14 }}>
-              <Text style={s.upgradeTitle}>Upgrade to Elite Gold</Text>
-              <Text style={s.upgradeSub}>85% payout rate + verified badge + priority matching</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#fbbf24" />
-          </LinearGradient>
-        </TouchableOpacity>
-
-        <HowItWorksCard
-          title="How Earnings Work"
-          persistKey="model-dashboard-earnings-how"
-          items={[
-            'Accepted bookings move to active sessions and are eligible for payout after completion.',
-            'Declined requests close that offer and notify clients to continue matching.',
-            'Tips, subscriptions, and PPV sales are recorded in your earnings ledger separately.',
-            'Payout methods require verification before withdrawals are released.',
-          ]}
-          containerStyle={s.howCard}
-          titleStyle={s.howTitle}
-          itemStyle={s.howItem}
-        />
 
         {/* Payout Settings */}
         <TouchableOpacity 
@@ -832,37 +866,37 @@ const ModelPremiumDashboard: React.FC = () => {
   );
 };
 
-const s = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#0a0a14' },
+const makeStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: colors.bg },
   container: { padding: 20, paddingBottom: 100 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   onlineRow: { alignItems: 'center', justifyContent: 'center' },
-  onlineLabel: { fontWeight: '800', fontSize: 10, marginBottom: 4, letterSpacing: 0.8 },
+  onlineLabel: { fontWeight: '800', fontSize: 10, marginBottom: 4, letterSpacing: 0 },
   iconBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' },
-  greeting: { color: '#ec4899', fontWeight: '800', fontSize: 11, textTransform: 'uppercase', letterSpacing: 1.5 },
-  title: { color: '#fff', fontSize: 22, fontWeight: '900', marginTop: 2 },
+  greeting: { color: colors.textMuted, fontWeight: '700', fontSize: 12, letterSpacing: 0 },
+  title: { color: colors.text, fontSize: 22, fontWeight: '800', marginTop: 2 },
   avatar: { width: 48, height: 48, borderRadius: 24, borderWidth: 2, borderColor: '#ec4899' },
   heroCard: {
-    borderRadius: 24,
-    padding: 24,
+    borderRadius: 0,
+    paddingVertical: 20,
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.16)',
+    borderBottomWidth: 1,
+    borderColor: colors.border,
     overflow: 'hidden',
     shadowColor: '#fff',
     shadowOpacity: 0.08,
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 8 },
   },
-  heroLabel: { color: 'rgba(255,255,255,0.75)', fontWeight: '700', fontSize: 13 },
-  heroValue: { color: '#fff', fontSize: 36, fontWeight: '900', marginTop: 4 },
+  heroLabel: { color: colors.textMuted, fontWeight: '700', fontSize: 13 },
+  heroValue: { color: colors.text, fontSize: 30, fontWeight: '800', marginTop: 4 },
   heroStats: { flexDirection: 'row', marginTop: 16, gap: 20 },
   hStat: { alignItems: 'flex-start' },
-  hStatVal: { color: '#fff', fontWeight: '800', fontSize: 16 },
-  hStatLabel: { color: 'rgba(255,255,255,0.6)', fontSize: 12 },
+  hStatVal: { color: colors.text, fontWeight: '800', fontSize: 16 },
+  hStatLabel: { color: colors.textMuted, fontSize: 12 },
   alertCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1e1a0a', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#f59e0b40', marginBottom: 16, gap: 10 },
   alertDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#f59e0b' },
   alertText: { flex: 1, color: '#f59e0b', fontWeight: '700' },
@@ -877,32 +911,30 @@ const s = StyleSheet.create({
   actionsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 24 },
   actionBtn: {
     alignItems: 'center',
-    backgroundColor: 'rgba(15,23,42,0.38)',
+    backgroundColor: colors.card,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    borderRadius: 18,
+    borderColor: colors.border,
+    borderRadius: 8,
     paddingVertical: 14,
     paddingHorizontal: 8,
     overflow: 'hidden',
   },
   actionIcon: { width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
-  actionLabel: { color: '#94a3b8', fontSize: 11, fontWeight: '700', textAlign: 'center' },
+  actionLabel: { color: colors.text, fontSize: 12, fontWeight: '700', textAlign: 'center' },
   section: { marginBottom: 24 },
   priorityCard: {
-    backgroundColor: 'rgba(30,41,59,0.86)',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(148,163,184,0.18)',
-    padding: 14,
+    borderBottomWidth: 1,
+    borderColor: colors.border,
+    paddingVertical: 14,
     marginBottom: 14,
     overflow: 'hidden',
   },
   priorityRow: { flexDirection: 'row', gap: 8, marginTop: 8 },
-  priorityPill: { flex: 1, backgroundColor: '#0f172a', borderRadius: 12, borderWidth: 1, borderColor: '#334155', paddingVertical: 10, paddingHorizontal: 6, alignItems: 'center' },
-  priorityValue: { color: '#fff', fontWeight: '900', fontSize: 15 },
-  priorityLabel: { color: '#94a3b8', marginTop: 2, fontSize: 10, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.4 },
+  priorityPill: { flex: 1, paddingVertical: 10, paddingHorizontal: 6, alignItems: 'center' },
+  priorityValue: { color: colors.text, fontWeight: '800', fontSize: 15 },
+  priorityLabel: { color: colors.textMuted, marginTop: 2, fontSize: 11, fontWeight: '700', letterSpacing: 0 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
-  sectionTitle: { color: '#fff', fontSize: 17, fontWeight: '800' },
+  sectionTitle: { color: colors.text, fontSize: 17, fontWeight: '800' },
   viewAll: { color: '#ec4899', fontWeight: '700' },
   bookingCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1e293b', borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: '#334155', gap: 10 },
   bookingTitle: { color: '#fff', fontWeight: '700', fontSize: 15 },

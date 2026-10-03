@@ -31,7 +31,7 @@ export const updateAvailability = async (userId: string, slots: Partial<Availabi
   // Assumes a unique constraint on (user_id, day_of_week)
   const { error } = await backendDb
     .from('availability')
-    .upsert(slots.map(s => ({ ...s, user_id: userId })));
+    .upsert(slots.map(s => ({ ...s, user_id: userId })), { onConflict: 'user_id,day_of_week' });
     
   if (error) throw error;
 };

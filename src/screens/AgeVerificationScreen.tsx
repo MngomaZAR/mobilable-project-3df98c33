@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform } from 'react-native';
+import { View, Text, TextInput, StyleSheet, TouchableOpacity, Alert, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useTheme } from '../store/ThemeContext';
@@ -9,6 +9,9 @@ import { useAppData } from '../store/AppDataContext';
 import { recordConsent as recordComplianceConsent } from '../services/dispatchService';
 import { BRAND } from '../utils/constants';
 import { roleRequiresKyc } from '../utils/userRole';
+import { environment } from '../config/environment';
+import { apiClient } from '../config/apiClient';
+import { getApiAccessToken } from '../config/apiSession';
 
 const AgeVerificationScreen: React.FC = () => {
   const { colors } = useTheme();
@@ -17,6 +20,8 @@ const AgeVerificationScreen: React.FC = () => {
   const [dob, setDob] = useState(new Date(2000, 0, 1));
   const [showPicker, setShowPicker] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [webDob, setWebDob] = useState('');
+  const [failure, setFailure] = useState<string | null>(null);
 
   const handleConfirm = async () => {
     if (!currentUser?.id) {
@@ -24,9 +29,11 @@ const AgeVerificationScreen: React.FC = () => {
       return;
     }
 
+    const selected = Platform.OS === 'web' ? new Date(`${webDob}T12:00:00Z`) : dob;
+    if (Number.isNaN(selected.getTime())) { setFailure('Enter your date of birth as YYYY-MM-DD.'); return; }
     const today = new Date();
-    const age = today.getFullYear() - dob.getFullYear() -
-      (today < new Date(today.getFullYear(), dob.getMonth(), dob.getDate()) ? 1 : 0);
+    const age = today.getFullYear() - selected.getFullYear() -
+      (today < new Date(today.getFullYear(), selected.getMonth(), selected.getDate()) ? 1 : 0);
 
     if (age < 18) {
       Alert.alert(
@@ -38,9 +45,18 @@ const AgeVerificationScreen: React.FC = () => {
     }
 
     setSubmitting(true);
+    setFailure(null);
     try {
-      const isoDob = dob.toISOString().split('T')[0];
+      const isoDob = Platform.OS === 'web' ? webDob : `${selected.getFullYear()}-${String(selected.getMonth() + 1).padStart(2, '0')}-${String(selected.getDate()).padStart(2, '0')}`;
       const requiresKyc = roleRequiresKyc(currentUser);
+      if (environment.backendProvider === 'api') {
+        const result = await apiClient.post<{ profile: { age_verified: boolean; age_verified_at: string } }>('/auth/age-confirm', {
+          date_of_birth: isoDob, accepted_terms: true,
+        }, { token: await getApiAccessToken() });
+        setState({ currentUser: { ...currentUser, ...result.profile } });
+        await revalidateSession();
+        return;
+      }
 
       // Consent logging should never block age-gate progression if the edge function is unavailable.
       try {
@@ -112,6 +128,7 @@ const AgeVerificationScreen: React.FC = () => {
       await revalidateSession();
     } catch (err) {
       console.error('Age verification error:', err);
+      setFailure(err instanceof Error ? err.message : 'Could not save your age declaration.');
       Alert.alert('Verification Failed', 'Could not complete age verification right now. Please try again.');
     } finally {
       setSubmitting(false);
@@ -123,19 +140,19 @@ const AgeVerificationScreen: React.FC = () => {
       <View style={styles.content}>
         <Text style={[styles.title, { color: colors.text }]}>Age Verification</Text>
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-          {BRAND.name} contains adult-oriented content. You must be 18 or older to continue.
+          You must be 18 or older to use {BRAND.name}. Identity review is required before offering paid services.
         </Text>
 
-        <TouchableOpacity
+        {Platform.OS === 'web' ? <TextInput placeholder="Date of birth (YYYY-MM-DD)" value={webDob} onChangeText={setWebDob} style={[styles.dateBtn, { borderColor: colors.border, color: colors.text }]} /> : <TouchableOpacity
           style={[styles.dateBtn, { borderColor: colors.border, backgroundColor: colors.card }]}
           onPress={() => setShowPicker(true)}
         >
           <Text style={[styles.dateText, { color: colors.text }]}>
             Date of birth: {dob.toLocaleDateString('en-ZA')}
           </Text>
-        </TouchableOpacity>
+        </TouchableOpacity>}
 
-        {showPicker && (
+        {showPicker && Platform.OS !== 'web' && (
           <DateTimePicker
             value={dob}
             mode="date"
@@ -157,6 +174,7 @@ const AgeVerificationScreen: React.FC = () => {
             {submitting ? 'Verifying...' : 'I confirm I am 18+'}
           </Text>
         </TouchableOpacity>
+        {failure ? <Text accessibilityRole="alert" style={{ color: colors.destructive, marginTop: 12 }}>{failure}</Text> : null}
 
         <Text style={[styles.legal, { color: colors.textMuted }]}>
           By continuing you agree to our Terms of Service and confirm you are at least 18 years old.

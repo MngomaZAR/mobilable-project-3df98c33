@@ -1,10 +1,9 @@
 /**
- * Self-hosted analytics — stores events in Supabase `analytics_events` table.
- * No external accounts, no API keys, no rate limits beyond Supabase free tier.
+ * Self-hosted analytics — stores events through the active backend boundary.
  */
-import { supabase } from '../config/supabaseClient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
+import { backendDb } from '../services/backendGateway';
 
 const APP_VERSION = '1.0.0';
 const SESSION_KEY = 'papzi_session_id';
@@ -40,7 +39,7 @@ const flush = async () => {
   const batch = [..._eventQueue];
   _eventQueue = [];
   try {
-    await supabase.from('analytics_events').insert(batch);
+    await backendDb.from('analytics_events').insert(batch);
   } catch {
     // silent — analytics must never crash the app
   }

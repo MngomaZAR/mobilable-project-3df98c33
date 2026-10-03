@@ -144,7 +144,8 @@ export interface Booking {
   package_type: string;
   package_id?: string;
   notes?: string;
-  status: BookingStatus;
+    status: BookingStatus;
+    payment_status?: 'unpaid' | 'paid' | 'refunded';
   created_at: string;
   user_latitude?: number | null;
   user_longitude?: number | null;

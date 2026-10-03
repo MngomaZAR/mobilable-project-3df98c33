@@ -5,6 +5,7 @@ on:
     branches: ["main", "release/testflight-2026-06"]
     paths:
       - "backend/**"
+      - "scripts/ci-backend.sh"
       - "deployment/docker-compose.yml"
       - ".github/workflows/build-backend-images.yml"
   workflow_dispatch: {}
@@ -14,7 +15,53 @@ permissions:
   packages: write
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: qa
+          POSTGRES_PASSWORD: ci-only-password
+          POSTGRES_DB: papzii_qa_ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U qa -d papzii_qa_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://qa:ci-only-password@127.0.0.1:5432/papzii_qa_ci
+      APP_ENV: qa
+      ADMIN_USER_IDS: qa-admin-20261003
+      API_PUBLIC_URL: https://qa.example.invalid
+      MINIO_ENDPOINT: http://127.0.0.1:19000
+      MINIO_ACCESS_KEY: ci-minio-user
+      MINIO_SECRET_KEY: ci-only-minio-password
+      QA_API_URL: http://127.0.0.1:18000
+      QA_REPORT_PATH: ${{ runner.temp }}/role-load-report.json
+      QA_PAYMENT_REPORT_PATH: ${{ runner.temp }}/payment-protocol-report.json
+      QA_AUTH_REPORT_PATH: ${{ runner.temp }}/auth-protocol-report.json
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/api/requirements.txt
+      - name: Install backend dependencies
+        run: pip install -r backend/api/requirements.txt
+      - name: Run isolated database, role, load and payment protocol checks
+        run: bash scripts/ci-backend.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-qa-evidence
+          path: |
+            ${{ runner.temp }}/*report.json
+            ${{ runner.temp }}/papzi-*.log
   build:
+    needs: test
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -56,9 +103,9 @@ jobs:
         with:
           images: ghcr.io/${{ steps.owner.outputs.value }}/${{ matrix.image }}
           tags: |
-            type=sha,prefix=
+            type=sha,prefix=,format=long
             type=ref,event=branch
-            type=raw,value=latest
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
 
       - name: Build and push
         uses: docker/build-push-action@v6

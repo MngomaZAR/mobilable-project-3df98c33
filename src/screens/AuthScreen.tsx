@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -16,6 +17,8 @@ import { BRAND } from '../utils/constants';
 import { useAppData } from '../store/AppDataContext';
 import { Ionicons } from '@expo/vector-icons';
 import { UserGender, UserRole } from '../types';
+import { environment } from '../config/environment';
+import { apiClient } from '../config/apiClient';
 
 type Mode = 'signin' | 'signup';
 
@@ -33,7 +36,7 @@ const friendlyAuthError = (raw: string): string => {
   if (r.includes('user already registered'))
     return 'An account with this email already exists. Try signing in instead.';
   if (r.includes('password should be at least'))
-    return 'Your password must be at least 6 characters long.';
+    return 'Your password must be at least 8 characters long.';
   if (r.includes('unsupported provider') || r.includes('provider is not enabled'))
     return 'This sign-in method isn\'t enabled yet. Please use email & password for now.';
   if (r.includes('network') || r.includes('failed to fetch'))
@@ -81,6 +84,31 @@ const AuthScreen: React.FC = () => {
   const { signIn, signUp, signInWithOAuth, resetState, authenticating, error, setState } = useAppData();
   const [mode, setMode] = useState<Mode>('signin');
   const [localSubmitting, setLocalSubmitting] = useState(false);
+  const [recoveryMode, setRecoveryMode] = useState<'email' | 'code' | null>(null);
+  const [recoveryCode, setRecoveryCode] = useState('');
+  const [recoveryPassword, setRecoveryPassword] = useState('');
+  const [recoveryBusy, setRecoveryBusy] = useState(false);
+  const [recoveryMessage, setRecoveryMessage] = useState('');
+  const submitRecovery = async () => {
+    if (recoveryBusy) return;
+    setRecoveryBusy(true);
+    setRecoveryMessage('');
+    try {
+      const result = recoveryMode === 'email'
+        ? await apiClient.post<{ message: string }>('/auth/recover-password', { email: email.trim() })
+        : await apiClient.post<{ message: string }>('/auth/reset-password', { token: recoveryCode.trim(), password: recoveryPassword });
+      setRecoveryMessage(result.message);
+      if (recoveryMode === 'code') {
+        setRecoveryCode('');
+        setRecoveryPassword('');
+        setPassword('');
+      }
+    } catch (error) {
+      setRecoveryMessage(error instanceof Error ? error.message : 'Password recovery failed. Please try again.');
+    } finally {
+      setRecoveryBusy(false);
+    }
+  };
 
   const handleClearCache = async () => {
     Alert.alert(
@@ -114,6 +142,7 @@ const AuthScreen: React.FC = () => {
   const [localSuccess, setLocalSuccess] = useState<string | null>(null);
 
   const displayError = error ? friendlyAuthError(error) : localMessage;
+  const oauthEnabled = environment.oauthEnabled;
 
   const submit = async () => {
     if (localSubmitting || authenticating) return;
@@ -166,8 +195,8 @@ const AuthScreen: React.FC = () => {
           setLocalMessage('Please confirm age and accept Terms before continuing.');
           return;
         }
-        if (password.length < 6) {
-          setLocalMessage('Your password must be at least 6 characters long.');
+        if (password.length < 8) {
+          setLocalMessage('Your password must be at least 8 characters long.');
           return;
         }
         const user = await signUp(email.trim(), password, selectedRole, fullName.trim(), dobTrimmed, {
@@ -176,7 +205,7 @@ const AuthScreen: React.FC = () => {
           phone: phone.trim(),
         });
         if (user) {
-          setLocalSuccess('Account created. Check your email to verify, then sign in.');
+          setLocalSuccess(environment.backendProvider === 'api' ? 'Account created. You can now sign in.' : 'Account created. Check your email to verify, then sign in.');
           setEmail('');
           setPassword('');
           setFullName('');
@@ -380,6 +409,12 @@ const AuthScreen: React.FC = () => {
               </TouchableOpacity>
             </View>
 
+            {mode === 'signin' && environment.backendProvider === 'api' && (
+              <TouchableOpacity accessibilityRole="button" onPress={() => { setRecoveryMode('email'); setRecoveryMessage(''); }} style={{ minHeight: 44, justifyContent: 'center', alignSelf: 'flex-end' }}>
+                <Text style={{ color: '#334155', fontWeight: '600' }}>Forgot password?</Text>
+              </TouchableOpacity>
+            )}
+
             {mode === 'signup' && (
               <View style={styles.complianceWrap}>
                 <TouchableOpacity style={styles.checkboxRow} onPress={() => setConfirmedAdult((v) => !v)}>
@@ -400,6 +435,30 @@ const AuthScreen: React.FC = () => {
                 )}
               </View>
             )}
+
+            <Modal visible={recoveryMode !== null} transparent animationType="fade" onRequestClose={() => setRecoveryMode(null)}>
+              <View style={{ flex: 1, justifyContent: 'center', padding: 20, backgroundColor: 'rgba(0,0,0,0.45)' }}>
+                <View style={{ width: '100%', maxWidth: 420, alignSelf: 'center', backgroundColor: '#fff', padding: 20, borderRadius: 8 }}>
+                  <Text style={{ fontSize: 20, fontWeight: '700', marginBottom: 16 }}>Reset Password</Text>
+                  {recoveryMode === 'email' ? (
+                    <TextInput accessibilityLabel="Recovery email" placeholder="Email address" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" style={[styles.input, { minHeight: 48, borderBottomWidth: 1, borderColor: '#cbd5e1' }]} />
+                  ) : (
+                    <>
+                      <TextInput accessibilityLabel="Reset code" placeholder="Reset code from email" value={recoveryCode} onChangeText={setRecoveryCode} autoCapitalize="none" autoCorrect={false} style={[styles.input, { minHeight: 48 }]} />
+                      <TextInput accessibilityLabel="New password" placeholder="New password" value={recoveryPassword} onChangeText={setRecoveryPassword} secureTextEntry autoComplete="new-password" style={[styles.input, { minHeight: 48 }]} />
+                    </>
+                  )}
+                  {recoveryMessage ? <Text accessibilityLiveRegion="polite" style={{ color: '#334155', marginTop: 12 }}>{recoveryMessage}</Text> : null}
+                  <TouchableOpacity accessibilityRole="button" disabled={recoveryBusy} onPress={submitRecovery} style={[styles.submitBtn, { marginTop: 16 }]}>
+                    <Text style={styles.submitTxt}>{recoveryBusy ? 'Please wait...' : recoveryMode === 'email' ? 'Send Reset Code' : 'Update Password'}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity accessibilityRole="button" disabled={recoveryBusy} onPress={() => { setRecoveryMode(recoveryMode === 'email' ? 'code' : 'email'); setRecoveryMessage(''); }} style={{ minHeight: 44, justifyContent: 'center' }}>
+                    <Text style={{ color: '#334155' }}>{recoveryMode === 'email' ? 'Enter reset code' : 'Request a reset code'}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity accessibilityRole="button" onPress={() => setRecoveryMode(null)} style={{ minHeight: 44, justifyContent: 'center', alignSelf: 'flex-end' }}><Text>Close</Text></TouchableOpacity>
+                </View>
+              </View>
+            </Modal>
 
             {/* Error / Success feedback */}
             {displayError ? (
@@ -423,24 +482,28 @@ const AuthScreen: React.FC = () => {
               </Text>
             </TouchableOpacity>
 
-            {/* Divider */}
-            <View style={styles.divider}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerTxt}>or continue with</Text>
-              <View style={styles.dividerLine} />
-            </View>
+            {oauthEnabled ? (
+              <>
+                {/* Divider */}
+                <View style={styles.divider}>
+                  <View style={styles.dividerLine} />
+                  <Text style={styles.dividerTxt}>or continue with</Text>
+                  <View style={styles.dividerLine} />
+                </View>
 
-            {/* OAuth Buttons */}
-            <View style={styles.oauthRow}>
-              <TouchableOpacity style={styles.oauthBtn} onPress={() => handleOAuth('google')} disabled={authenticating}>
-                <Ionicons name="logo-google" size={18} color="#0f172a" style={{ marginRight: 8 }} />
-                <Text style={styles.oauthTxt}>Google</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.oauthBtn} onPress={() => handleOAuth('apple')} disabled={authenticating}>
-                <Ionicons name="logo-apple" size={18} color="#0f172a" style={{ marginRight: 8 }} />
-                <Text style={styles.oauthTxt}>Apple</Text>
-              </TouchableOpacity>
-            </View>
+                {/* OAuth Buttons */}
+                <View style={styles.oauthRow}>
+                  <TouchableOpacity style={styles.oauthBtn} onPress={() => handleOAuth('google')} disabled={authenticating}>
+                    <Ionicons name="logo-google" size={18} color="#0f172a" style={{ marginRight: 8 }} />
+                    <Text style={styles.oauthTxt}>Google</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.oauthBtn} onPress={() => handleOAuth('apple')} disabled={authenticating}>
+                    <Ionicons name="logo-apple" size={18} color="#0f172a" style={{ marginRight: 8 }} />
+                    <Text style={styles.oauthTxt}>Apple</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            ) : null}
 
             <Text style={styles.legalTxt}>
               By continuing, you agree to our Terms of Service and Privacy Policy.

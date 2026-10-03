@@ -1,5 +1,8 @@
 import { backendDb } from './backendGateway';
 import { requireCurrentAuthenticatedUser } from '../config/currentUser';
+import { environment } from '../config/environment';
+import { apiClient } from '../config/apiClient';
+import { getApiAccessToken } from '../config/apiSession';
 
 export type ReportTargetType = 'post' | 'profile' | 'booking' | 'message';
 
@@ -13,6 +16,15 @@ export interface ReportPayload {
 /** Report a piece of content or a user to the admin team */
 export const reportContent = async (payload: ReportPayload): Promise<void> => {
   const user = await requireCurrentAuthenticatedUser();
+  if (environment.backendProvider === 'api') {
+    await apiClient.post('/moderation/reports', {
+      target_type: payload.targetType,
+      target_id: payload.targetId,
+      reason: payload.reason,
+      details: payload.details ?? '',
+    }, { token: await getApiAccessToken() });
+    return;
+  }
 
   const severity =
     /harass|abuse|threat|minor|violence|illegal/i.test(payload.reason) ? 4 :

@@ -1,17 +1,20 @@
-import React, { createContext, useCallback, useContext, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { backendDb, hasBackendProvider } from '../services/backendGateway';
-import { ConversationSummary, Message, AppUser } from '../types';
+import { ConversationSummary, Message } from '../types';
 import { logError } from '../utils/errors';
 import { startConversationViaEdge } from '../services/chatService';
-import { sendConversationLockedMediaMessage, sendConversationTextMessage } from '../services/chatMessageService';
+import { createClientMessageId, getConversationAttachmentUrl, MessageRow, MessageSendError, sendConversationLockedMediaMessage, sendConversationMediaMessage, sendConversationTextMessage } from '../services/chatMessageService';
+import { invokeBackendFunction } from '../config/backendFunctions';
 import { trackEvent } from '../services/analyticsService';
 import { useAuth } from './AuthContext';
 import { Analytics } from '../utils/analytics';
-import { BUCKETS } from '../config/environment';
+import { BUCKETS, environment } from '../config/environment';
 import { resolveStorageRef } from '../services/uploadService';
 
 export type Reaction = { emoji: string; count: number; myReaction: boolean };
 export type ReactionsMap = Record<string, Reaction[]>; // keyed by messageId
+
+type MediaMessagePayload = { mediaUrl: string; previewUrl?: string; text?: string; clientMessageId?: string };
 
 type MessagingContextValue = {
   conversations: ConversationSummary[];
@@ -22,6 +25,7 @@ type MessagingContextValue = {
   fetchConversations: () => Promise<void>;
   fetchMessages: (chatId: string) => Promise<void>;
   sendMessage: (chatId: string, text: string, replyToId?: string) => Promise<Message>;
+  sendMediaMessage: (chatId: string, payload: MediaMessagePayload) => Promise<Message>;
   sendLockedMediaMessage: (chatId: string, payload: { mediaUrl: string; previewUrl?: string; text?: string; unlockBookingId?: string; unlockPrice?: number; }) => Promise<Message>;
   unlockPremiumMessage: (chatId: string, messageId: string) => Promise<boolean>;
   startConversationWithUser: (participantId: string, title?: string) => Promise<{ id: string; title: string }>;
@@ -38,16 +42,55 @@ const MessagingContext = createContext<MessagingContextValue | undefined>(undefi
 
 const TIMEOUT_ERROR_MESSAGE = 'Request timed out.';
 const withTimeout = async <T,>(promiseLike: PromiseLike<T>, timeoutMs = 12000): Promise<T> => {
-  return await Promise.race<T>([
-    Promise.resolve(promiseLike),
-    new Promise<T>((_, reject) => setTimeout(() => reject(new Error(TIMEOUT_ERROR_MESSAGE)), timeoutMs)),
-  ]);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race<T>([
+      Promise.resolve(promiseLike),
+      new Promise<T>((_, reject) => { timer = setTimeout(() => reject(new Error(TIMEOUT_ERROR_MESSAGE)), timeoutMs); }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 };
 const isTimeoutError = (err: unknown) =>
   err && typeof err === 'object' && 'message' in err
     ? String((err as { message?: unknown }).message ?? '').includes(TIMEOUT_ERROR_MESSAGE)
     : false;
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+const chatCommand = async (chatId: string, action: string, payload: Record<string, unknown> = {}) => {
+  const { data, error } = await invokeBackendFunction('chat-messages', { ...payload, action, conversation_id: chatId });
+  if (error) throw new Error(error.message || 'Unable to update this conversation.');
+  return data;
+};
+
+const hydrateMessage = async (raw: any, chatId: string, userId: string): Promise<Message> => {
+  const attachment = async (field: 'media_url' | 'preview_url') => {
+    if (!raw[field]) return null;
+    try {
+      if (environment.backendProvider === 'api') {
+        return await getConversationAttachmentUrl({ conversationId: chatId, messageId: raw.id, field });
+      }
+      return await resolveStorageRef(raw[field], BUCKETS.previews);
+    } catch {
+      return null;
+    }
+  };
+  const [mediaUrl, previewUrl] = await Promise.all([attachment('media_url'), attachment('preview_url')]);
+  return {
+    id: raw.id, conversation_id: raw.conversation_id ?? raw.chat_id ?? chatId,
+    from_user: raw.sender_id === userId, body: raw.body ?? raw.text ?? '',
+    timestamp: raw.created_at ?? raw.timestamp, message_type: raw.message_type ?? 'text',
+    media_url: mediaUrl, preview_url: previewUrl, locked: raw.locked ?? false, unlocked: raw.unlocked ?? true,
+    unlock_booking_id: raw.unlock_booking_id ?? null, unlock_price: raw.unlock_price ?? null,
+    read_at: raw.read_at ?? null, reply_to_id: raw.reply_to_id ?? null, reply_preview: raw.reply_preview ?? null,
+    audio_url: raw.audio_url ?? null, audio_duration_seconds: raw.audio_duration_seconds ?? null,
+  };
+};
+
+const upsertMessage = (list: Message[], message: Message, optimisticId?: string) =>
+  [...list.filter(row => row.id !== message.id && row.id !== optimisticId), message]
+    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
 export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { currentUser } = useAuth();
@@ -57,6 +100,22 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [typingUsers, setTypingUsers] = useState<Record<string, string[]>>({});
   const [loading, setLoading] = useState(false);
   const typingTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const draftIds = useRef(new Map<string, string>());
+  const sendsInFlight = useRef(new Map<string, Promise<Message>>());
+  const activeUserId = useRef(currentUser?.id);
+  activeUserId.current = currentUser?.id;
+
+  useEffect(() => {
+    draftIds.current.clear();
+    sendsInFlight.current.clear();
+    setMessages({});
+    setConversations([]);
+    setReactions({});
+    setTypingUsers({});
+    return () => {
+      Object.values(typingTimers.current).forEach(clearTimeout);
+    };
+  }, [currentUser?.id]);
 
   const fetchConversations = useCallback(async (attempt = 0) => {
     if (!hasBackendProvider || !currentUser) {
@@ -107,7 +166,7 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         for (const row of allParticipants ?? []) {
           if (!participantsByConvo[row.conversation_id]) participantsByConvo[row.conversation_id] = [];
           participantsByConvo[row.conversation_id].push(row.user_id);
-          if (row.user_id === currentUser.id) return;
+          if (row.user_id === currentUser.id) continue;
           const profile = profilesMap[row.user_id];
           if (!profile) continue;
           const avatarRaw = profile.avatar_url ?? '';
@@ -147,7 +206,7 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       const deduped = mapped.filter((conversation, index, list) =>
         list.findIndex((item) => item.id === conversation.id) === index
       );
-      setConversations(deduped);
+      if (activeUserId.current === currentUser.id) setConversations(deduped);
     } catch (err) {
       if (isTimeoutError(err) && attempt < 1) {
         await sleep(600);
@@ -161,14 +220,23 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   const markMessagesRead = useCallback(async (chatId: string) => {
     if (!currentUser || !hasBackendProvider) return;
-    try {
-      await backendDb
+    let readAt = new Date().toISOString();
+    if (environment.backendProvider === 'api') {
+      const result = await chatCommand(chatId, 'read');
+      if (!result?.success) throw new Error('Unable to mark messages as read.');
+      readAt = result.read_at ?? readAt;
+    } else {
+      const { error } = await backendDb
         .from('messages')
-        .update({ read_at: new Date().toISOString() })
+        .update({ read_at: readAt })
         .eq('chat_id', chatId)
         .neq('sender_id', currentUser.id)
         .is('read_at', null);
-    } catch { /* silent */ }
+      if (error) throw error;
+    }
+    if (activeUserId.current !== currentUser.id) return;
+    setMessages(prev => ({ ...prev, [chatId]: (prev[chatId] ?? []).map(message =>
+      !message.from_user && !message.read_at ? { ...message, read_at: readAt } : message) }));
   }, [currentUser]);
 
   const broadcastTyping = useCallback((chatId: string) => {
@@ -185,37 +253,22 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }, 3000);
   }, [currentUser]);
 
-  const addReaction = useCallback(async (chatId: string, messageId: string, emoji: string) => {
-    if (!currentUser || !hasBackendProvider) return;
-    try {
-      await backendDb.from('message_reactions').insert({ message_id: messageId, user_id: currentUser.id, emoji });
-      await fetchReactions([messageId]);
-    } catch { /* likely duplicate — ignore */ }
-  }, [currentUser]);
-
-  const removeReaction = useCallback(async (chatId: string, messageId: string, emoji: string) => {
-    if (!currentUser || !hasBackendProvider) return;
-    try {
-      await backendDb.from('message_reactions')
-        .delete()
-        .eq('message_id', messageId)
-        .eq('user_id', currentUser.id)
-        .eq('emoji', emoji);
-      await fetchReactions([messageId]);
-    } catch { /* silent */ }
-  }, [currentUser]);
-
   const fetchReactions = useCallback(async (messageIds: string[]) => {
     if (!currentUser || !hasBackendProvider || messageIds.length === 0) return;
     try {
-      const { data } = await backendDb
+      const { data, error } = await backendDb
         .from('message_reactions')
         .select('message_id, emoji, user_id')
         .in('message_id', messageIds);
-      if (!data) return;
+      if (error) throw error;
+      if (!data || activeUserId.current !== currentUser.id) return;
       const grouped: ReactionsMap = {};
       messageIds.forEach(id => { grouped[id] = []; });
+      const seen = new Set<string>();
       data.forEach((row: any) => {
+        const key = JSON.stringify([row.message_id, row.user_id, row.emoji]);
+        if (seen.has(key)) return;
+        seen.add(key);
         const existing = grouped[row.message_id]?.find((r: Reaction) => r.emoji === row.emoji);
         if (existing) {
           existing.count++;
@@ -229,66 +282,76 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     } catch { /* silent */ }
   }, [currentUser]);
 
+  const addReaction = useCallback(async (chatId: string, messageId: string, emoji: string) => {
+    if (!currentUser || !hasBackendProvider) return;
+    if (environment.backendProvider === 'api') {
+      const result = await chatCommand(chatId, 'react', { message_id: messageId, operation: 'add', emoji });
+      if (!result?.success) throw new Error('Unable to add reaction.');
+    } else {
+      const { error } = await backendDb.from('message_reactions').insert({ message_id: messageId, user_id: currentUser.id, emoji });
+      if (error) throw error;
+    }
+    await fetchReactions([messageId]);
+  }, [currentUser, fetchReactions]);
+
+  const removeReaction = useCallback(async (chatId: string, messageId: string, emoji: string) => {
+    if (!currentUser || !hasBackendProvider) return;
+    if (environment.backendProvider === 'api') {
+      const result = await chatCommand(chatId, 'react', { message_id: messageId, operation: 'remove', emoji });
+      if (!result?.success) throw new Error('Unable to remove reaction.');
+    } else {
+      const { error } = await backendDb.from('message_reactions').delete()
+        .eq('message_id', messageId).eq('user_id', currentUser.id).eq('emoji', emoji);
+      if (error) throw error;
+    }
+    await fetchReactions([messageId]);
+  }, [currentUser, fetchReactions]);
+
   const deleteMessage = useCallback(async (chatId: string, messageId: string) => {
     if (!currentUser || !hasBackendProvider) return;
-    try {
-      await backendDb.from('messages').update({ deleted_at: new Date().toISOString(), body: 'Message deleted' }).eq('id', messageId).eq('sender_id', currentUser.id);
-      setMessages(prev => ({ ...prev, [chatId]: (prev[chatId] ?? []).filter(m => m.id !== messageId) }));
-    } catch { /* silent */ }
-  }, [currentUser]);
+    if (environment.backendProvider === 'api') {
+      const result = await chatCommand(chatId, 'delete', { message_id: messageId });
+      if (!result?.success) throw new Error('Unable to delete message.');
+    } else {
+      const { error } = await backendDb.from('messages').update({ deleted_at: new Date().toISOString() }).eq('id', messageId).eq('sender_id', currentUser.id);
+      if (error) throw error;
+    }
+    if (activeUserId.current !== currentUser.id) return;
+    setMessages(prev => ({ ...prev, [chatId]: (prev[chatId] ?? []).filter(m => m.id !== messageId) }));
+    setReactions(prev => { const next = { ...prev }; delete next[messageId]; return next; });
+    await fetchConversations();
+  }, [currentUser, fetchConversations]);
 
   const fetchMessages = useCallback(async (chatId: string) => {
-    if (!hasBackendProvider || !chatId) return;
+    if (!hasBackendProvider || !currentUser || !chatId) return;
     try {
-      // Direct DB query using the correct column name: chat_id
-      const { data, error } = await withTimeout<{ data: any[] | null; error: any }>(
+      let rows: any[];
+      if (environment.backendProvider === 'api') {
+        const result = await withTimeout(chatCommand(chatId, 'list'));
+        rows = result?.messages ?? [];
+      } else {
+        const { data, error } = await withTimeout<{ data: any[] | null; error: any }>(
         backendDb
           .from('messages')
           .select('id, chat_id, sender_id, body, message_type, media_url, preview_url, locked, unlocked, unlock_booking_id, unlock_price, created_at, read_at, reply_to_id, reply_preview, audio_url, audio_duration_seconds')
           .eq('chat_id', chatId)
           .is('deleted_at', null)
           .order('created_at', { ascending: true })
-      );
-
-      if (error) throw error;
-
-      const mapped = await Promise.all((data ?? []).map(async (m: any) => {
-        let mediaUrl = m.media_url ?? null;
-        let previewUrl = m.preview_url ?? null;
-        try {
-          mediaUrl = mediaUrl ? await resolveStorageRef(mediaUrl, BUCKETS.previews) : null;
-          previewUrl = previewUrl ? await resolveStorageRef(previewUrl, BUCKETS.previews) : null;
-        } catch {
-          // Non-fatal, keep raw refs
-        }
-        return {
-          id: m.id,
-          conversation_id: m.chat_id,
-          from_user: m.sender_id === currentUser?.id,
-          body: m.body ?? '',
-          timestamp: m.created_at,
-          message_type: m.message_type ?? 'text',
-          media_url: mediaUrl,
-          preview_url: previewUrl,
-          locked: m.locked ?? false,
-          unlocked: m.unlocked ?? true,
-          unlock_booking_id: m.unlock_booking_id ?? null,
-          unlock_price: m.unlock_price ?? m.unlockPrice ?? null,
-          read_at: m.read_at ?? null,
-          reply_to_id: m.reply_to_id ?? null,
-          reply_preview: m.reply_preview ?? null,
-          audio_url: m.audio_url ?? null,
-          audio_duration_seconds: m.audio_duration_seconds ?? null,
-        };
-      }));
+        );
+        if (error) throw error;
+        rows = data ?? [];
+      }
+      const mapped = await Promise.all(rows.map(row => hydrateMessage(row, chatId, currentUser.id)));
+      if (activeUserId.current !== currentUser.id) return;
       setMessages(prev => ({ ...prev, [chatId]: mapped }));
       // Fetch reactions for these messages
       const ids = mapped.map((m: any) => m.id);
       if (ids.length > 0) fetchReactions(ids);
     } catch (err) {
       logError('Messaging:fetchMessages', err);
+      throw err;
     }
-  }, [currentUser]);
+  }, [currentUser, fetchReactions]);
 
   const subscribeToMessages = useCallback((chatId: string) => {
     if (!hasBackendProvider || !currentUser) return () => {};
@@ -303,32 +366,8 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       }, async payload => {
         const raw = payload.new as any;
         if (raw.sender_id === currentUser.id) return;
-        let mediaUrl = raw.media_url ?? null;
-        let previewUrl = raw.preview_url ?? null;
-        try {
-          mediaUrl = mediaUrl ? await resolveStorageRef(mediaUrl, BUCKETS.previews) : null;
-          previewUrl = previewUrl ? await resolveStorageRef(previewUrl, BUCKETS.previews) : null;
-        } catch {
-          // Non-fatal, keep raw refs
-        }
-
-        const msg: Message = {
-          id: raw.id,
-          conversation_id: raw.chat_id,
-          from_user: false,
-          body: raw.body ?? '',
-          timestamp: raw.created_at ?? new Date().toISOString(),
-          message_type: raw.message_type ?? 'text',
-          media_url: mediaUrl,
-          preview_url: previewUrl,
-          locked: raw.locked ?? false,
-          unlocked: raw.unlocked ?? true,
-          unlock_booking_id: raw.unlock_booking_id ?? null,
-          unlock_price: raw.unlock_price ?? raw.unlockPrice ?? null,
-          read_at: null,
-          reply_to_id: raw.reply_to_id ?? null,
-          reply_preview: raw.reply_preview ?? null,
-        };
+        const msg = await hydrateMessage(raw, chatId, currentUser.id);
+        if (activeUserId.current !== currentUser.id) return;
 
         setMessages(prev => {
           const list = prev[chatId] ?? [];
@@ -337,7 +376,7 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         });
 
         // Auto-mark read when screen is open
-        markMessagesRead(chatId);
+        void markMessagesRead(chatId).catch(error => logError('Messaging:markRead', error));
       })
       // Typing presence
       .on('presence', { event: 'sync' }, () => {
@@ -353,68 +392,72 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     return () => { backendDb.removeChannel(channel); };
   }, [currentUser, markMessagesRead]);
 
-  const sendMessage = async (chatId: string, text: string, replyToId?: string): Promise<Message> => {
-    if (!currentUser || !hasBackendProvider) throw new Error('Auth required');
-    const trimmed = text.trim();
-    if (!trimmed) throw new Error('Message required');
-
-    // Optimistic local insert
-    const optimisticId = `opt-${Date.now()}`;
-    const optimistic: Message = {
-      id: optimisticId,
-      conversation_id: chatId,
-      from_user: true,
-      body: trimmed,
-      timestamp: new Date().toISOString(),
-      message_type: 'text',
-    };
-    setMessages(prev => ({ ...prev, [chatId]: [...(prev[chatId] ?? []), optimistic] }));
-
-    try {
-      const data = await sendConversationTextMessage({
-        conversationId: chatId,
-        text: trimmed,
-      });
-      Analytics.messageSent(chatId, false);
-
-      const confirmed: Message = {
-        id: data.id,
-        conversation_id: data.conversation_id,
-        from_user: true,
-        body: data.body ?? trimmed,
-        timestamp: data.timestamp,
-        message_type: 'text',
-      };
-
-      // Replace optimistic with confirmed
-      setMessages(prev => ({
-        ...prev,
-        [chatId]: (prev[chatId] ?? []).map(m => m.id === optimisticId ? confirmed : m),
-      }));
-
-      // Update conversation preview
-      await backendDb
-        .from('conversations')
-        .update({ last_message: trimmed, last_message_at: data.timestamp })
-        .eq('id', chatId);
-
-      trackEvent('message_sent', { conversation_id: chatId });
-      return confirmed;
-    } catch (err) {
-      // Remove optimistic message on error
-      setMessages(prev => ({
-        ...prev,
-        [chatId]: (prev[chatId] ?? []).filter(m => m.id !== optimisticId),
-      }));
-      logError('Messaging:sendMessage', err);
-      throw err;
+  const sendDraft = (
+    chatId: string, draftKey: string, body: string, media: boolean,
+    send: (clientMessageId: string) => Promise<MessageRow>, providedId?: string
+  ): Promise<Message> => {
+    if (!currentUser || !hasBackendProvider) return Promise.reject(new Error('Auth required'));
+    const inFlight = sendsInFlight.current.get(draftKey);
+    if (inFlight) return inFlight;
+    const clientMessageId = providedId ?? draftIds.current.get(draftKey) ?? createClientMessageId();
+    draftIds.current.set(draftKey, clientMessageId);
+    const optimisticId = `opt-${clientMessageId}`;
+    if (!media) {
+      const optimistic: Message = { id: optimisticId, conversation_id: chatId, from_user: true,
+        body, timestamp: new Date().toISOString(), message_type: 'text' };
+      setMessages(prev => ({ ...prev, [chatId]: upsertMessage(prev[chatId] ?? [], optimistic) }));
     }
+    const request = (async () => {
+      try {
+        const raw = await send(clientMessageId);
+        const confirmed = await hydrateMessage(raw, chatId, currentUser.id);
+        if (activeUserId.current === currentUser.id) {
+          draftIds.current.delete(draftKey);
+          setMessages(prev => ({ ...prev, [chatId]: upsertMessage(prev[chatId] ?? [], confirmed, optimisticId) }));
+          setConversations(prev => prev.map(conversation => conversation.id === chatId &&
+            (!conversation.last_message_at || new Date(conversation.last_message_at) <= new Date(confirmed.timestamp))
+            ? { ...conversation, last_message: confirmed.body || 'Attachment', last_message_at: confirmed.timestamp } : conversation));
+        }
+        void Promise.resolve().then(() => Analytics.messageSent(chatId, media)).catch(error => logError('Messaging:analytics', error));
+        void Promise.resolve().then(() => trackEvent('message_sent', { conversation_id: chatId, type: media ? 'media' : 'text' })).catch(error => logError('Messaging:analytics', error));
+        return confirmed;
+      } catch (err) {
+        const error = err instanceof MessageSendError ? err :
+          new MessageSendError(err instanceof Error ? err.message : 'Unable to send message.', clientMessageId);
+        if (activeUserId.current === currentUser.id) {
+          draftIds.current.set(draftKey, error.clientMessageId);
+          setMessages(prev => ({ ...prev, [chatId]: (prev[chatId] ?? []).filter(message => message.id !== optimisticId) }));
+        }
+        logError('Messaging:sendMessage', error);
+        throw error;
+      }
+    })().finally(() => {
+      if (sendsInFlight.current.get(draftKey) === request) sendsInFlight.current.delete(draftKey);
+    });
+    sendsInFlight.current.set(draftKey, request);
+    return request;
+  };
+
+  const sendMessage = (chatId: string, text: string, replyToId?: string): Promise<Message> => {
+    const trimmed = text.trim();
+    if (!trimmed) return Promise.reject(new Error('Message required'));
+    const draftKey = JSON.stringify([currentUser?.id, chatId, 'text', trimmed, replyToId ?? null]);
+    return sendDraft(chatId, draftKey, trimmed, false, clientMessageId =>
+      sendConversationTextMessage({ conversationId: chatId, text: trimmed, clientMessageId }));
+  };
+
+  const sendMediaMessage = (chatId: string, payload: MediaMessagePayload): Promise<Message> => {
+    const body = payload.text?.trim() ?? '';
+    const draftKey = JSON.stringify([currentUser?.id, chatId, 'media', payload.mediaUrl, payload.previewUrl ?? null, body]);
+    return sendDraft(chatId, draftKey, body, true, clientMessageId =>
+      sendConversationMediaMessage({ ...payload, conversationId: chatId, text: body, clientMessageId }), payload.clientMessageId);
   };
 
   const sendLockedMediaMessage = async (chatId: string, payload: {
     mediaUrl: string; previewUrl?: string; text?: string; unlockBookingId?: string; unlockPrice?: number;
   }): Promise<Message> => {
     if (!currentUser || !hasBackendProvider) throw new Error('Auth required');
+    if (environment.backendProvider === 'api') throw new Error('Paid message locking is not enabled.');
 
     const rawMessage = await sendConversationLockedMediaMessage({
       conversationId: chatId,
@@ -443,6 +486,7 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   const unlockPremiumMessage = async (chatId: string, messageId: string): Promise<boolean> => {
     if (!currentUser || !hasBackendProvider) throw new Error('Auth required');
+    if (environment.backendProvider === 'api') throw new Error('Paid message unlocking is not enabled.');
     const { unlockMessage } = require('../services/chatMessageService');
     const success = await unlockMessage({ conversationId: chatId, messageId });
     if (success) {
@@ -464,7 +508,7 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     const existing = conversations.find(c =>
       c.participants && c.participants.includes(participantId)
     );
-    if (existing) return { id: existing.id, title: existing.title ?? 'Conversation' };
+    if (existing && environment.backendProvider !== 'api') return { id: existing.id, title: existing.title ?? 'Conversation' };
 
     try {
       const result = await startConversationViaEdge({ participantId, title });
@@ -481,7 +525,7 @@ export const MessagingProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     <MessagingContext.Provider value={{
       conversations, messages, reactions, typingUsers, loading,
       fetchConversations, fetchMessages,
-      sendMessage, sendLockedMediaMessage, unlockPremiumMessage,
+      sendMessage, sendMediaMessage, sendLockedMediaMessage, unlockPremiumMessage,
       startConversationWithUser, subscribeToMessages,
       markMessagesRead, broadcastTyping,
       addReaction, removeReaction, fetchReactions,

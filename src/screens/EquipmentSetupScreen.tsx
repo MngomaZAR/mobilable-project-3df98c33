@@ -34,8 +34,9 @@ const EquipmentSetupScreen: React.FC = () => {
 
     void (async () => {
       try {
-        const { data } = await backendDb.from('photographer_equipment').select('*').eq('photographer_id', userId).single();
+        const { data, error } = await backendDb.from('photographer_equipment').select('*').eq('photographer_id', userId).maybeSingle();
         if (!active) return;
+        if (error) throw error;
         if (data) {
           setSelectedTier(data.tier_id ?? TIER_OPTIONS[1].id);
           setCameraBody(data.camera_body ?? '');
@@ -43,6 +44,8 @@ const EquipmentSetupScreen: React.FC = () => {
           setSelectedLighting(new Set(data.lighting ? [data.lighting] : []));
           setSelectedExtras(new Set(data.extras ?? []));
         }
+      } catch (error: any) {
+        if (active) Alert.alert('Equipment unavailable', error.message || 'Could not load your equipment.');
       } finally {
         if (active) setLoading(false);
       }
@@ -74,8 +77,7 @@ const EquipmentSetupScreen: React.FC = () => {
         updated_at: new Date().toISOString(),
       }, { onConflict: 'photographer_id' });
       if (error) throw error;
-      await backendDb.from('photographers').update({ tier_id: selectedTier }).eq('id', userId);
-      Alert.alert('Saved!', 'Your gear profile is visible to clients when booking.', [{ text: 'OK', onPress: () => navigation.goBack() }]);
+      Alert.alert('Saved', 'Your equipment profile has been saved.', [{ text: 'OK', onPress: () => navigation.goBack() }]);
     } catch (err: any) {
       Alert.alert('Error', err.message || 'Could not save. Try again.');
     } finally { setSaving(false); }

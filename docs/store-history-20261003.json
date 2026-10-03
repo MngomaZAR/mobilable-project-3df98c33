@@ -1,0 +1,2215 @@
+{
+  "checkedAt": "2026-10-03T21:48:44.189Z",
+  "scope": "Read-only EAS build/submission receipts and App Store Connect status; no build or submission triggered.",
+  "projectId": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+  "builds": [
+    {
+      "id": "920ce9c5-d40e-48b4-92a5-f1952b7727ed",
+      "platform": "ANDROID",
+      "status": "FINISHED",
+      "appVersion": "1.0.0",
+      "appBuildVersion": "13",
+      "gitCommitHash": "0fe95564e949d05a0ccd6227813326f9e2e2868c",
+      "buildProfile": "production",
+      "createdAt": "2026-09-23T14:04:35.766Z",
+      "completedAt": "2026-09-23T15:20:45.821Z",
+      "artifactAvailable": true
+    },
+    {
+      "id": "453b777d-465d-488d-9b08-859e77bd3c9f",
+      "platform": "IOS",
+      "status": "FINISHED",
+      "appVersion": "1.0.0",
+      "appBuildVersion": "38",
+      "gitCommitHash": "0f302a3dcfff8fd4ef3cf514347125b6d33bbdeb",
+      "buildProfile": "production-ios-local",
+      "createdAt": "2026-09-23T13:47:06.219Z",
+      "completedAt": "2026-09-23T13:53:21.206Z",
+      "artifactAvailable": true
+    },
+    {
+      "id": "e3a2334d-910e-45d1-97d3-44db5bcf1246",
+      "platform": "IOS",
+      "status": "ERRORED",
+      "gitCommitHash": "034ee419abfd64d48ad1d12e4d8b171973a1a7ad",
+      "buildProfile": "production",
+      "createdAt": "2026-09-22T11:24:13.030Z",
+      "completedAt": "2026-09-22T11:25:21.591Z",
+      "artifactAvailable": false
+    },
+    {
+      "id": "48644ee7-4841-4d30-b7e0-85fe7cb4c965",
+      "platform": "ANDROID",
+      "status": "FINISHED",
+      "appVersion": "1.0.0",
+      "appBuildVersion": "12",
+      "gitCommitHash": "034ee419abfd64d48ad1d12e4d8b171973a1a7ad",
+      "buildProfile": "production",
+      "createdAt": "2026-09-22T11:24:13.030Z",
+      "completedAt": "2026-09-22T11:43:44.969Z",
+      "artifactAvailable": true
+    },
+    {
+      "id": "beb1ced8-3ef6-45f1-b9b7-d0051127837c",
+      "platform": "IOS",
+      "status": "ERRORED",
+      "appVersion": "1.0.0",
+      "appBuildVersion": "13",
+      "gitCommitHash": "109aee7755dd20963a5a230266d41ccd27def3b7",
+      "buildProfile": "production-ios-local",
+      "createdAt": "2026-09-22T10:33:37.782Z",
+      "completedAt": "2026-09-22T10:34:41.586Z",
+      "artifactAvailable": false
+    },
+    {
+      "id": "df0f8c0f-9249-4a75-bc5a-47e724f54566",
+      "platform": "IOS",
+      "status": "ERRORED",
+      "appVersion": "1.0.0",
+      "appBuildVersion": "12",
+      "gitCommitHash": "109aee7755dd20963a5a230266d41ccd27def3b7",
+      "buildProfile": "production-ios-local",
+      "createdAt": "2026-09-22T10:28:31.906Z",
+      "completedAt": "2026-09-22T10:30:38.689Z",
+      "artifactAvailable": false
+    },
+    {
+      "id": "9db4e7fe-e456-4fb8-aaaa-36fcdfb2941b",
+      "platform": "IOS",
+      "status": "ERRORED",
+      "appVersion": "1.0.0",
+      "appBuildVersion": "11",
+      "gitCommitHash": "109aee7755dd20963a5a230266d41ccd27def3b7",
+      "buildProfile": "production-ios-local",
+      "createdAt": "2026-09-22T10:25:59.492Z",
+      "completedAt": "2026-09-22T10:27:52.736Z",
+      "artifactAvailable": false
+    },
+    {
+      "id": "717ceec4-96ee-462b-9976-4e49b545c617",
+      "platform": "IOS",
+      "status": "ERRORED",
+      "gitCommitHash": "ee0c8ae61a86477b65ad3502f2e10f57d48a0e7c",
+      "buildProfile": "production",
+      "createdAt": "2026-09-22T10:16:44.835Z",
+      "completedAt": "2026-09-22T10:18:05.228Z",
+      "artifactAvailable": false
+    },
+    {
+      "id": "18f1bc02-3d2d-4a20-95c1-e00da7d258c9",
+      "platform": "ANDROID",
+      "status": "FINISHED",
+      "appVersion": "1.0.0",
+      "appBuildVersion": "11",
+      "gitCommitHash": "ee0c8ae61a86477b65ad3502f2e10f57d48a0e7c",
+      "buildProfile": "production",
+      "createdAt": "2026-09-22T10:16:44.835Z",
+      "completedAt": "2026-09-22T10:34:34.103Z",
+      "artifactAvailable": true
+    },
+    {
+      "id": "862aaae6-561e-425f-bd40-0d1cca2d29e3",
+      "platform": "ANDROID",
+      "status": "ERRORED",
+      "gitCommitHash": "10be590b0d341bf8cea0d4635850c01c9c86af14",
+      "buildProfile": "production",
+      "createdAt": "2026-09-22T10:13:16.753Z",
+      "completedAt": "2026-09-22T10:14:54.400Z",
+      "artifactAvailable": false
+    },
+    {
+      "id": "72036777-8ed0-449c-ab81-feb15622d612",
+      "platform": "IOS",
+      "status": "ERRORED",
+      "gitCommitHash": "10be590b0d341bf8cea0d4635850c01c9c86af14",
+      "buildProfile": "production",
+      "createdAt": "2026-09-22T10:13:16.753Z",
+      "completedAt": "2026-09-22T10:14:26.138Z",
+      "artifactAvailable": false
+    },
+    {
+      "id": "094f0516-7679-483a-936e-03fbdbda711e",
+      "platform": "ANDROID",
+      "status": "FINISHED",
+      "appVersion": "1.0.0",
+      "appBuildVersion": "9",
+      "gitCommitHash": "5912c7b4c56399d56541e41c230bf45595fad4db",
+      "buildProfile": "production",
+      "createdAt": "2026-06-18T15:20:44.133Z",
+      "completedAt": "2026-06-18T16:45:32.746Z",
+      "artifactAvailable": true
+    },
+    {
+      "id": "5c9b4e7e-39f3-4f71-8937-ba2d9abd96b3",
+      "platform": "IOS",
+      "status": "FINISHED",
+      "appVersion": "1.0.0",
+      "appBuildVersion": "37",
+      "gitCommitHash": "5912c7b4c56399d56541e41c230bf45595fad4db",
+      "buildProfile": "production",
+      "createdAt": "2026-06-18T15:20:43.435Z",
+      "completedAt": "2026-06-18T15:32:03.597Z",
+      "artifactAvailable": true
+    },
+    {
+      "id": "9c50f5ee-8a95-4aaa-a5df-6e3ad460a816",
+      "platform": "IOS",
+      "status": "FINISHED",
+      "appVersion": "1.0.0",
+      "appBuildVersion": "36",
+      "gitCommitHash": "5912c7b4c56399d56541e41c230bf45595fad4db",
+      "buildProfile": "production",
+      "createdAt": "2026-06-18T15:19:40.475Z",
+      "completedAt": "2026-06-18T15:26:05.879Z",
+      "artifactAvailable": true
+    },
+    {
+      "id": "d0ac56be-7503-41fc-a13b-be87a2f9fdf8",
+      "platform": "IOS",
+      "status": "FINISHED",
+      "appVersion": "1.0.0",
+      "appBuildVersion": "35",
+      "gitCommitHash": "7ef037a8a34eddb4f09eec301840a5621bee0175",
+      "buildProfile": "production",
+      "createdAt": "2026-06-18T14:36:41.188Z",
+      "completedAt": "2026-06-18T14:42:51.671Z",
+      "artifactAvailable": true
+    },
+    {
+      "id": "6582b813-e4ad-49da-94b6-7a5993d8c88b",
+      "platform": "ANDROID",
+      "status": "FINISHED",
+      "appVersion": "1.0.0",
+      "appBuildVersion": "8",
+      "gitCommitHash": "8b999e8a75e4b8457dc0e5f5ba94b424da925db7",
+      "buildProfile": "production",
+      "createdAt": "2026-06-18T13:44:55.550Z",
+      "completedAt": "2026-06-18T14:44:08.461Z",
+      "artifactAvailable": true
+    },
+    {
+      "id": "e5531839-f95b-433f-bab4-4581a3d3d9c5",
+      "platform": "IOS",
+      "status": "FINISHED",
+      "appVersion": "1.0.0",
+      "appBuildVersion": "33",
+      "gitCommitHash": "8b999e8a75e4b8457dc0e5f5ba94b424da925db7",
+      "buildProfile": "production",
+      "createdAt": "2026-06-18T13:44:53.249Z",
+      "completedAt": "2026-06-18T13:57:05.660Z",
+      "artifactAvailable": true
+    },
+    {
+      "id": "468491a4-b6ec-40e1-b65b-c0ec437ae458",
+      "platform": "IOS",
+      "status": "FINISHED",
+      "appVersion": "1.0.0",
+      "appBuildVersion": "34",
+      "gitCommitHash": "8b999e8a75e4b8457dc0e5f5ba94b424da925db7",
+      "buildProfile": "production",
+      "createdAt": "2026-06-18T13:44:33.868Z",
+      "completedAt": "2026-06-18T13:51:02.836Z",
+      "artifactAvailable": true
+    },
+    {
+      "id": "85bb1b88-198c-4b20-a2f7-806e5283f1f0",
+      "platform": "ANDROID",
+      "status": "FINISHED",
+      "appVersion": "1.0.0",
+      "appBuildVersion": "7",
+      "gitCommitHash": "6ce660ccf36c03e1145e1bb07a4f17c364078b1f",
+      "buildProfile": "production",
+      "createdAt": "2026-06-18T13:00:29.097Z",
+      "completedAt": "2026-06-18T13:40:17.732Z",
+      "artifactAvailable": true
+    },
+    {
+      "id": "106d5010-4203-428f-b74a-29c1c3428eb1",
+      "platform": "IOS",
+      "status": "FINISHED",
+      "appVersion": "1.0.0",
+      "appBuildVersion": "32",
+      "gitCommitHash": "6ce660ccf36c03e1145e1bb07a4f17c364078b1f",
+      "buildProfile": "production",
+      "createdAt": "2026-06-18T10:07:45.505Z",
+      "completedAt": "2026-06-18T10:14:00.203Z",
+      "artifactAvailable": true
+    },
+    {
+      "id": "cbb962cb-9e4c-4a85-a18f-0d90c7c0683d",
+      "platform": "ANDROID",
+      "status": "FINISHED",
+      "appVersion": "1.0.0",
+      "appBuildVersion": "6",
+      "gitCommitHash": "e2b1b729452e151e3a657a1ceb9e5f9e8c15465a",
+      "buildProfile": "production",
+      "createdAt": "2026-06-17T18:49:56.980Z",
+      "completedAt": "2026-06-17T19:59:08.116Z",
+      "artifactAvailable": true
+    },
+    {
+      "id": "20eeb97a-4ff3-495a-b62e-00500541e58e",
+      "platform": "IOS",
+      "status": "FINISHED",
+      "appVersion": "1.0.0",
+      "appBuildVersion": "31",
+      "gitCommitHash": "e2b1b729452e151e3a657a1ceb9e5f9e8c15465a",
+      "buildProfile": "production",
+      "createdAt": "2026-06-17T18:25:21.605Z",
+      "completedAt": "2026-06-17T18:35:18.797Z",
+      "artifactAvailable": true
+    },
+    {
+      "id": "3ce796cf-1167-4a26-913e-0999921a4b24",
+      "platform": "IOS",
+      "status": "FINISHED",
+      "appVersion": "1.0.0",
+      "appBuildVersion": "30",
+      "gitCommitHash": "e2b1b729452e151e3a657a1ceb9e5f9e8c15465a",
+      "buildProfile": "production",
+      "createdAt": "2026-06-17T18:23:16.255Z",
+      "completedAt": "2026-06-17T18:29:05.287Z",
+      "artifactAvailable": true
+    },
+    {
+      "id": "b81583f2-c1ab-44b5-8ea8-10883c464649",
+      "platform": "IOS",
+      "status": "FINISHED",
+      "appVersion": "1.0.0",
+      "appBuildVersion": "29",
+      "gitCommitHash": "cd4c27423bcc59fc675fe7412c074489011630fb",
+      "buildProfile": "production",
+      "createdAt": "2026-06-17T14:12:48.428Z",
+      "completedAt": "2026-06-17T14:23:42.879Z",
+      "artifactAvailable": true
+    },
+    {
+      "id": "48b1b526-a1d9-4dba-8520-29f7647a227f",
+      "platform": "IOS",
+      "status": "FINISHED",
+      "appVersion": "1.0.0",
+      "appBuildVersion": "28",
+      "gitCommitHash": "cd4c27423bcc59fc675fe7412c074489011630fb",
+      "buildProfile": "production",
+      "createdAt": "2026-06-17T14:10:19.460Z",
+      "completedAt": "2026-06-17T14:16:50.592Z",
+      "artifactAvailable": true
+    },
+    {
+      "id": "a913cd86-f4db-42f8-b252-6c7971edceea",
+      "platform": "IOS",
+      "status": "FINISHED",
+      "appVersion": "1.0.0",
+      "appBuildVersion": "27",
+      "gitCommitHash": "55e28298ecf400e92ac736bb4803e6a8ca0d3ab6",
+      "buildProfile": "production",
+      "createdAt": "2026-06-17T11:00:06.816Z",
+      "completedAt": "2026-06-17T11:10:26.838Z",
+      "artifactAvailable": true
+    },
+    {
+      "id": "9ca4eca2-31a2-4272-bbc9-2cf64e2399af",
+      "platform": "IOS",
+      "status": "FINISHED",
+      "appVersion": "1.0.0",
+      "appBuildVersion": "26",
+      "gitCommitHash": "55e28298ecf400e92ac736bb4803e6a8ca0d3ab6",
+      "buildProfile": "production",
+      "createdAt": "2026-06-17T10:58:09.181Z",
+      "completedAt": "2026-06-17T11:04:39.976Z",
+      "artifactAvailable": true
+    },
+    {
+      "id": "c80f2b93-8b0f-4a59-9f01-d3bc47ba72ff",
+      "platform": "IOS",
+      "status": "FINISHED",
+      "appVersion": "1.0.0",
+      "appBuildVersion": "25",
+      "gitCommitHash": "12b238853cb9b9a77293d876fe07330164e2c8e5",
+      "buildProfile": "production",
+      "createdAt": "2026-06-17T05:18:02.188Z",
+      "completedAt": "2026-06-17T05:23:54.870Z",
+      "artifactAvailable": true
+    },
+    {
+      "id": "d68de199-8ad4-48f5-8638-67716efe58a5",
+      "platform": "IOS",
+      "status": "FINISHED",
+      "appVersion": "1.0.0",
+      "appBuildVersion": "24",
+      "gitCommitHash": "c7e74463ac2bed873f72f9107b95f8dacc04ec31",
+      "buildProfile": "production",
+      "createdAt": "2026-06-17T04:51:58.191Z",
+      "completedAt": "2026-06-17T04:58:23.440Z",
+      "artifactAvailable": true
+    },
+    {
+      "id": "3a090861-2272-4fdc-9eb8-48b0cd59bb91",
+      "platform": "IOS",
+      "status": "ERRORED",
+      "buildProfile": "production",
+      "createdAt": "2026-06-17T00:36:04.361Z",
+      "completedAt": "2026-06-17T00:37:43.426Z",
+      "artifactAvailable": false
+    }
+  ],
+  "submissions": [
+    {
+      "id": "ee8e12fd-14d6-4f43-8a98-a84335ff6d89",
+      "status": "ERRORED",
+      "platform": "ANDROID",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "androidConfig": {
+        "track": "internal",
+        "releaseStatus": "DRAFT"
+      },
+      "error": {
+        "errorCode": "SUBMISSION_SERVICE_ANDROID_UNKNOWN_ERROR"
+      },
+      "createdAt": "2026-09-23T20:24:02.012Z",
+      "completedAt": "2026-09-23T20:25:24.803Z",
+      "submittedBuild": {
+        "id": "920ce9c5-d40e-48b4-92a5-f1952b7727ed",
+        "status": "FINISHED",
+        "platform": "ANDROID",
+        "fingerprint": {
+          "id": "01a0ce95-2468-7b78-8d2d-c07cba66f86e"
+        },
+        "initiatingActor": {
+          "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+        },
+        "app": {
+          "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+          "name": "papzi",
+          "ownerAccount": {
+            "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+            "name": "papz"
+          }
+        },
+        "updateChannel": {
+          "id": "019ce6c2-156c-7def-93d0-581169533c5d",
+          "name": "production"
+        },
+        "buildProfile": "production",
+        "appVersion": "1.0.0",
+        "appBuildVersion": "13",
+        "gitCommitHash": "0fe95564e949d05a0ccd6227813326f9e2e2868c",
+        "createdAt": "2026-09-23T14:04:35.766Z",
+        "updatedAt": "2026-09-23T15:20:46.026Z",
+        "completedAt": "2026-09-23T15:20:45.821Z"
+      }
+    },
+    {
+      "id": "094be3d5-a1f5-4530-a585-b6bc265bd759",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      },
+      "createdAt": "2026-09-23T19:35:30.603Z",
+      "completedAt": "2026-09-23T20:35:03.940Z",
+      "submittedBuild": {
+        "id": "453b777d-465d-488d-9b08-859e77bd3c9f",
+        "status": "FINISHED",
+        "platform": "IOS",
+        "fingerprint": {
+          "id": "01a0ce85-20a6-7848-a3b3-7effbcb9c4d2"
+        },
+        "initiatingActor": {
+          "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+        },
+        "app": {
+          "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+          "name": "papzi",
+          "ownerAccount": {
+            "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+            "name": "papz"
+          }
+        },
+        "updateChannel": {
+          "id": "019ce6c2-156c-7def-93d0-581169533c5d",
+          "name": "production"
+        },
+        "buildProfile": "production-ios-local",
+        "appVersion": "1.0.0",
+        "appBuildVersion": "38",
+        "gitCommitHash": "0f302a3dcfff8fd4ef3cf514347125b6d33bbdeb",
+        "createdAt": "2026-09-23T13:47:06.219Z",
+        "updatedAt": "2026-09-23T13:53:21.556Z",
+        "completedAt": "2026-09-23T13:53:21.206Z"
+      }
+    },
+    {
+      "id": "5f78f0a2-f3d3-4dc9-a9a7-f5ab45a2f391",
+      "status": "ERRORED",
+      "platform": "ANDROID",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "androidConfig": {
+        "track": "internal",
+        "releaseStatus": "DRAFT"
+      },
+      "error": {
+        "errorCode": "SUBMISSION_SERVICE_ANDROID_UNKNOWN_ERROR"
+      },
+      "createdAt": "2026-09-23T19:21:35.315Z",
+      "completedAt": "2026-09-23T19:23:23.440Z",
+      "submittedBuild": {
+        "id": "920ce9c5-d40e-48b4-92a5-f1952b7727ed",
+        "status": "FINISHED",
+        "platform": "ANDROID",
+        "fingerprint": {
+          "id": "01a0ce95-2468-7b78-8d2d-c07cba66f86e"
+        },
+        "initiatingActor": {
+          "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+        },
+        "app": {
+          "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+          "name": "papzi",
+          "ownerAccount": {
+            "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+            "name": "papz"
+          }
+        },
+        "updateChannel": {
+          "id": "019ce6c2-156c-7def-93d0-581169533c5d",
+          "name": "production"
+        },
+        "buildProfile": "production",
+        "appVersion": "1.0.0",
+        "appBuildVersion": "13",
+        "gitCommitHash": "0fe95564e949d05a0ccd6227813326f9e2e2868c",
+        "createdAt": "2026-09-23T14:04:35.766Z",
+        "updatedAt": "2026-09-23T15:20:46.026Z",
+        "completedAt": "2026-09-23T15:20:45.821Z"
+      }
+    },
+    {
+      "id": "fea42e52-de19-4638-a541-148356af5fe2",
+      "status": "ERRORED",
+      "platform": "ANDROID",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "androidConfig": {
+        "track": "internal",
+        "releaseStatus": "DRAFT"
+      },
+      "error": {
+        "errorCode": "SUBMISSION_SERVICE_ANDROID_UNKNOWN_ERROR"
+      },
+      "createdAt": "2026-09-22T10:54:47.244Z",
+      "completedAt": "2026-09-22T10:56:17.218Z",
+      "submittedBuild": {
+        "id": "18f1bc02-3d2d-4a20-95c1-e00da7d258c9",
+        "status": "FINISHED",
+        "platform": "ANDROID",
+        "fingerprint": {
+          "id": "01a0c8a0-1db9-7ca9-99b1-dd0b7ae642a6"
+        },
+        "initiatingActor": {
+          "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+        },
+        "app": {
+          "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+          "name": "papzi",
+          "ownerAccount": {
+            "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+            "name": "papz"
+          }
+        },
+        "updateChannel": {
+          "id": "019ce6c2-156c-7def-93d0-581169533c5d",
+          "name": "production"
+        },
+        "buildProfile": "production",
+        "appVersion": "1.0.0",
+        "appBuildVersion": "11",
+        "gitCommitHash": "ee0c8ae61a86477b65ad3502f2e10f57d48a0e7c",
+        "createdAt": "2026-09-22T10:16:44.835Z",
+        "updatedAt": "2026-09-22T10:34:34.311Z",
+        "completedAt": "2026-09-22T10:34:34.103Z"
+      }
+    },
+    {
+      "id": "2f0adac6-6062-473a-8211-84d04b60ae69",
+      "status": "ERRORED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      },
+      "createdAt": "2026-06-18T15:34:15.431Z",
+      "submittedBuild": {
+        "id": "5c9b4e7e-39f3-4f71-8937-ba2d9abd96b3",
+        "status": "FINISHED",
+        "platform": "IOS",
+        "fingerprint": {
+          "id": "019edb51-fac9-7346-9511-987fd640cb35"
+        },
+        "initiatingActor": {
+          "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+        },
+        "app": {
+          "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+          "name": "papzi",
+          "ownerAccount": {
+            "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+            "name": "papz"
+          }
+        },
+        "updateChannel": {
+          "id": "019ce6c2-156c-7def-93d0-581169533c5d",
+          "name": "production"
+        },
+        "buildProfile": "production",
+        "appVersion": "1.0.0",
+        "appBuildVersion": "37",
+        "gitCommitHash": "5912c7b4c56399d56541e41c230bf45595fad4db",
+        "createdAt": "2026-06-18T15:20:43.435Z",
+        "updatedAt": "2026-06-18T19:00:48.665Z",
+        "completedAt": "2026-06-18T15:32:03.597Z"
+      }
+    },
+    {
+      "id": "bff50394-65a5-482a-8a9c-6494da037697",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      },
+      "createdAt": "2026-06-18T15:20:45.871Z",
+      "completedAt": "2026-06-18T15:33:41.615Z",
+      "submittedBuild": {
+        "id": "5c9b4e7e-39f3-4f71-8937-ba2d9abd96b3",
+        "status": "FINISHED",
+        "platform": "IOS",
+        "fingerprint": {
+          "id": "019edb51-fac9-7346-9511-987fd640cb35"
+        },
+        "initiatingActor": {
+          "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+        },
+        "app": {
+          "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+          "name": "papzi",
+          "ownerAccount": {
+            "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+            "name": "papz"
+          }
+        },
+        "updateChannel": {
+          "id": "019ce6c2-156c-7def-93d0-581169533c5d",
+          "name": "production"
+        },
+        "buildProfile": "production",
+        "appVersion": "1.0.0",
+        "appBuildVersion": "37",
+        "gitCommitHash": "5912c7b4c56399d56541e41c230bf45595fad4db",
+        "createdAt": "2026-06-18T15:20:43.435Z",
+        "updatedAt": "2026-06-18T19:00:48.665Z",
+        "completedAt": "2026-06-18T15:32:03.597Z"
+      }
+    },
+    {
+      "id": "cbc06ad9-c2c9-4824-822d-fc0753fe14e6",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      },
+      "createdAt": "2026-06-18T15:19:40.972Z",
+      "completedAt": "2026-06-18T15:28:02.860Z",
+      "submittedBuild": {
+        "id": "9c50f5ee-8a95-4aaa-a5df-6e3ad460a816",
+        "status": "FINISHED",
+        "platform": "IOS",
+        "fingerprint": {
+          "id": "019edb29-a9c0-7fb2-9edb-f09139d49e5f"
+        },
+        "initiatingActor": {
+          "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+        },
+        "app": {
+          "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+          "name": "papzi",
+          "ownerAccount": {
+            "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+            "name": "papz"
+          }
+        },
+        "updateChannel": {
+          "id": "019ce6c2-156c-7def-93d0-581169533c5d",
+          "name": "production"
+        },
+        "buildProfile": "production",
+        "appVersion": "1.0.0",
+        "appBuildVersion": "36",
+        "gitCommitHash": "5912c7b4c56399d56541e41c230bf45595fad4db",
+        "createdAt": "2026-06-18T15:19:40.475Z",
+        "updatedAt": "2026-06-18T19:00:39.935Z",
+        "completedAt": "2026-06-18T15:26:05.879Z"
+      }
+    },
+    {
+      "id": "8dbf4186-5573-48fa-97f9-bb8b8614b054",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      },
+      "createdAt": "2026-06-18T14:36:42.054Z",
+      "completedAt": "2026-06-18T14:55:41.035Z",
+      "submittedBuild": {
+        "id": "d0ac56be-7503-41fc-a13b-be87a2f9fdf8",
+        "status": "FINISHED",
+        "platform": "IOS",
+        "fingerprint": {
+          "id": "019edb29-a9c0-7fb2-9edb-f09139d49e5f"
+        },
+        "initiatingActor": {
+          "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+        },
+        "app": {
+          "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+          "name": "papzi",
+          "ownerAccount": {
+            "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+            "name": "papz"
+          }
+        },
+        "updateChannel": {
+          "id": "019ce6c2-156c-7def-93d0-581169533c5d",
+          "name": "production"
+        },
+        "buildProfile": "production",
+        "appVersion": "1.0.0",
+        "appBuildVersion": "35",
+        "gitCommitHash": "7ef037a8a34eddb4f09eec301840a5621bee0175",
+        "createdAt": "2026-06-18T14:36:41.188Z",
+        "updatedAt": "2026-06-18T18:01:09.714Z",
+        "completedAt": "2026-06-18T14:42:51.671Z"
+      }
+    },
+    {
+      "id": "7dd77c4a-45e2-4d16-8018-c50f30ef89a3",
+      "status": "ERRORED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      },
+      "createdAt": "2026-06-18T13:54:23.109Z",
+      "submittedBuild": {
+        "id": "468491a4-b6ec-40e1-b65b-c0ec437ae458",
+        "status": "FINISHED",
+        "platform": "IOS",
+        "fingerprint": {
+          "id": "019ed6d2-bf67-7b1e-8a08-158fcfe9e7c2"
+        },
+        "initiatingActor": {
+          "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+        },
+        "app": {
+          "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+          "name": "papzi",
+          "ownerAccount": {
+            "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+            "name": "papz"
+          }
+        },
+        "updateChannel": {
+          "id": "019ce6c2-156c-7def-93d0-581169533c5d",
+          "name": "production"
+        },
+        "buildProfile": "production",
+        "appVersion": "1.0.0",
+        "appBuildVersion": "34",
+        "gitCommitHash": "8b999e8a75e4b8457dc0e5f5ba94b424da925db7",
+        "createdAt": "2026-06-18T13:44:33.868Z",
+        "updatedAt": "2026-06-18T17:01:27.081Z",
+        "completedAt": "2026-06-18T13:51:02.836Z"
+      }
+    },
+    {
+      "id": "286d10e6-e676-41c1-9149-efb1a7383a79",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      },
+      "createdAt": "2026-06-18T13:44:55.590Z",
+      "completedAt": "2026-06-18T13:59:04.223Z",
+      "submittedBuild": {
+        "id": "e5531839-f95b-433f-bab4-4581a3d3d9c5",
+        "status": "FINISHED",
+        "platform": "IOS",
+        "fingerprint": {
+          "id": "019ed6d4-a8e6-7d56-b580-98133f00baea"
+        },
+        "initiatingActor": {
+          "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+        },
+        "app": {
+          "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+          "name": "papzi",
+          "ownerAccount": {
+            "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+            "name": "papz"
+          }
+        },
+        "updateChannel": {
+          "id": "019ce6c2-156c-7def-93d0-581169533c5d",
+          "name": "production"
+        },
+        "buildProfile": "production",
+        "appVersion": "1.0.0",
+        "appBuildVersion": "33",
+        "gitCommitHash": "8b999e8a75e4b8457dc0e5f5ba94b424da925db7",
+        "createdAt": "2026-06-18T13:44:53.249Z",
+        "updatedAt": "2026-06-18T17:01:37.098Z",
+        "completedAt": "2026-06-18T13:57:05.660Z"
+      }
+    },
+    {
+      "id": "3cdd9b2b-b0f6-483f-80db-33555a8b6f2a",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      },
+      "createdAt": "2026-06-18T13:44:34.580Z",
+      "completedAt": "2026-06-18T13:52:38.840Z",
+      "submittedBuild": {
+        "id": "468491a4-b6ec-40e1-b65b-c0ec437ae458",
+        "status": "FINISHED",
+        "platform": "IOS",
+        "fingerprint": {
+          "id": "019ed6d2-bf67-7b1e-8a08-158fcfe9e7c2"
+        },
+        "initiatingActor": {
+          "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+        },
+        "app": {
+          "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+          "name": "papzi",
+          "ownerAccount": {
+            "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+            "name": "papz"
+          }
+        },
+        "updateChannel": {
+          "id": "019ce6c2-156c-7def-93d0-581169533c5d",
+          "name": "production"
+        },
+        "buildProfile": "production",
+        "appVersion": "1.0.0",
+        "appBuildVersion": "34",
+        "gitCommitHash": "8b999e8a75e4b8457dc0e5f5ba94b424da925db7",
+        "createdAt": "2026-06-18T13:44:33.868Z",
+        "updatedAt": "2026-06-18T17:01:27.081Z",
+        "completedAt": "2026-06-18T13:51:02.836Z"
+      }
+    },
+    {
+      "id": "e199d146-accb-4a91-82f6-b86806822f83",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      },
+      "createdAt": "2026-06-18T10:07:46.154Z",
+      "completedAt": "2026-06-18T10:15:51.796Z",
+      "submittedBuild": {
+        "id": "106d5010-4203-428f-b74a-29c1c3428eb1",
+        "status": "FINISHED",
+        "platform": "IOS",
+        "fingerprint": {
+          "id": "019ed6d2-bf67-7b1e-8a08-158fcfe9e7c2"
+        },
+        "initiatingActor": {
+          "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+        },
+        "app": {
+          "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+          "name": "papzi",
+          "ownerAccount": {
+            "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+            "name": "papz"
+          }
+        },
+        "updateChannel": {
+          "id": "019ce6c2-156c-7def-93d0-581169533c5d",
+          "name": "production"
+        },
+        "buildProfile": "production",
+        "appVersion": "1.0.0",
+        "appBuildVersion": "32",
+        "gitCommitHash": "6ce660ccf36c03e1145e1bb07a4f17c364078b1f",
+        "createdAt": "2026-06-18T10:07:45.505Z",
+        "updatedAt": "2026-06-18T14:00:22.467Z",
+        "completedAt": "2026-06-18T10:14:00.203Z"
+      }
+    },
+    {
+      "id": "e269861b-c8f1-4917-8f1f-96acd36929ae",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      },
+      "createdAt": "2026-06-17T18:25:24.304Z",
+      "completedAt": "2026-06-17T18:40:54.592Z",
+      "submittedBuild": {
+        "id": "20eeb97a-4ff3-495a-b62e-00500541e58e",
+        "status": "FINISHED",
+        "platform": "IOS",
+        "fingerprint": {
+          "id": "019ed6d4-a8e6-7d56-b580-98133f00baea"
+        },
+        "initiatingActor": {
+          "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+        },
+        "app": {
+          "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+          "name": "papzi",
+          "ownerAccount": {
+            "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+            "name": "papz"
+          }
+        },
+        "updateChannel": {
+          "id": "019ce6c2-156c-7def-93d0-581169533c5d",
+          "name": "production"
+        },
+        "buildProfile": "production",
+        "appVersion": "1.0.0",
+        "appBuildVersion": "31",
+        "gitCommitHash": "e2b1b729452e151e3a657a1ceb9e5f9e8c15465a",
+        "createdAt": "2026-06-17T18:25:21.605Z",
+        "updatedAt": "2026-06-17T22:01:00.699Z",
+        "completedAt": "2026-06-17T18:35:18.797Z"
+      }
+    },
+    {
+      "id": "4adf6a0c-3af0-43c7-a714-05c6c7e10f4b",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      },
+      "createdAt": "2026-06-17T18:23:17.016Z",
+      "completedAt": "2026-06-17T18:31:10.658Z",
+      "submittedBuild": {
+        "id": "3ce796cf-1167-4a26-913e-0999921a4b24",
+        "status": "FINISHED",
+        "platform": "IOS",
+        "fingerprint": {
+          "id": "019ed6d2-bf67-7b1e-8a08-158fcfe9e7c2"
+        },
+        "initiatingActor": {
+          "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+        },
+        "app": {
+          "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+          "name": "papzi",
+          "ownerAccount": {
+            "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+            "name": "papz"
+          }
+        },
+        "updateChannel": {
+          "id": "019ce6c2-156c-7def-93d0-581169533c5d",
+          "name": "production"
+        },
+        "buildProfile": "production",
+        "appVersion": "1.0.0",
+        "appBuildVersion": "30",
+        "gitCommitHash": "e2b1b729452e151e3a657a1ceb9e5f9e8c15465a",
+        "createdAt": "2026-06-17T18:23:16.255Z",
+        "updatedAt": "2026-06-17T22:00:52.168Z",
+        "completedAt": "2026-06-17T18:29:05.287Z"
+      }
+    },
+    {
+      "id": "b53fa0cb-9396-46ad-8886-5a40d0693907",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      },
+      "createdAt": "2026-06-17T14:12:50.046Z",
+      "completedAt": "2026-06-17T14:25:30.721Z",
+      "submittedBuild": {
+        "id": "b81583f2-c1ab-44b5-8ea8-10883c464649",
+        "status": "FINISHED",
+        "platform": "IOS",
+        "fingerprint": {
+          "id": "019ed5ed-70c8-748a-ac71-b89e684b7362"
+        },
+        "initiatingActor": {
+          "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+        },
+        "app": {
+          "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+          "name": "papzi",
+          "ownerAccount": {
+            "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+            "name": "papz"
+          }
+        },
+        "updateChannel": {
+          "id": "019ce6c2-156c-7def-93d0-581169533c5d",
+          "name": "production"
+        },
+        "buildProfile": "production",
+        "appVersion": "1.0.0",
+        "appBuildVersion": "29",
+        "gitCommitHash": "cd4c27423bcc59fc675fe7412c074489011630fb",
+        "createdAt": "2026-06-17T14:12:48.428Z",
+        "updatedAt": "2026-06-17T18:00:35.707Z",
+        "completedAt": "2026-06-17T14:23:42.879Z"
+      }
+    },
+    {
+      "id": "6589918f-b95c-4159-b489-40acdaed3a67",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      },
+      "createdAt": "2026-06-17T14:10:22.094Z",
+      "completedAt": "2026-06-17T14:19:35.127Z",
+      "submittedBuild": {
+        "id": "48b1b526-a1d9-4dba-8520-29f7647a227f",
+        "status": "FINISHED",
+        "platform": "IOS",
+        "fingerprint": {
+          "id": "019ed5eb-2b04-742c-81dd-76887e182c47"
+        },
+        "initiatingActor": {
+          "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+        },
+        "app": {
+          "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+          "name": "papzi",
+          "ownerAccount": {
+            "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+            "name": "papz"
+          }
+        },
+        "updateChannel": {
+          "id": "019ce6c2-156c-7def-93d0-581169533c5d",
+          "name": "production"
+        },
+        "buildProfile": "production",
+        "appVersion": "1.0.0",
+        "appBuildVersion": "28",
+        "gitCommitHash": "cd4c27423bcc59fc675fe7412c074489011630fb",
+        "createdAt": "2026-06-17T14:10:19.460Z",
+        "updatedAt": "2026-06-17T18:00:25.116Z",
+        "completedAt": "2026-06-17T14:16:50.592Z"
+      }
+    },
+    {
+      "id": "ec43b3e1-7aee-48d5-bedc-caa768b60390",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      },
+      "createdAt": "2026-06-17T11:00:09.290Z",
+      "completedAt": "2026-06-17T11:12:15.966Z",
+      "submittedBuild": {
+        "id": "a913cd86-f4db-42f8-b252-6c7971edceea",
+        "status": "FINISHED",
+        "platform": "IOS",
+        "fingerprint": {
+          "id": "019ed53d-0661-716a-ab0e-79ccb38a0988"
+        },
+        "initiatingActor": {
+          "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+        },
+        "app": {
+          "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+          "name": "papzi",
+          "ownerAccount": {
+            "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+            "name": "papz"
+          }
+        },
+        "updateChannel": {
+          "id": "019ce6c2-156c-7def-93d0-581169533c5d",
+          "name": "production"
+        },
+        "buildProfile": "production",
+        "appVersion": "1.0.0",
+        "appBuildVersion": "27",
+        "gitCommitHash": "55e28298ecf400e92ac736bb4803e6a8ca0d3ab6",
+        "createdAt": "2026-06-17T11:00:06.816Z",
+        "updatedAt": "2026-06-17T15:00:14.762Z",
+        "completedAt": "2026-06-17T11:10:26.838Z"
+      }
+    },
+    {
+      "id": "851b0c98-39c2-4c41-b97f-1c3c5eefd05f",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      },
+      "createdAt": "2026-06-17T10:58:10.211Z",
+      "completedAt": "2026-06-17T11:07:04.235Z",
+      "submittedBuild": {
+        "id": "9ca4eca2-31a2-4272-bbc9-2cf64e2399af",
+        "status": "FINISHED",
+        "platform": "IOS",
+        "fingerprint": {
+          "id": "019ed53b-3ad0-744f-beac-6e712c425267"
+        },
+        "initiatingActor": {
+          "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+        },
+        "app": {
+          "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+          "name": "papzi",
+          "ownerAccount": {
+            "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+            "name": "papz"
+          }
+        },
+        "updateChannel": {
+          "id": "019ce6c2-156c-7def-93d0-581169533c5d",
+          "name": "production"
+        },
+        "buildProfile": "production",
+        "appVersion": "1.0.0",
+        "appBuildVersion": "26",
+        "gitCommitHash": "55e28298ecf400e92ac736bb4803e6a8ca0d3ab6",
+        "createdAt": "2026-06-17T10:58:09.181Z",
+        "updatedAt": "2026-06-17T15:00:05.808Z",
+        "completedAt": "2026-06-17T11:04:39.976Z"
+      }
+    },
+    {
+      "id": "468c78aa-8415-4685-8478-e19f1b35cff4",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      },
+      "createdAt": "2026-06-17T05:18:02.703Z",
+      "completedAt": "2026-06-17T05:25:33.656Z",
+      "submittedBuild": {
+        "id": "c80f2b93-8b0f-4a59-9f01-d3bc47ba72ff",
+        "status": "FINISHED",
+        "platform": "IOS",
+        "fingerprint": {
+          "id": "019ed403-d7ee-7a44-b813-2d56dcc1e4a9"
+        },
+        "initiatingActor": {
+          "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+        },
+        "app": {
+          "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+          "name": "papzi",
+          "ownerAccount": {
+            "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+            "name": "papz"
+          }
+        },
+        "updateChannel": {
+          "id": "019ce6c2-156c-7def-93d0-581169533c5d",
+          "name": "production"
+        },
+        "buildProfile": "production",
+        "appVersion": "1.0.0",
+        "appBuildVersion": "25",
+        "gitCommitHash": "12b238853cb9b9a77293d876fe07330164e2c8e5",
+        "createdAt": "2026-06-17T05:18:02.188Z",
+        "updatedAt": "2026-06-17T09:00:25.169Z",
+        "completedAt": "2026-06-17T05:23:54.870Z"
+      }
+    },
+    {
+      "id": "3f6dd255-2137-4d83-b92e-9d11f070c3e6",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      },
+      "createdAt": "2026-06-17T04:52:00.618Z",
+      "completedAt": "2026-06-17T05:00:03.405Z",
+      "submittedBuild": {
+        "id": "d68de199-8ad4-48f5-8638-67716efe58a5",
+        "status": "FINISHED",
+        "platform": "IOS",
+        "fingerprint": {
+          "id": "019ed3eb-fa8b-7970-b837-7b47e3e8a4f1"
+        },
+        "initiatingActor": {
+          "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+        },
+        "app": {
+          "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+          "name": "papzi",
+          "ownerAccount": {
+            "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+            "name": "papz"
+          }
+        },
+        "updateChannel": {
+          "id": "019ce6c2-156c-7def-93d0-581169533c5d",
+          "name": "production"
+        },
+        "buildProfile": "production",
+        "appVersion": "1.0.0",
+        "appBuildVersion": "24",
+        "gitCommitHash": "c7e74463ac2bed873f72f9107b95f8dacc04ec31",
+        "createdAt": "2026-06-17T04:51:58.191Z",
+        "updatedAt": "2026-06-17T08:00:55.694Z",
+        "completedAt": "2026-06-17T04:58:23.440Z"
+      }
+    },
+    {
+      "id": "524a0698-61f2-4eec-803c-56b0bca56496",
+      "status": "ERRORED",
+      "platform": "ANDROID",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "androidConfig": {
+        "track": "internal",
+        "releaseStatus": "DRAFT"
+      },
+      "error": {
+        "errorCode": "SUBMISSION_SERVICE_ANDROID_UNKNOWN_ERROR"
+      },
+      "createdAt": "2026-06-17T03:25:01.038Z",
+      "completedAt": "2026-06-17T03:26:13.343Z"
+    },
+    {
+      "id": "6b23f7a5-9fcc-4c0a-aafa-5b6d133b8583",
+      "status": "ERRORED",
+      "platform": "ANDROID",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "androidConfig": {
+        "track": "internal",
+        "releaseStatus": "DRAFT"
+      },
+      "error": {
+        "errorCode": "SUBMISSION_SERVICE_ANDROID_UNKNOWN_ERROR"
+      },
+      "createdAt": "2026-06-17T01:04:06.972Z",
+      "completedAt": "2026-06-17T01:07:20.855Z",
+      "submittedBuild": {
+        "id": "017e563e-ba4f-426e-a698-c110048d2cd8",
+        "status": "FINISHED",
+        "platform": "ANDROID",
+        "fingerprint": {
+          "id": "019ed302-aa5e-7b4f-977a-40fc4608a0f2"
+        },
+        "initiatingActor": {
+          "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+        },
+        "app": {
+          "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+          "name": "papzi",
+          "ownerAccount": {
+            "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+            "name": "papz"
+          }
+        },
+        "updateChannel": {
+          "id": "019ce6c2-156c-7def-93d0-581169533c5d",
+          "name": "production"
+        },
+        "buildProfile": "production",
+        "appVersion": "1.0.0",
+        "appBuildVersion": "5",
+        "gitCommitHash": "3d49b451ad969eb8457293a7fcb39087b43d615c",
+        "createdAt": "2026-06-17T00:36:04.361Z",
+        "updatedAt": "2026-06-17T04:00:53.708Z",
+        "completedAt": "2026-06-17T00:57:48.616Z"
+      }
+    },
+    {
+      "id": "ea9ce04b-d49f-4761-a71d-62885287fe7e",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      },
+      "createdAt": "2026-03-13T23:04:55.018Z",
+      "submittedBuild": {
+        "id": "cc44e3b5-feb2-40bc-91e1-0ec201b1f200",
+        "status": "FINISHED",
+        "platform": "IOS",
+        "fingerprint": {
+          "id": "019ce77e-0ed8-7838-bec4-1287e853589d"
+        },
+        "initiatingActor": {
+          "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+        },
+        "app": {
+          "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+          "name": "papzi",
+          "ownerAccount": {
+            "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+            "name": "papz"
+          }
+        },
+        "updateChannel": {
+          "id": "019ce6c2-156c-7def-93d0-581169533c5d",
+          "name": "production"
+        },
+        "buildProfile": "production",
+        "appVersion": "1.0.0",
+        "appBuildVersion": "23",
+        "gitCommitHash": "85961b3d1613d4de812654225f0c601bd5b3733d",
+        "createdAt": "2026-03-13T22:57:30.067Z",
+        "updatedAt": "2026-03-13T23:03:42.698Z",
+        "completedAt": "2026-03-13T23:03:32.459Z"
+      }
+    },
+    {
+      "id": "9596baae-622f-44f7-972f-440bb6a04711",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      },
+      "createdAt": "2026-03-13T22:46:05.337Z",
+      "submittedBuild": {
+        "id": "8d16007d-897e-4575-bb6c-c67a33f81992",
+        "status": "FINISHED",
+        "platform": "IOS",
+        "fingerprint": {
+          "id": "019ce77e-0ed8-7838-bec4-1287e853589d"
+        },
+        "initiatingActor": {
+          "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+        },
+        "app": {
+          "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+          "name": "papzi",
+          "ownerAccount": {
+            "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+            "name": "papz"
+          }
+        },
+        "updateChannel": {
+          "id": "019ce6c2-156c-7def-93d0-581169533c5d",
+          "name": "production"
+        },
+        "buildProfile": "production",
+        "appVersion": "1.0.0",
+        "appBuildVersion": "22",
+        "gitCommitHash": "3faecc480547cda8d72a7e46d00e2e5e08a879bc",
+        "createdAt": "2026-03-13T22:27:08.392Z",
+        "updatedAt": "2026-03-13T22:44:21.000Z",
+        "completedAt": "2026-03-13T22:44:13.774Z"
+      }
+    },
+    {
+      "id": "010c9429-c942-460e-88f4-b9245bca8968",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      },
+      "createdAt": "2026-03-13T16:43:51.269Z",
+      "submittedBuild": {
+        "id": "45cdf097-b5b1-459d-8a5a-0107f761f847",
+        "status": "FINISHED",
+        "platform": "IOS",
+        "fingerprint": {
+          "id": "019ce77e-0ed8-7838-bec4-1287e853589d"
+        },
+        "initiatingActor": {
+          "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+        },
+        "app": {
+          "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+          "name": "papzi",
+          "ownerAccount": {
+            "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+            "name": "papz"
+          }
+        },
+        "updateChannel": {
+          "id": "019ce6c2-156c-7def-93d0-581169533c5d",
+          "name": "production"
+        },
+        "buildProfile": "production",
+        "appVersion": "1.0.0",
+        "appBuildVersion": "15",
+        "gitCommitHash": "2d663fe325cb52649a4fb62a474e456e95abbaeb",
+        "createdAt": "2026-03-13T14:46:37.919Z",
+        "updatedAt": "2026-03-13T16:19:00.601Z",
+        "completedAt": "2026-03-13T16:18:48.427Z"
+      }
+    },
+    {
+      "id": "2643dd9c-f601-4c4a-86a0-1dc6d8614598",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      },
+      "createdAt": "2026-03-13T14:26:57.228Z",
+      "submittedBuild": {
+        "id": "b2fc680f-2aab-424f-ac7c-9ac2a62ae66c",
+        "status": "FINISHED",
+        "platform": "IOS",
+        "fingerprint": {
+          "id": "019ce77e-0ed8-7838-bec4-1287e853589d"
+        },
+        "initiatingActor": {
+          "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+        },
+        "app": {
+          "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+          "name": "papzi",
+          "ownerAccount": {
+            "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+            "name": "papz"
+          }
+        },
+        "updateChannel": {
+          "id": "019ce6c2-156c-7def-93d0-581169533c5d",
+          "name": "production"
+        },
+        "buildProfile": "production",
+        "appVersion": "1.0.0",
+        "appBuildVersion": "14",
+        "gitCommitHash": "232baefeb22cf08e161c13395e08a7e3a7dc62e6",
+        "createdAt": "2026-03-13T13:58:44.142Z",
+        "updatedAt": "2026-03-13T14:26:16.764Z",
+        "completedAt": "2026-03-13T14:26:05.422Z"
+      }
+    },
+    {
+      "id": "fa2e63f3-9ddc-4326-900c-f37ac1315da2",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      },
+      "createdAt": "2026-03-13T11:26:08.605Z",
+      "submittedBuild": {
+        "id": "36ad5a49-75cf-4161-aa67-bd1eff0e1ad2",
+        "status": "FINISHED",
+        "platform": "IOS",
+        "fingerprint": {
+          "id": "019ce6c2-ba49-781d-95a2-89824a8bee5a"
+        },
+        "initiatingActor": {
+          "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+        },
+        "app": {
+          "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+          "name": "papzi",
+          "ownerAccount": {
+            "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+            "name": "papz"
+          }
+        },
+        "updateChannel": {
+          "id": "019ce6c2-156c-7def-93d0-581169533c5d",
+          "name": "production"
+        },
+        "buildProfile": "production",
+        "appVersion": "1.0.0",
+        "appBuildVersion": "13",
+        "runtime": {
+          "id": "019ce26a-d15f-7927-9e56-db7a66641951",
+          "version": "1.0.0"
+        },
+        "gitCommitHash": "2163bce6d752f349bce819b30bc5564a9550bada",
+        "createdAt": "2026-03-13T10:34:07.253Z",
+        "updatedAt": "2026-03-13T10:42:01.806Z",
+        "completedAt": "2026-03-13T10:41:50.865Z"
+      }
+    },
+    {
+      "id": "0c6d75bb-5f72-466a-9853-0dd3790d1b05",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      },
+      "createdAt": "2026-03-13T09:55:59.476Z",
+      "submittedBuild": {
+        "id": "1253eb3e-3578-4a01-a93b-315f24e32b9a",
+        "status": "FINISHED",
+        "platform": "IOS",
+        "fingerprint": {
+          "id": "019ce692-19c4-71e8-aa0b-b76f2171370f"
+        },
+        "initiatingActor": {
+          "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+        },
+        "app": {
+          "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+          "name": "papzi",
+          "ownerAccount": {
+            "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+            "name": "papz"
+          }
+        },
+        "buildProfile": "production",
+        "appVersion": "1.0.0",
+        "appBuildVersion": "12",
+        "runtime": {
+          "id": "019ce26a-d15f-7927-9e56-db7a66641951",
+          "version": "1.0.0"
+        },
+        "gitCommitHash": "756e206c2b0496f1b628393e455511343f4ffbc7",
+        "createdAt": "2026-03-13T09:41:00.398Z",
+        "updatedAt": "2026-03-13T09:47:15.651Z",
+        "completedAt": "2026-03-13T09:47:07.884Z"
+      }
+    },
+    {
+      "id": "584ad20c-0472-449d-acc7-0a3e7167e16f",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      },
+      "createdAt": "2026-03-11T09:31:21.396Z",
+      "submittedBuild": {
+        "id": "ed71518e-4299-48c5-9c95-c37af0d43e6b",
+        "status": "FINISHED",
+        "platform": "IOS",
+        "fingerprint": {
+          "id": "019cdc0a-f798-7c1f-a916-ec85c3c1d53a"
+        },
+        "initiatingActor": {
+          "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+        },
+        "app": {
+          "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+          "name": "papzi",
+          "ownerAccount": {
+            "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+            "name": "papz"
+          }
+        },
+        "buildProfile": "production",
+        "appVersion": "1.0.0",
+        "appBuildVersion": "1",
+        "gitCommitHash": "2d5a65186d4dd67c4b034f4a2efb760cd4f1d963",
+        "createdAt": "2026-03-11T08:37:11.630Z",
+        "updatedAt": "2026-03-11T08:51:45.450Z",
+        "completedAt": "2026-03-11T08:51:39.556Z"
+      }
+    }
+  ],
+  "submissionTargets": [
+    {
+      "id": "ee8e12fd-14d6-4f43-8a98-a84335ff6d89",
+      "status": "ERRORED",
+      "platform": "ANDROID",
+      "createdAt": "2026-09-23T20:24:02.012Z",
+      "completedAt": "2026-09-23T20:25:24.803Z",
+      "initiatingActor": {
+        "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+      },
+      "submittedBuild": {
+        "id": "920ce9c5-d40e-48b4-92a5-f1952b7727ed"
+      },
+      "androidConfig": {
+        "track": "internal",
+        "releaseStatus": "DRAFT"
+      },
+      "error": {
+        "errorCode": "SUBMISSION_SERVICE_ANDROID_UNKNOWN_ERROR"
+      },
+      "failureCategory": "provider_error_requires_private_log_review"
+    },
+    {
+      "id": "094be3d5-a1f5-4530-a585-b6bc265bd759",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "createdAt": "2026-09-23T19:35:30.603Z",
+      "completedAt": "2026-09-23T20:35:03.940Z",
+      "initiatingActor": {
+        "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+      },
+      "submittedBuild": {
+        "id": "453b777d-465d-488d-9b08-859e77bd3c9f"
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "5f78f0a2-f3d3-4dc9-a9a7-f5ab45a2f391",
+      "status": "ERRORED",
+      "platform": "ANDROID",
+      "createdAt": "2026-09-23T19:21:35.315Z",
+      "completedAt": "2026-09-23T19:23:23.440Z",
+      "initiatingActor": {
+        "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+      },
+      "submittedBuild": {
+        "id": "920ce9c5-d40e-48b4-92a5-f1952b7727ed"
+      },
+      "androidConfig": {
+        "track": "internal",
+        "releaseStatus": "DRAFT"
+      },
+      "error": {
+        "errorCode": "SUBMISSION_SERVICE_ANDROID_UNKNOWN_ERROR"
+      },
+      "failureCategory": "provider_error_requires_private_log_review"
+    },
+    {
+      "id": "fea42e52-de19-4638-a541-148356af5fe2",
+      "status": "ERRORED",
+      "platform": "ANDROID",
+      "createdAt": "2026-09-22T10:54:47.244Z",
+      "completedAt": "2026-09-22T10:56:17.218Z",
+      "initiatingActor": {
+        "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+      },
+      "submittedBuild": {
+        "id": "18f1bc02-3d2d-4a20-95c1-e00da7d258c9"
+      },
+      "androidConfig": {
+        "track": "internal",
+        "releaseStatus": "DRAFT"
+      },
+      "error": {
+        "errorCode": "SUBMISSION_SERVICE_ANDROID_UNKNOWN_ERROR"
+      },
+      "failureCategory": "provider_error_requires_private_log_review"
+    },
+    {
+      "id": "2f0adac6-6062-473a-8211-84d04b60ae69",
+      "status": "ERRORED",
+      "platform": "IOS",
+      "createdAt": "2026-06-18T15:34:15.431Z",
+      "initiatingActor": {
+        "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+      },
+      "submittedBuild": {
+        "id": "5c9b4e7e-39f3-4f71-8937-ba2d9abd96b3"
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "bff50394-65a5-482a-8a9c-6494da037697",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "createdAt": "2026-06-18T15:20:45.871Z",
+      "completedAt": "2026-06-18T15:33:41.615Z",
+      "initiatingActor": {
+        "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+      },
+      "submittedBuild": {
+        "id": "5c9b4e7e-39f3-4f71-8937-ba2d9abd96b3"
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "cbc06ad9-c2c9-4824-822d-fc0753fe14e6",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "createdAt": "2026-06-18T15:19:40.972Z",
+      "completedAt": "2026-06-18T15:28:02.860Z",
+      "initiatingActor": {
+        "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+      },
+      "submittedBuild": {
+        "id": "9c50f5ee-8a95-4aaa-a5df-6e3ad460a816"
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "8dbf4186-5573-48fa-97f9-bb8b8614b054",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "createdAt": "2026-06-18T14:36:42.054Z",
+      "completedAt": "2026-06-18T14:55:41.035Z",
+      "initiatingActor": {
+        "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+      },
+      "submittedBuild": {
+        "id": "d0ac56be-7503-41fc-a13b-be87a2f9fdf8"
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "7dd77c4a-45e2-4d16-8018-c50f30ef89a3",
+      "status": "ERRORED",
+      "platform": "IOS",
+      "createdAt": "2026-06-18T13:54:23.109Z",
+      "initiatingActor": {
+        "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+      },
+      "submittedBuild": {
+        "id": "468491a4-b6ec-40e1-b65b-c0ec437ae458"
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "286d10e6-e676-41c1-9149-efb1a7383a79",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "createdAt": "2026-06-18T13:44:55.590Z",
+      "completedAt": "2026-06-18T13:59:04.223Z",
+      "initiatingActor": {
+        "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+      },
+      "submittedBuild": {
+        "id": "e5531839-f95b-433f-bab4-4581a3d3d9c5"
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "3cdd9b2b-b0f6-483f-80db-33555a8b6f2a",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "createdAt": "2026-06-18T13:44:34.580Z",
+      "completedAt": "2026-06-18T13:52:38.840Z",
+      "initiatingActor": {
+        "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+      },
+      "submittedBuild": {
+        "id": "468491a4-b6ec-40e1-b65b-c0ec437ae458"
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "e199d146-accb-4a91-82f6-b86806822f83",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "createdAt": "2026-06-18T10:07:46.154Z",
+      "completedAt": "2026-06-18T10:15:51.796Z",
+      "initiatingActor": {
+        "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+      },
+      "submittedBuild": {
+        "id": "106d5010-4203-428f-b74a-29c1c3428eb1"
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "e269861b-c8f1-4917-8f1f-96acd36929ae",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "createdAt": "2026-06-17T18:25:24.304Z",
+      "completedAt": "2026-06-17T18:40:54.592Z",
+      "initiatingActor": {
+        "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+      },
+      "submittedBuild": {
+        "id": "20eeb97a-4ff3-495a-b62e-00500541e58e"
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "4adf6a0c-3af0-43c7-a714-05c6c7e10f4b",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "createdAt": "2026-06-17T18:23:17.016Z",
+      "completedAt": "2026-06-17T18:31:10.658Z",
+      "initiatingActor": {
+        "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+      },
+      "submittedBuild": {
+        "id": "3ce796cf-1167-4a26-913e-0999921a4b24"
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "b53fa0cb-9396-46ad-8886-5a40d0693907",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "createdAt": "2026-06-17T14:12:50.046Z",
+      "completedAt": "2026-06-17T14:25:30.721Z",
+      "initiatingActor": {
+        "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+      },
+      "submittedBuild": {
+        "id": "b81583f2-c1ab-44b5-8ea8-10883c464649"
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "6589918f-b95c-4159-b489-40acdaed3a67",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "createdAt": "2026-06-17T14:10:22.094Z",
+      "completedAt": "2026-06-17T14:19:35.127Z",
+      "initiatingActor": {
+        "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+      },
+      "submittedBuild": {
+        "id": "48b1b526-a1d9-4dba-8520-29f7647a227f"
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "ec43b3e1-7aee-48d5-bedc-caa768b60390",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "createdAt": "2026-06-17T11:00:09.290Z",
+      "completedAt": "2026-06-17T11:12:15.966Z",
+      "initiatingActor": {
+        "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+      },
+      "submittedBuild": {
+        "id": "a913cd86-f4db-42f8-b252-6c7971edceea"
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "851b0c98-39c2-4c41-b97f-1c3c5eefd05f",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "createdAt": "2026-06-17T10:58:10.211Z",
+      "completedAt": "2026-06-17T11:07:04.235Z",
+      "initiatingActor": {
+        "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+      },
+      "submittedBuild": {
+        "id": "9ca4eca2-31a2-4272-bbc9-2cf64e2399af"
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "468c78aa-8415-4685-8478-e19f1b35cff4",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "createdAt": "2026-06-17T05:18:02.703Z",
+      "completedAt": "2026-06-17T05:25:33.656Z",
+      "initiatingActor": {
+        "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+      },
+      "submittedBuild": {
+        "id": "c80f2b93-8b0f-4a59-9f01-d3bc47ba72ff"
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "3f6dd255-2137-4d83-b92e-9d11f070c3e6",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "createdAt": "2026-06-17T04:52:00.618Z",
+      "completedAt": "2026-06-17T05:00:03.405Z",
+      "initiatingActor": {
+        "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+      },
+      "submittedBuild": {
+        "id": "d68de199-8ad4-48f5-8638-67716efe58a5"
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "524a0698-61f2-4eec-803c-56b0bca56496",
+      "status": "ERRORED",
+      "platform": "ANDROID",
+      "createdAt": "2026-06-17T03:25:01.038Z",
+      "completedAt": "2026-06-17T03:26:13.343Z",
+      "initiatingActor": {
+        "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+      },
+      "androidConfig": {
+        "track": "internal",
+        "releaseStatus": "DRAFT"
+      },
+      "error": {
+        "errorCode": "SUBMISSION_SERVICE_ANDROID_UNKNOWN_ERROR"
+      },
+      "failureCategory": "provider_error_requires_private_log_review"
+    },
+    {
+      "id": "6b23f7a5-9fcc-4c0a-aafa-5b6d133b8583",
+      "status": "ERRORED",
+      "platform": "ANDROID",
+      "createdAt": "2026-06-17T01:04:06.972Z",
+      "completedAt": "2026-06-17T01:07:20.855Z",
+      "initiatingActor": {
+        "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+      },
+      "submittedBuild": {
+        "id": "017e563e-ba4f-426e-a698-c110048d2cd8"
+      },
+      "androidConfig": {
+        "track": "internal",
+        "releaseStatus": "DRAFT"
+      },
+      "error": {
+        "errorCode": "SUBMISSION_SERVICE_ANDROID_UNKNOWN_ERROR"
+      },
+      "failureCategory": "provider_error_requires_private_log_review"
+    },
+    {
+      "id": "ea9ce04b-d49f-4761-a71d-62885287fe7e",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "createdAt": "2026-03-13T23:04:55.018Z",
+      "initiatingActor": {
+        "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+      },
+      "submittedBuild": {
+        "id": "cc44e3b5-feb2-40bc-91e1-0ec201b1f200"
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "9596baae-622f-44f7-972f-440bb6a04711",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "createdAt": "2026-03-13T22:46:05.337Z",
+      "initiatingActor": {
+        "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+      },
+      "submittedBuild": {
+        "id": "8d16007d-897e-4575-bb6c-c67a33f81992"
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "010c9429-c942-460e-88f4-b9245bca8968",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "createdAt": "2026-03-13T16:43:51.269Z",
+      "initiatingActor": {
+        "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+      },
+      "submittedBuild": {
+        "id": "45cdf097-b5b1-459d-8a5a-0107f761f847"
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "2643dd9c-f601-4c4a-86a0-1dc6d8614598",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "createdAt": "2026-03-13T14:26:57.228Z",
+      "initiatingActor": {
+        "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+      },
+      "submittedBuild": {
+        "id": "b2fc680f-2aab-424f-ac7c-9ac2a62ae66c"
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "fa2e63f3-9ddc-4326-900c-f37ac1315da2",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "createdAt": "2026-03-13T11:26:08.605Z",
+      "initiatingActor": {
+        "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+      },
+      "submittedBuild": {
+        "id": "36ad5a49-75cf-4161-aa67-bd1eff0e1ad2"
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "0c6d75bb-5f72-466a-9853-0dd3790d1b05",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "createdAt": "2026-03-13T09:55:59.476Z",
+      "initiatingActor": {
+        "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+      },
+      "submittedBuild": {
+        "id": "1253eb3e-3578-4a01-a93b-315f24e32b9a"
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "584ad20c-0472-449d-acc7-0a3e7167e16f",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "createdAt": "2026-03-11T09:31:21.396Z",
+      "initiatingActor": {
+        "id": "9954ea83-4449-4ebd-b664-bdcc69c1f3f7"
+      },
+      "submittedBuild": {
+        "id": "ed71518e-4299-48c5-9c95-c37af0d43e6b"
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    }
+  ],
+  "appStoreStatus": {
+    "exitCode": 1,
+    "reason": "credentials_not_resolved"
+  },
+  "warning": "FINISHED build status is not evidence of upload, tester availability, successful user journeys or public approval. Google Play production state is not provided by EAS submit:status."
+}

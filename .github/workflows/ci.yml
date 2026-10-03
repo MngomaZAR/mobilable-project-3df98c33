@@ -4,12 +4,40 @@ on:
   push:
     branches: ["main", "release/testflight-2026-06"]
   pull_request: {}
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      audit_stores:
+        description: Read existing Apple build/review state without submitting
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 jobs:
+  apple_store_history:
+    if: github.event_name == 'workflow_dispatch' && inputs.audit_stores
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install locked Apple API transport dependencies
+        run: python -m pip install httpx==0.28.1 cryptography==50.0.2
+      - name: Read existing Apple records using repository credentials
+        env:
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+          APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
+          STORE_AUDIT_OUTPUT: store-audit/apple-status.json
+        run: python scripts/audit-apple-store.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apple-store-status
+          path: store-audit/apple-status.json
+          retention-days: 7
   frontend:
     runs-on: ubuntu-latest
     env:

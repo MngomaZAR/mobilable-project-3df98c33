@@ -1,4 +1,6 @@
-import { backendDb } from './backendGateway';
+import * as Crypto from 'expo-crypto';
+import { apiClient } from '../config/apiClient';
+import { getApiAccessToken } from '../config/apiSession';
 import { LEGAL_CONTENT } from '../constants/LegalContent';
 
 export interface Contract {
@@ -11,6 +13,10 @@ export interface Contract {
   status: 'draft' | 'signed' | 'expired';
   contract_type: 'model_release' | 'shoot_agreement';
   content: string;
+  content_hash: string;
+  content_version: number;
+  signature_method: 'authenticated_typed_acknowledgement';
+  legal_approval_status: 'not_reviewed';
   creator_signature?: string | null;
   client_signature?: string | null;
   model_signature?: string | null;
@@ -18,25 +24,106 @@ export interface Contract {
   created_at: string;
 }
 
-const normalizeContract = (row: any): Contract => {
-  const typeFromTitle = String(row?.title ?? '').toLowerCase().includes('model')
-    ? 'model_release'
-    : 'shoot_agreement';
-  const creatorId = row?.creator_id ?? row?.photographer_id ?? null;
+type ContractType = Contract['contract_type'];
+type SignerRole = 'creator' | 'client' | 'model';
+
+// Keep a separate review snapshot: callers must not be able to mutate the signed hash.
+const reviewedContracts = new Map<string, Readonly<Contract>>();
+const MAX_REVIEWED_CONTRACTS = 100;
+const DOCUMENT_FIELDS = [
+  'id', 'booking_id', 'contract_type', 'content', 'content_hash', 'content_version',
+  'creator_id', 'photographer_id', 'client_id', 'model_id', 'created_at',
+] as const;
+
+const requireId = (value: string) => {
+  if (typeof value !== 'string' || !value.trim()) throw new Error('A contract or booking ID is required.');
+  return encodeURIComponent(value);
+};
+
+const requireToken = async () => {
+  const token = await getApiAccessToken();
+  if (typeof token !== 'string' || !token.trim()) {
+    reviewedContracts.clear();
+    throw new Error('Sign in to access booking contracts.');
+  }
+  return token;
+};
+
+const invalidResponse = () => new Error('The server returned an invalid authenticated contract.');
+
+const optionalText = (value: unknown): string | null => {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== 'string' || !value.trim()) throw invalidResponse();
+  return value;
+};
+
+const normalizeContract = async (value: unknown, bookingId: string): Promise<Contract> => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw invalidResponse();
+  const row = value as Record<string, unknown>;
+  const { id, booking_id, creator_id, client_id, contract_type, content, content_hash,
+    content_version, status, created_at } = row;
+  if (
+    typeof id !== 'string' || !id.trim() || booking_id !== bookingId ||
+    typeof creator_id !== 'string' || !creator_id.trim() ||
+    typeof client_id !== 'string' || !client_id.trim() || creator_id === client_id ||
+    (contract_type !== 'model_release' && contract_type !== 'shoot_agreement') ||
+    typeof content !== 'string' || !content.trim() || content.includes('\0') ||
+    typeof content_hash !== 'string' || !/^[0-9a-f]{64}$/.test(content_hash) ||
+    typeof content_version !== 'number' || !Number.isSafeInteger(content_version) || content_version < 1 ||
+    (status !== 'draft' && status !== 'signed' && status !== 'expired') ||
+    typeof created_at !== 'string' || !Number.isFinite(Date.parse(created_at)) ||
+    row.signature_method !== 'authenticated_typed_acknowledgement' || row.legal_approval_status !== 'not_reviewed'
+  ) throw invalidResponse();
+
+  const photographerId = optionalText(row.photographer_id);
+  const modelId = optionalText(row.model_id);
+  if (creator_id !== (photographerId ?? modelId) || client_id === photographerId || client_id === modelId) {
+    throw invalidResponse();
+  }
+  const creatorSignature = optionalText(row.creator_signature);
+  const clientSignature = optionalText(row.client_signature);
+  const modelSignature = optionalText(row.model_signature);
+  const signedAt = optionalText(row.signed_at);
+  if (signedAt && !Number.isFinite(Date.parse(signedAt))) throw invalidResponse();
+  if (status === 'signed' && (!creatorSignature || !clientSignature || (modelId && !modelSignature) || !signedAt)) {
+    throw invalidResponse();
+  }
+  const digest = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, content, {
+    encoding: Crypto.CryptoEncoding.HEX,
+  });
+  if (digest !== content_hash) throw new Error('The contract content does not match its immutable hash.');
+
+  // Legacy flags, aliases and per-party dates are not signature evidence.
   return {
-    ...row,
-    creator_id: creatorId,
-    photographer_id: row?.photographer_id ?? creatorId,
-    contract_type: row?.contract_type ?? typeFromTitle,
-    content: row?.content ?? row?.body ?? '',
-    creator_signature: row?.creator_signature ?? (row?.signed_by_photographer ? 'Signed in app' : null),
-    client_signature: row?.client_signature ?? (row?.signed_by_client ? 'Signed in app' : null),
-    model_signature: row?.model_signature ?? (row?.signed_by_model ? 'Signed in app' : null),
-    signed_at: row?.signed_at ?? row?.client_signed_at ?? row?.photographer_signed_at ?? row?.model_signed_at ?? null,
+    id, booking_id: bookingId, creator_id, photographer_id: photographerId, client_id, model_id: modelId,
+    contract_type, content, content_hash, content_version, status, created_at,
+    signature_method: 'authenticated_typed_acknowledgement', legal_approval_status: 'not_reviewed',
+    creator_signature: creatorSignature, client_signature: clientSignature, model_signature: modelSignature,
+    signed_at: signedAt,
   };
 };
 
-const CONTRACT_TEMPLATES: Record<'model_release' | 'shoot_agreement', string> = {
+const rememberContract = (contract: Contract) => {
+  reviewedContracts.delete(contract.id);
+  reviewedContracts.set(contract.id, Object.freeze({ ...contract }));
+  if (reviewedContracts.size > MAX_REVIEWED_CONTRACTS) {
+    const oldest = reviewedContracts.keys().next().value;
+    if (oldest !== undefined) reviewedContracts.delete(oldest);
+  }
+};
+
+const readBookingContracts = async (bookingId: string, token: string): Promise<Contract[]> => {
+  const data = await apiClient.get<unknown>(`/bookings/${requireId(bookingId)}/contracts`, { token });
+  if (!Array.isArray(data)) throw invalidResponse();
+  const contracts = await Promise.all(data.map(row => normalizeContract(row, bookingId)));
+  if (new Set(contracts.map(contract => contract.id)).size !== contracts.length) throw invalidResponse();
+  return contracts;
+};
+
+const sameDocument = (expected: Readonly<Contract>, actual: Contract) =>
+  DOCUMENT_FIELDS.every(field => expected[field] === actual[field]);
+
+const CONTRACT_TEMPLATES: Record<ContractType, string> = {
   model_release: LEGAL_CONTENT.MODEL_RELEASE,
   shoot_agreement: `# Papzii Shoot Agreement
 **Last Updated: March 2026 - South African Law**
@@ -47,8 +134,8 @@ This agreement governs a booked shoot between Client, Photographer, and where ap
 - Session details are defined by booking package, schedule, and in-app notes.
 - Parties must arrive on time and act professionally.
 
-## Payment and Escrow
-- Payment is processed in-app and held/settled per Papzii terms.
+## Payment
+- Payment is processed through the booking's payment flow.
 - Off-platform payment circumvention is prohibited.
 
 ## Cancellation and No-show
@@ -68,57 +155,37 @@ Republic of South Africa.
 `,
 };
 
-export const fetchBookingContracts = async (bookingId: string) => {
-  const { data, error } = await backendDb
-    .from('contracts')
-    .select('*')
-    .eq('booking_id', bookingId);
-    
-  if (error) {
-    console.error('fetchBookingContracts error:', error);
-    throw error;
+export const fetchBookingContracts = async (bookingId: string): Promise<Contract[]> => {
+  requireId(bookingId);
+  const contracts = await readBookingContracts(bookingId, await requireToken());
+  for (const [id, contract] of reviewedContracts) {
+    if (contract.booking_id === bookingId) reviewedContracts.delete(id);
   }
-  return (data ?? []).map(normalizeContract);
+  contracts.forEach(rememberContract);
+  return contracts;
 };
 
-export const createContract = async (bookingId: string, type: 'model_release' | 'shoot_agreement', content: string) => {
-  // Fetch booking details to get participants
-  const { data: booking, error: bError } = await backendDb
-    .from('bookings')
-    .select('photographer_id, client_id, model_id')
-    .eq('id', bookingId)
-    .single();
-    
-  if (bError) throw bError;
-  const creatorId = booking.photographer_id ?? booking.model_id;
-  if (!creatorId) throw new Error('Booking does not have a creator/model participant.');
-
-  const { data, error } = await backendDb
-    .from('contracts')
-    .insert({
-      booking_id: bookingId,
-      creator_id: creatorId,
-      photographer_id: booking.photographer_id ?? creatorId,
-      client_id: booking.client_id,
-      model_id: booking.model_id,
-      contract_type: type,
-      content,
-      title: type === 'model_release' ? 'Model Release' : 'Shoot Agreement',
-      body: content,
-      status: 'draft'
-    })
-    .select()
-    .single();
-
-  if (error) throw error;
-  return normalizeContract(data);
+export const createContract = async (bookingId: string, type: ContractType, content: string): Promise<Contract> => {
+  const pathId = requireId(bookingId);
+  if (type !== 'model_release' && type !== 'shoot_agreement') throw new Error('Unsupported contract type.');
+  if (typeof content !== 'string' || !content.trim() || content.length > 50000 || content.includes('\0')) {
+    throw new Error('Provide nonblank contract content of at most 50000 characters.');
+  }
+  const token = await requireToken();
+  const data = await apiClient.post<unknown>(`/bookings/${pathId}/contracts`, {
+    contract_type: type, content,
+  }, { token });
+  const contract = await normalizeContract(data, bookingId);
+  if (contract.contract_type !== type || contract.content !== content) throw invalidResponse();
+  rememberContract(contract);
+  return contract;
 };
 
 export const ensureBookingContracts = async (bookingId: string): Promise<Contract[]> => {
   const existing = await fetchBookingContracts(bookingId);
-  const have = new Set(existing.map((c: Contract) => c.contract_type));
+  const have = new Set(existing.map(contract => contract.contract_type));
 
-  const missing: Array<'model_release' | 'shoot_agreement'> = [];
+  const missing: ContractType[] = [];
   if (!have.has('model_release')) missing.push('model_release');
   if (!have.has('shoot_agreement')) missing.push('shoot_agreement');
 
@@ -126,56 +193,40 @@ export const ensureBookingContracts = async (bookingId: string): Promise<Contrac
 
   const created: Contract[] = [];
   for (const type of missing) {
-    try {
-      const content = CONTRACT_TEMPLATES[type];
-      const contract = await createContract(bookingId, type, content);
-      created.push(contract);
-    } catch (error) {
-      // Non-fatal: if policy prevents creation for this role, caller still gets existing docs.
-      console.warn(`ensureBookingContracts: failed to create ${type}`, error);
-    }
+    created.push(await createContract(bookingId, type, CONTRACT_TEMPLATES[type]));
   }
 
-  if (created.length === 0) return existing;
   return [...existing, ...created];
 };
 
-export const signContract = async (contractId: string, signature: string, role: 'creator' | 'client' | 'model') => {
-  const { data: existing, error: fetchError } = await backendDb
-    .from('contracts')
-    .select('id, client_id, model_id, creator_signature, client_signature, model_signature, signed_by_photographer, signed_by_client, signed_by_model')
-    .eq('id', contractId)
-    .single();
+export const signContract = async (contractId: string, signature: string, role: SignerRole): Promise<void> => {
+  const pathId = requireId(contractId);
+  if (role !== 'creator' && role !== 'client' && role !== 'model') throw new Error('Unsupported contract signer role.');
+  if (typeof signature !== 'string') throw new Error('Provide a single-line typed acknowledgement.');
+  const acknowledgement = signature.trim();
+  const hasControlCharacters = Array.from(acknowledgement).some(character => {
+    const code = character.charCodeAt(0);
+    return code < 32 || code === 127;
+  });
+  if (acknowledgement.length < 2 || acknowledgement.length > 200 || hasControlCharacters) {
+    throw new Error('Provide a single-line typed acknowledgement of 2 to 200 characters.');
+  }
+  const token = await requireToken();
+  const reviewed = reviewedContracts.get(contractId);
+  if (!reviewed) throw new Error('Load and review this contract before signing.');
 
-  if (fetchError) throw fetchError;
-
-  const nextCreatorSignature = role === 'creator' ? signature : existing.creator_signature;
-  const nextClientSignature = role === 'client' ? signature : existing.client_signature;
-  const nextModelSignature = role === 'model' ? signature : existing.model_signature;
-
-  // Base required signers are creator + client.
-  // If model is a distinct participant, require model signature as well.
-  const requiresModelSignature = Boolean(existing.model_id) && existing.model_id !== existing.client_id;
-  const fullySigned = Boolean(nextCreatorSignature && nextClientSignature && (!requiresModelSignature || nextModelSignature));
-
-  const update: any = {
-    creator_signature: nextCreatorSignature,
-    client_signature: nextClientSignature,
-    model_signature: nextModelSignature,
-    signed_by_photographer: Boolean(nextCreatorSignature),
-    signed_by_client: Boolean(nextClientSignature),
-    signed_by_model: Boolean(nextModelSignature),
-    photographer_signed_at: role === 'creator' ? new Date().toISOString() : undefined,
-    client_signed_at: role === 'client' ? new Date().toISOString() : undefined,
-    model_signed_at: role === 'model' ? new Date().toISOString() : undefined,
-    status: fullySigned ? 'signed' : 'draft',
-    signed_at: fullySigned ? new Date().toISOString() : null,
-  };
-
-  const { error } = await backendDb
-    .from('contracts')
-    .update(update)
-    .eq('id', contractId);
-
-  if (error) throw error;
+  // Reauthenticate the read without rebinding to a document the screen has not reviewed.
+  const current = (await readBookingContracts(reviewed.booking_id, token)).find(contract => contract.id === contractId);
+  if (!current || !sameDocument(reviewed, current)) {
+    reviewedContracts.delete(contractId);
+    throw new Error('The contract changed. Load and review it again before signing.');
+  }
+  const data = await apiClient.post<unknown>(`/contracts/${pathId}/sign`, {
+    signature: acknowledgement, role, content_hash: reviewed.content_hash, content_version: reviewed.content_version,
+  }, { token });
+  const signed = await normalizeContract(data, reviewed.booking_id);
+  if (!sameDocument(reviewed, signed) || signed[`${role}_signature`] !== acknowledgement) {
+    throw new Error('The server did not confirm this contract acknowledgement.');
+  }
+  rememberContract(signed);
 };

@@ -43,12 +43,17 @@ async def checkout(settings: Settings, booking_id: str, user: dict[str, Any]) ->
             if amount <= 0:
                 raise HTTPException(status_code=409, detail="Booking has no valid server quote.")
             payment = await conn.fetchrow("SELECT * FROM payments WHERE booking_id=$1 AND status='pending'", booking_id)
+            mode = 'sandbox' if settings.payfast_sandbox else 'live'
+            if payment and payment.get('merchant_id') and (payment['merchant_id'] != settings.payfast_merchant_id or payment.get('provider_mode') != mode):
+                raise HTTPException(status_code=409, detail="Pending payment belongs to another merchant or environment.")
             if not payment:
                 payment = await conn.fetchrow(
-                    """INSERT INTO payments (id,booking_id,amount,currency,status,provider,description)
-                    VALUES ($1,$2,$3::numeric,'ZAR','pending','payfast','Scheduled creator booking') RETURNING *""",
-                    str(uuid.uuid4()), booking_id, amount,
+                    """INSERT INTO payments (id,booking_id,amount,currency,status,provider,description,merchant_id,provider_mode)
+                    VALUES ($1,$2,$3::numeric,'ZAR','pending','payfast','Scheduled creator booking',$4,$5) RETURNING *""",
+                    str(uuid.uuid4()), booking_id, amount, settings.payfast_merchant_id, mode,
                 )
+            elif not payment.get('merchant_id'):
+                payment = await conn.fetchrow('UPDATE payments SET merchant_id=$2,provider_mode=$3 WHERE id=$1 RETURNING *', payment['id'], settings.payfast_merchant_id, mode)
             base = settings.api_public_url.rstrip("/")
             params = {
                 "merchant_id": settings.payfast_merchant_id,
@@ -107,6 +112,9 @@ async def confirm_notification(settings: Settings, raw: bytes) -> None:
             payment = await conn.fetchrow("SELECT * FROM payments WHERE id=$1 FOR UPDATE", fields["m_payment_id"])
             if not payment or money(payment["amount"]) != amount:
                 raise HTTPException(status_code=400, detail="Payment does not match the expected booking amount.")
+            mode = 'sandbox' if settings.payfast_sandbox else 'live'
+            if payment.get('merchant_id') != settings.payfast_merchant_id or payment.get('provider_mode') != mode:
+                raise HTTPException(status_code=400, detail="Payment merchant or environment does not match.")
             if not booking or money(booking["quote_amount"]) != amount:
                 raise HTTPException(status_code=400, detail="Booking does not match the payment.")
             if fields.get("payment_status") != "COMPLETE":

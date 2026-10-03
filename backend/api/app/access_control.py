@@ -36,6 +36,7 @@ READ_ONLY.add("post_unlocks")
 READ_ONLY.add("post_likes")
 READ_ONLY.add("post_comments")
 READ_ONLY.add("reports")
+READ_ONLY.add("account_deletion_requests")
 INSERT_ONLY = {"analytics_events", "crash_logs", "consent_events", "account_deletion_requests", "reports"}
 INSERT_ONLY.add("media_access_logs")
 PROFILE_WRITE_FIELDS = {"id", "role", "full_name", "name", "bio", "avatar_url", "city", "province", "country", "phone", "contact_details", "latitude", "longitude", "availability_status", "privacy", "preferences", "updated_at", "username", "instagram", "website", "gender", "push_token", "is_model", "is_photographer", "kyc_status"}
@@ -61,6 +62,8 @@ def authorize_query(
 ) -> tuple[dict[str, Any], tuple[str, list[Any]] | None]:
     payload = deepcopy(request)
     action = payload.get("action", "select")
+    if action != 'select' and user and (user.get('user_metadata') or {}).get('deletion_status'):
+        raise HTTPException(status_code=409, detail='Account deletion is pending; new content and profile changes are disabled.')
     if action not in {"select", "insert", "upsert", "update", "delete"}:
         raise HTTPException(status_code=400, detail="Unsupported data action.")
     if table not in PUBLIC_TABLES | set(OWNER_COLUMNS) | ADMIN_TABLES | {"bookings", "payments", "conversations", "conversation_participants", "messages", "status_scores", "eta_snapshots", "dispatch_requests", "dispatch_offers"}:
@@ -71,6 +74,11 @@ def authorize_query(
     if not user:
         if action != "select" or table not in PUBLIC_TABLES:
             raise HTTPException(status_code=401, detail="Authentication is required.")
+    if action != 'select' and table in {'posts', 'stories', 'post_comments', 'reviews'}:
+        rows = payload.get('payload') or {}
+        rows = rows if isinstance(rows, list) else [rows]
+        if any(isinstance(row, dict) and 'moderation_status' in row for row in rows):
+            raise HTTPException(status_code=403, detail='Use the audited moderation command, including a decision reason.')
     if is_admin(settings, user):
         # Financial records and booking states still go through domain commands.
         if action == "select" or (table not in READ_ONLY and table != "bookings"):
@@ -86,6 +94,7 @@ def authorize_query(
     actor = str(user["id"]) if user else ""
     scope = None
     if table == "profiles" and action == "select":
+        scope = ("coalesce(profiles.deletion_status,'') NOT IN ('processing','completed')", [])
         own_only = bool(actor and any(item.get("op") == "eq" and item.get("column") == "id" and item.get("value") == actor for item in payload.get("filters") or []))
         if not own_only:
             for item in payload.get("filters") or []:

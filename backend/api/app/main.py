@@ -46,6 +46,12 @@ from .provider_settings import router as provider_settings_router
 from .reporting import router as reporting_router
 from .provider_availability import router as provider_availability_router
 from .location_tracking import router as location_tracking_router
+from .account_deletion import router as account_deletion_router
+from .dispatch_engine import router as dispatch_router
+from .contracts import router as contracts_router
+from .admin_moderation import router as admin_moderation_router, handle_content_review
+from .financial_operations import create_financial_router
+from .video_calls import handle_video_webhook
 
 
 REQUIRED_SCHEMA_COLUMNS = {
@@ -134,6 +140,7 @@ class AuthMeResponse(BaseModel):
 
 @asynccontextmanager
 async def lifespan(_app):
+    get_settings()
     yield
     await close_pools()
 
@@ -158,6 +165,17 @@ app.include_router(provider_settings_router)
 app.include_router(reporting_router)
 app.include_router(provider_availability_router)
 app.include_router(location_tracking_router)
+app.include_router(account_deletion_router)
+app.include_router(dispatch_router)
+app.include_router(contracts_router)
+app.include_router(admin_moderation_router)
+
+
+async def financial_user(request: Request, settings: Annotated[Settings, Depends(get_settings)]):
+    return await require_user(settings, bearer_token(request))
+
+
+app.include_router(create_financial_router(get_settings, financial_user))
 
 
 @app.middleware('http')
@@ -558,7 +576,7 @@ async def data_query(
             row = await transition_booking(settings, booking_id, target.status, user)
             return {"data": row if payload.get("single") else [row], "error": None}
         authorized, scope = authorize_query(settings, table, payload, user)
-        result = await execute_table_query(settings, table, authorized, scope)
+        result = await execute_table_query(settings, table, authorized, scope, actor_id=user['id'] if user else None)
         return redact_result(settings, table, result, user)
     return await execute_nhost_table_query(settings, table, payload, bearer_token(request))
 
@@ -605,20 +623,19 @@ async def social_comment(request: Request, payload: Annotated[dict[str, Any], Bo
 @app.post('/moderation/review', tags=['moderation'])
 async def moderate_content(request: Request, payload: Annotated[dict[str, Any], Body()], settings: Annotated[Settings, Depends(get_settings)]):
     user = await require_user(settings, bearer_token(request))
-    require_admin(settings, user)
-    table = str(payload.get('table') or '')
-    decision = str(payload.get('decision') or '')
-    if table not in {'posts', 'stories', 'post_comments', 'reviews'} or decision not in {'approved', 'rejected'}:
-        raise HTTPException(status_code=400, detail='Select supported content and an approval or rejection decision.')
-    conn = await connect(settings)
+    return await handle_content_review(settings, user, payload)
+
+
+@app.post('/video-calls/webhook', tags=['video'])
+async def video_webhook(request: Request, settings: Annotated[Settings, Depends(get_settings)]):
+    body = await request.body()
+    if len(body) > 262144:
+        raise HTTPException(status_code=413, detail='Video webhook is too large.')
     try:
-        async with conn.transaction():
-            row = await conn.fetchrow(f'UPDATE {table} SET moderation_status=$2,updated_at=now() WHERE id=$1 RETURNING id', str(payload.get('id') or ''), decision)
-            if not row:
-                raise HTTPException(status_code=404, detail='Content not found.')
-            return {'id': row['id'], 'moderation_status': decision}
-    finally:
-        await conn.close()
+        text = body.decode('utf-8')
+    except UnicodeDecodeError:
+        raise HTTPException(status_code=400, detail='Invalid webhook encoding.') from None
+    return await handle_video_webhook(settings, text, request.headers.get('authorization'))
 
 
 @app.post("/graphql", tags=["graphql"])
@@ -650,7 +667,16 @@ async def storage_upload(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> dict[str, Any]:
     user = await require_user(settings, bearer_token(request))
-    return await run_in_threadpool(put_object, settings, payload, user["id"])
+    conn = await connect(settings)
+    try:
+        async with conn.transaction():
+            state = await conn.fetchval("SELECT metadata->>'deletion_status' FROM api_users WHERE id=$1 FOR UPDATE", user['id'])
+            if state:
+                raise HTTPException(status_code=409, detail='Uploads are disabled while account deletion is pending.')
+            # Cleanup waits for an in-flight upload before enumerating owned keys.
+            return await run_in_threadpool(put_object, settings, payload, user["id"])
+    finally:
+        await conn.close()
 
 
 @app.post("/storage/signed-url", tags=["storage"])
@@ -689,6 +715,7 @@ async def storage_signed_url(
 
 @app.get("/storage/object", tags=["storage"])
 async def storage_object(bucket: str, path: str, expiry: int, signature: str, settings: Annotated[Settings, Depends(get_settings)]):
+    await require_active_media_owner(settings, path)
     obj = await run_in_threadpool(read_object, settings, bucket, path, expiry, signature)
     def chunks():
         try:
@@ -701,6 +728,7 @@ async def storage_object(bucket: str, path: str, expiry: int, signature: str, se
 
 @app.get('/storage/avatar', tags=['storage'])
 async def storage_avatar(path: str, settings: Annotated[Settings, Depends(get_settings)]):
+    await require_active_media_owner(settings, path)
     obj = await run_in_threadpool(read_public_avatar, settings, path)
     def chunks():
         try:
@@ -708,7 +736,20 @@ async def storage_avatar(path: str, settings: Annotated[Settings, Depends(get_se
         finally:
             obj['Body'].close()
     return StreamingResponse(chunks(), media_type=obj.get('ContentType', 'application/octet-stream'),
-                             headers={'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'public, max-age=86400, immutable'})
+                             headers={'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'private, max-age=300'})
+
+
+async def require_active_media_owner(settings, path):
+    parts = path.split('/')
+    if len(parts) < 3 or parts[0] != 'users':
+        raise HTTPException(status_code=404, detail='Media not found.')
+    conn = await connect(settings)
+    try:
+        owner = await conn.fetchrow("SELECT metadata->>'deletion_status' AS deletion_status FROM api_users WHERE id=$1", parts[1])
+        if not owner or owner['deletion_status'] in {'processing', 'completed'}:
+            raise HTTPException(status_code=404, detail='Media not found.')
+    finally:
+        await conn.close()
 
 
 @app.post("/payments/checkout", tags=["payments"])

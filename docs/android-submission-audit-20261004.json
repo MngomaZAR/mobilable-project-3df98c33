@@ -1,0 +1,12 @@
+{
+  "checkedAt": "2026-10-03T22:13:14.705Z",
+  "readOnly": true,
+  "submissionId": "ee8e12fd-14d6-4f43-8a98-a84335ff6d89",
+  "status": "ERRORED",
+  "errorCode": "SUBMISSION_SERVICE_ANDROID_UNKNOWN_ERROR",
+  "logsRead": 2,
+  "causes": [
+    "publisher_api_disabled"
+  ],
+  "note": "Provider log URLs, credential values and account emails are intentionally excluded. No submission retried."
+}

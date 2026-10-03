@@ -1,0 +1,33 @@
+# Standalone local QA only. This is not a production ingress/TURN deployment.
+services:
+  livekit-qa:
+    image: livekit/livekit-server:v1.13.7
+    restart: "no"
+    command: ["--config", "/etc/livekit.yaml"]
+    ports:
+      - "127.0.0.1:7880:7880/tcp"
+      - "127.0.0.1:7881:7881/tcp"
+      - "127.0.0.1:7882:7882/udp"
+    configs:
+      - source: livekit-qa-config
+        target: /etc/livekit.yaml
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+configs:
+  livekit-qa-config:
+    content: |
+      port: 7880
+      bind_addresses: ["0.0.0.0"]
+      rtc:
+        node_ip: 127.0.0.1
+        use_external_ip: false
+        tcp_port: 7881
+        udp_port: 7882
+      keys:
+        "${LIVEKIT_API_KEY:?Set a dedicated local QA key}": "${LIVEKIT_API_SECRET:?Set a dedicated random local QA secret}"
+      room:
+        empty_timeout: 120
+        departure_timeout: 30
+        max_participants: 3

@@ -117,8 +117,17 @@ def user_response(row: asyncpg.Record | dict[str, Any]) -> dict[str, Any]:
             "avatar_url": metadata.get("avatar_url"),
             "kyc_status": metadata.get("kyc_status"),
             "age_verified": metadata.get("age_verified"),
+            "deletion_status": metadata.get("deletion_status"),
         },
     }
+
+
+def assert_account_access(row) -> None:
+    metadata = row.get('metadata') or {}
+    if isinstance(metadata, str):
+        metadata = json.loads(metadata)
+    if metadata.get('deletion_status') in {'processing', 'completed'}:
+        raise HTTPException(status_code=401, detail='This account is being deleted or has been deleted.')
 
 
 def metadata_from_options(options: dict[str, Any]) -> dict[str, Any]:
@@ -140,17 +149,18 @@ async def create_session(settings: Settings, user: asyncpg.Record | dict[str, An
     user_id = user.get("id") if isinstance(user, dict) else user["id"]
     conn = await connect(settings)
     try:
-        await conn.execute(
-            """
-            INSERT INTO api_sessions (access_token, refresh_token, user_id, expires_at, refresh_expires_at)
-            VALUES ($1, $2, $3, $4, $5)
-            """,
-            token_digest(access_token),
-            token_digest(refresh_token),
-            user_id,
-            expires_at,
-            refresh_expires_at,
-        )
+        async with conn.transaction():
+            current = await conn.fetchrow('SELECT id,email,metadata FROM api_users WHERE id=$1 FOR UPDATE', user_id)
+            if not current:
+                raise HTTPException(status_code=401, detail='Account not found.')
+            assert_account_access(current)
+            user = current
+            await conn.execute(
+                """INSERT INTO api_sessions (access_token, refresh_token, user_id, expires_at, refresh_expires_at)
+                VALUES ($1, $2, $3, $4, $5)""",
+                token_digest(access_token), token_digest(refresh_token), user_id,
+                expires_at, refresh_expires_at,
+            )
     finally:
         await conn.close()
     return {
@@ -247,6 +257,7 @@ async def user_from_access_token(settings: Settings, token: str) -> dict[str, An
         await conn.close()
     if not row:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session expired or invalid.")
+    assert_account_access(row)
     return user_response(row)
 
 
@@ -260,16 +271,21 @@ async def local_refresh(settings: Settings, refresh_token: str | None) -> dict[s
             row = await conn.fetchrow(
                 """SELECT u.id, u.email, u.metadata, u.created_at, s.access_token
                 FROM api_sessions s JOIN api_users u ON u.id = s.user_id
-                WHERE s.refresh_token = $1 AND s.refresh_expires_at > now()
-                FOR UPDATE OF s""", token_digest(refresh_token),
+                WHERE s.refresh_token = $1 AND s.refresh_expires_at > now()""", token_digest(refresh_token),
             )
             if not row:
                 raise HTTPException(status_code=401, detail="Refresh token expired or invalid.")
+            # Serialize refresh against cleanup before rotating a session.
+            current = await conn.fetchrow('SELECT metadata FROM api_users WHERE id=$1 FOR UPDATE', row['id'])
+            assert_account_access(current)
+            locked_token = await conn.fetchval('SELECT access_token FROM api_sessions WHERE refresh_token=$1 AND refresh_expires_at>now() FOR UPDATE', token_digest(refresh_token))
+            if not locked_token:
+                raise HTTPException(status_code=401, detail='Refresh token expired or invalid.')
             access_token, next_refresh = secrets.token_urlsafe(48), secrets.token_urlsafe(48)
             expires_at = _now() + ACCESS_TOKEN_TTL
             await conn.execute(
                 """UPDATE api_sessions SET access_token=$2,refresh_token=$3,expires_at=$4
-                WHERE access_token=$1""", row["access_token"], token_digest(access_token), token_digest(next_refresh), expires_at,
+                WHERE access_token=$1""", locked_token, token_digest(access_token), token_digest(next_refresh), expires_at,
             )
     finally:
         await conn.close()
@@ -308,7 +324,7 @@ async def local_update_user(settings: Settings, token: str, attributes: dict[str
         row = await conn.fetchrow(
             """
             UPDATE api_users
-            SET email = $2, metadata = $3::jsonb, updated_at = now()
+            SET email = $2, metadata = metadata || $3::jsonb, updated_at = now()
             WHERE id = $1
             RETURNING id, email, metadata, created_at
             """,

@@ -25,7 +25,7 @@ import { environment } from '../config/environment';
 import { RootStackParamList } from '../navigation/types';
 import { ActionModal } from '../components/ActionModal';
 import { LEGAL_CONTENT } from '../constants/LegalContent';
-import { requestAccountDeletion } from '../services/accountService';
+import { getAccountDeletionStatus, requestAccountDeletion } from '../services/accountService';
 import { BRAND, PLACEHOLDER_AVATAR } from '../utils/constants';
 import { backendDb } from '../services/backendGateway';
 import { registerForPushNotificationsAsync, savePushTokenAsync } from '../services/notificationService';
@@ -183,6 +183,7 @@ const SettingsScreen: React.FC = () => {
     content: ''
   });
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isCheckingDeletion, setIsCheckingDeletion] = useState(false);
 
   const s = makeStyles(colors, isDark);
 
@@ -244,15 +245,15 @@ const SettingsScreen: React.FC = () => {
   const handleDeleteAccount = () => {
     setModalState({
       visible: true,
-      title: 'Request Account Deletion',
-      message: 'Submit an account deletion request to support? Your account remains active until the request is processed. Records required for payments or legal obligations may need to be retained.',
+      title: 'Delete Account',
+      message: 'Delete your profile, content and uploaded media? New bookings and uploads will stop. Open bookings and balances must be resolved first. Required financial records may be retained. This cannot be undone once cleanup starts.',
       isDestructive: true,
       onConfirm: async () => {
         setModalState(p => ({ ...p, visible: false }));
         try {
           setIsDeleting(true);
-          await requestAccountDeletion('User requested via settings');
-          Alert.alert('Request Sent', 'Your account deletion request has been saved for support. Your account has not yet been deleted. Contact support for the request status.');
+          const result = await requestAccountDeletion('User requested via settings');
+          Alert.alert('Deletion Queued', `Request ${result.id} is ${result.status}. Your data will be removed after open bookings and balances are resolved. Your account has not yet been deleted.`);
         } catch (err) {
           Alert.alert('Error', 'Failed to submit request. Please contact support.');
         } finally {
@@ -261,6 +262,20 @@ const SettingsScreen: React.FC = () => {
       },
       onCancel: () => setModalState(p => ({ ...p, visible: false }))
     });
+  };
+
+  const checkDeletionStatus = async () => {
+    setIsCheckingDeletion(true);
+    try {
+      const result = await getAccountDeletionStatus();
+      Alert.alert('Account Deletion', result
+        ? `Request ${result.id}: ${result.status}.${result.blocked_reason ? '\nOutstanding: ' + result.blocked_reason.replace(/_/g, ' ') : ''}`
+        : 'No deletion receipt is stored on this device.');
+    } catch (error: any) {
+      Alert.alert('Account Deletion', error.message || 'Unable to check deletion status.');
+    } finally {
+      setIsCheckingDeletion(false);
+    }
   };
 
   const handleUpdateAvatar = async () => {
@@ -659,6 +674,9 @@ const SettingsScreen: React.FC = () => {
             disabled={isDeleting}
           >
             <Text style={s.destructiveText}>{isDeleting ? 'Processing...' : 'Delete Account'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[s.groupItem, { justifyContent: 'center' }]} onPress={checkDeletionStatus} disabled={isCheckingDeletion}>
+            <Text style={s.itemText}>{isCheckingDeletion ? 'Checking...' : 'Deletion Status'}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[s.groupItem, { justifyContent: 'center' }]}

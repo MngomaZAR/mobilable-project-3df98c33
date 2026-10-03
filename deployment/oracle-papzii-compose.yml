@@ -1,3 +1,22 @@
+x-operational-environment: &operational-environment
+  ALLOW_RUNTIME_SCHEMA_CHANGES: "false"
+  ADMIN_USER_IDS: ${ADMIN_USER_IDS:-}
+  COMMISSION_RATE: ${COMMISSION_RATE:-0.20}
+  OSRM_BASE_URL: ${OSRM_BASE_URL:-http://papzii-osrm:5000}
+  EXPO_ACCESS_TOKEN: ${EXPO_ACCESS_TOKEN:-}
+  SMTP_HOST: ${SMTP_HOST:-}
+  SMTP_PORT: ${SMTP_PORT:-587}
+  SMTP_USER: ${SMTP_USER:-}
+  SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+  SMTP_FROM: ${SMTP_FROM:-}
+  SMTP_SSL: ${SMTP_SSL:-false}
+  RECOVERY_ENCRYPTION_KEY: ${RECOVERY_ENCRYPTION_KEY:-}
+  LIVEKIT_ENABLED: ${LIVEKIT_ENABLED:-false}
+  LIVEKIT_URL: ${LIVEKIT_URL:-}
+  LIVEKIT_API_URL: ${LIVEKIT_API_URL:-}
+  LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-}
+  LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-}
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -16,10 +35,7 @@ services:
       retries: 10
 
   api:
-    build:
-      context: ${PAPZII_SOURCE_DIR:-/opt/papzii-src}
-      dockerfile: backend/api/Dockerfile
-    image: papzii-api:local
+    image: ${PAPZI_API_IMAGE:?Set the tested GHCR API digest before deploying}
     container_name: papzii-api
     restart: unless-stopped
     depends_on:
@@ -32,9 +48,11 @@ services:
       typesense:
         condition: service_started
     environment:
+      <<: *operational-environment
       APP_ENV: production
       APP_VERSION: ${APP_VERSION:-0.1.0}
       API_PUBLIC_URL: ${API_PUBLIC_URL}
+      FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-127.0.0.1}
       DATABASE_URL: postgresql://${POSTGRES_USER:-papzii}:${POSTGRES_PASSWORD}@papzii-postgres:5432/${POSTGRES_DB:-papzii}
       MINIO_ENDPOINT: http://minio:9000
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
@@ -52,11 +70,23 @@ services:
       PAYFAST_MERCHANT_ID: ${PAYFAST_MERCHANT_ID:-}
       PAYFAST_MERCHANT_KEY: ${PAYFAST_MERCHANT_KEY:-}
       PAYFAST_PASSPHRASE: ${PAYFAST_PASSPHRASE:-}
+      PAYFAST_SANDBOX: ${PAYFAST_SANDBOX:-true}
+      PAYFAST_RETURN_URL: ${PAYFAST_RETURN_URL:-}
+      PAYFAST_CANCEL_URL: ${PAYFAST_CANCEL_URL:-}
+      FINANCIAL_BANK_ENCRYPTION_KEY: ${FINANCIAL_BANK_ENCRYPTION_KEY:-}
+      PAYFAST_REFUNDS_ENABLED: ${PAYFAST_REFUNDS_ENABLED:-false}
+      FINANCIAL_REFUND_ACCEPTANCE_ID: ${FINANCIAL_REFUND_ACCEPTANCE_ID:-}
+      STITCH_CLIENT_ID: ${STITCH_CLIENT_ID:-}
+      STITCH_CLIENT_SECRET: ${STITCH_CLIENT_SECRET:-}
+      STITCH_WEBHOOK_SECRET: ${STITCH_WEBHOOK_SECRET:-}
+      STITCH_MODE: ${STITCH_MODE:-}
+      STITCH_PAYOUTS_ENABLED: ${STITCH_PAYOUTS_ENABLED:-false}
+      FINANCIAL_PAYOUT_ACCEPTANCE_ID: ${FINANCIAL_PAYOUT_ACCEPTANCE_ID:-}
     expose:
       - "8000"
     networks:
       - default
-      - madabukela_default
+      - dokploy-network
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5).read()\""]
       interval: 30s
@@ -65,15 +95,13 @@ services:
       start_period: 30s
 
   worker:
-    build:
-      context: ${PAPZII_SOURCE_DIR:-/opt/papzii-src}
-      dockerfile: backend/worker/Dockerfile
-    image: papzii-worker:local
+    image: ${PAPZI_WORKER_IMAGE:?Set the tested GHCR worker digest before deploying}
     restart: unless-stopped
     depends_on:
       api:
         condition: service_healthy
     environment:
+      <<: *operational-environment
       APP_ENV: production
       DATABASE_URL: postgresql://${POSTGRES_USER:-papzii}:${POSTGRES_PASSWORD}@papzii-postgres:5432/${POSTGRES_DB:-papzii}
       MINIO_ENDPOINT: http://minio:9000
@@ -86,7 +114,8 @@ services:
       TYPESENSE_API_KEY: ${TYPESENSE_API_KEY}
 
   minio:
-    image: quay.io/minio/minio:latest
+    # Existing volume stays intact until a verified S3 data migration is accepted.
+    image: quay.io/minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
     restart: unless-stopped
     command: ["server", "/data", "--console-address", ":9001"]
     environment:
@@ -98,7 +127,7 @@ services:
   nats:
     image: nats:2.12-alpine
     restart: unless-stopped
-    command: ["-js"]
+    command: ["-js", "-sd", "/data"]
     volumes:
       - papzii-nats-data:/data
 
@@ -118,5 +147,5 @@ volumes:
   papzii-typesense-data:
 
 networks:
-  madabukela_default:
+  dokploy-network:
     external: true

@@ -1,633 +1,289 @@
-/**
- * PaidVideoCallScreen — LiveKit powered video call screen
- *
- * Integration: @livekit/react-native
- * Install: npx expo install @livekit/react-native livekit-client
- *
- * Architecture:
- *   - Server generates a LiveKit access token via a provider Edge Function
- *     (`livekit-token`) using the LiveKit server SDK + API key/secret (in env).
- *   - Client connects to the LiveKit Cloud (or self-hosted) room.
- *   - Billing: `video_call_sessions` table records start/end; a DB trigger
- *     writes an earnings row when the session ends.
- */
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert,
-  Dimensions,
-  Linking,
-  Modal,
-  Platform,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+  ActivityIndicator, Platform, StatusBar, StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { createTipCheckoutLink } from '../services/monetisationService';
-import { trackEvent } from '../services/analyticsService';
-import { backendDb } from '../services/backendGateway';
-import { getCurrentAuthenticatedUser } from '../config/currentUser';
-import { invokeBackendFunction } from '../config/backendFunctions';
-import { getDefaultPayfastNotifyUrl } from '../config/commercePolicy';
-import { useAppData } from '../store/AppDataContext';
-import { isLiveVideoAvailable, LIVE_VIDEO_UNAVAILABLE_MESSAGE } from '../utils/videoCalls';
+import { ConnectionState, Track } from 'livekit-client';
+import {
+  BookingCallSession, connectedSeconds, endBookingCall, getLiveVideoSDK,
+  LIVE_VIDEO_UNAVAILABLE_MESSAGE, requestBookingCall,
+} from '../utils/videoCalls';
 
-const { width, height } = Dimensions.get('window');
+type NativeSDK = NonNullable<ReturnType<typeof getLiveVideoSDK>>;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// LiveKit lazy import — the app uses this when the native package is available
-// ─────────────────────────────────────────────────────────────────────────────
-let LiveKitRoom: React.ComponentType<any> | null = null;
-let VideoView: React.ComponentType<any> | null = null;
-let useTracks: (() => any[]) | null = null;
-let Track: any = null;
+const CallRoom: React.FC<{
+  sdk: NativeSDK; ending: boolean; error: string | null;
+  onEnd: () => Promise<void>; onRetry: () => Promise<void>;
+  onRoom: (room: ReturnType<NativeSDK['useRoomContext']> | null) => void;
+}> = ({ sdk, ending, error, onEnd, onRetry, onRoom }) => {
+  const room = sdk.useRoomContext();
+  const connection = sdk.useConnectionState();
+  const { localParticipant, isMicrophoneEnabled, isCameraEnabled } = sdk.useLocalParticipant();
+  const tracks = sdk.useTracks([Track.Source.Camera]);
+  const remote = tracks.filter((track) => !track.participant.isLocal);
+  const local = tracks.find((track) => track.participant.isLocal);
+  const [controlError, setControlError] = useState<string | null>(null);
+  const [busy, setBusy] = useState<'microphone' | 'camera' | null>(null);
+  const busyRef = useRef(false);
+  const [seconds, setSeconds] = useState(0);
+  const accumulated = useRef(0);
+  const connectedAt = useRef<number | null>(null);
+  const isConnected = connection === ConnectionState.Connected;
 
-try {
-  const lk = require('@livekit/react-native');
-  LiveKitRoom = lk.LiveKitRoom;
-  VideoView = lk.VideoView;
-  useTracks = lk.useTracks;
-  Track = lk.Track;
-} catch (_e) {
-  // Keep the call surface functional even if the native module is unavailable on a given build.
-}
+  useEffect(() => {
+    onRoom(room);
+    return () => onRoom(null);
+  }, [room, onRoom]);
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Sub-component: active room video views (rendered inside LiveKitRoom context)
-// ─────────────────────────────────────────────────────────────────────────────
-const RoomParticipants: React.FC<{ creatorId: string }> = ({ creatorId }) => {
-  const useTracksSafe = useTracks ?? (() => []);
-  const tracks = useTracksSafe();
-  const remoteTracks = tracks.filter((t: any) => !t.participant?.isLocal && t.source === Track?.Source?.Camera);
-  const localTrack = tracks.find((t: any) => t.participant?.isLocal && t.source === Track?.Source?.Camera);
+  useEffect(() => {
+    if (!isConnected) {
+      setSeconds(connectedSeconds(accumulated.current, null));
+      return;
+    }
+    connectedAt.current = Date.now();
+    const timer = setInterval(() => setSeconds(connectedSeconds(accumulated.current, connectedAt.current)), 1000);
+    return () => {
+      if (connectedAt.current !== null) accumulated.current += Math.max(0, Date.now() - connectedAt.current);
+      connectedAt.current = null;
+      clearInterval(timer);
+    };
+  }, [isConnected]);
+
+  const toggle = async (control: 'microphone' | 'camera') => {
+    if (busyRef.current || !isConnected || ending) return;
+    busyRef.current = true;
+    setBusy(control);
+    setControlError(null);
+    try {
+      if (control === 'microphone') await localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled);
+      else await localParticipant.setCameraEnabled(!isCameraEnabled);
+    } catch {
+      setControlError(control === 'microphone' ? 'Microphone change failed. Check device permissions.' : 'Camera change failed. Check device permissions.');
+    } finally {
+      busyRef.current = false;
+      setBusy(null);
+    }
+  };
+  const time = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+  const status = isConnected ? 'Connected' : connection === ConnectionState.Disconnected ? 'Disconnected' : 'Connecting';
+  const VideoTrack = sdk.VideoTrack;
+  const controlsDisabled = !isConnected || ending || busy !== null;
 
   return (
-    <View style={StyleSheet.absoluteFillObject}>
-      {/* Remote (creator) video — full screen background */}
-      {remoteTracks[0] && VideoView ? (
-        <VideoView trackRef={remoteTracks[0]} style={StyleSheet.absoluteFillObject} objectFit="cover" />
-      ) : (
-        <View style={styles.noVideoPlaceholder}>
-          <Ionicons name="person-circle" size={80} color="rgba(255,255,255,0.3)" />
-          <Text style={styles.noVideoText}>Waiting for creator to join…</Text>
-        </View>
-      )}
-      {/* Local (viewer) PiP preview */}
-      {localTrack && VideoView ? (
-        <View style={styles.localPreviewWrap}>
-          <VideoView trackRef={localTrack} style={styles.localVideo} objectFit="cover" />
-        </View>
-      ) : (
-        <View style={styles.localPreviewWrap}>
-          <View style={[styles.localVideo, styles.cameraOffPlaceholder]}>
-            <Ionicons name="videocam-off" size={28} color="rgba(255,255,255,0.4)" />
+    <View style={styles.container}>
+      <View style={styles.remoteGrid}>
+        {remote.length > 0 ? remote.map((track) => (
+          <VideoTrack key={track.participant.identity} trackRef={track} style={styles.remoteVideo} objectFit="cover" />
+        )) : (
+          <View style={styles.placeholder}>
+            <Ionicons name="person-circle-outline" size={72} color="#a1a1aa" />
+            <Text style={styles.secondary}>Waiting for another booking participant</Text>
           </View>
+        )}
+      </View>
+      <View style={styles.localPreview}>
+        {local && isCameraEnabled ? (
+          <VideoTrack trackRef={local} style={styles.localVideo} objectFit="cover" />
+        ) : <Ionicons name="videocam-off-outline" size={28} color="#fff" />}
+      </View>
+      <SafeAreaView edges={['top']} style={styles.topBar}>
+        <Text style={styles.heading}>Booking call</Text>
+        <Text accessibilityLiveRegion="polite" style={styles.secondary}>{status} | {time}</Text>
+      </SafeAreaView>
+      <SafeAreaView edges={['bottom']} style={styles.bottomBar}>
+        {(error || controlError) && <Text accessibilityRole="alert" style={styles.error}>{error || controlError}</Text>}
+        {connection === ConnectionState.Disconnected && !ending && !error && (
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Reconnect booking call" style={styles.action} onPress={() => void onRetry()}>
+            <Ionicons name="refresh-outline" size={20} color="#fff" /><Text style={styles.actionText}>Reconnect</Text>
+          </TouchableOpacity>
+        )}
+        {error && !ending && (
+          <TouchableOpacity accessibilityRole="button" style={styles.action} onPress={() => void onEnd()}>
+            <Ionicons name="call-outline" size={20} color="#fff" /><Text style={styles.actionText}>End call</Text>
+          </TouchableOpacity>
+        )}
+        <View style={styles.controls}>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel={isMicrophoneEnabled ? 'Mute microphone' : 'Unmute microphone'}
+            accessibilityState={{ disabled: controlsDisabled, selected: !isMicrophoneEnabled }}
+            disabled={controlsDisabled} style={[styles.control, !isMicrophoneEnabled && styles.controlOff, controlsDisabled && styles.disabled]}
+            onPress={() => void toggle('microphone')}>
+            <Ionicons name={isMicrophoneEnabled ? 'mic-outline' : 'mic-off-outline'} size={26} color="#fff" />
+          </TouchableOpacity>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="End booking call" accessibilityState={{ disabled: ending }}
+            disabled={ending} style={[styles.control, styles.hangup]}
+            onPress={() => void onEnd()}>
+            {ending ? <ActivityIndicator color="#fff" /> : <Ionicons name="call-outline" size={28} color="#fff" />}
+          </TouchableOpacity>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel={isCameraEnabled ? 'Turn camera off' : 'Turn camera on'}
+            accessibilityState={{ disabled: controlsDisabled, selected: !isCameraEnabled }}
+            disabled={controlsDisabled} style={[styles.control, !isCameraEnabled && styles.controlOff, controlsDisabled && styles.disabled]}
+            onPress={() => void toggle('camera')}>
+            <Ionicons name={isCameraEnabled ? 'videocam-outline' : 'videocam-off-outline'} size={26} color="#fff" />
+          </TouchableOpacity>
         </View>
-      )}
+      </SafeAreaView>
     </View>
   );
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Main screen
-// ─────────────────────────────────────────────────────────────────────────────
 const PaidVideoCallScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
-  const { currentUser } = useAppData();
-
-  const creatorId: string | undefined = route.params?.creatorId;
-  const requestedRole: 'creator' | 'viewer' = route.params?.role === 'creator' ? 'creator' : 'viewer';
-  const isTestRoom = Boolean(route.params?.testRoom);
-  const [resolvedCreatorId, setResolvedCreatorId] = useState<string | undefined>(creatorId);
-  const [roleChoice, setRoleChoice] = useState<'creator' | 'viewer'>(requestedRole);
-  const [creatorIdInput, setCreatorIdInput] = useState('');
-  const [testReady, setTestReady] = useState(!isTestRoom);
-
-  const [seconds, setSeconds] = useState(0);
-  const [isMuted, setIsMuted] = useState(false);
-  const [cameraOff, setCameraOff] = useState(false);
-  const [isTipping, setIsTipping] = useState(false);
-  const [tipModalVisible, setTipModalVisible] = useState(false);
-  const [tipAmount, setTipAmount] = useState('50');
-  const [livekitToken, setLivekitToken] = useState<string | null>(null);
-  const [livekitUrl, setLivekitUrl] = useState<string | null>(null);
-  const [sessionId, setSessionId] = useState<string | null>(null);
-  const [tokenLoading, setTokenLoading] = useState(true);
-  const [tokenError, setTokenError] = useState<string | null>(null);
+  const bookingId = typeof route.params?.bookingId === 'string' ? route.params.bookingId : '';
+  const sdk = useMemo(() => getLiveVideoSDK(), []);
+  const [session, setSession] = useState<BookingCallSession | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [ending, setEnding] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [roomKey, setRoomKey] = useState(0);
+  const mounted = useRef(true);
+  const sessionRef = useRef<BookingCallSession | null>(null);
+  const roomRef = useRef<ReturnType<NativeSDK['useRoomContext']> | null>(null);
+  const onRoom = useCallback((room: ReturnType<NativeSDK['useRoomContext']> | null) => { roomRef.current = room; }, []);
+  const requestVersion = useRef(0);
+  const joiningRef = useRef(false);
+  const endingRef = useRef(false);
+  const allowLeave = useRef(false);
 
   useEffect(() => {
-    if (!isTestRoom) {
-      setResolvedCreatorId(creatorId);
-    }
-  }, [creatorId, isTestRoom]);
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      requestVersion.current++;
+      if (sessionRef.current) void endBookingCall(sessionRef.current).catch(() => {});
+      if (sdk) void sdk.AudioSession.stopAudioSession().catch(() => {});
+    };
+  }, [sdk]);
 
-  // For creator mode, fallback to the signed-in user id when creatorId is missing.
-  useEffect(() => {
-    const activeRole = isTestRoom ? roleChoice : requestedRole;
-    if (resolvedCreatorId || activeRole !== 'creator') return;
-    (async () => {
-      const user = await getCurrentAuthenticatedUser();
-      if (user?.id) setResolvedCreatorId(user.id);
-    })();
-  }, [requestedRole, resolvedCreatorId, isTestRoom, roleChoice]);
-
-  // ── Guard: creatorId is required ──────────────────────────────────────────
-  useEffect(() => {
-    const activeRole = isTestRoom ? roleChoice : requestedRole;
-    if (activeRole === 'viewer' && !resolvedCreatorId && !isTestRoom) {
-      Alert.alert('Error', 'No creator specified for this call.', [
-        { text: 'Go back', onPress: () => navigation.goBack() },
-      ]);
-    }
-  }, [requestedRole, resolvedCreatorId, navigation, isTestRoom, roleChoice]);
-
-  // ── Call timer ─────────────────────────────────────────────────────────────
-  useEffect(() => {
-    const timer = setInterval(() => setSeconds((s) => s + 1), 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  // ── Fetch LiveKit token from provider Edge Function ───────────────────────
-  const fetchToken = useCallback(async () => {
-    const activeRole = isTestRoom ? roleChoice : requestedRole;
-    if (!resolvedCreatorId) return;
-    setTokenLoading(true);
-    setTokenError(null);
+  const join = useCallback(async () => {
+    if (!sdk || !bookingId || joiningRef.current || endingRef.current) return;
+    joiningRef.current = true;
+    const version = ++requestVersion.current;
+    setLoading(true);
+    setError(null);
+    setSession(null);
     try {
-      const { data, error } = await invokeBackendFunction('livekit-token', {
-        creator_id: resolvedCreatorId,
-        role: activeRole,
-      });
-      if (error) throw error;
-      if (!data?.token || !data?.url) throw new Error('Invalid token response from server.');
-      setLivekitToken(data.token);
-      setLivekitUrl(data.url);
-      if (data?.sessionId) setSessionId(data.sessionId);
-    } catch (err: any) {
-      setTokenError(err.message || 'Could not start video call.');
-    } finally {
-      setTokenLoading(false);
-    }
-  }, [requestedRole, resolvedCreatorId, isTestRoom, roleChoice]);
-
-  useEffect(() => {
-    if (!testReady) return;
-    fetchToken();
-  }, [fetchToken, testReady]);
-
-  // ── End call — bills the session via edge function ────────────────────────
-  const endCall = useCallback(async () => {
-    if (sessionId) {
-      try {
-        await invokeBackendFunction('livekit-token', {
-          action: 'end',
-          session_id: sessionId,
-        });
-      } catch (_e) {
-        // Non-blocking — session will be cleaned up server-side
-      }
-    }
-    navigation.goBack();
-  }, [sessionId, navigation]);
-
-  // ── Tip handler ───────────────────────────────────────────────────────────
-  const handleTip = async () => {
-    if (!resolvedCreatorId || !tipAmount || isNaN(Number(tipAmount))) return;
-    setIsTipping(true);
-    try {
-      const amountNum = Number(tipAmount);
-      if (amountNum < 5) {
-        Alert.alert('Minimum tip', 'Minimum tip is R5.');
+      const credentials = await requestBookingCall(bookingId);
+      if (!mounted.current || version !== requestVersion.current) {
+        void endBookingCall(credentials).catch(() => {});
         return;
       }
-
-      const { paymentUrl } = await createTipCheckoutLink({
-        receiverId: resolvedCreatorId,
-        amount: amountNum,
-        message: 'Great video call!',
-        returnUrl: 'papzi://tips/success',
-        cancelUrl: 'papzi://tips/cancel',
-        notifyUrl: getDefaultPayfastNotifyUrl(),
-      });
-
-      setTipModalVisible(false);
-      trackEvent('tip_sent', {
-        creator_id: resolvedCreatorId,
-        amount: amountNum,
-        source: 'video_call',
-      });
-      await Linking.openURL(paymentUrl);
-      Platform.OS === 'web'
-        ? alert('Checkout opened. Complete payment to send your tip.')
-        : Alert.alert('Checkout opened', 'Complete payment to send your tip.');
-    } catch (e: any) {
-      const friendly = e.message || 'Something went wrong.';
-      Platform.OS === 'web' ? alert(friendly) : Alert.alert('Error', friendly);
+      sessionRef.current = credentials;
+      await sdk.AudioSession.startAudioSession();
+      if (!mounted.current || version !== requestVersion.current) {
+        await sdk.AudioSession.stopAudioSession();
+        return;
+      }
+      setSession(credentials);
+      setRoomKey((value) => value + 1);
+    } catch (failure) {
+      if (mounted.current) setError(failure instanceof Error ? failure.message : 'The booking call could not be started.');
+      await sdk.AudioSession.stopAudioSession().catch(() => {});
     } finally {
-      setIsTipping(false);
+      joiningRef.current = false;
+      if (mounted.current && version === requestVersion.current) setLoading(false);
     }
+  }, [bookingId, sdk]);
+
+  const end = useCallback(async () => {
+    if (endingRef.current) return;
+    endingRef.current = true;
+    requestVersion.current++;
+    setEnding(true);
+    setError(null);
+    try {
+      if (roomRef.current) await roomRef.current.disconnect().catch(() => {});
+      if (sessionRef.current) await endBookingCall(sessionRef.current);
+      sessionRef.current = null;
+      allowLeave.current = true;
+      navigation.goBack();
+    } catch {
+      if (mounted.current) setError('The server could not confirm call ending. Retry, or leave locally; room cleanup may still be pending.');
+    } finally {
+      if (sdk) await sdk.AudioSession.stopAudioSession().catch(() => {});
+      endingRef.current = false;
+      if (mounted.current) setEnding(false);
+    }
+  }, [navigation, sdk]);
+
+  useEffect(() => navigation.addListener('beforeRemove', (event: any) => {
+    if (!sessionRef.current || allowLeave.current) return;
+    event.preventDefault();
+    void end();
+  }), [navigation, end]);
+
+  const leaveLocally = () => {
+    allowLeave.current = true;
+    navigation.goBack();
   };
 
-  const formatTime = (s: number) => {
-    const mins = Math.floor(s / 60);
-    const secs = s % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  // ── LiveKit unavailable on this build/device: show a production fallback ──
-  if (!LiveKitRoom || !isLiveVideoAvailable()) {
+  if (!session || !sdk) {
+    const unavailable = !sdk ? LIVE_VIDEO_UNAVAILABLE_MESSAGE : !bookingId ? 'An accepted booking is required to join this call.' : null;
     return (
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle="light-content" />
-        <View style={styles.notInstalledBanner}>
-          <Ionicons name="videocam-outline" size={64} color="rgba(255,255,255,0.5)" />
-          <Text style={styles.notInstalledTitle}>Video room unavailable</Text>
-          <Text style={styles.notInstalledBody}>
-            {LIVE_VIDEO_UNAVAILABLE_MESSAGE} You can still message the creator or return to your bookings.
-          </Text>
-          <View style={styles.fallbackActions}>
-            <TouchableOpacity style={styles.fallbackBtn} onPress={() => navigation.navigate('Root', { screen: 'Chat' })}>
-              <Ionicons name="chatbubbles-outline" size={18} color="#fff" />
-              <Text style={styles.fallbackBtnText}>Open Chat</Text>
+        <View style={styles.idle}>
+          <Ionicons name="videocam-outline" size={54} color="#a1a1aa" />
+          <Text style={styles.title}>Booking call</Text>
+          <Text style={styles.secondary}>{unavailable || (loading ? 'Preparing call...' : 'Ready to join')}</Text>
+          {error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
+          {!unavailable && (
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Join booking call" disabled={loading || ending}
+              style={[styles.action, (loading || ending) && styles.disabled]} onPress={() => void join()}>
+              {loading ? <ActivityIndicator color="#fff" /> : <Ionicons name="videocam-outline" size={20} color="#fff" />}
+              <Text style={styles.actionText}>Join call</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.endCallBtn} onPress={endCall}>
-              <Text style={{ color: '#fff', fontWeight: '700' }}>Go Back</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  // ── Token error state ─────────────────────────────────────────────────────
-  const inlineError = !tokenLoading && tokenError ? tokenError : null;
-
-  if (isTestRoom && !testReady) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <StatusBar barStyle="light-content" />
-        <View style={styles.testRoomWrap}>
-          <Text style={styles.testRoomTitle}>LiveKit Test Room</Text>
-          <Text style={styles.testRoomBody}>
-            Use two devices. Join as Model on one device and Client on the other using the same model ID.
-          </Text>
-
-          <View style={styles.testRoleRow}>
-            <TouchableOpacity
-              style={[styles.testRoleBtn, roleChoice === 'creator' && styles.testRoleBtnActive]}
-              onPress={() => setRoleChoice('creator')}
-            >
-              <Text style={[styles.testRoleText, roleChoice === 'creator' && styles.testRoleTextActive]}>Join as Model</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.testRoleBtn, roleChoice === 'viewer' && styles.testRoleBtnActive]}
-              onPress={() => setRoleChoice('viewer')}
-            >
-              <Text style={[styles.testRoleText, roleChoice === 'viewer' && styles.testRoleTextActive]}>Join as Client</Text>
-            </TouchableOpacity>
-          </View>
-
-          {roleChoice === 'creator' ? (
-            <View style={styles.testRoomCard}>
-              <Text style={styles.testRoomLabel}>Model ID (share this)</Text>
-              <Text selectable style={styles.testRoomCode}>{currentUser?.id ?? 'Sign in to host'}</Text>
-              {!currentUser?.id && (
-                <Text style={styles.testRoomHint}>You must be signed in as a model to host the test room.</Text>
-              )}
-            </View>
-          ) : (
-            <View style={styles.testRoomCard}>
-              <Text style={styles.testRoomLabel}>Enter Model ID</Text>
-              <TextInput
-                style={styles.testRoomInput}
-                placeholder="Paste model ID"
-                placeholderTextColor="rgba(255,255,255,0.5)"
-                value={creatorIdInput}
-                onChangeText={setCreatorIdInput}
-                autoCapitalize="none"
-              />
-              <Text style={styles.testRoomHint}>Ask the model to open the test room and share their ID.</Text>
-            </View>
           )}
-
-          <TouchableOpacity
-            style={styles.testRoomStart}
-            onPress={() => {
-              if (roleChoice === 'creator') {
-                if (!currentUser?.id) {
-                  Alert.alert('Sign in required', 'Please sign in as a model to host a test room.');
-                  return;
-                }
-                setResolvedCreatorId(currentUser.id);
-              } else {
-                if (!creatorIdInput.trim()) {
-                  Alert.alert('Missing ID', 'Enter the model ID to join as a client.');
-                  return;
-                }
-                setResolvedCreatorId(creatorIdInput.trim());
-              }
-              setTestReady(true);
-            }}
-          >
-            <Text style={styles.testRoomStartText}>Start Test Room</Text>
+          <TouchableOpacity accessibilityRole="button" style={styles.action} onPress={() => void end()}>
+            <Text style={styles.actionText}>Back to booking</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
   }
 
-  // ── Loading token ─────────────────────────────────────────────────────────
-  if (!resolvedCreatorId) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <StatusBar barStyle="light-content" />
-        <View style={styles.notInstalledBanner}>
-          <Ionicons name="sync-outline" size={56} color="rgba(255,255,255,0.5)" />
-          <Text style={styles.notInstalledTitle}>Preparing call session...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (tokenLoading || !livekitToken || !livekitUrl) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <StatusBar barStyle="light-content" />
-        {inlineError ? (
-          <View style={styles.inlineErrorBanner}>
-            <Ionicons name="alert-circle" size={18} color="#f87171" />
-            <Text style={styles.inlineErrorText}>{inlineError}</Text>
-            <TouchableOpacity style={styles.inlineErrorAction} onPress={fetchToken}>
-              <Text style={styles.inlineErrorActionText}>Retry</Text>
-            </TouchableOpacity>
-          </View>
-        ) : null}
-        <View style={styles.notInstalledBanner}>
-          <Ionicons name="sync-outline" size={56} color="rgba(255,255,255,0.5)" />
-          <Text style={styles.notInstalledTitle}>Connecting to call...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  // ── Main LiveKit room ─────────────────────────────────────────────────────
+  const LiveKitRoom = sdk.LiveKitRoom;
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
-
-      {inlineError ? (
-        <View style={styles.inlineErrorBanner}>
-          <Ionicons name="alert-circle" size={18} color="#f87171" />
-          <Text style={styles.inlineErrorText}>{inlineError}</Text>
-          <TouchableOpacity style={styles.inlineErrorAction} onPress={fetchToken}>
-            <Text style={styles.inlineErrorActionText}>Retry</Text>
-          </TouchableOpacity>
-        </View>
-      ) : null}
-
-      <LiveKitRoom
-        token={livekitToken}
-        serverUrl={livekitUrl}
-        options={{ adaptiveStream: true, dynacast: true }}
-        video={!cameraOff}
-        audio={!isMuted}
-        onDisconnected={endCall}
-      >
-        {/* Remote and local video tracks */}
-        <RoomParticipants creatorId={resolvedCreatorId!} />
-
-        {/* Gradient overlay with HUD */}
-        <LinearGradient
-          colors={['rgba(0,0,0,0.55)', 'transparent', 'rgba(0,0,0,0.75)']}
-          style={StyleSheet.absoluteFillObject}
-          pointerEvents="none"
-        />
-
-        {/* Top HUD */}
-        <SafeAreaView edges={['top']} style={[styles.hudTop, inlineError ? { marginTop: 56 } : null]}>
-          <TouchableOpacity style={styles.backBtn} onPress={endCall}>
-            <Ionicons name="chevron-back" size={28} color="#fff" />
-          </TouchableOpacity>
-          <View style={styles.timerBadge}>
-            <View style={styles.activeDot} />
-            <Text style={styles.timerText}>{formatTime(seconds)}</Text>
-            <Text style={styles.rateText}> · R15/min</Text>
-          </View>
-          <View style={{ width: 44 }} />
-        </SafeAreaView>
-
-        {/* Controls */}
-        <SafeAreaView edges={['bottom']} style={styles.hudBottom}>
-          <View style={styles.bottomActions}>
-            <TouchableOpacity
-              style={styles.tipBtn}
-              onPress={() => setTipModalVisible(true)}
-              disabled={isTipping}
-            >
-              <Ionicons name="heart" size={20} color="#fff" />
-              <Text style={styles.tipBtnText}>Send Tip</Text>
-            </TouchableOpacity>
-            <View style={{ flex: 1 }} />
-          </View>
-          <View style={styles.controlsRow}>
-            <TouchableOpacity
-              style={[styles.controlBtn, isMuted && styles.controlBtnActive]}
-              onPress={() => setIsMuted((m) => !m)}
-              accessibilityLabel={isMuted ? 'Unmute microphone' : 'Mute microphone'}
-            >
-              <Ionicons name={isMuted ? 'mic-off' : 'mic'} size={24} color="#fff" />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.controlBtn, styles.endCallBtnCircle]}
-              onPress={endCall}
-              accessibilityLabel="End video call"
-            >
-              <Ionicons name="call" size={28} color="#fff" style={{ transform: [{ rotate: '135deg' }] }} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.controlBtn, cameraOff && styles.controlBtnActive]}
-              onPress={() => setCameraOff((c) => !c)}
-              accessibilityLabel={cameraOff ? 'Turn camera on' : 'Turn camera off'}
-            >
-              <Ionicons name={cameraOff ? 'videocam-off' : 'videocam'} size={24} color="#fff" />
-            </TouchableOpacity>
-          </View>
-        </SafeAreaView>
+      <LiveKitRoom key={roomKey} token={session.token} serverUrl={session.url} connect audio video
+        options={{ adaptiveStream: { pixelDensity: 'screen' }, dynacast: true }}
+        onError={() => setError('Video connection failed. End this booking call or leave locally.')}
+        onMediaDeviceFailure={() => setError('Camera or microphone unavailable. Check device permissions.')}
+        onEncryptionError={() => setError('The video connection could not be secured.')}>
+        <CallRoom sdk={sdk} ending={ending} error={error} onEnd={end} onRetry={join} onRoom={onRoom} />
       </LiveKitRoom>
-
-      {/* Tip Modal */}
-      <Modal
-        visible={tipModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setTipModalVisible(false)}
-      >
-        <View style={styles.modalBg}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Send Tip</Text>
-              <TouchableOpacity onPress={() => setTipModalVisible(false)}>
-                <Ionicons name="close" size={24} color="#fff" />
-              </TouchableOpacity>
-            </View>
-            <TextInput
-              style={styles.modalInput}
-              keyboardType="numeric"
-              value={tipAmount}
-              onChangeText={setTipAmount}
-              placeholder="50"
-              placeholderTextColor="rgba(255,255,255,0.4)"
-              autoFocus
-            />
-            <View style={styles.presets}>
-              {['20', '50', '100', '500'].map((p) => (
-                <TouchableOpacity
-                  key={p}
-                  style={[styles.presetBtn, tipAmount === p && styles.presetBtnActive]}
-                  onPress={() => setTipAmount(p)}
-                >
-                  <Text style={styles.presetText}>R{p}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            <TouchableOpacity
-              style={styles.confirmBtn}
-              onPress={handleTip}
-              disabled={isTipping}
-            >
-              <Text style={styles.confirmBtnText}>{isTipping ? 'Sending…' : 'Confirm Tip'}</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+      {error && <TouchableOpacity accessibilityRole="button" accessibilityLabel="Leave call locally" style={styles.leave} onPress={leaveLocally}>
+        <Text style={styles.actionText}>Leave locally</Text>
+      </TouchableOpacity>}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000' },
-  inlineErrorBanner: {
-    position: 'absolute',
-    top: 12,
-    left: 12,
-    right: 12,
-    zIndex: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(15,23,42,0.92)',
-    borderWidth: 1,
-    borderColor: 'rgba(248,113,113,0.6)',
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 8,
-  },
-  inlineErrorText: { color: '#f8fafc', fontWeight: '600', flex: 1, fontSize: 13 },
-  inlineErrorAction: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, backgroundColor: '#ef4444' },
-  inlineErrorActionText: { color: '#fff', fontWeight: '700', fontSize: 12 },
-  testRoomWrap: { flex: 1, padding: 24, justifyContent: 'center' },
-  testRoomTitle: { color: '#fff', fontSize: 26, fontWeight: '800', textAlign: 'center' },
-  testRoomBody: { color: 'rgba(255,255,255,0.65)', textAlign: 'center', marginTop: 10, lineHeight: 20 },
-  testRoleRow: { flexDirection: 'row', marginTop: 24, gap: 12 },
-  testRoleBtn: { flex: 1, paddingVertical: 12, borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', alignItems: 'center' },
-  testRoleBtnActive: { backgroundColor: '#ec4899', borderColor: '#ec4899' },
-  testRoleText: { color: 'rgba(255,255,255,0.7)', fontWeight: '700' },
-  testRoleTextActive: { color: '#fff' },
-  testRoomCard: { marginTop: 20, backgroundColor: '#0f172a', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
-  testRoomLabel: { color: 'rgba(255,255,255,0.6)', fontWeight: '700', marginBottom: 8 },
-  testRoomCode: { color: '#fff', fontWeight: '700', fontSize: 14 },
-  testRoomInput: { borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', borderRadius: 12, padding: 12, color: '#fff', fontSize: 14 },
-  testRoomHint: { color: 'rgba(255,255,255,0.6)', marginTop: 10, fontSize: 12 },
-  testRoomStart: { marginTop: 24, backgroundColor: '#0ea5e9', paddingVertical: 14, borderRadius: 14, alignItems: 'center' },
-  testRoomStartText: { color: '#fff', fontWeight: '800', fontSize: 16 },
-  // HUD
-  hudTop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingBottom: 12,
-  },
-  hudBottom: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: 20,
-  },
-  backBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  timerBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-  },
-  activeDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#ef4444', marginRight: 8 },
-  timerText: { color: '#fff', fontWeight: '800', fontSize: 16 },
-  rateText: { color: 'rgba(255,255,255,0.6)', fontWeight: '600' },
-  // Video surface states
-  noVideoPlaceholder: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#0f172a',
-  },
-  noVideoText: { color: 'rgba(255,255,255,0.5)', marginTop: 12, fontWeight: '600' },
-  localPreviewWrap: { position: 'absolute', bottom: 160, right: 20 },
-  localVideo: { width: 110, height: 160, borderRadius: 16, overflow: 'hidden', backgroundColor: '#1e293b', borderWidth: 2, borderColor: '#fff' },
-  cameraOffPlaceholder: { alignItems: 'center', justifyContent: 'center' },
-  // Controls
-  controlsRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 24, paddingBottom: 20, paddingTop: 8 },
-  controlBtn: { width: 60, height: 60, borderRadius: 30, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
-  controlBtnActive: { backgroundColor: '#ef4444' },
-  endCallBtnCircle: { backgroundColor: '#ef4444', width: 70, height: 70, borderRadius: 35 },
-  bottomActions: { flexDirection: 'row', alignItems: 'center', paddingTop: 16 },
-  tipBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#ec4899', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 14, gap: 8 },
-  tipBtnText: { color: '#fff', fontWeight: '800', fontSize: 16 },
-  // Not-installed / error state
-  notInstalledBanner: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
-  notInstalledTitle: { color: '#fff', fontSize: 22, fontWeight: '800', marginTop: 20, textAlign: 'center' },
-  notInstalledBody: { color: 'rgba(255,255,255,0.6)', fontSize: 14, marginTop: 12, textAlign: 'center', lineHeight: 22, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
-  fallbackActions: { marginTop: 24, width: '100%', alignItems: 'center', gap: 12 },
-  fallbackBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#0ea5e9', paddingHorizontal: 18, paddingVertical: 12, borderRadius: 14 },
-  fallbackBtnText: { color: '#fff', fontWeight: '800' },
-  fallbackBtnGhost: { marginTop: 12, paddingHorizontal: 18, paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' },
-  fallbackBtnGhostText: { color: '#fff', fontWeight: '700' },
-  endCallBtn: { backgroundColor: '#ef4444', paddingHorizontal: 24, paddingVertical: 14, borderRadius: 14, marginTop: 32 },
-  // Tip modal
-  modalBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: '#1e293b', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
-  modalTitle: { color: '#fff', fontSize: 22, fontWeight: '800' },
-  modalInput: { backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 16, padding: 20, color: '#fff', fontSize: 32, fontWeight: '800', textAlign: 'center', marginBottom: 16 },
-  presets: { flexDirection: 'row', gap: 10, marginBottom: 20 },
-  presetBtn: { flex: 1, paddingVertical: 12, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.05)', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
-  presetBtnActive: { backgroundColor: '#ec4899', borderColor: '#ec4899' },
-  presetText: { color: '#fff', fontWeight: '700' },
-  confirmBtn: { backgroundColor: '#ec4899', paddingVertical: 16, borderRadius: 16, alignItems: 'center' },
-  confirmBtnText: { color: '#fff', fontSize: 18, fontWeight: '800' },
+  container: { flex: 1, backgroundColor: '#18181b' },
+  remoteGrid: { flex: 1 },
+  remoteVideo: { flex: 1, width: '100%' },
+  placeholder: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
+  topBar: { position: 'absolute', top: 0, left: 0, right: 0, paddingHorizontal: 20, paddingBottom: 12, backgroundColor: '#18181bcc' },
+  heading: { fontSize: 18, color: '#fff', fontWeight: '700' },
+  secondary: { color: '#d4d4d8', fontSize: 14, lineHeight: 22, textAlign: 'center', marginTop: 8 },
+  bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 16, backgroundColor: '#18181bcc' },
+  controls: { flexDirection: 'row', justifyContent: 'center', gap: 24, paddingVertical: 12 },
+  control: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', backgroundColor: '#3f3f46' },
+  controlOff: { backgroundColor: '#52525b' },
+  hangup: { backgroundColor: '#dc2626' },
+  disabled: { opacity: 0.5 },
+  localPreview: { position: 'absolute', right: 16, top: 120, width: 108, height: 152, borderRadius: 8, overflow: 'hidden', backgroundColor: '#27272a', alignItems: 'center', justifyContent: 'center' },
+  localVideo: { width: '100%', height: '100%' },
+  idle: { flex: 1, padding: 24, alignItems: 'center', justifyContent: 'center', gap: 16 },
+  title: { color: '#fff', fontSize: 24, fontWeight: '700' },
+  action: { minWidth: 160, minHeight: 44, paddingHorizontal: 16, paddingVertical: 12, borderRadius: 6, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#3f3f46' },
+  actionText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  error: { color: '#fda4af', fontSize: 14, lineHeight: 20, textAlign: 'center', paddingHorizontal: 12 },
+  leave: { position: 'absolute', top: Platform.OS === 'ios' ? 88 : 68, right: 16, backgroundColor: '#3f3f46', padding: 12, borderRadius: 6 },
 });
 
 export default PaidVideoCallScreen;

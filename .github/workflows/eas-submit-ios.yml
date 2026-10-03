@@ -1,16 +1,23 @@
 name: EAS Submit iOS
 
-# Auto-submit latest production iOS build to TestFlight.
+# Submit an exact source-matched production iOS build to App Store Connect.
 # Requires EXPO_TOKEN and App Store Connect setup in EAS.
 
 on:
   workflow_dispatch:
+    inputs:
+      build_id:
+        description: Finished tested iOS EAS build ID from this source revision
+        required: true
+        type: string
 
 jobs:
   submit_ios:
     runs-on: ubuntu-latest
     env:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      STORE_BUILD_ID: ${{ inputs.build_id }}
+      STORE_PLATFORM: ios
     steps:
       - uses: actions/checkout@v4
 
@@ -26,7 +33,7 @@ jobs:
       - name: Setup EAS
         uses: expo/expo-github-action@v8
         with:
-          eas-version: latest
+          eas-version: 24.10.0
           token: ${{ secrets.EXPO_TOKEN }}
 
       - name: Install dependencies
@@ -35,5 +42,9 @@ jobs:
       - name: Validate release env
         run: npx eas-cli@latest env:exec production "npm run validate:env:release" --non-interactive
 
-      - name: Submit latest iOS build (production)
-        run: npx eas-cli submit --platform ios --profile production --latest --non-interactive
+      - name: Verify exact artifact platform and source
+        run: |
+          eas build:view "$STORE_BUILD_ID" --json > "$RUNNER_TEMP/store-build.json"
+          STORE_SOURCE_REVISION="$(git rev-parse HEAD)" node scripts/assert-store-build.mjs "$RUNNER_TEMP/store-build.json"
+      - name: Submit the verified iOS artifact
+        run: eas submit --platform ios --profile production --id "$STORE_BUILD_ID" --non-interactive

@@ -1,0 +1,49 @@
+{
+  "checkedAt": "2026-10-03T23:06:22Z",
+  "projectId": "papz-601b5",
+  "credentialFile": "papz-601b5-firebase-adminsdk-fbsvc-5842f2e3e0.json",
+  "publishingPerformed": false,
+  "packages": [
+    {
+      "packageName": "com.papziiii.paparazzi",
+      "access": {
+        "status": 403,
+        "errorStatus": "PERMISSION_DENIED",
+        "reasons": [],
+        "detailReasons": [
+          "SERVICE_DISABLED"
+        ]
+      }
+    },
+    {
+      "packageName": "com.saicts.papzi",
+      "access": {
+        "status": 403,
+        "errorStatus": "PERMISSION_DENIED",
+        "reasons": [],
+        "detailReasons": [
+          "SERVICE_DISABLED"
+        ]
+      }
+    },
+    {
+      "packageName": "com.papzi.app",
+      "access": {
+        "status": 403,
+        "errorStatus": "PERMISSION_DENIED",
+        "reasons": [],
+        "detailReasons": [
+          "SERVICE_DISABLED"
+        ]
+      }
+    }
+  ],
+  "publisherApi": {
+    "status": 403,
+    "errorStatus": "PERMISSION_DENIED",
+    "reasons": [],
+    "detailReasons": [
+      "AUTH_PERMISSION_DENIED"
+    ]
+  }
+}

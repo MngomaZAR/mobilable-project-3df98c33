@@ -62,3 +62,25 @@ esp32-sensor-test/logs/
 # local tooling binaries
 /supabase.exe
 /supabase_windows_amd64.tar.gz
+
+# Local build products, IDE state and unrelated experiments (preserve on disk).
+/.playwright-mcp/
+/.vscode/
+/android/
+/ios/
+/dist-store/
+/docs/output/
+/docs/build_sa_digitization_deep_dive_pdf.py
+/docs/build_saicts_master_doc.py
+/docs/inspect_saicts_sources.py
+/esp32-sensor-test/
+/local-ai-ide/
+/patches/
+/startup-backups/
+/tmp_pdf_extract/
+/tools/
+*.ipa
+*.aab
+*.apk
+*-firebase-adminsdk-*.json
+service-account*.json

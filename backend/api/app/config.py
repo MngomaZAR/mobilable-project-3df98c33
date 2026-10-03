@@ -1,5 +1,6 @@
 from functools import lru_cache
-from pydantic import Field
+from ipaddress import ip_network
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -8,6 +9,7 @@ class Settings(BaseSettings):
     app_env: str = Field(default="development", alias="APP_ENV")
     app_version: str = Field(default="0.1.0", alias="APP_VERSION")
     api_public_url: str = Field(default="", alias="API_PUBLIC_URL")
+    forwarded_allow_ips: str = Field(default="127.0.0.1", alias="FORWARDED_ALLOW_IPS")
     allow_runtime_schema_changes: bool = Field(default=False, alias="ALLOW_RUNTIME_SCHEMA_CHANGES")
     admin_user_ids: str = Field(default="", alias="ADMIN_USER_IDS")
     commission_rate: float = Field(default=0.20, alias="COMMISSION_RATE", ge=0, le=1)
@@ -52,12 +54,28 @@ class Settings(BaseSettings):
     typesense_api_key: str = Field(default="", alias="TYPESENSE_API_KEY")
 
     livekit_url: str = Field(default="", alias="LIVEKIT_URL")
+    livekit_enabled: bool = Field(default=False, alias="LIVEKIT_ENABLED")
+    livekit_api_url: str = Field(default="", alias="LIVEKIT_API_URL")
     livekit_api_key: str = Field(default="", alias="LIVEKIT_API_KEY")
     livekit_api_secret: str = Field(default="", alias="LIVEKIT_API_SECRET")
     payfast_base_url: str = Field(default="", alias="PAYFAST_BASE_URL")
     payfast_merchant_id: str = Field(default="", alias="PAYFAST_MERCHANT_ID")
     payfast_merchant_key: str = Field(default="", alias="PAYFAST_MERCHANT_KEY")
     payfast_passphrase: str = Field(default="", alias="PAYFAST_PASSPHRASE")
+
+    @field_validator("forwarded_allow_ips")
+    @classmethod
+    def validate_trusted_proxies(cls, value: str) -> str:
+        if not value.strip():
+            return ""
+        entries = [entry.strip() for entry in value.split(",")]
+        for entry in entries:
+            if not entry or entry == "*":
+                raise ValueError("Trust explicit reverse-proxy IPs, never a wildcard.")
+            network = ip_network(entry, strict=False)
+            if network.prefixlen == 0:
+                raise ValueError("A trusted reverse proxy cannot cover every IP address.")
+        return ",".join(entries)
 
     @property
     def postgres_url(self) -> str:

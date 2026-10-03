@@ -163,6 +163,16 @@ async def load_provider(conn, command: BookingInput, include_pricing: bool = Tru
     return await load_pricing(conn, dict(row), expected_role) if include_pricing else dict(row)
 
 
+async def require_open_booking_parties(conn, *user_ids: str) -> None:
+    # Lazy import keeps booking -> dispatch -> booking initialization acyclic.
+    from .dispatch_engine import require_open_account
+
+    if any(not user_id for user_id in user_ids):
+        raise HTTPException(status_code=403, detail="Active stored booking parties are required.")
+    for user_id in sorted(set(user_ids)):
+        await require_open_account(conn, user_id)
+
+
 async def quote_booking(settings: Settings, command: BookingInput, user: dict[str, Any]) -> dict[str, Any]:
     if not user or not user.get("id"):
         raise HTTPException(status_code=401, detail="Authentication is required.")
@@ -174,6 +184,7 @@ async def quote_booking(settings: Settings, command: BookingInput, user: dict[st
     try:
         async with conn.transaction():
             await conn.execute("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", f"provider:{command.photographer_id or command.model_id}")
+            await require_open_booking_parties(conn, user["id"], command.photographer_id or command.model_id)
             provider = await load_provider(conn, command)
             return calculate_quote(settings, command, provider)
     finally:
@@ -213,6 +224,7 @@ async def create_booking(settings: Settings, command: BookingInput, user: dict[s
     conn = await connect(settings)
     try:
         async with conn.transaction():
+            await require_open_booking_parties(conn, user["id"], provider_id)
             # Serialize both request retries and competing bookings for a creator.
             await conn.execute("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", f"request:{user['id']}:{command.idempotency_key}")
             existing = await conn.fetchrow("SELECT * FROM bookings WHERE client_id=$1 AND idempotency_key=$2", user["id"], command.idempotency_key)
@@ -257,6 +269,8 @@ class BookingTransition(BaseModel):
 
 
 async def transition_booking(settings: Settings, booking_id: str, target: str, user: dict[str, Any]) -> dict[str, Any]:
+    if not user or not user.get("id"):
+        raise HTTPException(status_code=401, detail="Authentication is required.")
     conn = await connect(settings)
     try:
         async with conn.transaction():
@@ -277,7 +291,10 @@ async def transition_booking(settings: Settings, booking_id: str, target: str, u
             if target == "accepted" and row["hold_expires_at"] and row["hold_expires_at"] <= datetime.now(UTC):
                 raise HTTPException(status_code=409, detail="This booking request has expired.")
             if target == "accepted":
+                if row.get("dispatch_request_id"):
+                    raise HTTPException(status_code=409, detail="Accept your own dispatch offer instead of the scheduled booking command.")
                 await conn.execute("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", f"provider:{provider}")
+                await require_open_booking_parties(conn, actor, row["client_id"], provider)
                 values = {key: row[key] for key in BookingInput.model_fields if key in row and row[key] is not None}
                 if isinstance(values.get("equipment_selection"), str):
                     values["equipment_selection"] = json.loads(values["equipment_selection"])

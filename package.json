@@ -46,8 +46,8 @@
     "eas:build:workflow": "npm run validate:env:release && npx eas-cli@latest workflow:run .eas/workflows/create-production-builds.yml",
     "eas:build:ios": "npm run validate:env:release && npx eas-cli@latest workflow:run .eas/workflows/build-ios-preview.yml",
     "eas:build:android": "npm run validate:env:release && npx eas-cli@latest build --platform android --profile production",
-    "eas:submit:ios": "npm run validate:env:release && npx eas-cli@latest submit --platform ios --profile production --latest",
-    "eas:submit:android": "npm run validate:env:release && npx eas-cli@latest submit --platform android --profile production --latest",
+    "eas:submit:ios": "node scripts/submit-store.mjs ios",
+    "eas:submit:android": "node scripts/submit-store.mjs android",
     "eas:deploy:web": "npm run validate:env:release && npx eas-cli@latest workflow:run .eas/workflows/deploy-web.yml",
     "prepare": "husky"
   },
@@ -57,8 +57,11 @@
     ]
   },
   "dependencies": {
+    "@config-plugins/react-native-webrtc": "13.0.0",
     "@expo/vector-icons": "^15.0.3",
-    "@livekit/react-native": "^2.9.6",
+    "@livekit/react-native": "2.9.6",
+    "@livekit/react-native-expo-plugin": "1.0.3",
+    "@livekit/react-native-webrtc": "137.0.2",
     "@maplibre/maplibre-react-native": "^10.4.2",
     "@nhost/nhost-js": "^4.7.2",
     "@react-native-async-storage/async-storage": "^2.2.0",

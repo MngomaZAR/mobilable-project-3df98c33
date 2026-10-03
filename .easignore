@@ -12,3 +12,13 @@ local-ai-ide
 patches
 startup-backups
 supabase/.temp
+dist-store
+tmp_pdf_extract
+tools
+*.ipa
+*.aab
+*.apk
+*-firebase-adminsdk-*.json
+service-account*.json
+backend
+deployment

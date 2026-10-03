@@ -199,6 +199,7 @@ class MemoryConnection:
         self.verified = True
         self.age_verified = True
         self.has_model = True
+        self.accounts = {owner: {"id": owner, "metadata": {}} for owner in ("client", "creator", "victim")}
         self.creator = provider()
         self.gear = None
         self.services = {("creator", "product_shoot"): service(), ("victim", "product_shoot"): service("900")}
@@ -227,6 +228,8 @@ class MemoryConnection:
 
     async def fetchrow(self, sql, *args):
         self.calls.append((sql, args))
+        if "FROM api_users" in sql:
+            return deepcopy(self.accounts.get(args[0]))
         if "FROM profiles" in sql:
             return {"id": args[0], "role": self.role, "verified": self.verified, "kyc_status": "approved" if self.verified else "pending", "age_verified": self.age_verified}
         if "FROM models" in sql or "FROM photographers" in sql:
@@ -259,6 +262,40 @@ class MemoryConnection:
 
 
 class PersistenceTests(unittest.IsolatedAsyncioTestCase):
+    async def test_booking_quotes_and_creation_require_open_stored_parties(self):
+        for function in (quote_booking, create_booking):
+            for owner in ("client", "creator"):
+                for status in ("pending", "processing", "completed", "missing"):
+                    conn = MemoryConnection("photographer")
+                    if status == "missing":
+                        del conn.accounts[owner]
+                    else:
+                        conn.accounts[owner]["metadata"]["deletion_status"] = status
+                    with self.subTest(function=function.__name__, owner=owner, status=status), patch("app.booking_engine.connect", new=AsyncMock(return_value=conn)), self.assertRaises(HTTPException) as error:
+                        await function(settings(), booking(), {"id": "client", "user_metadata": {"deletion_status": "active"}})
+                    self.assertEqual(error.exception.status_code, 403)
+                    self.assertFalse(conn.bookings)
+                    self.assertFalse(any("INSERT INTO job_outbox" in sql for sql, _ in conn.calls))
+
+    async def test_new_acceptance_blocks_closing_parties_but_existing_work_can_finish(self):
+        for owner in ("client", "creator"):
+            conn = MemoryConnection("photographer")
+            with patch("app.booking_engine.connect", new=AsyncMock(return_value=conn)):
+                row = await create_booking(settings(), booking(), {"id": "client"})
+                conn.accounts[owner]["metadata"]["deletion_status"] = "pending"
+                with self.assertRaises(HTTPException) as error:
+                    await transition_booking(settings(), row["id"], "accepted", {"id": "creator"})
+                self.assertEqual(error.exception.status_code, 403)
+                self.assertEqual(conn.bookings[row["id"]]["status"], "pending")
+                cancelled = await transition_booking(settings(), row["id"], "cancelled", {"id": "client"})
+                self.assertEqual(cancelled["status"], "cancelled")
+                existing = conn.bookings[row["id"]]
+                existing.update(status="accepted", payment_status="paid", start_datetime=datetime.now(UTC)-timedelta(hours=2), end_datetime=datetime.now(UTC)-timedelta(hours=1))
+                progressed = await transition_booking(settings(), row["id"], "in_progress", {"id": "creator"})
+                self.assertEqual(progressed["status"], "in_progress")
+                completed = await transition_booking(settings(), row["id"], "completed", {"id": "creator"})
+                self.assertEqual(completed["status"], "completed")
+
     async def test_replacement_owns_rows_disables_omitted_and_converges_on_retry(self):
         conn = MemoryConnection()
         conn.services[("creator", "fashion_shoot")] = service(service_type="fashion_shoot")

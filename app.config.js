@@ -4,7 +4,7 @@ const APP_IDS = {
   slug: 'papzi',
   scheme: 'papzi',
   bundleIdentifier: process.env.EXPO_IOS_BUNDLE_IDENTIFIER || 'com.saicts.papzi',
-  androidPackage: process.env.EXPO_ANDROID_PACKAGE || 'com.saicts.papzi',
+  androidPackage: process.env.EXPO_ANDROID_PACKAGE || 'com.papziiii.paparazzi',
 };
 
 export default {
@@ -28,6 +28,7 @@ export default {
       bundleIdentifier: APP_IDS.bundleIdentifier,
       infoPlist: {
         NSCameraUsageDescription: `${BRAND.name} needs camera access for KYC verification and story creation.`,
+        NSMicrophoneUsageDescription: `${BRAND.name} uses your microphone for booking calls and voice messages.`,
         NSPhotoLibraryUsageDescription: `${BRAND.name} needs photo access for profile pictures, posts, and story creation.`,
         NSLocationWhenInUseUsageDescription: `${BRAND.name} uses your location to show nearby photographers and track bookings.`,
         NSLocationAlwaysAndWhenInUseUsageDescription: `${BRAND.name} needs your location to track you during a live booking session.`,
@@ -44,6 +45,7 @@ export default {
         'ACCESS_FINE_LOCATION',
         'ACCESS_COARSE_LOCATION',
         'CAMERA',
+        'RECORD_AUDIO',
         'READ_EXTERNAL_STORAGE'
       ],
       // Deep link intent filter so Android re-opens the app after OAuth redirect
@@ -60,6 +62,9 @@ export default {
       favicon: "./assets/favicon.png"
     },
     plugins: [
+      "@livekit/react-native-expo-plugin",
+      "@config-plugins/react-native-webrtc",
+      "expo-secure-store",
       [
         "expo-notifications",
         {

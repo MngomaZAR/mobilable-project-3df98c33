@@ -442,6 +442,28 @@ async def execute_table_query(
     table: str,
     payload: dict[str, Any],
     scope: tuple[str, list[Any]] | None = None,
+    actor_id: str | None = None,
+) -> dict[str, Any]:
+    if not actor_id or payload.get('action', 'select') == 'select':
+        return await _execute_table_query(settings, table, payload, scope)
+    conn = await connect(settings)
+    try:
+        async with conn.transaction():
+            # Serialize public writes with account cleanup, not only the earlier auth read.
+            row = await conn.fetchrow("SELECT id,metadata->>'deletion_status' AS deletion_status FROM api_users WHERE id=$1 FOR UPDATE", actor_id)
+            if not row or row['deletion_status']:
+                raise HTTPException(status_code=409, detail='New data changes are disabled while account deletion is pending.')
+            return await _execute_table_query(settings, table, payload, scope, connection=conn)
+    finally:
+        await conn.close()
+
+
+async def _execute_table_query(
+    settings: Settings,
+    table: str,
+    payload: dict[str, Any],
+    scope: tuple[str, list[Any]] | None = None,
+    connection=None,
 ) -> dict[str, Any]:
     table_sql = quote_ident(table)
     action = payload.get("action", "select")
@@ -451,7 +473,7 @@ async def execute_table_query(
     head = bool(payload.get("head"))
     select_sql = parse_select(payload.get("select"))
 
-    conn = await connect(settings)
+    conn = connection if connection is not None else await connect(settings)
     try:
         if settings.allow_runtime_schema_changes:
             await ensure_table_exists(conn, table)
@@ -568,7 +590,8 @@ async def execute_table_query(
 
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Unsupported action: {action}")
     finally:
-        await conn.close()
+        if connection is None:
+            await conn.close()
 
 
 def shape_rows(rows: list[dict[str, Any]], single: bool, maybe_single: bool, count: int | None) -> dict[str, Any]:

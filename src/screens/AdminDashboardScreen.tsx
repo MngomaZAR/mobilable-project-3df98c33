@@ -10,6 +10,9 @@ import { useTheme } from '../store/ThemeContext';
 import { useMessaging } from '../store/MessagingContext';
 import { NewMessageModal } from '../components/NewMessageModal';
 import { backendDb } from '../services/backendGateway';
+import { apiClient } from '../config/apiClient';
+import { getApiAccessToken } from '../config/apiSession';
+import { environment } from '../config/environment';
 
 type Navigation = StackNavigationProp<RootStackParamList>;
 
@@ -19,6 +22,8 @@ const AdminDashboardScreen: React.FC = () => {
   const { startConversationWithUser } = useMessaging();
   const [showNewMessage, setShowNewMessage] = React.useState(false);
   const [liveRevenue, setLiveRevenue] = useState<number | null>(null);
+  const [pendingContent, setPendingContent] = useState<number | null>(null);
+  const [contentError, setContentError] = useState<string | null>(null);
   const [opsMetrics, setOpsMetrics] = useState({
     dispatchOpen: 0,
     avgEtaConfidence: 0,
@@ -66,16 +71,33 @@ const AdminDashboardScreen: React.FC = () => {
     }
   }, []);
 
+  const fetchContentCount = React.useCallback(async () => {
+    if (environment.backendProvider !== 'api') return;
+    try {
+      const token = await getApiAccessToken();
+      if (!token) throw new Error('Sign in again to load pending content.');
+      const response = await apiClient.get<{ counts: Record<string, number> }>('/admin/moderation/content', { token });
+      const counts = ['posts', 'stories', 'post_comments', 'reviews'].map(table => response?.counts?.[table]);
+      if (counts.some(count => !Number.isInteger(count) || count < 0)) throw new Error('Invalid moderation count response.');
+      setPendingContent(counts.reduce((sum, count) => sum + count, 0));
+      setContentError(null);
+    } catch (error: any) {
+      setPendingContent(null);
+      setContentError(error.message || 'Pending content unavailable.');
+    }
+  }, []);
+
   useFocusEffect(
     React.useCallback(() => {
       let active = true;
       const run = async () => {
-        if (!active) return;
+        if (!active || state.currentUser?.role !== 'admin') return;
         const userId = state.currentUser?.id;
         await Promise.allSettled([
           fetchBookings(userId),
           fetchRevenue(),
           fetchOpsMetrics(),
+          fetchContentCount(),
         ]);
       };
       run();
@@ -84,7 +106,7 @@ const AdminDashboardScreen: React.FC = () => {
         active = false;
         clearInterval(timer);
       };
-    }, [fetchBookings, fetchOpsMetrics, fetchRevenue, state.currentUser?.id]),
+    }, [fetchBookings, fetchOpsMetrics, fetchRevenue, fetchContentCount, state.currentUser?.id, state.currentUser?.role]),
   );
 
   const pendingBookings = useMemo(
@@ -95,6 +117,8 @@ const AdminDashboardScreen: React.FC = () => {
     () => state.bookings.filter((booking) => booking.status === 'accepted').length,
     [state.bookings]
   );
+
+  if (state.currentUser?.role !== 'admin') return <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.bg }]}><Text accessibilityRole="alert" style={{ color: colors.text }}>Administrator access required.</Text></SafeAreaView>;
 
   return (
     <SafeAreaView edges={['left', 'right']} style={[styles.safeArea, { backgroundColor: colors.bg }]}>
@@ -115,6 +139,11 @@ const AdminDashboardScreen: React.FC = () => {
 
         <View style={styles.statsRow}>
           <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border, width: statCardWidth }]}>
+            <Text style={[styles.statLabel, { color: colors.textMuted }]}>Pending Content</Text>
+            <Text testID="admin-pending-content-count" style={[styles.statValue, { color: colors.text }]}>{pendingContent === null ? '--' : pendingContent}</Text>
+            <Text style={[styles.statMeta, { color: colors.textMuted }]}>Posts / stories / comments / reviews</Text>
+          </View>
+          <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border, width: statCardWidth }]}>
             <Text style={[styles.statLabel, { color: colors.textMuted }]}>Dispatch Open</Text>
             <Text style={[styles.statValue, { color: colors.text }]}>{opsMetrics.dispatchOpen}</Text>
             <Text style={[styles.statMeta, { color: colors.accent }]}>Queued/offered</Text>
@@ -130,6 +159,7 @@ const AdminDashboardScreen: React.FC = () => {
             <Text style={[styles.statMeta, { color: colors.destructive }]}>Open mod / pay issues</Text>
           </View>
         </View>
+        {contentError ? <Text accessibilityRole="alert" style={{ color: colors.destructive, marginBottom: 12 }}>{contentError}</Text> : null}
 
         <View style={styles.statsRow}>
           <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border, width: statCardWidth }]}>
@@ -168,7 +198,7 @@ const AdminDashboardScreen: React.FC = () => {
               <Text style={[styles.priorityLabel, { color: colors.textMuted }]}>Payout Issues</Text>
             </View>
           </View>
-          <TouchableOpacity style={[styles.action, { backgroundColor: colors.bg, borderColor: colors.border }]} onPress={() => navigation.navigate('AdminModeration')}>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Resolve priority queue" style={[styles.action, { backgroundColor: colors.bg, borderColor: colors.border }]} onPress={() => navigation.navigate('AdminModeration')}>
             <Ionicons name="flash-outline" size={18} color={colors.accent} />
             <Text style={[styles.actionText, { color: colors.text }]}>Resolve priority queue</Text>
             <Ionicons name="chevron-forward" size={16} color={colors.textMuted} style={{ marginLeft: 'auto' }} />
@@ -180,7 +210,7 @@ const AdminDashboardScreen: React.FC = () => {
           <Text style={[styles.cardBody, { color: colors.textSecondary }]}>
             Review reported content, user disputes, and community standards.
           </Text>
-          <TouchableOpacity style={[styles.action, { backgroundColor: colors.bg, borderColor: colors.border }]} onPress={() => navigation.navigate('AdminModeration')}>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Moderation queue" style={[styles.action, { backgroundColor: colors.bg, borderColor: colors.border }]} onPress={() => navigation.navigate('AdminModeration')}>
             <Ionicons name="shield-half-outline" size={18} color={colors.destructive} />
             <Text style={[styles.actionText, { color: colors.text }]}>Moderation queue</Text>
             <Ionicons name="chevron-forward" size={16} color={colors.textMuted} style={{ marginLeft: 'auto' }} />

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
@@ -13,19 +14,26 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../store/ThemeContext';
 import { useAppData } from '../store/AppDataContext';
-import { backendDb } from '../services/backendGateway';
 import { invokeBackendFunction } from '../config/backendFunctions';
 
 type PayoutMethod = {
   id: string;
   bank_name: string;
-  account_holder: string;
+  account_holder?: string;
   account_masked: string;
   account_type: 'cheque' | 'savings' | 'current';
   branch_code: string | null;
   is_default: boolean;
   verified: boolean;
 };
+
+const BANKS = [
+  { id: 'absa', name: 'Absa' }, { id: 'african_bank', name: 'African Bank' },
+  { id: 'capitec', name: 'Capitec' }, { id: 'discovery_bank', name: 'Discovery Bank' },
+  { id: 'fnb', name: 'FNB' }, { id: 'investec', name: 'Investec' },
+  { id: 'nedbank', name: 'Nedbank' }, { id: 'standard_bank', name: 'Standard Bank' },
+  { id: 'tymebank', name: 'TymeBank' },
+];
 
 const PayoutMethodsScreen: React.FC = () => {
   const { colors } = useTheme();
@@ -34,11 +42,13 @@ const PayoutMethodsScreen: React.FC = () => {
   const [methods, setMethods] = useState<PayoutMethod[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [bankName, setBankName] = useState('');
+  const [bankId, setBankId] = useState('');
+  const [bankMenuOpen, setBankMenuOpen] = useState(false);
   const [accountHolder, setAccountHolder] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
   const [branchCode, setBranchCode] = useState('');
-  const [accountType, setAccountType] = useState<'cheque' | 'savings' | 'current'>('cheque');
+  const [accountType, setAccountType] = useState<'savings' | 'current'>('current');
+  const selectedBank = BANKS.find(bank => bank.id === bankId);
 
   const fetchMethods = useCallback(async () => {
     if (!currentUser?.id) return;
@@ -60,7 +70,7 @@ const PayoutMethodsScreen: React.FC = () => {
 
   const addMethod = async () => {
     if (!currentUser?.id) return;
-    if (!bankName.trim() || !accountHolder.trim() || !accountNumber.trim()) {
+    if (!selectedBank || !accountHolder.trim() || !/^\d{4,12}$/.test(accountNumber) || (branchCode && !/^\d{6}$/.test(branchCode))) {
       Alert.alert('Missing details', 'Bank name, account holder and account number are required.');
       return;
     }
@@ -68,14 +78,15 @@ const PayoutMethodsScreen: React.FC = () => {
     try {
       const { error } = await invokeBackendFunction('payout-methods', {
         action: 'add',
-        bank_name: bankName.trim(),
+        bank_id: bankId,
+        payfast_bank_name: branchCode ? selectedBank.name : '',
         account_holder: accountHolder.trim(),
         account_number: accountNumber.trim(),
         account_type: accountType,
         branch_code: branchCode.trim() || null,
       });
       if (error) throw error;
-      setBankName('');
+      setBankId('');
       setAccountHolder('');
       setAccountNumber('');
       setBranchCode('');
@@ -131,13 +142,14 @@ const PayoutMethodsScreen: React.FC = () => {
         </Text>
 
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <TextInput
-            value={bankName}
-            onChangeText={setBankName}
-            placeholder="Bank name"
-            placeholderTextColor={colors.textMuted}
-            style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.bg }]}
-          />
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Select bank" onPress={() => setBankMenuOpen(true)}
+            style={[styles.input, { borderColor: colors.border, backgroundColor: colors.bg }]}
+          >
+            <View style={styles.methodHeader}>
+              <Text style={{ color: selectedBank ? colors.text : colors.textMuted }}>{selectedBank?.name || 'Select bank'}</Text>
+              <Ionicons name="chevron-down" color={colors.textMuted} size={18} />
+            </View>
+          </TouchableOpacity>
           <TextInput
             value={accountHolder}
             onChangeText={setAccountHolder}
@@ -151,18 +163,20 @@ const PayoutMethodsScreen: React.FC = () => {
             placeholder="Account number"
             placeholderTextColor={colors.textMuted}
             keyboardType="number-pad"
+            maxLength={12}
             style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.bg }]}
           />
           <TextInput
             value={branchCode}
-            onChangeText={setBranchCode}
+            onChangeText={value => setBranchCode(value.replace(/[^\d]/g, ''))}
             placeholder="Branch code (optional)"
             placeholderTextColor={colors.textMuted}
             keyboardType="number-pad"
+            maxLength={6}
             style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.bg }]}
           />
           <View style={styles.typesRow}>
-            {(['cheque', 'savings', 'current'] as const).map((type) => (
+            {(['current', 'savings'] as const).map((type) => (
               <TouchableOpacity
                 key={type}
                 onPress={() => setAccountType(type)}
@@ -193,7 +207,7 @@ const PayoutMethodsScreen: React.FC = () => {
               <Text style={[styles.methodMeta, { color: colors.textSecondary }]}>{method.account_holder}</Text>
               <Text style={[styles.methodMeta, { color: colors.textMuted }]}>{method.account_masked} · {method.account_type}</Text>
               <View style={styles.methodActions}>
-                {!method.is_default && (
+                {!method.is_default && method.verified && (
                   <TouchableOpacity onPress={() => setDefault(method.id)} style={[styles.smallBtn, { borderColor: colors.border }]}>
                     <Text style={{ color: colors.text, fontWeight: '700' }}>Set Default</Text>
                   </TouchableOpacity>
@@ -212,6 +226,23 @@ const PayoutMethodsScreen: React.FC = () => {
           ))
         )}
       </ScrollView>
+      <Modal visible={bankMenuOpen} transparent animationType="fade" onRequestClose={() => setBankMenuOpen(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.bankMenu, { backgroundColor: colors.card }]}>
+            <Text style={[styles.methodTitle, { color: colors.text }]}>Select Bank</Text>
+            <ScrollView>
+              {BANKS.map(bank => (
+                <TouchableOpacity key={bank.id} accessibilityRole="button" onPress={() => { setBankId(bank.id); setBankMenuOpen(false); }} style={styles.bankOption}>
+                  <Text style={{ color: colors.text }}>{bank.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            <TouchableOpacity accessibilityRole="button" onPress={() => setBankMenuOpen(false)} style={styles.bankOption}>
+              <Text style={{ color: colors.textMuted }}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -221,13 +252,16 @@ const styles = StyleSheet.create({
   container: { padding: 16, gap: 12 },
   title: { fontSize: 24, fontWeight: '900' },
   subtitle: { fontSize: 14, lineHeight: 20 },
-  card: { borderWidth: 1, borderRadius: 22, padding: 14, gap: 10, overflow: 'hidden' },
+  card: { borderWidth: 1, borderRadius: 8, padding: 14, gap: 10, overflow: 'hidden' },
   input: { borderWidth: 1, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 10, fontSize: 15 },
   typesRow: { flexDirection: 'row', gap: 8, marginTop: 2 },
   typeChip: { borderWidth: 1, borderRadius: 999, paddingVertical: 8, paddingHorizontal: 12, overflow: 'hidden' },
   addBtn: { borderRadius: 14, alignItems: 'center', justifyContent: 'center', minHeight: 46, marginTop: 4, overflow: 'hidden' },
   addBtnText: { color: '#fff', fontSize: 15, fontWeight: '800' },
-  methodCard: { borderWidth: 1, borderRadius: 22, padding: 12, gap: 6, overflow: 'hidden' },
+  methodCard: { borderWidth: 1, borderRadius: 8, padding: 12, gap: 6, overflow: 'hidden' },
+  modalBackdrop: { flex: 1, backgroundColor: '#00000066', justifyContent: 'center', alignItems: 'center', padding: 24 },
+  bankMenu: { width: '100%', maxWidth: 420, maxHeight: '80%', borderRadius: 8, padding: 16 },
+  bankOption: { minHeight: 48, justifyContent: 'center', paddingHorizontal: 8 },
   methodHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   methodTitle: { fontSize: 16, fontWeight: '800' },
   methodMeta: { fontSize: 13 },

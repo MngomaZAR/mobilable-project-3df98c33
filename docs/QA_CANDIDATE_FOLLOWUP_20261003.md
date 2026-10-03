@@ -4,7 +4,7 @@ Date: 2026-10-03. Public release remains blocked; Oracle QA is not a store launc
 
 ## Deployment Identity
 
-- Branch: `release/testflight-2026-06`; deployed source `291433aaa38af76f6bc8dd1bc7ce5c830c4a61e4`, plus later QA-safety/documentation changes.
+- Branch: `release/testflight-2026-06`; deployed backend source `291433aaa38af76f6bc8dd1bc7ce5c830c4a61e4`, plus later frontend and QA-safety/documentation changes.
 - Host: Jones Madunga's `papzi-prod-a1`, `129.151.188.15`, Johannesburg.
 - Isolated source/database: `/opt/papzii-qa-20261003` / `papzii_qa_20261003`.
 - Migrations 001-006 applied in QA; previously applied files were not rewritten.
@@ -22,7 +22,7 @@ Date: 2026-10-03. Public release remains blocked; Oracle QA is not a store launc
 | Pricing | Published photographer/model rates and add-ons form the server quote; expected-total guard; atomic model-service replacement. | Unit/domain checks cover stale quotes and retries. Pending payout records are not bank transfers. |
 | Availability | Authenticated atomic online/offline command; approved KYC required; dashboard rollback/error handling. | Real QA role tests. Opening the app no longer makes a provider available automatically. |
 | Tracking | Booking participant authorization, paid/accepted/time-window gates, bounded accurate coordinates, expiring fixes; no public live-location writes. | Paid synthetic booking tests verify both participants, outside users, early/stale/completed windows. No native GPS acceptance. |
-| Messaging | Stable send IDs; deduplicated retries; durable attachment references; read/delete/react commands; bidirectional blocks and membership. | Real database/MinIO checks; two browser send/read/text-bounds checks passed. HTTP polling is not WebSocket delivery. |
+| Messaging | Stable send IDs; deduplicated retries; durable attachment references; read/delete/react commands; bidirectional blocks and membership; explicit conversation header instead of navigator branding. | Real database/MinIO checks; focused header units and browser send/read/text-bounds checks. HTTP polling is not WebSocket delivery. |
 | Media/social/reporting | Stable avatar gateway, fresh signed private media, approved stories/comments, atomic report plus admin case. | Real storage/privacy/report tests; no accepted NSFW scanning/transcoding/operator lifecycle. |
 | Settings | Real session list/revoke and sharing; unsupported biometric/2FA/export controls unavailable; truthful deletion-request copy. | Settings and persistence tests. Actual account deletion processing remains missing. |
 | Maps | Interactive MapLibre, real OpenFreeMap tiles, Oracle OSRM road geometry, markers/zoom/resize/retry, honest failure states. | Eight browser cases passed, including invalid locations and far-snapped routes. Native map acceptance remains separate. |
@@ -64,14 +64,14 @@ Exact reports: `qa-role-patched-20261003.json`, `qa-auth-patched-20261003.json`,
 The earlier archive/results above are retained, not overwritten as though every run used the same image.
 
 - Type checking, full source lint, Expo compatibility check and locked-tree install dry-run passed.
-- Final frontend unit run: 14 suites / 96 tests passed. One inherited AppDataContext test is a placeholder, not behavioral coverage; a non-failing VirtualizedList act warning remains.
+- Latest frontend unit run: 14 suites / 98 tests passed, including two conversation-header regressions. One inherited AppDataContext test is a placeholder, not behavioral coverage; a non-failing VirtualizedList act warning remains.
 - Structural inventory: 44 screens, 24 services, zero structural blockers. This is not 44-screen behavioral coverage.
 - Six EAS gate-selection regression tests passed.
 - Production npm audit reduced from 57 to 39 findings: zero critical, 25 high, 14 moderate. Compatible patches applied; remaining Expo/RN/native/transitive findings require triage and tested upgrades, not a forced SDK-major update.
 - MapLibre 6.11.2 replaces the vulnerable version; Expo 54.0.37, local authentication 17.0.9 and React 19.1.0 are aligned.
 - First final-candidate browser attempt: 19 passed, 6 failed, retained in `qa-browser-alignment-failed-20261003.json`. Two chat failures were ambiguous hidden-preview selectors; two Home failures were real unsupported embedded queries; two later client failures hit the normal repeated-login account limit. Independent test accounts are now used; production limits were not weakened.
 - The next 25-case browser run passed, but manual screenshots exposed an unset `(0,0)` creator pin and clipped unbroken chat text. That report is preserved as `qa-browser-before-visual-fixes-20261003.json`, not accepted as final map/text quality evidence. Marker, road-snap and text-bounds regressions were added.
-- Final patched web export is `index-e6178dbad1860e26a87d987729b39f8a.js`. All 27 browser cases passed: 13 role/signup, four settings-entry, eight maps and two chat cases. The real isolated Oracle API and real map tiles/OSRM geometry were used; 96 screenshots were captured. Phone route and long-message screenshots were manually checked after the run. Entry-point coverage is 22/44 modules, not all actions or native devices. Report: `qa-browser-verified-20261003.json`.
+- Earlier patched web export is `index-e6178dbad1860e26a87d987729b39f8a.js`. All 27 browser cases passed: 13 role/signup, four settings-entry, eight maps and two chat cases. The real isolated Oracle API and real map tiles/OSRM geometry were used; 96 screenshots were captured. Phone route and long-message screenshots were manually checked after the run. A later visual check found that the navigator logo still hid the conversation title; the final follow-up below covers that fix. Entry-point coverage is 22/44 modules, not all actions or native devices. Report: `qa-browser-verified-20261003.json`.
 - Latest live QA schema audit checked 48 tables and found zero missing table/column contracts. This does not establish every relationship or business rule.
 - GitHub CI/GHCR execution completed successfully for the source revision recorded below. Public promotion is a separate blocked operation.
 - First pushed source commit: `06fe914bce30559f95b86a11ea7c7bc80191898b`. Backend run [37144196586](https://github.com/MngomaZAR/mobilable-project-3df98c33/actions/runs/37144196586) was rejected before jobs: report paths used the unavailable `runner` context in job-level env. They were moved to step env; actionlint 1.7.12 checks all workflows without findings and is now part of CI. The failed attempt is retained, not described as a successful image publish. Context rules: [GitHub reference](https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#context-availability).
@@ -139,6 +139,29 @@ cannot silently redirect protocol writes to production. `--check-only` passed on
 Oracle. The application images above are unchanged by this safety/documentation
 follow-up. The temporary browser server and private SSH tunnel were stopped;
 the remote QA API/worker and OSRM service remain deployed.
+
+## Final Conversation-Header Follow-Up
+
+A final screenshot check found that the stack navigator's logo still overrode
+the conversation title, despite message delivery passing. Chat now sets both
+`title` and `headerTitle`, with a `Conversation` fallback for titleless deep
+links. Inbox cards expose the conversation context as an accessible button.
+Two unit regressions verify the header options; the browser tests additionally
+require the matching visible conversation heading before sending messages.
+
+The full 14-suite frontend run passed all 98 tests. Type checking, full source
+lint and actionlint passed. The new private QA web bundle is
+`index-6787618dd7157fc038b8629b31f3b974.js`. The complete browser repeat starting
+`2026-10-03T19:36:21.521Z` passed all 27 cases in 319.88 seconds, with zero
+skipped, flaky or unexpected failures and 96 screenshots. Report:
+`qa-browser-header-20261003.json`. The phone conversation heading and road-route
+screenshots were manually inspected. This does not expand the 22/44 screen
+entry-point scope to every button, every native device or real payments.
+
+The exact GHCR digests and source labels were checked again on Oracle. The EAS
+production-env validation was rerun and still failed with HTTP 404 for public
+readiness and road routing. No environment was redirected to the SSH tunnel,
+and no native build, store submission or public promotion was performed.
 
 ## Public Release Blockers
 

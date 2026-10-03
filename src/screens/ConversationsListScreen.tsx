@@ -105,6 +105,8 @@ const ConversationsListScreen: React.FC = () => {
     const avatarUrl = display.avatarUrl || PLACEHOLDER_AVATAR;
     return (
       <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel={`Open conversation with ${displayTitle}`}
         style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
         onPress={() =>
           navigation.navigate('ChatThread', {

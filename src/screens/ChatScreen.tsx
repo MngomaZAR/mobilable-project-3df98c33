@@ -69,6 +69,11 @@ const ChatScreen: React.FC = () => {
 
 
   const otherAvatar = route.params?.avatarUrl ?? PLACEHOLDER_IMAGE;
+  const threadTitle = route.params?.title?.trim() || 'Conversation';
+
+  useEffect(() => {
+    navigation.setOptions({ title: threadTitle, headerTitle: threadTitle });
+  }, [navigation, threadTitle]);
 
   const LOCKED_MEDIA_FULL = PLACEHOLDER_IMAGE;
   const LOCKED_MEDIA_PREVIEW = PLACEHOLDER_IMAGE;
@@ -94,10 +99,6 @@ const ChatScreen: React.FC = () => {
       }
     };
     load();
-
-    if (route.params?.title) {
-      navigation.setOptions({ title: route.params.title });
-    }
 
     // Subscribe to realtime messages and store cleanup fn to prevent memory leak
     const unsubscribe = subscribeToMessages?.(chatId);

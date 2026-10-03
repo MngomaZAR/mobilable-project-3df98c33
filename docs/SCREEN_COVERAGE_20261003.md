@@ -8,6 +8,14 @@ All 27 cases passed again after Oracle pulled the published GHCR images for
 source revision `291433aaa38af76f6bc8dd1bc7ce5c830c4a61e4`; exact report:
 `qa-browser-ghcr-291433a.json`. This remains browser QA, not a store-device test.
 
+After a manual screenshot check exposed the logo hiding the conversation title,
+the explicit chat header and accessible inbox button were fixed. A complete
+27-case repeat passed with the new web bundle
+`index-6787618dd7157fc038b8629b31f3b974.js`; exact report:
+`qa-browser-header-20261003.json`. The two chat cases now assert the visible
+conversation heading as well as persisted messages and text bounds. Screen
+coverage remains 22/44 entry points, not full feature acceptance.
+
 | Screen module | UI evidence this pass | Domain evidence / remaining gap |
 |---|---|---|
 | AccessDeniedScreen | Not exercised | Static gate exists; rejection, blocked user and appeal UX need acceptance. |
@@ -21,7 +29,7 @@ source revision `291433aaa38af76f6bc8dd1bc7ce5c830c4a61e4`; exact report:
 | BookingFormScreen | Not exercised | Published provider/service/add-on quotes and stale-total rejection tested by API; equipment, service selection, rate/duration and final price still need full UI acceptance. |
 | BookingTrackingScreen | Not exercised | Real OSRM API geometry tested; native map, live tracking and permission behavior not accepted. |
 | BookingsScreen | Browser: all roles, all viewports | List/navigation only; no full create-to-review UI journey. Domain write journeys tested separately. |
-| ChatScreen | Browser: phone/desktop persistent send/read and long text | HTTP retry/membership/private attachment/read/delete/react commands tested; full UI actions, native attachments and real-time transport not accepted. |
+| ChatScreen | Browser: phone/desktop conversation heading, persistent send/read and long text | HTTP retry/membership/private attachment/read/delete/react commands tested; full UI actions, native attachments and real-time transport not accepted. |
 | ComplianceScreen | Browser entry: four roles, phone | Consent/age API evidence is partial; privacy control persistence and permissions need UI acceptance. |
 | ConversationsListScreen | Browser: photographer/model/admin, all viewports | Inbox loads; client access path and full thread actions need UI acceptance. |
 | CreatePostScreen | Not exercised | API inserts default pending moderation; media upload, caption, submit and errors need UI tests. |

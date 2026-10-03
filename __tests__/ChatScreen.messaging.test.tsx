@@ -9,6 +9,8 @@ const mockMessaging = {
   subscribeToMessages: jest.fn(), broadcastTyping: jest.fn(), sendMessage: jest.fn(), sendMediaMessage: jest.fn(),
   sendLockedMediaMessage: jest.fn(), unlockPremiumMessage: jest.fn(), addReaction: jest.fn(), removeReaction: jest.fn(), deleteMessage: jest.fn(),
 };
+const mockRouteParams: { conversationId: string; title?: string } = { conversationId: 'chat-a', title: 'Chat' };
+const mockNavigation = { setOptions: jest.fn() };
 jest.mock('../src/store/MessagingContext', () => ({ useMessaging: () => mockMessaging }));
 jest.mock('../src/store/AuthContext', () => ({ useAuth: () => ({ currentUser: { id: 'alice' } }) }));
 jest.mock('../src/store/BookingContext', () => ({ useBooking: () => ({ bookings: [] }) }));
@@ -20,7 +22,7 @@ jest.mock('../src/services/reportService', () => ({ reportContent: jest.fn() }))
 jest.mock('../src/components/HowItWorksCard', () => () => null);
 jest.mock('../src/components/Skeleton', () => ({ ChatSkeleton: () => null }));
 jest.mock('../src/components/AnimatedBubble', () => ({ AnimatedBubble: require('react-native').View }));
-jest.mock('@react-navigation/native', () => ({ useRoute: () => ({ params: { conversationId: 'chat-a', title: 'Chat' } }), useNavigation: () => ({ setOptions: jest.fn() }) }));
+jest.mock('@react-navigation/native', () => ({ useRoute: () => ({ params: mockRouteParams }), useNavigation: () => mockNavigation }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0 }), SafeAreaView: require('react-native').View }));
 jest.mock('@expo/vector-icons', () => {
   const React = require('react');
@@ -37,6 +39,7 @@ jest.mock('expo-haptics', () => ({ ImpactFeedbackStyle: { Light: 'light' }, Noti
 beforeEach(() => {
   jest.useFakeTimers();
   jest.clearAllMocks();
+  mockRouteParams.title = 'Chat';
   mockMessaging.messages = {};
   mockMessaging.reactions = {};
   jest.spyOn(Alert, 'alert').mockImplementation(() => {});
@@ -46,6 +49,20 @@ beforeEach(() => {
   mockMessaging.sendMediaMessage.mockResolvedValue({ id: 'media-a' });
   mockMessaging.sendMessage.mockResolvedValue({ id: 'message-a' });
   (uploadImage as jest.Mock).mockResolvedValue('chat-media::users/alice/photo.jpg');
+});
+
+test('conversation title overrides the navigator logo header', async () => {
+  mockRouteParams.title = 'Nandi - Friday shoot';
+  render(<ChatScreen />);
+  await waitFor(() => expect(mockMessaging.markMessagesRead).toHaveBeenCalled());
+  expect(mockNavigation.setOptions).toHaveBeenCalledWith({ title: 'Nandi - Friday shoot', headerTitle: 'Nandi - Friday shoot' });
+});
+
+test('a thread deep link without a title has an explicit conversation header', async () => {
+  delete mockRouteParams.title;
+  render(<ChatScreen />);
+  await waitFor(() => expect(mockMessaging.markMessagesRead).toHaveBeenCalled());
+  expect(mockNavigation.setOptions).toHaveBeenCalledWith({ title: 'Conversation', headerTitle: 'Conversation' });
 });
 
 afterEach(() => {

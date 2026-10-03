@@ -54,9 +54,14 @@ for (const [width, actorIndex] of [[390, 80], [1440, 81]]) {
     await page.getByPlaceholder('Password').fill(password);
     await page.getByText('Sign In', { exact: true }).last().click();
     await page.getByRole('tab', { name: /Chat/ }).click({ timeout: 40000 });
-    await page.getByText(incoming, { exact: true }).click();
+    const conversationCard = page.getByRole('button').filter({ has: page.getByText(incoming, { exact: true }) });
+    const cardLabel = await conversationCard.getAttribute('aria-label');
+    expect(cardLabel).toMatch(/^Open conversation with .+/);
+    const title = cardLabel.replace('Open conversation with ', '');
+    await conversationCard.click();
     const input = page.getByPlaceholder('Type a message...');
     await expect(input).toBeVisible({ timeout: 30000 });
+    await expect(page.getByRole('heading', { name: title, exact: true }).filter({ visible: true })).toBeVisible();
     // Stack navigation retains the hidden inbox preview behind the thread.
     const visibleMessage = body => page.getByText(body, { exact: true }).filter({ visible: true });
     await expect(visibleMessage(incoming)).toHaveCount(1);

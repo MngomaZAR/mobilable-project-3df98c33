@@ -1,0 +1,29 @@
+{
+  "scope": "Real isolated S3 backend; synthetic objects only",
+  "checks": [
+    {
+      "name": "Object bytes survive container restart",
+      "passed": true
+    },
+    {
+      "name": "Content type survives container restart",
+      "passed": true
+    },
+    {
+      "name": "Anonymous S3 object access denied",
+      "passed": true
+    },
+    {
+      "name": "Incorrect S3 signature denied",
+      "passed": true
+    },
+    {
+      "name": "Non-empty bucket deletion denied",
+      "passed": true
+    },
+    {
+      "name": "Explicit object deletion persists",
+      "passed": true
+    }
+  ]
+}

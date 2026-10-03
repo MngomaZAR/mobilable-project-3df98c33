@@ -53,6 +53,7 @@ jobs:
           QA_REPORT_PATH: ${{ runner.temp }}/role-load-report.json
           QA_PAYMENT_REPORT_PATH: ${{ runner.temp }}/payment-protocol-report.json
           QA_AUTH_REPORT_PATH: ${{ runner.temp }}/auth-protocol-report.json
+          QA_STORAGE_REPORT_PATH: ${{ runner.temp }}/storage-protocol-report.json
         run: bash scripts/ci-backend.sh
       - uses: actions/upload-artifact@v4
         if: always()

@@ -58,7 +58,7 @@ Manage these in the Oracle/Dokploy environment, not in EAS public variables:
 | `MINIO_ENDPOINT`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY` | Private object storage connection and credentials. Devices use the authenticated API media gateway. |
 | `ADMIN_USER_IDS` | Explicit server-side admin allowlist; client metadata is not admin authority. |
 | `PAYFAST_MERCHANT_ID`, `PAYFAST_MERCHANT_KEY`, `PAYFAST_PASSPHRASE` | Merchant configuration. An existing checkout UI or mock callback test does not prove a real payment or settlement. |
-| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`, `SMTP_USE_SSL`, `RECOVERY_ENCRYPTION_KEY` | Server-only recovery email; API and worker share a valid Fernet key. Actual mail delivery and reset acceptance are required, not just configured fields. |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`, `SMTP_SSL`, `RECOVERY_ENCRYPTION_KEY` | Server-only recovery email; API and worker share a valid Fernet key. Actual mail delivery and reset acceptance are required, not just configured fields. |
 | `EXPO_ACCESS_TOKEN` | Optional server-side authenticated Expo push delivery. Never use an `EXPO_PUBLIC_` prefix. |
 
 Do not assume that placing LiveKit, SMTP or payout credentials in an environment completes the missing service implementations. `/health/readiness` reports those gaps explicitly.

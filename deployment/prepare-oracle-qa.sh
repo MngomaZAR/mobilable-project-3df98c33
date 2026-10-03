@@ -12,6 +12,7 @@ from urllib.parse import urlsplit,urlunsplit
 env=dict(item.split("=",1) for item in json.load(sys.stdin)[0]["Config"]["Env"] if "=" in item)
 url=urlsplit(env["DATABASE_URL"])
 env["DATABASE_URL"]=urlunsplit((url.scheme,url.netloc,"/papzii_qa_20261003",url.query,url.fragment))
+env["NEON_DATABASE_URL"]=""
 env["APP_ENV"]="qa"
 env["ALLOW_RUNTIME_SCHEMA_CHANGES"]="false"
 env["ADMIN_USER_IDS"]="qa-admin-20261003"

@@ -59,6 +59,8 @@ completion is recorded separately below; unchecked production items remain open.
 - [x] Latest repeat passes 144 backend units, 138 HTTP/domain checks, 15 auth checks and 30 mock-gateway payment/tracking checks; no real money moved.
 - [x] Final browser repeat passes 27 cases and captures 96 screenshots; map and chat bring entry-point evidence to 22/44 modules, not every action.
 - [x] Final source unit run passes 96 tests; missing-location pins, road-snap rejection, published pricing and long chat text have regressions.
+- [x] GitHub frontend/backend CI passes for source `291433a`; API and worker images published to GHCR for AMD64/ARM64, then pulled by exact digest and deployed to private Oracle QA. Backend/load and 27 browser cases pass again.
+- [x] Legacy default-branch auto-Dokploy workflow disabled pending reviewed production guards; its green no-op is not public deployment evidence.
 
 See `QA_CANDIDATE_FOLLOWUP_20261003.md` for current evidence and
 `QA_RELEASE_REPORT_20261003.md` for historical runs and failures.

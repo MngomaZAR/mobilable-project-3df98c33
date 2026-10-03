@@ -73,7 +73,7 @@ The earlier archive/results above are retained, not overwritten as though every 
 - The next 25-case browser run passed, but manual screenshots exposed an unset `(0,0)` creator pin and clipped unbroken chat text. That report is preserved as `qa-browser-before-visual-fixes-20261003.json`, not accepted as final map/text quality evidence. Marker, road-snap and text-bounds regressions were added.
 - Final patched web export is `index-e6178dbad1860e26a87d987729b39f8a.js`. All 27 browser cases passed: 13 role/signup, four settings-entry, eight maps and two chat cases. The real isolated Oracle API and real map tiles/OSRM geometry were used; 96 screenshots were captured. Phone route and long-message screenshots were manually checked after the run. Entry-point coverage is 22/44 modules, not all actions or native devices. Report: `qa-browser-verified-20261003.json`.
 - Latest live QA schema audit checked 48 tables and found zero missing table/column contracts. This does not establish every relationship or business rule.
-- GitHub CI/GHCR execution is pending at this report revision; do not infer successful publishing from local tests.
+- GitHub CI/GHCR execution completed successfully for the source revision recorded below. Public promotion is a separate blocked operation.
 - First pushed source commit: `06fe914bce30559f95b86a11ea7c7bc80191898b`. Backend run [37144196586](https://github.com/MngomaZAR/mobilable-project-3df98c33/actions/runs/37144196586) was rejected before jobs: report paths used the unavailable `runner` context in job-level env. They were moved to step env; actionlint 1.7.12 checks all workflows without findings and is now part of CI. The failed attempt is retained, not described as a successful image publish. Context rules: [GitHub reference](https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#context-availability).
 - Frontend CI [37144197328](https://github.com/MngomaZAR/mobilable-project-3df98c33/actions/runs/37144197328) passed. The next backend run [37144464755](https://github.com/MngomaZAR/mobilable-project-3df98c33/actions/runs/37144464755) passed unit/auth checks but failed pulling `quay.io/minio/minio`; neither `latest`, the documented release tag nor the cached digest could be fetched in the live registry probe. Existing Oracle media continues using its cached image; this is not a reproducible fresh deployment.
 - CI now tests a real digest-pinned SeaweedFS 4.48 S3 fixture, not a storage mock. Boto3 remains the common service boundary. Anonymous/wrong-signature denial, non-empty-bucket protection and object/metadata persistence across restart are explicit gates. The separate `docker-compose.seaweedfs-qa.yml` fixture does not mount or replace the production MinIO volume. Production S3 migration, object inventory/checksums, private access and rollback acceptance remain required before switching providers. [MinIO upstream](https://github.com/minio/minio) is archived/unmaintained; [SeaweedFS upstream](https://github.com/seaweedfs/seaweedfs) documents the single-node S3 mode. No automatic production migration is implied.
@@ -81,6 +81,56 @@ The earlier archive/results above are retained, not overwritten as though every 
 - Python dependency audit found seven distinct API advisories and four worker advisories, zero critical. Patched FastAPI/Starlette/cryptography pins are under regression testing; one unpatched transitive `ecdsa` advisory requires an explicit non-ECDSA usage assessment. The sanitized resolution audit is not a deployed-image or OS-package SBOM.
 - Those Python pins are now applied and passed the Oracle repeat above. Resolved and isolated-installed audits agree: API one known unpatched transitive `ecdsa` advisory; worker zero. No advisories were silently suppressed. Only current RS256 verification / HS256 token creation are found in source; this is a bounded usage assessment, not a claim that the vulnerable dependency has been patched. Evidence: `backend-dependency-audit-20261003.json`.
 - The generic `npm run db:migrate` command now targets the FastAPI migration module, not Supabase. Real schema migrations must still run only in the intended server environment with a verified backup.
+
+## Published Images And Oracle QA
+
+Source revision: `291433aaa38af76f6bc8dd1bc7ce5c830c4a61e4` on
+`release/testflight-2026-06`. [Frontend CI](https://github.com/MngomaZAR/mobilable-project-3df98c33/actions/runs/37145296867)
+and [backend test/build/publish](https://github.com/MngomaZAR/mobilable-project-3df98c33/actions/runs/37145296825)
+both completed successfully. API and worker images were published for
+`linux/amd64` and `linux/arm64`, then fetched from GHCR on Oracle. Their OCI
+revision labels matched this source revision before deployment:
+
+- API: `ghcr.io/mngomazar/papzi-api@sha256:97c71ec57211ac19430fb9d178b68519a9ff51ce806f1f38f659032c14bd0657`.
+- Worker: `ghcr.io/mngomazar/papzi-worker@sha256:ef30e2c13e93a4f3e5987104ccf01ec181016a04d700c59324cbcab1e6ab0cfa`.
+- The private `papzii-api-qa` and `papzii-worker-qa` containers now run those exact images. The public API was not switched.
+
+CI used fresh PostgreSQL and real SeaweedFS, not cached MinIO. It passed 138 domain,
+15 auth, 30 mock-gateway payment/tracking and six storage restart/access checks.
+All 3,000 read requests and 1,400 booking/chat requests passed, with 200/200 write
+journeys completed. Read p95 was 1,479.56 ms; write per-request p95 was 5,440.02 ms.
+The worker persisted 810 fixture notifications from 811 completed jobs. These
+are in-app records, not device push receipts. Sanitized reports: `qa-ci-*-291433a.json`.
+Downloaded GitHub artifact 11281509327 matched SHA-256
+`7e7f6bf022dd39863128cbfaf89e5f2bb44c6cf43046bf4bee62ff7fc746313b`.
+
+The GHCR images then passed 144 backend units and migrations in Oracle QA, followed
+by a fresh protocol/load repeat starting `2026-10-03T18:53:26.514172+00:00`:
+138 domain checks, 15 auth checks and 30 mock-gateway payment/tracking checks.
+All 3,000 reads and 1,400 write requests passed; 200/200 write journeys completed.
+Read p95 was 2,145.55 ms and write per-request p95 was 6,034.23 ms. Cumulative
+worker totals were 10,593 completed jobs / 10,587 fixture notifications. Real
+Oracle OSRM geometry was verified again. Reports: `qa-ghcr-*-291433a.json`.
+Oracle QA still uses cached MinIO; its production replacement is not complete.
+The browser repeat against these exact images passed all 27 cases (zero skipped,
+flaky or unexpected failures), starting `2026-10-03T18:56:22.090Z`. It captured 96
+screenshots; route and message bounds were manually reviewed again. Report:
+`qa-browser-ghcr-291433a.json`. Entry-point coverage remains 22/44 screen modules,
+not complete action/device acceptance.
+
+The final check using the pulled EAS production variables still failed readiness
+and routing with HTTP 404. Those variables were not pointed at the private QA
+tunnel. Existing phone builds have not been replaced, and the new API images are
+not a new TestFlight/Play binary or a public API cutover.
+
+The legacy default-branch Dokploy workflow was manually disabled (workflow
+301399490). A release-branch edit alone does not replace the default-branch
+`workflow_run` definition; see [GitHub event semantics](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_run).
+Its last [green run](https://github.com/MngomaZAR/mobilable-project-3df98c33/actions/runs/37145634546)
+skipped the actual redeploy and both smoke steps. It is not evidence of a public
+rollout. CI and image publishing remain enabled. Install the reviewed production
+guard on `main`, configure the deployment environment and complete acceptance
+before re-enabling automatic production deployment.
 
 ## Public Release Blockers
 

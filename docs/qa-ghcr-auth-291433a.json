@@ -1,0 +1,78 @@
+{
+  "checks": [
+    {
+      "name": "Recovery account signup",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Session credentials stored only as fingerprints",
+      "passed": true
+    },
+    {
+      "name": "Own sessions listed without credentials",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Second device sign-in",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Cannot revoke another account session",
+      "passed": true,
+      "status": 404
+    },
+    {
+      "name": "Revoke own old session",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Revoked session cannot authenticate",
+      "passed": true,
+      "status": 401
+    },
+    {
+      "name": "Recovery request queued",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Unknown email gets identical response",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Concurrent reset has exactly one winner",
+      "passed": true
+    },
+    {
+      "name": "Reset code cannot be replayed",
+      "passed": true,
+      "status": 400
+    },
+    {
+      "name": "Reset revokes all old devices",
+      "passed": true,
+      "status": 401
+    },
+    {
+      "name": "Old password rejected",
+      "passed": true,
+      "status": 401
+    },
+    {
+      "name": "New password works",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "Database-backed login abuse limit",
+      "passed": true
+    }
+  ],
+  "actual_email_delivered": false,
+  "scope": "QA database and API; code retrieved privately from encrypted synthetic job, not email"
+}

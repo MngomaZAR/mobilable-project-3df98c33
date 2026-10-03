@@ -4,6 +4,10 @@
 
 The final 27-case Playwright run uses the real isolated Oracle QA API: four roles at three viewports, new client registration/age declaration, phone settings entry points, interactive road maps and persistent chat. It captures 96 view-state screenshots. It checks navigation, page crashes, unexpected backend errors, map pixels/markers/geometry, message text bounds, horizontal overflow and tab-label bounds. It does not press every control. Synthetic fixtures do not prove real-world identities, money, users or videos.
 
+All 27 cases passed again after Oracle pulled the published GHCR images for
+source revision `291433aaa38af76f6bc8dd1bc7ce5c830c4a61e4`; exact report:
+`qa-browser-ghcr-291433a.json`. This remains browser QA, not a store-device test.
+
 | Screen module | UI evidence this pass | Domain evidence / remaining gap |
 |---|---|---|
 | AccessDeniedScreen | Not exercised | Static gate exists; rejection, blocked user and appeal UX need acceptance. |

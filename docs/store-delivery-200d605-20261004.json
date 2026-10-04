@@ -1,0 +1,82 @@
+{
+  "checkedAt": "2026-10-04T15:26:18Z",
+  "revision": "200d60599c92c800ab29bba6eb8b4a4a1b7cfdf6",
+  "scope": "Restricted beta only; not public approval or native acceptance",
+  "ios": {
+    "bundleId": "com.papzi.app",
+    "appStoreConnectAppId": "6760396864",
+    "version": "1.0.0",
+    "buildNumber": "41",
+    "easBuildId": "4bac4c43-00a3-4774-a901-5d132596b567",
+    "buildStatus": "FINISHED",
+    "easSubmissionId": "cbfae5a4-beca-4f6a-b172-93dd576df956",
+    "submissionStatus": "FINISHED",
+    "submissionCompletedAt": "2026-10-04T14:51:34.762Z",
+    "appleProcessingState": "VALID",
+    "internalBetaState": "IN_BETA_TESTING",
+    "externalBetaState": "IN_BETA_TESTING",
+    "existingGroupsAssigned": ["Team (Expo)", "papzi"],
+    "groupExpansion": false,
+    "autoNotifyEnabled": true,
+    "testerMail": {
+      "recipientCount": 2,
+      "smtpAccepted": 2,
+      "inboxReceiptVerified": false,
+      "deviceTestsVerified": false
+    },
+    "publicAppReviewSubmitted": false
+  },
+  "android": {
+    "packageName": "com.papziiii.paparazzi",
+    "version": "1.0.0",
+    "versionCode": "4",
+    "easBuildId": "86de4fe4-9d56-4b09-9cf8-ff15e017eb4e",
+    "buildStatus": "FINISHED",
+    "easSubmissionId": "9058d4f2-9214-472f-a75b-ab6690939d6b",
+    "submissionStatus": "FINISHED",
+    "submissionCompletedAt": "2026-10-04T15:06:16.290Z",
+    "track": "internal",
+    "initialUploadStatus": "draft",
+    "consoleRolloutAuthorized": true,
+    "consoleState": "Active",
+    "publisherReadbackAt": "2026-10-04T15:18:19Z",
+    "publisherReleaseStatus": "completed",
+    "testJoinUrl": "https://play.google.com/apps/internaltest/4701137796431968292",
+    "existingTesterListsPreserved": true,
+    "warning": "No associated deobfuscation file",
+    "productionTrackEmpty": true,
+    "closedTestOptIns": 0,
+    "requiredClosedTesters": 12,
+    "requiredContinuousDays": 14,
+    "appSetupTasksCompleted": 0,
+    "appSetupTasksTotal": 11
+  },
+  "runtime": {
+    "api": "https://papzii-api.129.151.188.15.nip.io",
+    "hostedWebPreview": "https://papzi--swvsndvpq2.expo.app",
+    "healthPassed": true,
+    "schemaPassed": true,
+    "anonymousAuthRejected": true,
+    "roadRoutePoints": 122,
+    "publicReady": false,
+    "blockers": [
+      "payment_checkout_enabled",
+      "payment_refund_execution",
+      "bank_payout_execution",
+      "video_call_service",
+      "instant_dispatch_service"
+    ]
+  },
+  "legal": {
+    "privacyUrl": "https://papzii.co.za/privacy",
+    "privacyStatus": 404,
+    "termsUrl": "https://papzii.co.za/terms",
+    "termsStatus": 404,
+    "operatorConfirmed": false,
+    "nativePolicyAccepted": false,
+    "cpanelAccessVerified": true,
+    "websiteChanged": false
+  },
+  "financialTransactionPerformed": false,
+  "publicStoreRelease": false
+}

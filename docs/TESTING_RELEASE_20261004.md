@@ -10,7 +10,7 @@ work continues. TestFlight testing is not a public App Store release.
 - iOS `com.papzi.app`, App Store Connect `6760396864`.
 - Android `com.papziiii.paparazzi`, internal testing only.
 - Profile/channel `beta-testing`, production-hosted Oracle HTTPS API.
-- Digital purchasing disabled. Build 40 uses authenticated, token-bound,
+- Digital purchasing disabled. Builds 40 and 41 use authenticated, token-bound,
   short-lived service permissions; general checkout, financial execution, video
   joins and instant dispatch stay paused. Explicit controlled-test accounts are
   not public service activation. Build 39 retains its older blanket client guards.
@@ -50,7 +50,42 @@ Do not create acceptance records without real provider readback and independent
 evidence. The public readiness endpoint now consults the guarded financial
 acceptance checks, rejecting sandbox evidence and failed database reads.
 
-## Current Build 40 Delivery
+## Current Build 41 / Android Code 4 Delivery
+
+- Exact source: `200d60599c92c800ab29bba6eb8b4a4a1b7cfdf6`, matching public Oracle
+  protected cutover `20261004T145154Z` and all 13 migrations.
+- iOS EAS build `4bac4c43-00a3-4774-a901-5d132596b567`, `1.0.0 (41)`;
+  submission `cbfae5a4-beca-4f6a-b172-93dd576df956` finished at `14:51:34Z`.
+  Apple validates it and reports internal/external `IN_BETA_TESTING`.
+- Existing `Team (Expo)` and `papzi` groups each retain one tester and build 41.
+  Jones already joined; no new group, public link or duplicate join invitation.
+  Auto-notification remains enabled.
+- Two build-41 instruction emails were SMTP-accepted at `15:07:36Z`; inbox receipt
+  and completed native tests remain unverified. Build-specific private ledgers
+  prevent blind resend.
+- Android EAS build `86de4fe4-9d56-4b09-9cf8-ff15e017eb4e`, `1.0.0` / code `4`;
+  submission `9058d4f2-9214-472f-a75b-ab6690939d6b` finished at `15:06:16Z`.
+  The signed-in Console activated only the existing internal track. Publisher
+  API readback at `15:18:19Z` confirms code 4 `completed`; production is empty.
+- Existing internal tester lists remain selected. Join through
+  [the existing Play internal test](https://play.google.com/apps/internaltest/4701137796431968292)
+  with an authorized Google account. Store propagation may take time.
+- Play reports one nonblocking code-4 deobfuscation-file warning. No supported
+  devices were dropped relative to code 3; 12,248 phone models were shown. This
+  is store compatibility metadata, not testing every device.
+- Matching [web preview](https://papzi--swvsndvpq2.expo.app) passed client sign-in,
+  Home/Map/Bookings/Feed/Settings, actual map tile/canvas rendering and sign-out
+  at 390x844 and 1440x900, without API errors, crashes or horizontal overflow.
+- [Native Map Follow-Up](NATIVE_MAP_ACCEPTANCE_20261004.md) records fixes and
+  physical-device limits; [Candidate Evidence](RELEASE_CANDIDATE_200D605_20261004.md)
+  records CI, backup, runtime and scope.
+
+Full public marketplace activation remains held. Play additionally has 0 of 11
+app setup tasks complete and 0 closed-testers against its 12-testers/14-days gate.
+Privacy/terms URLs return 404 and legacy native legal content requires owner
+review and correction. See [Public Store Gates](PUBLIC_STORE_GATES_20261004.md).
+
+## Build 40 / Android Code 3 History
 
 - Runtime/app candidate `871ec85ac00af86108b3b3525515bbb8d8814cad`; Oracle protected
   cutover `20261004T134217Z`, with all 13 migrations and real identities preserved.
@@ -119,16 +154,16 @@ verified reviewer access, beta-only review, invitation checks and tester notices
 It refuses unrelated builds/groups, incomplete/paginated scopes and unavailable
 external builds. Mail/reviewer operations require separately selected protected
 bridges; private credentials, recipients and retry ledgers remain outside Git.
-Thirteen offline safety tests cover those gates, explicit build-39/40 authorization,
+Thirteen offline safety tests cover those gates, explicit build-39/40/41 authorization,
 expired/processing build rejection and duplicate-invitation handling. CI runs
 these checks without provider credentials or sending mail.
 
 ## Guarded Activation Follow-Up
 
-The deployed build-40 candidate implements account-bound, short-lived
+The deployed candidate implements account-bound, short-lived
 server permissions for controlled acceptance, rather than removing the beta
 restriction globally. Deploying the server alone does not update build 39's
-JavaScript. Install build 40 to exercise these changes when explicitly authorized.
+JavaScript. Install build 41 to exercise these changes when explicitly authorized.
 Public checkout still requires independently accepted live refunds and creator
 bank settlement; public video and instant dispatch require reviewed native-device
 evidence. Missing provider credentials or evidence remain real launch blockers.

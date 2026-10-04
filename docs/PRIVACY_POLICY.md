@@ -2,6 +2,13 @@
 
 Last updated: 2026-03-05
 
+**Historical, unapproved draft.** October 4 review found it incomplete for the
+Oracle release. Operator identity, actual SDK/sharing behavior, location use,
+retention and monitored deletion/contact routes require owner confirmation and
+alignment with native consent and store declarations. The public URL returns 404.
+Do not publish this draft or claim POPIA compliance from it. See
+[Public Store Gates](PUBLIC_STORE_GATES_20261004.md).
+
 Papzi ("we", "us", "our") provides a marketplace for photography services. This policy explains what personal data we collect, how we use it, and your rights.
 
 ## Data we collect

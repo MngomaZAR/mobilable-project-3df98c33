@@ -1,7 +1,7 @@
 {
   "appId": "6760396864",
   "bundleId": "com.papzi.app",
-  "build": "40",
+  "build": "41",
   "processingState": "VALID",
   "expired": false,
   "beta": {
@@ -27,6 +27,13 @@
   "reviewDemoRequired": true,
   "reviewDemoConfigured": true,
   "appDescriptionsConfigured": true,
-  "checkedAt": "2026-10-04T14:47:46.832940+00:00",
-  "action": "inspect"
+  "email": {
+    "recipientCount": 2,
+    "smtpAccepted": 2,
+    "alreadyAccepted": 0,
+    "deliveryToInboxVerified": false,
+    "externalApprovalPending": false
+  },
+  "checkedAt": "2026-10-04T15:07:36.455740+00:00",
+  "action": "email-testers"
 }

@@ -1,13 +1,13 @@
 {
   "appId": "6760396864",
   "bundleId": "com.papzi.app",
-  "build": "40",
+  "build": "41",
   "processingState": "VALID",
   "expired": false,
   "beta": {
     "autoNotifyEnabled": true,
     "internalBuildState": "IN_BETA_TESTING",
-    "externalBuildState": "IN_BETA_TESTING"
+    "externalBuildState": "READY_FOR_BETA_SUBMISSION"
   },
   "groups": [
     {
@@ -27,6 +27,10 @@
   "reviewDemoRequired": true,
   "reviewDemoConfigured": true,
   "appDescriptionsConfigured": true,
-  "checkedAt": "2026-10-04T14:47:46.832940+00:00",
-  "action": "inspect"
+  "betaReviewStates": [
+    "WAITING_FOR_REVIEW"
+  ],
+  "publicAppReviewSubmitted": false,
+  "checkedAt": "2026-10-04T15:01:54.753167+00:00",
+  "action": "beta-review"
 }

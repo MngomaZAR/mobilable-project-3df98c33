@@ -1,8 +1,12 @@
 # Store Submission Package (iOS + Android)
 
-Date: 2026-03-23
+Historical draft: 2026-03-23. Reclassified 2026-10-04.
 
-This file is the final launch checklist for App Store Connect and Google Play Console submission readiness.
+**Not a final or approved submission package.** The URLs below currently return
+404, real payment/refund/settlement acceptance is incomplete, and native legal
+copy does not match the current runtime. Do not copy these template declarations
+into either store as verified facts. Use [Public Store Gates](PUBLIC_STORE_GATES_20261004.md)
+and [Release Status](RELEASE_STATUS.md) for current evidence and requirements.
 
 ## 1) Required URLs
 

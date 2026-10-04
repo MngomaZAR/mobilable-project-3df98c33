@@ -2,6 +2,12 @@
 
 Last updated: 2026-03-05
 
+**Historical, unapproved draft.** This is not the current accepted marketplace
+agreement. Operator identity, fee/tax/cancellation terms, explicit release consent
+and real refund/payout execution remain unverified. The public URL returns 404;
+the March native copy also requires correction. See
+[Public Store Gates](PUBLIC_STORE_GATES_20261004.md) before publication/submission.
+
 These Terms govern your access to and use of Papzi.
 
 ## 1. Acceptance

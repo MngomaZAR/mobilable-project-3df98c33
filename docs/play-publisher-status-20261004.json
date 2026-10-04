@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-10-04T14:09:54Z",
+  "checkedAt": "2026-10-04T15:18:19Z",
   "projectId": "papz-601b5",
   "credentialFile": "papz-601b5-firebase-adminsdk-fbsvc-5842f2e3e0.json",
   "publishingPerformed": false,
@@ -30,7 +30,7 @@
           "releases": [
             {
               "versionCodes": [
-                "3"
+                "4"
               ],
               "status": "completed"
             }

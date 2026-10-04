@@ -5,34 +5,55 @@ that the backend used by an installed phone build passes acceptance.
 
 ## Current Testing Release
 
-Restricted beta **1.0.0 (40)** is validated and `IN_BETA_TESTING` for existing
+Restricted beta **1.0.0 (41)** is validated and `IN_BETA_TESTING` for existing
 internal `Team (Expo)` and external `papzi` groups. Jones belongs to `papzi` and
-already accepted his invitation. Two build-40 live-device instruction emails were
+already accepted his invitation. Two build-41 live-device instruction emails were
 accepted by SMTP; inbox delivery and completed device tests are not confirmed.
 Automatic TestFlight notifications are enabled. Client-only reviewer sign-in,
 normal age declaration and hosted web navigation passed; no admin privileges
 were granted to the review account.
 
-Both native builds use candidate `871ec85ac00af86108b3b3525515bbb8d8814cad`,
-also running on public Oracle HTTPS after protected cutover `20261004T134217Z`.
-Android version code **3** uploaded successfully and was activated through the
+Both native builds use candidate `200d60599c92c800ab29bba6eb8b4a4a1b7cfdf6`,
+also running on public Oracle HTTPS after protected cutover `20261004T145154Z`.
+Android version code **4** uploaded successfully and was activated through the
 signed-in Play Console; independent Publisher API readback confirms internal
 status **completed**, and the Console reports **Active**. This is testing
 distribution, not a public Play release. The public production track is empty.
 
 Scheduled acceptance, booking-linked calls, retryable notification actions and
-SDK-54 native push registration are in this candidate. New controlled service
+SDK-54 native push registration are in this candidate. The map now opens canonical
+server-priced scheduling, rather than inserting instant bookings directly;
+validated road ETA, destination-bound geometry and retry replace stale/invented
+route states. New controlled service
 permissions remain account-bound and time-limited; payments, refunds, bank payouts,
 video and instant dispatch remain paused for general use. Real settlement,
 physical-device acceptance, full UI coverage and operational/security work still
 block public launch. Public Apple App Review remains unsubmitted.
 
 The matching web testing preview is
-[papzi--n30gcfhwzg.expo.app](https://papzi--n30gcfhwzg.expo.app).
+[papzi--swvsndvpq2.expo.app](https://papzi--swvsndvpq2.expo.app).
 Live client sign-in, five primary tabs and sign-out passed at phone and desktop
-widths with zero API errors or page crashes. This is not all-role/native acceptance.
-See [Latest Candidate](RELEASE_CANDIDATE_871EC85_20261004.md) and
+widths with rendered map tiles, zero API errors or page crashes. This is not
+all-role/native acceptance.
+See [Latest Candidate](RELEASE_CANDIDATE_200D605_20261004.md) and
 [Testing Release](TESTING_RELEASE_20261004.md) for exact receipts and limitations.
+
+## Additional Public Store Gates
+
+Signed-in Play Console confirms 0 of 11 setup tasks complete and 0 closed-testers.
+Production access requires a closed release and at least 12 real testers opted
+in continuously for 14 days; existing internal lists do not satisfy it. No public
+store review or production release was submitted in this pass.
+
+Both `https://papzii.co.za/privacy` and `https://papzii.co.za/terms` return 404.
+Existing cPanel access works and its `public_html` directory was observed empty;
+no website, DNS, customer mailbox or file was overwritten. The March native legal
+copy is not accepted policy evidence: operator identity is unverified, fees differ
+from the server default, payout timing is unsupported, and location retention
+claims exceed the implementation. Publication needs reviewed, aligned content,
+an external account-deletion resource and actual store declarations. The new
+public release check fails on unavailable legal pages; beta scope remains separate.
+See [Public Store Gates](PUBLIC_STORE_GATES_20261004.md).
 
 The sections below retain earlier checks and deployment history.
 

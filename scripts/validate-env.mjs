@@ -3,6 +3,7 @@
 import { lookup } from 'node:dns/promises';
 
 import { loadLocalEnv } from './lib/load-env-file.mjs';
+import { checkPublicDocuments } from './lib/public-document-checks.mjs';
 
 loadLocalEnv();
 
@@ -211,6 +212,11 @@ if (mode === 'release') {
 
   const targetsStore = storeTarget === 'appstore' || storeTarget === 'play' || storeTarget === 'both';
   if (targetsStore && backendProvider === 'api') await checkApiReadiness(apiBaseUrl);
+  if (targetsStore) {
+    for (const document of await checkPublicDocuments()) {
+      if (!document.ok) errors.push(`${document.name} ${document.url}: ${document.reason}. Restore and review the public legal document before store submission.`);
+    }
+  }
   const digitalDisabled = isTruthy(disableDigital);
   if (targetsStore && !digitalDisabled && billingProvider !== 'iap') {
     errors.push(

@@ -14,9 +14,24 @@ Passing compilation, static audits or `/health` alone does not prove readiness.
 | Evidence Level | Current Scope |
 |---|---|
 | Implemented in source | API auth, owner-scoped data, server-priced bookings, provider commands, media and admin controls; newer financial, dispatch, contract, video and deletion code needs its own acceptance. |
-| QA-tested | Exact-candidate CI: 323 API tests and 25 worker tests, no skips. Frontend: 27 suites / 300 tests. Six additional synthetic-transport browser checks cover profile/admin behavior, 320/390/1440px layouts and dark/light themes; earlier four Oracle workflows are revision-specific. PostgreSQL protocols and 300-session / 200-write-journey tests pass in their recorded scope; write p95 remains 5.16 seconds. Earlier screen inventory evidence remains 22 of 44 entry points, not all native controls. |
-| Publicly deployed | Immutable API/worker from backend revision `403cd0e`, with all 12 migrations, preserved real accounts, public road routing, published-review summaries and server-derived admin capability. SMTP recovery email reached the owner's inbox; LiveKit and the correct PayFast account authenticate from Oracle. New checkout is deliberately paused. This is not a new mobile binary or public-store approval. |
-| Device/store-proven | Apple confirms historical iOS build 38 is in internal beta testing; public review has not been submitted. Android build 13 cannot update the confirmed Play package. Google testing API access, EAS upload-key and submission-credential links are now verified; the internal release remains an empty draft. Neither old binary proves the new candidate on devices. |
+| QA-tested | Candidate `200d605`: 349 API tests / 26 worker tests, no skips; 369 frontend tests / 35 suites, typecheck and lint passed. Scoped web checks accepted sign-in, five tabs, rendered map tiles and sign-out at phone/desktop widths. Load: 300 sessions / 3,000 reads and 200 booking/chat journeys / 1,400 requests, zero errors; write p95 4.34 seconds is still above target. These are not all-screen, physical-device or real-money acceptance. |
+| Publicly deployed | Immutable matching API/worker from `200d605`, all 13 migrations, existing production identities/storage preserved after backup/restore rehearsal. Public HTTPS schema, road routing, review summaries and server-derived admin capability pass. SMTP recovery previously reached the owner's inbox; correct PayFast and LiveKit credentials authenticate. General financial/video/dispatch activation remains paused. |
+| Store-distributed | Exact-source iOS 1.0.0 (41) is available in both existing TestFlight groups; Android 1.0.0 / code 4 is completed and active on internal testing. Two build-41 tester emails were SMTP-accepted, not confirmed in inboxes. Public Apple review is unsubmitted and Play production is empty. Store distribution is not proof of every feature on actual devices. |
+
+The current phone candidate, Oracle backend and
+[hosted web testing preview](https://papzi--swvsndvpq2.expo.app) share revision
+`200d60599c92c800ab29bba6eb8b4a4a1b7cfdf6`. Later operational documentation and
+release-gate commits do not change those installed binaries. Maps now enter the
+server-priced booking flow and display ETA only from validated road routes;
+native rendering, permissions and interaction still need device acceptance.
+
+Play Console confirms 0 of 11 app-setup tasks complete and 0 closed-testers.
+This personal account requires at least 12 real testers continuously opted in
+for 14 days before applying for production access. Internal testing does not
+meet that requirement. Public privacy/terms URLs currently return 404, and
+the March in-app legal text contains unverified operator, fee, payout and data
+retention claims. Do not reuse it as an approved public policy. See
+[Public Store Gates](docs/PUBLIC_STORE_GATES_20261004.md).
 
 See [Release Status](docs/RELEASE_STATUS.md) and [Launch Execution](docs/LAUNCH_EXECUTION.md) for current blockers and store
 receipts, [October 3 Candidate Evidence](docs/QA_CANDIDATE_FOLLOWUP_20261003.md),
@@ -49,17 +64,19 @@ The canonical release path is:
   digest with migrations and public contract/readiness checks.
 - Release gate: `npm run check:release`, including live schema and capability checks.
 
-Backend revision `403cd0e` now runs on public Oracle after database-backed CI and
-fresh backup/restore rehearsal. Later
-frontend source work is not automatically included in installed phone builds. NATS and
+Backend revision `200d605` now runs on public Oracle after database-backed CI and
+fresh backup/restore rehearsal. iOS 41 and Android code 4 contain its native map
+changes. Later source work is not automatically included in installed phone builds. NATS and
 Typesense container presence does not prove integrated realtime messaging or
 search. Current messaging uses persisted HTTP reads/polling. Refund, payout,
 push and LiveKit configuration/implementation are not proof of money movement or
 device media delivery. SMTP recovery has one verified live email-delivery journey;
 that does not establish all-device reset UX. See
 [Integration Recovery](docs/INTEGRATION_RECOVERY_20261004.md).
-Latest candidate, cutover and public-probe receipts are in
-[Competitive Release Evidence](docs/competitive-release-20261004.json).
+Current candidate, cutover, test and distribution receipts are in
+[Candidate 200d605](docs/RELEASE_CANDIDATE_200D605_20261004.md).
+The older [Competitive Release Evidence](docs/competitive-release-20261004.json)
+retains its recorded revision, rather than representing the current runtime.
 
 Supporting docs:
 
@@ -144,6 +161,11 @@ This runs:
 5. Live database/schema and capability checks
 6. Dashboard and single-flow source audits
 7. Web export build
+
+Public store validation also checks the existing privacy and terms URLs for
+reachable, nonempty HTML without an off-document/login redirect. That availability
+check does not establish legal accuracy, account-deletion compliance or approval.
+Restricted beta validation is separate and does not claim public readiness.
 
 These checks complement, not replace, device tests, moderation operations and real
 payment/refund/payout evidence. Capability readiness deliberately fails while

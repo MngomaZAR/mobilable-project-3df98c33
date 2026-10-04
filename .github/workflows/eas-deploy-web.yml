@@ -1,46 +1,41 @@
 name: EAS Deploy Web
 
-# Deploys the web app to EAS Hosting on every push to main.
+# Manual public deployment; validation must pass before export/publishing.
 #
 # Required secret: EXPO_TOKEN (create at expo.dev/settings/access-tokens)
-# Runtime environment is pulled from EAS production env before validation/export.
+# Validation and export execute together inside the existing EAS environment.
 
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Setup EAS
         uses: expo/expo-github-action@v8
         with:
-          eas-version: latest
+          eas-version: 24.10.0
           token: ${{ secrets.EXPO_TOKEN }}
 
       - name: Install dependencies
-        run: npm ci --no-audit --no-fund --no-optional
+        run: npm ci --no-audit --no-fund
 
-      - name: Validate required env (release)
-        run: |
-          npx eas-cli@latest env:exec production "npm run validate:env:release" --non-interactive
-          npm run audit:release-runtime
-
-      - name: Export web bundle
-        run: |
-          set -a
-          . ./.env.eas.production
-          set +a
-          npx expo export -p web
+      - name: Validate and export in the production environment
+        run: eas env:exec production "npm run check:release" --non-interactive
 
       - name: Deploy to EAS Hosting
-        run: npx eas-cli deploy --prod --non-interactive
+        run: eas deploy --prod --environment production --non-interactive
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}

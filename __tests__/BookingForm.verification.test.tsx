@@ -1,12 +1,14 @@
 import React from 'react';
-import { render, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import BookingFormScreen from '../src/screens/BookingFormScreen';
 import { useAppData } from '../src/store/AppDataContext';
 import { backendDb } from '../src/services/backendGateway';
 import { apiClient } from '../src/config/apiClient';
 
 jest.mock('../src/store/AppDataContext', () => ({ useAppData: jest.fn() }));
-jest.mock('../src/hooks/useServiceAccess', () => ({ useServiceAccess: () => ({ allowed: () => false }) }));
+let mockDispatchAllowed = false;
+let mockTimeMode: 'now' | 'schedule' | undefined;
+jest.mock('../src/hooks/useServiceAccess', () => ({ useServiceAccess: () => ({ allowed: () => mockDispatchAllowed }) }));
 jest.mock('../src/store/MessagingContext', () => ({ useMessaging: () => ({ startConversationWithUser: jest.fn() }) }));
 jest.mock('../src/config/environment', () => ({ environment: { backendProvider: 'api' } }));
 jest.mock('../src/config/apiSession', () => ({ getApiAccessToken: async () => 'synthetic-unit-token' }));
@@ -15,10 +17,10 @@ jest.mock('../src/services/backendGateway', () => ({ backendDb: { from: jest.fn(
 jest.mock('../src/services/dispatchService', () => ({ createDispatch: jest.fn() }));
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: jest.fn(), replace: jest.fn() }),
-  useRoute: () => ({ params: { photographerId: 'creator-beyond-first-page' } }),
+  useRoute: () => ({ params: { photographerId: 'creator-beyond-first-page', timeMode: mockTimeMode } }),
 }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
-jest.mock('expo-haptics', () => ({ impactAsync: jest.fn() }));
+jest.mock('expo-haptics', () => ({ impactAsync: jest.fn(), selectionAsync: jest.fn() }));
 jest.mock('../src/components/BookingCalendar', () => ({ BookingCalendar: () => null }));
 jest.mock('../src/components/LocationPickerModal', () => ({ __esModule: true, default: () => null }));
 jest.mock('../src/components/HowItWorksCard', () => ({ __esModule: true, default: () => null }));
@@ -34,6 +36,7 @@ let profileQuery: { select: jest.Mock; eq: jest.Mock; maybeSingle: jest.Mock };
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockDispatchAllowed = false; mockTimeMode = undefined;
   profileQuery = { select: jest.fn(), eq: jest.fn(), maybeSingle: jest.fn() };
   profileQuery.select.mockReturnValue(profileQuery);
   profileQuery.eq.mockReturnValue(profileQuery);
@@ -73,4 +76,26 @@ test('verification lookup failure stays disabled without declaring the creator u
   await waitFor(() => expect(screen.getByText('Unable to reach verification service')).toBeTruthy());
   expect(screen.queryByText('Published package')).toBeNull();
   expect(screen.queryByText(blocked)).toBeNull();
+});
+
+test('instant entry from a map keeps its mode but cannot quote without account authorization', async () => {
+  mockTimeMode = 'now';
+  profileQuery.maybeSingle.mockResolvedValue({ data: { id: creatorId, verified: true, age_verified: true }, error: null });
+  const screen = render(<BookingFormScreen />);
+  await waitFor(() => expect(screen.getByText('Published package')).toBeTruthy());
+  expect(screen.getByText('Now (dispatch)')).toBeTruthy();
+  expect(screen.getByText('Instant matching is not available for this account.')).toBeTruthy();
+  expect(apiClient.post).not.toHaveBeenCalled();
+  fireEvent.press(screen.getByText('Schedule'));
+  expect(screen.getByText('Pick a date and time slot below')).toBeTruthy();
+});
+
+test('authorized instant entry retains its selection through verification loading', async () => {
+  mockDispatchAllowed = true; mockTimeMode = 'now';
+  profileQuery.maybeSingle.mockResolvedValue({ data: { id: creatorId, verified: true, age_verified: true }, error: null });
+  const screen = render(<BookingFormScreen />);
+  await waitFor(() => expect(screen.getByText('Published package')).toBeTruthy());
+  expect(screen.getByText('Now (dispatch)')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Book an available creator now' })).toBeTruthy();
+  expect(screen.queryByText('Instant matching is not available for this account.')).toBeNull();
 });

@@ -2,6 +2,30 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { chromium } from 'playwright';
+import { expect } from '@playwright/test';
+
+async function mapColorCount(page, canvas) {
+  const screenshot = await canvas.screenshot();
+  return page.evaluate(async base64 => {
+    const image = new Image();
+    image.src = `data:image/png;base64,${base64}`;
+    await image.decode();
+    const sample = document.createElement('canvas');
+    sample.width = image.width;
+    sample.height = image.height;
+    const context = sample.getContext('2d');
+    context.drawImage(image, 0, 0);
+    const { data } = context.getImageData(0, 0, sample.width, sample.height);
+    const colors = new Set();
+    for (let y = Math.floor(sample.height * 0.2); y < sample.height * 0.7; y += 3) {
+      for (let x = Math.floor(sample.width * 0.2); x < sample.width * 0.8; x += 3) {
+        const i = (y * sample.width + x) * 4;
+        colors.add(`${data[i] >> 3},${data[i + 1] >> 3},${data[i + 2] >> 3}`);
+      }
+    }
+    return colors.size;
+  }, screenshot.toString('base64'));
+}
 
 // Use the existing synthetic review account; secrets arrive on stdin.
 const [preview, revision, output] = process.argv.slice(2);
@@ -37,10 +61,11 @@ try {
     const context = await browser.newContext({ viewport, geolocation: { latitude: -29.85, longitude: 31.03 }, permissions: ['geolocation'] });
     const page = await context.newPage();
     page.setDefaultTimeout(30000);
-    let token;
+    let token, loadedTiles = 0, renderedMapColors = 0;
     const crashes = [], failedApiRequests = [];
     page.on('pageerror', () => crashes.push('pageerror'));
     page.on('response', async response => {
+      if (response.url().startsWith('https://tiles.openfreemap.org/') && /\.(?:pbf|mvt)(?:\?|$)/.test(response.url()) && response.ok()) loadedTiles++;
       if (response.url() === `${api}/auth/sign-in` && response.status() === 200) {
         token = (await response.json()).session?.access_token;
       }
@@ -73,6 +98,15 @@ try {
         await page.waitForTimeout(2000);
         assert.equal(await tab.getAttribute('aria-selected'), 'true');
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 2), false);
+        if (name === 'Map') {
+          const map = page.getByRole('region', { name: 'Talent map', exact: true });
+          await expect(map).toHaveAttribute('data-map-state', 'ready', { timeout: 45000 });
+          await expect.poll(() => loadedTiles, { timeout: 45000 }).toBeGreaterThan(0);
+          await expect.poll(async () => {
+            renderedMapColors = await mapColorCount(page, map.locator('canvas.maplibregl-canvas'));
+            return renderedMapColors;
+          }, { timeout: 45000 }).toBeGreaterThan(16);
+        }
         await page.screenshot({ path: path.join(destination, `${viewport.name}-${name}.png`), fullPage: true });
         tabs.push(name);
       }
@@ -82,10 +116,11 @@ try {
       await page.getByPlaceholder('Email address').waitFor();
       assert.equal(crashes.length, 0);
       assert.deepEqual(failedApiRequests, []);
-      report.viewports.push({ viewport: viewport.name, tabs, signIn: true, signOut: true, horizontalOverflow: false, crashes: 0, failedApiRequests: 0 });
+      report.viewports.push({ viewport: viewport.name, tabs, signIn: true, signOut: true, horizontalOverflow: false, crashes: 0, failedApiRequests: 0, loadedTiles, renderedMapColors });
     } catch (error) {
       report.failedApiRequests = failedApiRequests;
       report.crashCount = crashes.length;
+      report.map = { loadedTiles, renderedMapColors };
       await page.screenshot({ path: path.join(destination, `${viewport.name}-failure.png`), fullPage: true }).catch(() => {});
       throw error;
     } finally {

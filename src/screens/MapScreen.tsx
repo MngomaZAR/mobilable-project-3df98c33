@@ -15,10 +15,10 @@ import { MapAvatarPin } from '../components/MapAvatarPin';
 import { useAppData } from '../store/AppDataContext';
 import { useTheme } from '../store/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
-import { BOOKING_PACKAGES } from '../constants/pricing';
 import { haversineDistanceKm, validateSouthAfricanLocation } from '../utils/geo';
 import { backendDb } from '../services/backendGateway';
-import { routingService } from '../services/routingService';
+import { useRoadRoute } from '../hooks/useRoadRoute';
+import { useServiceAccess } from '../hooks/useServiceAccess';
 import * as Haptics from 'expo-haptics';
 import { Analytics } from '../utils/analytics';
 import { getHeatmap } from '../services/dispatchService';
@@ -33,10 +33,7 @@ const MAP_STYLES = {
 };
 
 const SCREEN_HEIGHT = Dimensions.get('window').height;
-// Bottom sheet snap points (from bottom of screen)
 const SHEET_COLLAPSED = 100;
-const SHEET_HALF = SCREEN_HEIGHT * 0.38;
-const SHEET_FULL = SCREEN_HEIGHT * 0.82;
 
 const formatAccuracy = (a?: number | null) => {
   if (!a) return 'Approximate';
@@ -63,20 +60,23 @@ const isAvailabilityOnline = (status?: string | null) => {
 };
 
 const MapScreen: React.FC = () => {
-  const { state, fetchBookings } = useAppData();
+  const { state } = useAppData();
+  const serviceAccess = useServiceAccess();
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<StackNavigationProp<RootStackParamList, 'Root'>>();
   const currentUser = state.currentUser;
   const role = getEffectiveRole(currentUser);
   const isClientFacing = role === 'client';
+  const [mapHeight, setMapHeight] = useState(SCREEN_HEIGHT);
+  const sheetHalf = mapHeight * 0.38;
+  const sheetFull = mapHeight * 0.82;
 
   const [userMarker, setUserMarker] = useState<MapMarker | null>(null);
   const [userCoords, setUserCoords] = useState<{ lat: number; lng: number; timestamp: number } | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
   const [locationWarning, setLocationWarning] = useState<string | null>(null);
   const [requesting, setRequesting] = useState(false);
-  const [isRequesting, setIsRequesting] = useState(false);
   const [selectedMarker, setSelectedMarker] = useState<MapMarker | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [mapStyle, setMapStyle] = useState<keyof typeof MAP_STYLES>(isDark ? 'dark' : 'light');
@@ -88,18 +88,12 @@ const MapScreen: React.FC = () => {
   const cameraRef = useRef<any>(null);
   const pulse = useRef(new Animated.Value(0)).current;
   const [routeProgress, setRouteProgress] = useState(0);
-  const [primaryRoute, setPrimaryRoute] = useState<Array<{ lat: number; lng: number }>>([]);
-  const [altRoute, setAltRoute] = useState<Array<{ lat: number; lng: number }>>([]);
-  const [routeDurationSec, setRouteDurationSec] = useState<number | null>(null);
-  const [routeDistanceKm, setRouteDistanceKm] = useState<number | null>(null);
-  const [routeSource, setRouteSource] = useState<'osrm' | 'ors' | 'fallback' | null>(null);
+  const roadRoute = useRoadRoute(
+    userCoords ? { latitude: userCoords.lat, longitude: userCoords.lng } : null,
+    selectedMarker ? { latitude: selectedMarker.latitude, longitude: selectedMarker.longitude } : null
+  );
+  const primaryRoute = useMemo(() => roadRoute.coordinates.map(([lng, lat]) => ({ lat, lng })), [roadRoute.coordinates]);
   const [heatmapSummary, setHeatmapSummary] = useState<{ demand: number; supply: number } | null>(null);
-  const [pendingRequest, setPendingRequest] = useState<{
-    bookingId: string;
-    talentId: string;
-    talentName: string;
-    talentType: 'photographer' | 'model';
-  } | null>(null);
 
   // Bottom sheet gesture
   const sheetY = useRef(new Animated.Value(SCREEN_HEIGHT - SHEET_COLLAPSED)).current;
@@ -123,31 +117,35 @@ const MapScreen: React.FC = () => {
     },
     onPanResponderMove: (_, g) => {
       const newY = currentSheetY.current + g.dy;
-      const clamped = Math.max(SCREEN_HEIGHT - SHEET_FULL, Math.min(SCREEN_HEIGHT - SHEET_COLLAPSED, newY));
+      const clamped = Math.max(mapHeight - sheetFull, Math.min(mapHeight - SHEET_COLLAPSED, newY));
       sheetY.setValue(clamped);
     },
     onPanResponderRelease: (_, g) => {
       const y = currentSheetY.current + g.dy;
       const vy = g.vy;
       // Snap to nearest
-      if (vy < -0.5 || y < SCREEN_HEIGHT - SHEET_HALF - 50) {
-        snapTo(SCREEN_HEIGHT - SHEET_FULL, vy);
-      } else if (vy > 0.5 || y > SCREEN_HEIGHT - SHEET_HALF + 50) {
-        snapTo(SCREEN_HEIGHT - SHEET_COLLAPSED, vy);
+      if (vy < -0.5 || y < mapHeight - sheetHalf - 50) {
+        snapTo(mapHeight - sheetFull, vy);
+      } else if (vy > 0.5 || y > mapHeight - sheetHalf + 50) {
+        snapTo(mapHeight - SHEET_COLLAPSED, vy);
       } else {
-        snapTo(SCREEN_HEIGHT - SHEET_HALF, vy);
+        snapTo(mapHeight - sheetHalf, vy);
       }
     },
-  }), [snapTo, sheetY]);
+  }), [snapTo, sheetY, mapHeight, sheetHalf, sheetFull]);
+
+  useEffect(() => { snapTo(mapHeight - SHEET_COLLAPSED); }, [mapHeight, snapTo]);
 
   // Real-time online presence sync
   useEffect(() => {
     if (!currentUser?.id) return;
+    let active = true;
     // Initial load of online profiles
     const loadOnline = async () => {
       const { data, error } = await backendDb
         .from('profiles')
         .select('id, availability_status');
+      if (!active) return;
       if (error) {
         console.warn('Online presence unavailable:', error.message);
         return;
@@ -169,6 +167,7 @@ const MapScreen: React.FC = () => {
         schema: 'public',
         table: 'profiles',
       }, (payload) => {
+        if (!active) return;
         const profile = payload.new as any;
         setOnlineProfiles(prev => {
           const next = new Set(prev);
@@ -179,7 +178,7 @@ const MapScreen: React.FC = () => {
       })
       .subscribe();
 
-    return () => { backendDb.removeChannel(channel); };
+    return () => { active = false; backendDb.removeChannel(channel); };
   }, [currentUser?.id]);
 
   // Pulse animation for user pin
@@ -211,8 +210,7 @@ const MapScreen: React.FC = () => {
       participantBookings.find(
         (booking) =>
           booking.status === 'accepted' ||
-          booking.status === 'in_progress' ||
-          booking.status === 'paid_out'
+          booking.status === 'in_progress'
       ) ?? null,
     [participantBookings]
   );
@@ -226,9 +224,8 @@ const MapScreen: React.FC = () => {
   );
 
   const shouldHighlightPendingRequest = isClientFacing && Boolean(
-    pendingRequest ||
-      (latestPendingBooking &&
-        (!activeBooking || bookingTimestamp(latestPendingBooking) >= bookingTimestamp(activeBooking)))
+    latestPendingBooking &&
+      (!activeBooking || bookingTimestamp(latestPendingBooking) >= bookingTimestamp(activeBooking))
   );
 
   const activeTalent = useMemo(() => {
@@ -240,18 +237,10 @@ const MapScreen: React.FC = () => {
   const pendingTalent = useMemo(() => {
     const talentId =
       latestPendingBooking?.photographer_id ||
-      latestPendingBooking?.model_id ||
-      pendingRequest?.talentId;
+      latestPendingBooking?.model_id;
     if (!talentId) return null;
     return state.photographers.find((p) => p.id === talentId) || state.models.find((m) => m.id === talentId);
-  }, [latestPendingBooking, pendingRequest?.talentId, state.photographers, state.models]);
-
-  useEffect(() => {
-    if (!pendingRequest) return;
-    if (state.bookings.some((booking) => booking.id === pendingRequest.bookingId)) {
-      setPendingRequest(null);
-    }
-  }, [pendingRequest, state.bookings]);
+  }, [latestPendingBooking, state.photographers, state.models]);
 
   // Build map markers
   const baseMarkers: MapMarker[] = useMemo(() => {
@@ -347,29 +336,6 @@ const MapScreen: React.FC = () => {
     finally { setRequesting(false); }
   }, [currentUser]);
 
-  // Route fetching
-  const fetchRoutes = useCallback(async () => {
-    if (!selectedMarker || !userCoords) return;
-    try {
-      const start = { latitude: userCoords.lat, longitude: userCoords.lng };
-      const end = { latitude: selectedMarker.latitude, longitude: selectedMarker.longitude };
-      const route = await routingService.getRoute(start, end);
-      const routeCoords = route.coordinates.map(([lng, lat]) => ({ lat, lng }));
-      setPrimaryRoute(route.source === 'fallback' ? [] : routeCoords);
-      setAltRoute(route.source === 'fallback' ? routeCoords : []);
-      setRouteDistanceKm(route.distance);
-      setRouteDurationSec(route.duration);
-      setRouteSource(route.source);
-      setRouteProgress(0);
-    } catch {
-      setRouteDistanceKm(null);
-      setRouteDurationSec(null);
-      setRouteSource(null);
-    }
-  }, [selectedMarker, userCoords]);
-
-  useEffect(() => { fetchRoutes(); }, [fetchRoutes]);
-
   useEffect(() => {
     if (role !== 'admin') {
       setHeatmapSummary(null);
@@ -405,13 +371,12 @@ const MapScreen: React.FC = () => {
     };
     raf = requestAnimationFrame(tick);
     return () => { if (raf) cancelAnimationFrame(raf); };
-  }, [primaryRoute.length]);
+  }, [primaryRoute]);
 
   const sliceRoute = (coords: Array<{ lat: number; lng: number }>, p: number) =>
     coords.slice(0, Math.max(2, Math.floor(coords.length * p)));
 
   const primarySlice = useMemo(() => sliceRoute(primaryRoute, routeProgress), [primaryRoute, routeProgress]);
-  const altSlice = useMemo(() => sliceRoute(altRoute, routeProgress), [altRoute, routeProgress]);
 
   const toGeoJson = (slice: Array<{ lat: number; lng: number }>) => ({
     type: 'Feature', geometry: { type: 'LineString', coordinates: slice.map(p => [p.lng, p.lat]) }, properties: {},
@@ -419,85 +384,26 @@ const MapScreen: React.FC = () => {
 
   const selectedDistance = useMemo(() => {
     if (!selectedMarker || !userCoords) return null;
-    if (routeDistanceKm && routeDistanceKm > 0) return `${routeDistanceKm.toFixed(1)} km`;
+    if (roadRoute.distanceKm !== null) return `${roadRoute.distanceKm.toFixed(1)} km`;
     const km = haversineDistanceKm({ latitude: userCoords.lat, longitude: userCoords.lng }, { latitude: selectedMarker.latitude, longitude: selectedMarker.longitude });
     return `${km.toFixed(1)} km`;
-  }, [selectedMarker, userCoords, routeDistanceKm]);
+  }, [selectedMarker, userCoords, roadRoute.distanceKm]);
 
   const etaLabel = useMemo(() => {
-    if (routeDurationSec && routeDurationSec > 0) return `${Math.max(3, Math.round(routeDurationSec / 60))} min`;
-    if (!selectedDistance) return null;
-    const km = parseFloat(selectedDistance);
-    return isNaN(km) ? null : `${Math.max(6, Math.round(km * 3.4))} min`;
-  }, [selectedDistance, routeDurationSec]);
+    return roadRoute.durationSec === null ? null : `${Math.max(1, Math.round(roadRoute.durationSec / 60))} min`;
+  }, [roadRoute.durationSec]);
 
-  const activeBookingDistance = useMemo(() => {
-    if (!activeBooking || activeTalent?.latitude == null || activeTalent?.longitude == null) return null;
-    const clientLat = userCoords?.lat ?? activeBooking.user_latitude;
-    const clientLng = userCoords?.lng ?? activeBooking.user_longitude;
-    if (clientLat == null || clientLng == null) return null;
-    const km = haversineDistanceKm(
-      { latitude: clientLat, longitude: clientLng },
-      { latitude: activeTalent.latitude, longitude: activeTalent.longitude }
-    );
-    return `${km.toFixed(1)} km`;
-  }, [activeBooking, activeTalent, userCoords]);
-
-  const activeBookingEtaLabel = useMemo(() => {
-    if (!activeBookingDistance) return '~15 min';
-    const km = parseFloat(activeBookingDistance);
-    return Number.isNaN(km) ? '~15 min' : `${Math.max(6, Math.round(km * 3.4))} min`;
-  }, [activeBookingDistance]);
-
-  const handleRequestBooking = async (marker: MapMarker) => {
-    if (!userCoords) { Alert.alert('Location required', 'Enable GPS first.'); return; }
-    if (!onlineProfiles.has(marker.sourceId ?? '')) {
-      Alert.alert('Offline', `${marker.title} is currently offline. You can request them once they are live.`);
+  const handleRequestBooking = (marker: MapMarker, timeMode: 'now' | 'schedule' = 'schedule') => {
+    if (role !== 'client' || !currentUser?.id || !marker.sourceId ||
+        (marker.type !== 'model' && marker.type !== 'photographer')) return;
+    if (timeMode === 'now' && (!serviceAccess.allowed('dispatch') || !onlineProfiles.has(marker.sourceId))) {
+      Alert.alert('Instant matching unavailable', 'Choose a scheduled booking instead.');
       return;
     }
     Keyboard.dismiss();
-    setIsRequesting(true);
-    try {
-      const pkg = BOOKING_PACKAGES.find(p => p.id === 'instant') ?? BOOKING_PACKAGES[0];
-      const base = pkg.basePrice;
-      const providerId = marker.sourceId ?? marker.id;
-      const isModel = marker.type === 'model';
-      const { data, error } = await backendDb
-        .from('bookings')
-        .insert({
-          client_id: currentUser?.id,
-          photographer_id: isModel ? null : providerId,
-          model_id: isModel ? providerId : null,
-          service_type: isModel ? 'modeling' : 'photography',
-          status: 'pending',
-          package_type: `${pkg.label} (${marker.type})`,
-          package_id: pkg.id,
-          pricing_mode: 'flat',
-          user_latitude: userCoords.lat,
-          user_longitude: userCoords.lng,
-          booking_date: new Date().toISOString(),
-          is_instant: true,
-        })
-        .select('id')
-        .single();
-      if (error) throw error;
-      setPendingRequest({
-        bookingId: data.id,
-        talentId: providerId,
-        talentName: marker.title ?? 'Talent',
-        talentType: isModel ? 'model' : 'photographer',
-      });
-      void fetchBookings(currentUser?.id);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert('Request sent', `Waiting for ${marker.title} to accept...`);
-      Analytics.bookingCreated(pkg.label, base);
-      snapTo(SCREEN_HEIGHT - SHEET_COLLAPSED);
-      setSelectedMarker(null);
-    } catch (err: any) {
-      Alert.alert('Error', err.message);
-    } finally {
-      setIsRequesting(false);
-    }
+    navigation.navigate('BookingForm', marker.type === 'model'
+      ? { modelId: marker.sourceId, serviceType: 'modeling', timeMode }
+      : { photographerId: marker.sourceId, serviceType: 'photography', timeMode });
   };
 
   const cycleMapStyle = () => {
@@ -522,13 +428,15 @@ const MapScreen: React.FC = () => {
   }
 
   return (
-    <View style={[s.container, { backgroundColor: colors.bg }]}>
+    <View testID="native-talent-map" style={[s.container, { backgroundColor: colors.bg }]}
+      onLayout={event => { if (event.nativeEvent.layout.height > 0) setMapHeight(event.nativeEvent.layout.height); }}>
       {isMapLibreNativeAvailable ? (
         <MapLibreGL.MapView
           style={StyleSheet.absoluteFill}
           mapStyle={MAP_STYLE_URL}
           logoEnabled={false}
-          attributionEnabled={false}
+          attributionEnabled
+          attributionPosition={{ top: insets.top + 130, left: 16 }}
           compassEnabled
         >
           <MapLibreGL.Camera
@@ -538,13 +446,6 @@ const MapScreen: React.FC = () => {
             animationMode="flyTo"
             animationDuration={700}
           />
-
-          {/* Direct fallback estimate when OSRM cannot return a road route. */}
-          {routeSource === 'fallback' && altSlice.length > 1 && (
-            <MapLibreGL.ShapeSource id="route-alt" shape={toGeoJson(altSlice) as any}>
-              <MapLibreGL.LineLayer id="route-alt-line" style={{ lineColor: isDark ? '#6f7f9c' : '#b8a78f', lineOpacity: 0.45, lineWidth: 4, lineDasharray: [2, 3] }} />
-            </MapLibreGL.ShapeSource>
-          )}
 
           {/* Primary route */}
           {primarySlice.length > 1 && (
@@ -560,7 +461,7 @@ const MapScreen: React.FC = () => {
               coordinate={[marker.longitude, marker.latitude]}
               onSelected={() => {
                 setSelectedMarker(marker);
-                snapTo(SCREEN_HEIGHT - SHEET_HALF);
+                snapTo(mapHeight - sheetHalf);
               }}
             >
               <MapAvatarPin
@@ -590,10 +491,10 @@ const MapScreen: React.FC = () => {
         <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24, backgroundColor: isDark ? '#0b1220' : '#f1f5f9' }]}>
           <Ionicons name="map-outline" size={32} color={isDark ? '#94a3b8' : '#64748b'} />
           <Text style={{ marginTop: 10, fontSize: 16, fontWeight: '800', color: isDark ? '#e2e8f0' : '#1e293b' }}>
-            Live map requires a development build
+            Map unavailable
           </Text>
           <Text style={{ marginTop: 6, textAlign: 'center', color: isDark ? '#94a3b8' : '#475569' }}>
-            Expo Go cannot load the native MapLibre module. Use an iOS development build to see the live Uber-style map.
+            Map rendering could not start on this device.
           </Text>
         </View>
       )}
@@ -614,7 +515,7 @@ const MapScreen: React.FC = () => {
               style={[s.searchInput, { color: colors.text }]}
             />
             {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel="Clear map search" onPress={() => setSearchQuery('')}>
                 <Ionicons name="close-circle" size={18} color={colors.textMuted} />
               </TouchableOpacity>
             )}
@@ -649,7 +550,7 @@ const MapScreen: React.FC = () => {
 
       {/* Floating action buttons */}
       <View style={[s.fabColumn, { bottom: SHEET_COLLAPSED + insets.bottom + 20 }]}>
-        <TouchableOpacity style={[s.fab, { backgroundColor: panelBackground, borderColor: panelBorder }]} onPress={requestLocation} disabled={requesting}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Locate me" style={[s.fab, { backgroundColor: panelBackground, borderColor: panelBorder }]} onPress={requestLocation} disabled={requesting}>
           <Ionicons name={requesting ? 'hourglass' : 'locate'} size={22} color={colors.accent} />
         </TouchableOpacity>
         {!isClientFacing ? (
@@ -666,7 +567,8 @@ const MapScreen: React.FC = () => {
 
       {/* Gesture-driven bottom sheet */}
       <Animated.View
-        style={[s.bottomSheet, { backgroundColor: panelBackground, borderColor: panelBorder, transform: [{ translateY: sheetY }] }]}
+        testID="talent-map-sheet"
+        style={[s.bottomSheet, { height: mapHeight, backgroundColor: panelBackground, borderColor: panelBorder, transform: [{ translateY: sheetY }] }]}
         {...panResponder.panHandlers}
       >
         {/* Drag handle */}
@@ -689,14 +591,14 @@ const MapScreen: React.FC = () => {
                   </View>
                   <Text style={[s.sheetSub, { color: colors.textSecondary }]}>{selectedMarker.description}</Text>
                 </View>
-                <TouchableOpacity onPress={() => setSelectedMarker(null)}>
+                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Close creator details" onPress={() => setSelectedMarker(null)}>
                   <Ionicons name="close" size={22} color={colors.textMuted} />
                 </TouchableOpacity>
               </View>
 
               <View style={s.metricsRow}>
                 {[
-                  { label: 'Distance', value: selectedDistance ?? '--' },
+                  { label: roadRoute.status === 'ready' ? 'Road distance' : 'Direct distance', value: selectedDistance ?? '--' },
                   { label: 'ETA', value: etaLabel ?? '--' },
                   { label: 'Status', value: onlineProfiles.has(selectedMarker.sourceId ?? '') ? 'Available' : 'Offline', color: onlineProfiles.has(selectedMarker.sourceId ?? '') ? '#10b981' : '#64748b' },
                 ].map(m => (
@@ -709,6 +611,20 @@ const MapScreen: React.FC = () => {
                 ))}
               </View>
 
+              {roadRoute.status !== 'ready' && (
+                <View style={s.routeNotice}>
+                  <Text style={[s.routeNoticeText, { color: colors.textSecondary }]}>
+                    {!userCoords ? 'Location needed for directions.' : roadRoute.status === 'loading'
+                      ? 'Finding road route...' : 'Road route and ETA unavailable.'}
+                  </Text>
+                  {roadRoute.status === 'unavailable' && (
+                    <TouchableOpacity accessibilityRole="button" accessibilityLabel="Retry road route" onPress={roadRoute.retry} style={s.routeRetry}>
+                      <Ionicons name="refresh" size={20} color={colors.text} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
+
               <View style={s.sheetActions}>
                 <TouchableOpacity
                   style={[s.ghostBtn, { borderColor: colors.border, flex: 1 }]}
@@ -719,14 +635,23 @@ const MapScreen: React.FC = () => {
                 </TouchableOpacity>
                 {role === 'client' && (
                   <TouchableOpacity
-                    style={[s.primaryBtn, { flex: 2, backgroundColor: primaryButtonColor }, !onlineProfiles.has(selectedMarker.sourceId ?? '') && s.disabledBtn]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Book ${selectedMarker.title}`}
+                    style={[s.primaryBtn, { flex: 2, backgroundColor: primaryButtonColor }]}
                     onPress={() => handleRequestBooking(selectedMarker)}
-                    disabled={isRequesting || !onlineProfiles.has(selectedMarker.sourceId ?? '')}
                   >
-                    <Ionicons name="flash" size={18} color={primaryButtonText} style={{ marginRight: 6 }} />
+                    <Ionicons name="calendar-outline" size={18} color={primaryButtonText} style={{ marginRight: 6 }} />
                     <Text style={[s.primaryBtnText, { color: primaryButtonText }]}>
-                      {onlineProfiles.has(selectedMarker.sourceId ?? '') ? (isRequesting ? 'Requesting...' : 'Request') : 'Offline'}
+                      Book
                     </Text>
+                  </TouchableOpacity>
+                )}
+                {role === 'client' && serviceAccess.allowed('dispatch') && onlineProfiles.has(selectedMarker.sourceId ?? '') && (
+                  <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Book ${selectedMarker.title} now`}
+                    style={[s.ghostBtn, { borderColor: colors.border, paddingHorizontal: 12 }]}
+                    onPress={() => handleRequestBooking(selectedMarker, 'now')}>
+                    <Ionicons name="flash" size={18} color={colors.text} />
+                    <Text style={[s.ghostBtnText, { color: colors.text }]}>Now</Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -740,7 +665,7 @@ const MapScreen: React.FC = () => {
                 <View style={s.sheetInfo}>
                   <Text style={[s.sheetTitle, { color: colors.text }]}>Request Sent</Text>
                   <Text style={[s.sheetSub, { color: colors.textSecondary }]}>
-                    Waiting for {(pendingTalent?.name ?? pendingRequest?.talentName ?? 'Talent')} to accept
+                    Waiting for {(pendingTalent?.name ?? 'Talent')} to accept
                   </Text>
                 </View>
                 <View style={[s.trackBtn, { backgroundColor: isDark ? '#3f3020' : '#f6ead7' }]}>
@@ -753,12 +678,11 @@ const MapScreen: React.FC = () => {
                   {
                     label: 'Service',
                     value:
-                      latestPendingBooking?.service_type === 'modeling' ||
-                      pendingRequest?.talentType === 'model'
+                      latestPendingBooking?.service_type === 'modeling'
                         ? 'Modeling'
                         : 'Photography',
                   },
-                  { label: 'Mode', value: 'Instant request' },
+                  { label: 'Mode', value: latestPendingBooking?.is_instant ? 'Instant request' : 'Scheduled' },
                 ].map((m) => (
                   <View key={m.label} style={[s.metricItem, { backgroundColor: panelCard, borderColor: panelBorder }]}>
                     <Text style={[s.metricLabel, { color: colors.textMuted }]}>{m.label}</Text>
@@ -772,7 +696,7 @@ const MapScreen: React.FC = () => {
                 style={[s.primaryBtn, { backgroundColor: primaryButtonColor }]}
                 onPress={() =>
                   navigation.navigate('BookingDetail', {
-                    bookingId: latestPendingBooking?.id ?? pendingRequest?.bookingId ?? '',
+                    bookingId: latestPendingBooking?.id ?? '',
                   })
                 }
               >
@@ -789,20 +713,22 @@ const MapScreen: React.FC = () => {
                 </View>
                 <View style={s.sheetInfo}>
                   <Text style={[s.sheetTitle, { color: colors.text }]}>
-                    {activeBooking.status === 'accepted' ? 'En Route to You' : 'Shoot in Progress'}
+                    {activeBooking.status === 'accepted' ? 'Booking accepted' : 'Shoot in progress'}
                   </Text>
                   <Text style={[s.sheetSub, { color: colors.textSecondary }]}>
-                    {activeTalent?.name ?? 'Talent'} • ETA {activeBookingEtaLabel}
+                    {activeTalent?.name ?? 'Talent'}
                   </Text>
                 </View>
-                <TouchableOpacity onPress={() => navigation.navigate('BookingTracking', { bookingId: activeBooking.id })} style={[s.trackBtn, { backgroundColor: isDark ? '#273454' : '#ecdfcc' }]}>
-                  <Ionicons name="navigate" size={20} color="#2563eb" />
+                <TouchableOpacity accessibilityRole="button" accessibilityLabel="View active booking"
+                  onPress={() => navigation.navigate('BookingDetail', { bookingId: activeBooking.id })}
+                  style={[s.trackBtn, { backgroundColor: isDark ? '#273454' : '#ecdfcc' }]}>
+                  <Ionicons name="receipt-outline" size={20} color="#2563eb" />
                 </TouchableOpacity>
               </View>
               <View style={s.metricsRow}>
                 {[
-                  { label: 'Distance', value: activeBookingDistance ?? '--' },
-                  { label: 'ETA', value: activeBookingEtaLabel ?? '--' },
+                  { label: 'Mode', value: activeBooking.is_instant ? 'Instant' : 'Scheduled' },
+                  { label: 'Payment', value: activeBooking.payment_status ?? 'unpaid' },
                   {
                     label: 'Status',
                     value: activeBooking.status === 'accepted'
@@ -823,10 +749,12 @@ const MapScreen: React.FC = () => {
               </View>
               <TouchableOpacity
                 style={[s.primaryBtn, { backgroundColor: primaryButtonColor }]}
-                onPress={() => navigation.navigate('ChatThread', { conversationId: `chat-${activeBooking.id}`, title: activeTalent?.name })}
+                accessibilityRole="button"
+                accessibilityLabel="Open booking details and chat"
+                onPress={() => navigation.navigate('BookingDetail', { bookingId: activeBooking.id })}
               >
-                <Ionicons name="chatbubble" size={18} color={primaryButtonText} style={{ marginRight: 8 }} />
-                <Text style={[s.primaryBtnText, { color: primaryButtonText }]}>Message {activeTalent?.name?.split(' ')[0] ?? 'Talent'}</Text>
+                <Ionicons name="receipt-outline" size={18} color={primaryButtonText} style={{ marginRight: 8 }} />
+                <Text style={[s.primaryBtnText, { color: primaryButtonText }]}>View booking</Text>
               </TouchableOpacity>
             </>
           ) : (
@@ -844,7 +772,7 @@ const MapScreen: React.FC = () => {
               </TouchableOpacity>
               {nearbyTalent.length > 0 ? (
                 <ScrollView
-                  style={s.nearbyList}
+                  style={[s.nearbyList, { maxHeight: mapHeight * 0.42 }]}
                   contentContainerStyle={s.nearbyListContent}
                   showsVerticalScrollIndicator={false}
                   keyboardShouldPersistTaps="handled"
@@ -864,7 +792,7 @@ const MapScreen: React.FC = () => {
                           onPress={() => {
                             Keyboard.dismiss();
                             setSelectedMarker(marker);
-                            snapTo(SCREEN_HEIGHT - SHEET_HALF);
+                            snapTo(mapHeight - sheetHalf);
                           }}
                           activeOpacity={0.85}
                         >
@@ -889,12 +817,13 @@ const MapScreen: React.FC = () => {
                         </TouchableOpacity>
                         {isClientFacing ? (
                           <TouchableOpacity
-                            style={[s.listRequestBtn, { backgroundColor: isOnline ? '#e2c189' : '#0f172a' }, !isOnline && s.disabledBtn]}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Book ${marker.title}`}
+                            style={[s.listRequestBtn, { backgroundColor: primaryButtonColor }]}
                             onPress={() => handleRequestBooking(marker)}
-                            disabled={isRequesting || !isOnline}
                           >
-                            <Text style={[s.listRequestBtnText, { color: isOnline ? '#1f1a12' : '#fffaf2' }]}>
-                              {isOnline ? (isRequesting ? '...' : 'Request') : 'Offline'}
+                            <Text style={[s.listRequestBtnText, { color: primaryButtonText }]}>
+                              Book
                             </Text>
                           </TouchableOpacity>
                         ) : (
@@ -903,7 +832,7 @@ const MapScreen: React.FC = () => {
                             onPress={() => {
                               Keyboard.dismiss();
                               setSelectedMarker(marker);
-                              snapTo(SCREEN_HEIGHT - SHEET_HALF);
+                              snapTo(mapHeight - sheetHalf);
                             }}
                           >
                             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
@@ -955,6 +884,9 @@ const s = StyleSheet.create({
   onlineBadge: { backgroundColor: '#10b981', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
   onlineBadgeText: { color: '#fff', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
   metricsRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
+  routeNotice: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 8 },
+  routeNoticeText: { flex: 1, fontSize: 13 },
+  routeRetry: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   metricItem: { flex: 1, borderRadius: 16, paddingHorizontal: 10, paddingVertical: 13, alignItems: 'center', borderWidth: 1, minHeight: 82 },
   metricLabel: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 6 },
   metricValue: { fontSize: 14, fontWeight: '800', textAlign: 'center', textTransform: 'capitalize' },

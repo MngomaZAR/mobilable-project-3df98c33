@@ -20,7 +20,7 @@ class TestFlightScopeTests(unittest.TestCase):
         return build, {}, [], report
 
     def test_processing_or_other_build_cannot_be_prepared(self):
-        for number, processing in [('38', 'VALID'), ('41', 'VALID'), ('39', 'PROCESSING'), ('40', 'PROCESSING')]:
+        for number, processing in [('38', 'VALID'), ('42', 'VALID'), ('39', 'PROCESSING'), ('40', 'PROCESSING'), ('41', 'PROCESSING')]:
             state = self.state()
             state[0]['attributes']['processingState'] = processing
             state[3]['processingState'] = processing
@@ -64,10 +64,10 @@ class TestFlightScopeTests(unittest.TestCase):
 
     def test_new_build_must_be_valid_and_unexpired(self):
         report = self.state()[3]
-        release.require_authorized_build('40', report)
+        release.require_authorized_build('41', report)
         report['expired'] = True
         with self.assertRaises(ValueError):
-            release.require_authorized_build('40', report)
+            release.require_authorized_build('41', report)
 
     def test_new_build_review_is_beta_only(self):
         with patch.object(release, 'inventory', return_value=self.state()), patch.object(release, 'verify_reviewer', return_value=True), patch.object(release, 'listing', return_value=[]), patch.object(release, 'request', return_value=({'attributes': {'betaReviewState': 'WAITING_FOR_REVIEW'}}, {})) as request:

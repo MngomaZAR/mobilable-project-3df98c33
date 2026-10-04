@@ -17,6 +17,7 @@ export type RootStackParamList = {
     photographerId?: string;
     modelId?: string;
     serviceType?: 'photography' | 'modeling' | 'combined';
+    timeMode?: 'now' | 'schedule';
   };
   BookingDetail: { bookingId: string };
   BookingTracking: { bookingId: string };

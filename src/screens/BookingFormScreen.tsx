@@ -42,12 +42,13 @@ const BookingFormScreen: React.FC = () => {
   const navigation = useNavigation<Navigation>();
   const { state, createBooking, refresh } = useAppData();
   const serviceAccess = useServiceAccess();
+  const dispatchAllowed = serviceAccess.allowed('dispatch');
   const { startConversationWithUser } = useMessaging();
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [timeSlot, setTimeSlot] = useState('Golden hour (4-7)');
   const [selectedServiceType, setSelectedServiceType] = useState<string | null>(null);
   const [selectedTierId, setSelectedTierId] = useState(TIER_OPTIONS[1]?.id ?? 'standard');
-  const [bookingTimeMode, setBookingTimeMode] = useState<'now' | 'schedule'>('schedule');
+  const [bookingTimeMode, setBookingTimeMode] = useState<'now' | 'schedule'>(params.timeMode ?? 'schedule');
   const [instantStart, setInstantStart] = useState(() => new Date(Date.now() + 30 * 60 * 1000));
   const [locationLabel, setLocationLabel] = useState(state.currentUser?.city ?? '');
   const [locationCoords, setLocationCoords] = useState<{ lat: number; lng: number } | null>(null);
@@ -136,7 +137,7 @@ const BookingFormScreen: React.FC = () => {
   const canBookTalent = talentKycApproved && talentAgeVerified;
 
   const validationError = useMemo(() => {
-    if (bookingTimeMode === 'now' && !serviceAccess.allowed('dispatch')) return 'Instant matching is not available for this account.';
+    if (bookingTimeMode === 'now' && !dispatchAllowed) return 'Instant matching is not available for this account.';
     if (usesApi && !providerOptions) return optionsError || 'Loading creator prices...';
     if (usesApi && isModelTalent && !providerOptions?.services.length) return 'This model has no active services.';
     if (!selectedServiceType) return 'Select a service type to continue.';
@@ -155,7 +156,7 @@ const BookingFormScreen: React.FC = () => {
     bookingTimeMode,
     selectedDate,
     canBookTalent,
-    usesApi, providerOptions, optionsError, isModelTalent, serviceAccess,
+    usesApi, providerOptions, optionsError, isModelTalent, dispatchAllowed,
   ]);
 
   React.useEffect(() => {
@@ -180,6 +181,7 @@ const BookingFormScreen: React.FC = () => {
     [selectedTierId, tierOptions]
   );
   const quoteCommand = useMemo(() => {
+    if (bookingTimeMode === 'now' && !dispatchAllowed) return null;
     if ((bookingTimeMode === 'schedule' && !selectedDate) || !locationCoords || !talentId || !selectedServiceType || (usesApi && !providerOptions)) return null;
     const start = bookingTimeMode === 'now' ? instantStart : scheduledShootStart(selectedDate!, timeSlot);
     return {
@@ -199,7 +201,7 @@ const BookingFormScreen: React.FC = () => {
       prepare_dispatch: bookingTimeMode === 'now',
     };
   }, [selectedDate, locationCoords, talentId, isModelTalent, selectedTierId, timeSlot, selectedServiceType,
-    selectedCamera, selectedLenses, selectedLighting, selectedExtras, usesApi, providerOptions, bookingTimeMode, instantStart]);
+    selectedCamera, selectedLenses, selectedLighting, selectedExtras, usesApi, providerOptions, bookingTimeMode, instantStart, dispatchAllowed]);
   const commandFingerprint = JSON.stringify(quoteCommand);
   const currentQuote = serverQuote?.commandFingerprint === commandFingerprint ? serverQuote : null;
 
@@ -510,7 +512,7 @@ const BookingFormScreen: React.FC = () => {
       <View style={styles.detailsCard}>
         <Text style={styles.label}>Time</Text>
         <View style={styles.choiceRow}>
-          {usesApi && serviceAccess.allowed('dispatch') ? <TouchableOpacity
+          {usesApi && dispatchAllowed ? <TouchableOpacity
             accessibilityRole="button" accessibilityLabel="Book an available creator now"
             style={[styles.choiceChip, bookingTimeMode === 'now' && styles.choiceChipActive]}
             onPress={() => { Haptics.selectionAsync(); setInstantStart(new Date(Date.now() + 30 * 60 * 1000)); setBookingTimeMode('now'); }}

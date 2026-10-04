@@ -36,6 +36,20 @@ BUILD_NOTES = {'39': (
     'acceptance tests. Digital purchasing remains disabled. Do not enter bank '
     'details or attempt real payments without those separate instructions. '
     'This is not a public or fully accepted marketplace release.'
+), '41': (
+    'Restricted hosted beta 1.0.0 (41). Fixes native map booking through verified '
+    'server pricing, correct model/photographer IDs, scheduled booking while a '
+    'creator is offline, and booking-detail/chat navigation. Road failures no '
+    'longer show invented ETA or direct-line navigation; retry and stale-route '
+    'protection are included. Test map controls in portrait/landscape, scheduled '
+    'bookings, notification taps, chat and network recovery. Payments, refunds, '
+    'bank payouts, video and instant dispatch remain paused for general use. '
+    'Only explicitly authorized, time-limited accounts can participate in '
+    'separately instructed controlled acceptance tests. Digital purchasing '
+    'remains disabled. Do not enter bank details or attempt real payments '
+    'without those separate instructions. Report build, role, device/OS, exact '
+    'steps and screenshots via TestFlight feedback. This is not a public or '
+    'fully accepted marketplace release.'
 )}
 
 

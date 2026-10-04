@@ -13,11 +13,11 @@ Passing compilation, static audits or `/health` alone does not prove readiness.
 | Evidence Level | Current Scope |
 |---|---|
 | Implemented in source | API auth, owner-scoped data, server-priced bookings, provider commands, media and admin controls; newer financial, dispatch, contract, video and deletion code needs its own acceptance. |
-| QA-tested | The October 3 isolated Oracle/GHCR baseline passed backend protocols and 27 browser cases, with entry-point evidence for 22 of 44 screen modules. This does not certify later source changes or all buttons. |
+| QA-tested | October 4 CI passes 302 API tests and 25 worker tests. Local frontend checks pass 20 suites / 226 tests; four targeted private Oracle browser workflows pass after onboarding/booking fixes. Isolated PostgreSQL protocols pass; 300 synthetic role sessions and 200 booking/chat write journeys have zero errors in tested scope. Earlier browser coverage remains 22 of 44 entry points, not all native controls. |
 | Publicly deployed | Existing older backend only; candidate fixes are not publicly deployed. |
-| Device/store-proven | Historical iOS build 38 and Android build 13 finished September 23. They do not prove the current source, physical-device journeys or public approval. Current Apple/Google account blockers remain. |
+| Device/store-proven | Apple confirms historical iOS build 38 is in internal beta testing; public review has not been submitted. Android build 13 cannot update the confirmed Play package. Google testing API access, EAS upload-key and submission-credential links are now verified; the internal release remains an empty draft. Neither old binary proves the new candidate on devices. |
 
-See [Launch Execution](docs/LAUNCH_EXECUTION.md) for current blockers and store
+See [Release Status](docs/RELEASE_STATUS.md) and [Launch Execution](docs/LAUNCH_EXECUTION.md) for current blockers and store
 receipts, [October 3 Candidate Evidence](docs/QA_CANDIDATE_FOLLOWUP_20261003.md),
 [Earlier QA Report](docs/QA_RELEASE_REPORT_20261003.md) and
 [Screen Coverage](docs/SCREEN_COVERAGE_20261003.md). Historical reports describe
@@ -86,6 +86,16 @@ variables are compiled into the application and must never contain server secret
 Reuse the existing EAS/GitHub credentials rather than creating duplicate accounts.
 Do not publish loopback URLs, SSH tunnels or private QA configuration. Production
 requires a verified public backend, not merely the correct provider setting.
+
+## Store Identity
+
+The existing EAS project remains `@papz/papzi` / `f0c1ef90-ac26-4e4c-a799-77b377e2f452`.
+iOS targets the confirmed App Store Connect app `6760396864` / `com.papzi.app`.
+Android targets the user-confirmed verified Play app `com.papziiii.paparazzi`.
+Older `com.saicts.papzi` binaries are separate identities, not interchangeable updates.
+The existing EAS upload key was verified against Play's upload certificate and
+linked to the confirmed package; the existing submission credential was reused.
+Do not regenerate keys or upload a differently identified legacy bundle.
 
 ## Run
 

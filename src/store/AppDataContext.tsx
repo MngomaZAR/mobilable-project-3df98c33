@@ -336,6 +336,7 @@ const mapBookingRow = (row: any): Booking => ({
 
 type Action = 
   | { type: 'SET_STATE', payload: Partial<AppState> }
+  | { type: 'MERGE_PROFILES', payload: AppState['profiles'] }
   | { type: 'SET_LOADING', payload: boolean }
   | { type: 'SET_SAVING', payload: boolean }
   | { type: 'SET_AUTHENTICATING', payload: boolean }
@@ -343,6 +344,8 @@ type Action =
 
 const appReducer = (state: AppState, action: Action): AppState => {
   switch (action.type) {
+    case 'MERGE_PROFILES':
+      return { ...state, profiles: dedupeById([...action.payload, ...state.profiles]) };
     case 'SET_STATE': {
       const payload = action.payload;
       const nextState = { ...state, ...payload };
@@ -383,7 +386,8 @@ const appReducer = (state: AppState, action: Action): AppState => {
 };
 
 export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [state, dispatch] = useReducer(appReducer, initialState);
+  // Navigation must not consume the initial deep link before session restoration.
+  const [state, dispatch] = useReducer(appReducer, { ...initialState, loading: true });
   const stateRef = useRef(state);
   const profileFetchInFlightRef = useRef<Map<string, Promise<ProfileRow | null>>>(new Map());
   const profileFetchLastRef = useRef<Map<string, number>>(new Map());
@@ -438,17 +442,20 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
   }, [state.currentUser?.id, state.currentUser?.role]);
 
-  const fetchProfile = useCallback(async (userId: string): Promise<ProfileRow> => {
+  const fetchProfile = useCallback(async (userId: string, force = false): Promise<ProfileRow> => {
     if (!hasBackendProvider) return null;
     const now = Date.now();
     const lastFetchedAt = profileFetchLastRef.current.get(userId) ?? 0;
-    if (now - lastFetchedAt < 1500) {
+    if (!force && now - lastFetchedAt < 1500) {
       const cached = stateRef.current.profiles.find((p) => p.id === userId);
       if (cached) return cached as ProfileRow;
     }
 
     const inFlight = profileFetchInFlightRef.current.get(userId);
-    if (inFlight) return inFlight;
+    if (inFlight) {
+      if (!force) return inFlight;
+      await inFlight;
+    }
 
     const promise = (async () => {
       try {
@@ -481,7 +488,9 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const profileIds = [...new Set((rawPhotographers ?? []).map((p: any) => p.id).filter(Boolean))];
       let profilesMap: Record<string, any> = {};
       if (profileIds.length > 0) {
-        const { data: profilesData } = await backendDb.from('profiles').select(PROFILE_SELECT).in('id', profileIds);
+        const { data: profilesData, error: profilesError } = await backendDb.from('profiles').select(PROFILE_SELECT).in('id', profileIds);
+        if (profilesError) throw profilesError;
+        dispatch({ type: 'MERGE_PROFILES', payload: profilesData ?? [] });
         (profilesData ?? []).forEach((p: any) => { profilesMap[p.id] = p; });
       }
 
@@ -492,7 +501,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         })
         .filter((p: any) => {
           const profile = profilesMap[p.id];
-          if (!profile) return true;
+          if (!profile) return false;
           return !profile.is_test_account &&
             profile.role !== 'test_account' &&
             (profile.is_photographer === true || profile.role === 'photographer');
@@ -540,7 +549,9 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const profileIds = [...new Set((rawModels ?? []).map((m: any) => m.id).filter(Boolean))];
       let profilesMap: Record<string, any> = {};
       if (profileIds.length > 0) {
-        const { data: profilesData } = await backendDb.from('profiles').select(PROFILE_SELECT).in('id', profileIds);
+        const { data: profilesData, error: profilesError } = await backendDb.from('profiles').select(PROFILE_SELECT).in('id', profileIds);
+        if (profilesError) throw profilesError;
+        dispatch({ type: 'MERGE_PROFILES', payload: profilesData ?? [] });
         (profilesData ?? []).forEach((p: any) => { profilesMap[p.id] = p; });
       }
       
@@ -551,7 +562,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         })
         .filter((m: any) => {
           const profile = profilesMap[m.id];
-          if (!profile) return true;
+          if (!profile) return false;
           return !profile.is_test_account &&
             profile.role !== 'test_account' &&
             (profile.is_model === true || profile.role === 'model');
@@ -912,7 +923,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const stored = await AsyncStorage.getItem(STORAGE_KEY);
         if (stored) {
           const parsed: AppState = JSON.parse(stored);
-          setState({ ...initialState, ...parsed, currentUser: parsed.currentUser ? { ...parsed.currentUser, verified: Boolean(parsed.currentUser.verified) }: null });
+          setState({ ...initialState, ...parsed, loading: true, currentUser: parsed.currentUser ? { ...parsed.currentUser, verified: Boolean(parsed.currentUser.verified) }: null });
         }
 
         if (hasBackendProvider) {
@@ -923,6 +934,8 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
             const role = (profile?.role ?? session.user.user_metadata?.role ?? 'client') as AppUser['role'];
             setState({ currentUser: mapProviderUser(session.user, role, profile) });
             await Promise.all([
+              fetchPhotographers(),
+              fetchModels(),
               fetchBookings(session.user.id),
               fetchConversations(session.user.id),
               fetchEarnings(session.user.id),
@@ -930,7 +943,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
               fetchCredits(session.user.id),
             ]);
           } else {
-            setState({ bookings: [], conversations: [] });
+            setState({ currentUser: null, bookings: [], conversations: [] });
             await Promise.all([fetchPhotographers(), fetchModels()]);
           }
         }
@@ -968,6 +981,8 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
             .catch(e => console.warn('Push registration failed', e));
 
           // Fetch lists
+          fetchPhotographers().catch(e => console.warn('Delayed photographer fetch failed', e));
+          fetchModels().catch(e => console.warn('Delayed model fetch failed', e));
           fetchBookings(session.user.id).catch(e => console.warn('Delayed booking fetch failed', e));
           fetchConversations(session.user.id).catch(e => console.warn('Delayed convo fetch failed', e));
           fetchEarnings(session.user.id).catch(e => console.warn('Delayed earnings fetch failed', e));
@@ -1207,7 +1222,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       backendDb.removeChannel(subscriptionsChannel);
       backendDb.removeChannel(messagesChannel);
     };
-  }, [fetchBookings, fetchConversations, fetchEarnings, fetchNotifications, fetchProfile, fetchSubscriptions]);
+  }, [fetchBookings, fetchConversations, fetchEarnings, fetchModels, fetchNotifications, fetchPhotographers, fetchProfile, fetchSubscriptions]);
 
   useEffect(() => {
     const persist = async () => {
@@ -2204,7 +2219,8 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         return null;
       }
 
-      const profile = await fetchProfile(user.id);
+      // Revalidation follows mutations such as age confirmation; cached reads may predate the write.
+      const profile = await fetchProfile(user.id, true);
       const currentRole = profile?.role || stateRef.current.currentUser?.role || 'client';
       const nextUser = mapProviderUser({ id: user.id, email: user.email ?? 'unknown-user', user_metadata: {} }, currentRole ?? 'client', profile);
       setState({ currentUser: nextUser });

@@ -1,7 +1,8 @@
 const { test, expect } = require('@playwright/test');
 const { randomUUID } = require('node:crypto');
 
-test.describe.configure({ timeout: 180000, mode: 'serial' });
+test.describe.configure({ timeout: 180000 });
+test.use({ actionTimeout: 15000, navigationTimeout: 30000 });
 const API = 'http://127.0.0.1:18000';
 const password = 'QA-only-not-a-real-user-2026!';
 const actorIndex = process.env.QA_WORKFLOW_ACTOR_INDEX || '94';
@@ -23,7 +24,11 @@ async function login(page, address) {
     || await page.getByRole('tab', { name: /Settings/ }).isVisible(), { timeout: 40000 }).toBe(true);
   if (await page.getByText('Age Verification', { exact: true }).isVisible()) {
     await page.getByPlaceholder('Date of birth (YYYY-MM-DD)').fill('1995-01-01');
+    const confirming = page.waitForResponse(response => response.url() === `${API}/auth/age-confirm` && response.request().method() === 'POST');
     await page.getByText('I confirm I am 18+', { exact: true }).click();
+    const confirmed = await confirming;
+    expect(confirmed.ok(), 'Age declaration must persist before entering the app').toBe(true);
+    expect((await confirmed.json()).profile.age_verified).toBe(true);
   }
   await expect(page.getByRole('tab', { name: /Settings/ })).toBeVisible({ timeout: 40000 });
 }
@@ -78,7 +83,7 @@ test('model service rate save and availability toggle persist through real comma
     await page.getByText('My Services & Rates', { exact: true }).click();
     const service = page.getByText('Brand Ambassador', { exact: true }).locator('xpath=ancestor::div[.//*[@role="switch"]][1]').locator('..');
     const toggle = service.getByRole('switch');
-    if (await toggle.getAttribute('aria-checked') !== 'true') await toggle.click();
+    if (!await toggle.isChecked()) await toggle.click();
     await service.getByRole('textbox').fill('2675.50');
     const saving = page.waitForResponse(response => response.url() === `${API}/providers/me/model-services` && response.request().method() === 'POST');
     await page.getByText('Save Services', { exact: true }).click();
@@ -95,7 +100,7 @@ test('model service rate save and availability toggle persist through real comma
     const confirmed = await request.get(`${API}/providers/me/availability`, { headers: model.headers });
     expect((await confirmed.json()).is_online).toBe(!priorOnline);
     await page.reload();
-    await expect(page.getByLabel('Provider online availability')).toHaveAttribute('aria-checked', String(!priorOnline), { timeout: 30000 });
+    await expect(page.getByLabel('Provider online availability')).toBeChecked({ checked: !priorOnline, timeout: 30000 });
     await page.screenshot({ path: testInfo.outputPath('model-services-availability.png'), fullPage: true });
   } finally {
     const restoreServices = await request.post(`${API}/providers/me/model-services`, { headers: model.headers, data: { services: original.filter(service => service.is_active).map(service => ({ service_type: service.service_type, rate_zar: Number(service.rate_zar) })) } });
@@ -119,6 +124,7 @@ test('client submits a server-priced scheduled booking and provider accepts with
     await login(page, email('client'));
     // Existing deep link opens the actual BookingForm, not a synthetic test component.
     await page.goto(`/booking/new/${provider.id}`);
+    await expect(page.getByText('Service type', { exact: true })).toBeVisible({ timeout: 30000 });
     await page.getByText('Photoshoot', { exact: true }).click();
     const day = new Date();
     day.setUTCDate(day.getUTCDate() + 10);

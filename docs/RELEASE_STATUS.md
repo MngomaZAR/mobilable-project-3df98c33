@@ -10,8 +10,9 @@ that the backend used by an installed phone build passes acceptance.
 - iOS 1.0.0 (38) finished building on 2026-09-23. Build ID:
   `453b777d-465d-488d-9b08-859e77bd3c9f`.
 - Submission `094be3d5-a1f5-4530-a585-b6bc265bd759` finished uploading that
-  build to App Store Connect app `6760396864`. TestFlight groups, tester email
-  delivery and current public review status have not been confirmed.
+  build to App Store Connect app `6760396864`. The current Apple API confirms
+  internal TestFlight testing; tester email delivery has not been confirmed.
+  Public review has not started, as detailed below.
 - Android 1.0.0 (13) finished building on 2026-09-23. Build ID:
   `920ce9c5-d40e-48b4-92a5-f1952b7727ed`.
 - Android submission `ee8e12fd-14d6-4f43-8a98-a84335ff6d89` failed. Its
@@ -33,23 +34,39 @@ iOS configuration now targets the existing, successful `com.papzi.app` record.
 The supplied active profile and local private certificate both match distribution
 certificate serial `6B1510798D94F4A667C8EF03788E793C`, expiring March 11, 2027.
 
-The existing Google service account authenticates, but the Android Publisher API
-returns HTTP 403 `SERVICE_DISABLED` for project `papz-601b5`. It also lacks
-permission to inspect Service Usage. An authorized project administrator must
-enable the API and confirm this account has release permissions in Play Console.
+The Android Publisher API was enabled in the existing `papz-601b5` project with
+explicit owner authorization. The existing service account is now Active in Play
+Console with access only to `com.papziiii.paparazzi`: View app information and
+Release apps to testing tracks. Google automatically includes its read-only app
+quality subset. No account-wide, production, admin or financial permissions were
+granted. At `2026-10-04T00:44:53Z`, package and track queries returned HTTP 200;
+the temporary audit edit was discarded without committing or publishing.
+Service Usage inspection still returns 403 for this deliberately restricted
+account; that is not an Android Publisher API failure.
 
-The supplied Play Console evidence identifies the verified app `paparrazziii`,
-package `com.papziiii.paparazzi`. Its internal track was **inactive**, despite two
-tester lists. Package registration and signing opt-in are not a distributed release.
+The signed-in Play Console check identifies the verified app `paparrazziii`,
+package `com.papziiii.paparazzi`, app ID `4973281859732428978`. Its internal track
+is **inactive**, with draft release `papzii` and no attached APK/AAB. Release preview
+shows three errors: missing bundle, no valid upgrade path, and no bundle added or
+removed. Package registration and signing opt-in are not a distributed release.
 The Android configuration now targets that package. The downloaded version 13 AAB
 is for `com.saicts.papzi` and cannot update this listing.
 
-EAS currently has signing records for `com.saicts.papzi` and `com.papzi.app`, not
-`com.papziiii.paparazzi`. Neither recorded SHA-256 fingerprint matches the three
-fingerprints supplied for the verified app. Recover/link the actual accepted
-upload key or complete a properly authorized Play upload-key reset before building
-this target. Do not generate a replacement key blindly. The Publisher API also
-returns `SERVICE_DISABLED` when queried for this newly identified package.
+Play Console's actual **upload** certificate SHA-256 is
+`2DC2CF575A2FF4F4E57C2D7BA3A4B12E258EF6CD83E4B0424D406302CF5CDCEA`.
+It matches the existing EAS key for `com.saicts.papzi`; the three previously supplied
+registration/app-signing fingerprints were not the upload certificate. Reuse this
+existing key for the new package, rather than resetting or generating one. This
+association is now saved in EAS, as is the existing service-account submission
+credential. A repeat setup at `2026-10-04T00:48:28Z` verified both links and made
+no changes. No private key was exported and no replacement key was generated.
+`scripts/link-existing-android-signing.mjs` checks the project, source fingerprint
+and conflicting target records; it is read-only unless explicitly given `--apply`.
+Use `--apply --link-submission` to explicitly reuse both existing credentials;
+the helper refuses an unexpected service account or conflicting target record.
+The Publisher API access blocker is resolved. The signed-in
+Google dashboard requires app setup, closed testing and production-access approval
+before public release; these requirements cannot be inferred complete from an upload.
 
 Apple and Google credentials, private keys, certificates with private material,
 signed download links, auth traces and store bundles do not belong in Git.
@@ -89,9 +106,21 @@ to obtain a green build or describe unit tests as full marketplace acceptance.
 
 ## Latest Candidate Checks
 
-- Frontend: 223 tests, type check, lint and private QA web compilation passed.
-- API: 300 local tests, including 36 database-only skips subsequently exercised
-  by isolated Oracle domain checks; later focused account-cleanup tests also passed.
+- Frontend: 20 suites / 226 tests, type check, lint and private QA web compilation
+  passed again after the age-gate cache fix. These are not native-device acceptance.
+- October 4 browser follow-up: four enabled workflows passed against private Oracle
+  QA in 1.1 minutes: model rates/availability persistence; client server-priced
+  booking and photographer acceptance while awaiting payment; new-model age
+  declaration, real QA storage KYC upload and admin identity approval; content
+  approval/rejection and outsider authorization checks. Production was untouched.
+  The first follow-up run passed three and failed onboarding: an older cached
+  profile overwrote the successful age declaration. Explicit session revalidation
+  now fetches a fresh profile, and the complete rerun passed all four.
+  Cold-start booking links and selected-provider verification outside the initial
+  profile cache were also corrected. No real merchant payment, device push or
+  media call is established by these browser cases.
+- GitHub CI: 302 API tests with the database fixtures enabled, plus 25 worker tests.
+  Local database-only skips are not counted as successful database coverage.
 - Oracle PostgreSQL 16: 61 dispatch/contract/moderation tests, 32 financial protocol
   checks and 91 account-deletion checks passed. All 12 candidate migrations applied
   in an isolated schema. Synthetic fixtures were removed; production was untouched.
@@ -100,6 +129,21 @@ to obtain a green build or describe unit tests as full marketplace acceptance.
 - A separate real loopback LiveKit control-plane fixture passed 21 checks. Media
   tracks, public/native connectivity and actual device permissions remain unproven.
 - Static runtime/architecture audits pass, but are not all-screen/device acceptance.
+- CI run `37161573532`: 300 role sessions / 3,000 read requests and 200 booking/chat
+  journeys / 1,400 write requests completed without errors. Write-request p95 was
+  5.11 seconds on the CI runner, still a performance concern. Providers and physical
+  device media are outside this load test. No public launch readiness was inferred.
+- The matching immutable GHCR API and worker images for
+  `db425300d65f7f6336f9b6c7c99bfb2bf31927c8` were deployed to isolated Oracle QA.
+  The QA database received migrations 007-012; production was not changed.
+  Auth protocol: 15 checks; role protocol: 139 checks; mocked payment protocol:
+  30 checks, all passed. Oracle load repeated 3,000 reads and 1,400 writes with
+  zero errors. Read p95 was 2.07 seconds; write p95 was 6.26 seconds, which remains
+  an unresolved responsiveness issue rather than evidence of marketplace parity.
+- Oracle QA road routing returned a 3.73 km OSRM route with 122 geometry points.
+  Durable in-app notification delivery passed; actual device push is not proven.
+  QA still reports `ready_for_public_launch=false`. No new native build or public
+  store submission was triggered from this candidate.
 
 ## Official Release Instructions
 

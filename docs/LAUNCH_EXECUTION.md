@@ -44,6 +44,15 @@ and administrator roles. Recorded browser entry-point coverage is **22/44**, not
 provider-service, KYC and admin-action checks only after an actual enabled QA run
 records the revision, environment and results; test discovery is not a passing run.
 
+October 4 follow-up against the isolated `db425300` Oracle backend and updated
+frontend working tree passed four enabled workflows: model rates/availability,
+client booking/photographer acceptance, new-model age/KYC/admin identity review,
+and content moderation/outsider authorization. The initial onboarding failure
+was traced to stale profile-cache reuse after age confirmation and corrected.
+The full rerun passed in 1.1 minutes. Frontend typecheck, lint and 20 suites / 226
+tests also passed. These narrow cases do not certify all controls or real payments,
+device push, video media, or the older public deployment.
+
 ## Execution checklist
 
 This checklist is for production cutover and acceptance, not source completion
@@ -60,7 +69,7 @@ or private QA. Unchecked items stay open even where candidate code/tests exist.
 - [ ] Pass public version, schema contract, readiness and domain smoke checks with production HTTPS configuration.
 - [ ] Verify enabled four-role web workflows and remaining screen controls/accessibility; retain untested scope.
 - [ ] Build the exact accepted source for iPhone and Android and run physical-device journeys, including permissions/reconnect/expiry.
-- [ ] Recheck synchronized Apple credentials and resolve Google Publisher API/permission and accepted upload-key blockers. The latest Apple query succeeds; the earlier agreement block has cleared.
+- [x] Recheck Apple API access; enable Android Publisher with authorization, verify app-only testing access, and link the verified existing EAS upload key and submission credential. No new candidate was uploaded.
 - [ ] Complete separately authorized live payment, refund and bank-settlement evidence.
 - [ ] Publish web and submit native releases only after applicable gates pass; record tester availability and public approval separately.
 
@@ -113,22 +122,25 @@ October 4 local-date account checks (receipts use October 3 late-evening UTC):
   release task reports updating three existing secrets to the EAS key. This is a
   configuration change, not a post-sync successful upload. The EAS key now reads
   Apple records successfully; GitHub uses that same synchronized credential.
-- **Google:** the local service-account credential for project `papz-601b5`
-  (key identifier prefix `5842`) authenticates, but Android Publisher access is
-  HTTP 403 `SERVICE_DISABLED`. The credential also lacks Service Usage permission
-  to enable the API (`AUTH_PERMISSION_DENIED`). A project/account administrator
-  must enable Android Publisher and verify the account's Play permissions; this
-  is not merely a failed key. [Publisher status](play-publisher-status-20261004.json)
-  and [submission log audit](android-submission-audit-20261004.json).
-  The user-confirmed intended app is the registered `com.papziiii.paparazzi`,
-  with an inactive internal track. Android configuration now targets it, but EAS
-  has no signing record for that package. Recover the accepted upload key or
-  complete an authorized reset; do not reuse an unverified legacy key or AAB.
+- **Google:** Android Publisher is now enabled in `papz-601b5`. With explicit
+  authorization, the existing service account received View app information and
+  testing-release access only to `com.papziiii.paparazzi`, including Google's
+  mandatory read-only app-quality subset. Package and track queries returned 200;
+  the temporary audit edit was discarded. No production, financial, admin or
+  account-wide access was granted. Service Usage inspection remains restricted,
+  which does not prevent these verified Publisher calls.
+  [Publisher status](play-publisher-status-20261004.json) supersedes the old
+  [submission log failure](android-submission-audit-20261004.json).
+  The accepted upload certificate matches the existing EAS key, now linked to
+  the confirmed package along with its existing submission credential. No reset
+  or private-key export was needed. The internal release is still an inactive,
+  empty draft with no bundle or version code; no new candidate was uploaded.
 
-Google account-holder actions remain pending; Apple API access has been restored.
-The read-only audits did not retry submission, publish artifacts or change live
-store state. Do not print credential material or create replacement accounts to
-conceal these permission/agreement failures.
+These specific Google account-access blockers are resolved; Apple API access has
+also been restored. The authorized API/permission/EAS configuration changes did
+not retry submission or publish a release. Production runtime, integrations,
+device acceptance and store setup remain separate gates. Do not print credential
+material or create replacement accounts to conceal remaining readiness gaps.
 
 ## Launch product
 

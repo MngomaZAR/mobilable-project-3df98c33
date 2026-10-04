@@ -2,6 +2,10 @@
 
 Date: 2026-09-11
 
+Historical snapshot only. API URLs, store identities and deployment evidence below
+have changed. Use [Release Status](RELEASE_STATUS.md) and
+[Launch Execution](LAUNCH_EXECUTION.md) for the current candidate and account state.
+
 Status: not public-deployable yet.
 
 The repository has the right release direction now: mobile traffic is configured to go through a FastAPI boundary and the architecture audit finds all 44 screens behind service/config layers. The live release is still blocked because the configured production API host is not reachable and the server-side data provider behind FastAPI is not reachable.

@@ -15,6 +15,8 @@ import HowItWorksCard from '../components/HowItWorksCard';
 import { apiClient } from '../config/apiClient';
 import { getApiAccessToken } from '../config/apiSession';
 import { environment } from '../config/environment';
+import { backendDb } from '../services/backendGateway';
+import { ProfileSummary } from '../types';
 import { scheduledShootStart } from '../utils/bookingTime';
 import { uid } from '../utils/id';
 
@@ -59,6 +61,7 @@ const BookingFormScreen: React.FC = () => {
   const [intensityLevel, setIntensityLevel] = useState(1);
   const [serverQuote, setServerQuote] = useState<ServerQuote | null>(null);
   const [providerOptions, setProviderOptions] = useState<ProviderBookingOptions | null>(null);
+  const [providerProfile, setProviderProfile] = useState<ProfileSummary | null>(null);
   const [optionsError, setOptionsError] = useState<string | null>(null);
   const [quoteRevision, setQuoteRevision] = useState(0);
   const [quoteError, setQuoteError] = useState<string | null>(null);
@@ -91,6 +94,7 @@ const BookingFormScreen: React.FC = () => {
     if (!usesApi || !talentId) return;
     let cancelled = false;
     setProviderOptions(null);
+    setProviderProfile(null);
     setOptionsError(null);
     setSelectedServiceType(null);
     setSelectedCamera(new Set());
@@ -98,9 +102,15 @@ const BookingFormScreen: React.FC = () => {
     setSelectedLighting(new Set());
     setSelectedExtras(new Set());
     void getApiAccessToken().then(token => apiClient.get<ProviderBookingOptions>(`/providers/${encodeURIComponent(talentId)}/booking-options`, { token }))
-      .then(options => {
+      .then(async options => {
         if (cancelled) return;
         if (options.role !== (isModelTalent ? 'model' : 'photographer')) throw new Error('Creator type does not match this booking.');
+        const { data: profile, error } = await backendDb.from('profiles')
+          .select('id,verified,kyc_status,age_verified').eq('id', talentId).maybeSingle();
+        if (error) throw error;
+        if (!profile || profile.id !== talentId) throw new Error('Creator verification could not be loaded.');
+        if (cancelled) return;
+        setProviderProfile(profile as ProfileSummary);
         setProviderOptions(options);
         setSelectedTierId(options.packages[0]?.id ?? '');
       })
@@ -116,8 +126,8 @@ const BookingFormScreen: React.FC = () => {
   );
 
   const talentProfile = useMemo(
-    () => (state.profiles ?? []).find((profile: any) => profile?.id === talent?.id),
-    [state.profiles, talent?.id]
+    () => usesApi ? providerProfile : (state.profiles ?? []).find((profile: any) => profile?.id === talent?.id),
+    [usesApi, providerProfile, state.profiles, talent?.id]
   );
   const talentKycApproved = Boolean(talentProfile?.kyc_status === 'approved' || talentProfile?.verified);
   const talentAgeVerified = Boolean(talentProfile?.age_verified);
@@ -378,7 +388,7 @@ const BookingFormScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
       </View>
-      {!canBookTalent ? (
+      {!canBookTalent && (!usesApi || providerOptions) ? (
         <View style={styles.blockedCard}>
           <Ionicons name="alert-circle" size={18} color="#ef4444" />
           <Text style={styles.blockedText}>This provider is not verified yet. Booking is disabled until KYC approval.</Text>

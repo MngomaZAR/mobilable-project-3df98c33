@@ -16,7 +16,47 @@
     "dashboardChecks": 18,
     "singleFlowChecks": 6
   },
-  "candidate": { "revision": null, "githubCi": "pending", "oraclePromotion": "pending", "browserAcceptance": { "checksPassed": 6, "transport": "Synthetic browser API fixtures, not live backend or native financial acceptance", "viewports": [320, 390, 1440], "themes": ["light", "dark"], "screenshotsReviewed": true, "mediaFixture": "Existing Papzi logo, not a real creator portfolio" } },
+  "candidate": {
+    "revision": "403cd0ef3ad032c9bdc3d58ef5b2752535ca1d69",
+    "githubCi": {
+      "frontendAndDeploymentSafety": { "runId": 37193156200, "conclusion": "success", "url": "https://github.com/MngomaZAR/mobilable-project-3df98c33/actions/runs/37193156200" },
+      "backendAndImages": { "runId": 37193156181, "conclusion": "success", "url": "https://github.com/MngomaZAR/mobilable-project-3df98c33/actions/runs/37193156181", "apiTests": 323, "workerTests": 25, "skips": 0 },
+      "readLoad": { "sessions": 300, "requests": 3000, "errors": 0, "p95Ms": 1531.62 },
+      "writeLoad": { "journeys": 200, "requests": 1400, "errors": 0, "p95Ms": 5163.27 },
+      "worker": { "completedOutboxJobs": 811, "persistedInAppNotifications": 810, "physicalPushVerified": false },
+      "financialScope": "Provider-mocked protocol evidence, not live payment/refund/bank settlement"
+    },
+    "oraclePromotion": {
+      "checkedAt": "2026-10-04T09:54:13Z",
+      "publicApi": "https://papzii-api.129.151.188.15.nip.io",
+      "apiImage": "ghcr.io/mngomazar/papzi-api@sha256:ddca1dd6971792d90d35981a9d10356abf4c187e066a6311152c491a68ad6763",
+      "workerImage": "ghcr.io/mngomazar/papzi-worker@sha256:03ec0a0829be21b66c63d0f7f57e2ce8f3cd3d071acb2618c99e3f3843047c63",
+      "rehearsal": "/var/backups/papzii/release-20261004T095307Z/rehearsal.json",
+      "cutover": "/var/backups/papzii/cutover-20261004T095413Z/promotion.json",
+      "backupRestoredAndChecked": true,
+      "identitiesPreserved": true,
+      "objectStorageBackedUp": true,
+      "existingIntegrationCredentialsPreserved": true,
+      "migrationsApplied": 12,
+      "publicReleaseReady": false
+    },
+    "publicProbes": {
+      "checkedAt": "2026-10-04T09:55:33Z",
+      "healthPassed": true,
+      "schemaPassed": true,
+      "anonymousAuthRejected": true,
+      "missingReviewSummary404": true,
+      "liveCreatorSummariesChecked": 4,
+      "emptyReputationHasNullAverage": true,
+      "allowlistedAccountCapabilityChecked": true,
+      "forgedAdminMetadataRejected": true,
+      "adminScope": "Actual runtime settings and read-only account serialization, not native owner UI acceptance",
+      "roadRoutePoints": 122,
+      "financialWrites": false,
+      "accountWrites": false
+    },
+    "browserAcceptance": { "checksPassed": 6, "transport": "Synthetic browser API fixtures, not live backend or native financial acceptance", "viewports": [320, 390, 1440], "themes": ["light", "dark"], "screenshotsReviewed": true, "mediaFixture": "Existing Papzi logo, not a real creator portfolio" }
+  },
   "release": {
     "publicReady": false,
     "nativeBuildStarted": false,

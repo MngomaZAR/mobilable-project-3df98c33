@@ -14,8 +14,8 @@ Passing compilation, static audits or `/health` alone does not prove readiness.
 | Evidence Level | Current Scope |
 |---|---|
 | Implemented in source | API auth, owner-scoped data, server-priced bookings, provider commands, media and admin controls; newer financial, dispatch, contract, video and deletion code needs its own acceptance. |
-| QA-tested | Backend CI evidence: 307 API tests and 25 worker tests, no skips. Latest local frontend: 23 suites / 246 tests and four targeted Oracle browser workflows pass. Isolated PostgreSQL protocols and 300-session / 200-write-journey tests pass in their recorded scope. Earlier screen inventory evidence remains 22 of 44 entry points, not all native controls. |
-| Publicly deployed | Immutable API/worker from backend revision `c48f17e`, with all 12 migrations, preserved real accounts and public road routing. SMTP recovery email reached the owner's inbox; LiveKit and the correct PayFast account authenticate from Oracle. New checkout is deliberately paused. This is not a new mobile binary or public-store approval. |
+| QA-tested | Exact-candidate CI: 323 API tests and 25 worker tests, no skips. Frontend: 27 suites / 300 tests. Six additional synthetic-transport browser checks cover profile/admin behavior, 320/390/1440px layouts and dark/light themes; earlier four Oracle workflows are revision-specific. PostgreSQL protocols and 300-session / 200-write-journey tests pass in their recorded scope; write p95 remains 5.16 seconds. Earlier screen inventory evidence remains 22 of 44 entry points, not all native controls. |
+| Publicly deployed | Immutable API/worker from backend revision `403cd0e`, with all 12 migrations, preserved real accounts, public road routing, published-review summaries and server-derived admin capability. SMTP recovery email reached the owner's inbox; LiveKit and the correct PayFast account authenticate from Oracle. New checkout is deliberately paused. This is not a new mobile binary or public-store approval. |
 | Device/store-proven | Apple confirms historical iOS build 38 is in internal beta testing; public review has not been submitted. Android build 13 cannot update the confirmed Play package. Google testing API access, EAS upload-key and submission-credential links are now verified; the internal release remains an empty draft. Neither old binary proves the new candidate on devices. |
 
 See [Release Status](docs/RELEASE_STATUS.md) and [Launch Execution](docs/LAUNCH_EXECUTION.md) for current blockers and store
@@ -49,7 +49,7 @@ The canonical release path is:
   digest with migrations and public contract/readiness checks.
 - Release gate: `npm run check:release`, including live schema and capability checks.
 
-Backend revision `c48f17e` now runs on public Oracle after database-backed CI and
+Backend revision `403cd0e` now runs on public Oracle after database-backed CI and
 fresh backup/restore rehearsal. Later
 frontend source work is not automatically included in installed phone builds. NATS and
 Typesense container presence does not prove integrated realtime messaging or
@@ -58,6 +58,8 @@ push and LiveKit configuration/implementation are not proof of money movement or
 device media delivery. SMTP recovery has one verified live email-delivery journey;
 that does not establish all-device reset UX. See
 [Integration Recovery](docs/INTEGRATION_RECOVERY_20261004.md).
+Latest candidate, cutover and public-probe receipts are in
+[Competitive Release Evidence](docs/competitive-release-20261004.json).
 
 Supporting docs:
 

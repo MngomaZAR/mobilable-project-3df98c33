@@ -5,12 +5,13 @@ Started: 2026-10-03. Updated: 2026-10-04 (Africa/Johannesburg).
 ## Release decision
 
 **Public store release remains blocked. The tested backend is publicly deployed.**
-Oracle now runs immutable API/worker revision `c48f17e` after a protected restore
+Oracle now runs immutable API/worker revision `403cd0e` after a protected restore
 rehearsal and cutover. Public health, schema and road routing pass; readiness
 returns HTTP 200 with `required_capabilities_available=false`, not the older 404.
 The five blockers are checkout activation, refunds, bank payouts, video acceptance
 and instant dispatch acceptance. Do not bypass the gate or publish a loopback/
-SSH-tunnel bundle. See [current evidence](integration-verification-20261004.json).
+SSH-tunnel bundle. See [current evidence](competitive-release-20261004.json) and
+[earlier integration evidence](integration-verification-20261004.json).
 
 A successful build, credential synchronization or healthy container is not proof
 of a working marketplace. Production deployment, signed native builds, device
@@ -37,8 +38,8 @@ production runtime. See [Single-Flow Architecture](SINGLE_FLOW_ARCHITECTURE.md).
 | Level | Recorded State | Not Established |
 |---|---|---|
 | Implemented | Source has auth/session protection, owner-scoped data, domain booking/pricing/availability, storage and moderation commands. New financial, dispatch, contracts, video, deletion and delivery implementations are candidate work. | Source presence is not deployment or complete integration acceptance. |
-| QA-tested | Latest exact-backend CI: 307 API tests, 25 worker tests, no skips; role/auth/storage/mocked-payment protocols passed. Frontend: 23 suites / 246 tests. CI load: 300 read sessions and 200 booking/chat journeys, zero errors; write p95 5.04 seconds. Older Oracle/browser evidence remains revision-specific. | No live financial settlement, physical device media/push or complete native control acceptance. |
-| Publicly deployed | Exact `c48f17e` API/worker images promoted at `20261004T082021Z`; all 12 migrations, real identities and volumes preserved. Correct merchant, SMTP, LiveKit and admin settings are present. Recovery email reached the owner's inbox. New checkout remains paused. | This backend cutover is not a new installed phone binary or public store approval. |
+| QA-tested | Exact-backend CI: 323 API tests, 25 worker tests, no skips; role/auth/storage/mocked-payment protocols passed. Frontend: 27 suites / 300 tests and six synthetic-transport profile/admin browser checks. CI load: 300 read sessions and 200 booking/chat journeys, zero errors; write p95 5.16 seconds. Older Oracle/browser evidence remains revision-specific. | No live financial settlement, physical device media/push or complete native control acceptance. |
+| Publicly deployed | Exact `403cd0e` API/worker images promoted at `20261004T095413Z`; all 12 migrations, real identities and volumes preserved. Public review aggregate and runtime admin capability pass narrow probes. Correct merchant, SMTP and LiveKit settings survive; recovery email reached the owner's inbox earlier. Checkout remains paused. | This backend cutover is not a new installed phone binary or public store approval. |
 | Device/store-proven | Historical September 23 build/submission receipts below. | No current-source physical iPhone/Android paid journey, full native control acceptance or public store approval. |
 
 Business scope remains **44 screen modules** across client, photographer, model
@@ -63,14 +64,14 @@ or private QA. Unchecked items stay open even where candidate code/tests exist.
 
 - [x] Locate earlier attempts and identify the maintained repository.
 - [x] Verify SSH access and identify running production containers.
-- [x] Identify the reviewed backend candidate revision and API/worker image digests (`c48f17e`; see Oracle Release Runbook). Later frontend source is a separate candidate.
+- [x] Identify the reviewed backend candidate revision and API/worker image digests (`403cd0e`; see Competitive Release Evidence). Updated frontend source is not an installed native candidate.
 - [x] Apply new migrations in isolated QA and rehearse production backup/restore and guarded pre-reopen rollback.
 - [x] Verify auth/ownership, protected writes, quotes, availability and concurrent transitions in exact-candidate isolated CI. Public native-role acceptance remains separate.
 - [ ] Accept media privacy, delivery jobs, routing and admin moderation/incident operations.
 - [x] Configure the restricted recovery mailbox and verify real owner-inbox delivery, durable worker completion and token scrubbing without changing the owner's password.
 - [x] Recover the correct merchant and existing LiveKit credentials, verify authentication from Oracle and configure both writers without enabling checkout.
 - [ ] Independently accept live payment/refund/payout, device push/media and enabled dispatch services before activation.
-- [x] Promote reviewed GHCR API/worker images to public Oracle with explicit migrations (latest cutover `20261004T082021Z`).
+- [x] Promote reviewed GHCR API/worker images to public Oracle with explicit migrations (latest cutover `20261004T095413Z`).
 - [x] Pass public health/version, schema contract, road geometry and anonymous access rejection.
 - [ ] Pass public version, schema contract, readiness and domain smoke checks with production HTTPS configuration.
 - [ ] Complete all enabled four-role screen controls/accessibility; targeted booking/chat/support/KYC/moderation workflows have QA evidence, not full coverage.

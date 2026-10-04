@@ -73,6 +73,25 @@ signed download links, auth traces and store bundles do not belong in Git.
 
 ## Runtime Acceptance Gate
 
+Latest guarded cutover `20261004T095413Z` promoted revision
+`403cd0ef3ad032c9bdc3d58ef5b2752535ca1d69` after exact-candidate frontend CI,
+323 API / 25 worker tests with no skips, and a restored-production rehearsal.
+Real accounts, business records, sessions, storage and existing integration
+configuration were preserved. Read-only public probes at `09:55:33Z` accepted
+the new review aggregate for four creators, null averages for zero reviews,
+missing-profile 404, road geometry and anonymous auth rejection. Actual runtime
+account serialization also accepted the configured admin capability and rejected
+forged metadata; native owner UI acceptance is still outstanding.
+
+The updated profile/admin source is on GitHub, not installed on existing phones.
+Six synthetic-transport browser checks passed; this is not live financial or
+native acceptance. Latest CI write p95 is 5.16 seconds, still above the project
+target. Release validation still fails the same five capability gates. No new
+native binary, invitation, public submission or customer charge was made by this
+pass. See [Competitive Release Evidence](competitive-release-20261004.json).
+
+The following paragraphs retain earlier deployment/configuration history.
+
 The initial public Oracle promotion ran backend revision `db425300` using immutable
 API and worker images. Guarded cutover `20261004T013038Z` applied all 12 migrations after
 backup/restore rehearsal and preserved real account, session and business-record

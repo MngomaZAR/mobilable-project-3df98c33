@@ -101,6 +101,19 @@ Do not trade privacy, truthful claims, moderation or financial correctness for r
 
 ## Release Evidence
 
+Source candidate `403cd0e` is pushed to `release/testflight-2026-06`. Exact-candidate
+CI passed 323 API tests, 25 worker tests (no skips), and frontend/deployment checks.
+The frontend has 300 passing tests and six targeted synthetic-transport browser
+checks. Isolated CI completed 300 concurrent read sessions and 200 booking/chat
+journeys without errors; write p95 remains 5.16 seconds, above the project target.
+
+Oracle API/worker were promoted by immutable digest at `2026-10-04T09:54:13Z`
+after restoring and checking a protected production backup. Public review summaries,
+missing-profile handling, road geometry and access rejection passed subsequent
+read-only probes. Data and integration configuration were preserved. This is a
+backend deployment, not a new installed phone version. Public readiness remains
+false; no new store build, tester invitation or public submission was made.
+
 Implementation and verification evidence for this pass is recorded in
 [competitive release evidence](competitive-release-20261004.json).
 An updated GitHub repository and deployed API do not constitute TestFlight/Play

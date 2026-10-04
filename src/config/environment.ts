@@ -6,6 +6,7 @@ const expoExtra = (Constants.expoConfig?.extra ?? {}) as Record<string, unknown>
 // Expo only inlines public variables referenced with literal dot notation.
 const publicProcessConfig: Record<string, string | undefined> = {
   EXPO_PUBLIC_APP_ENV: process.env.EXPO_PUBLIC_APP_ENV,
+  EXPO_PUBLIC_RESTRICTED_BETA: process.env.EXPO_PUBLIC_RESTRICTED_BETA,
   EXPO_PUBLIC_API_BASE_URL: process.env.EXPO_PUBLIC_API_BASE_URL,
   EXPO_PUBLIC_ROUTING_PROVIDER: process.env.EXPO_PUBLIC_ROUTING_PROVIDER,
   EXPO_PUBLIC_OSRM_BASE_URL: process.env.EXPO_PUBLIC_OSRM_BASE_URL,
@@ -36,6 +37,7 @@ export const readPublicConfig = (name: string, fallback = '') => {
 
 export const environment = {
   env: readPublicConfig('EXPO_PUBLIC_APP_ENV', __DEV__ ? 'development' : 'production'),
+  restrictedBeta: readPublicConfig('EXPO_PUBLIC_RESTRICTED_BETA', 'false').toLowerCase() === 'true',
   apiBaseUrl: readPublicConfig('EXPO_PUBLIC_API_BASE_URL'),
   routingProvider: readPublicConfig('EXPO_PUBLIC_ROUTING_PROVIDER', 'osrm'),
   osrmBaseUrl: readPublicConfig('EXPO_PUBLIC_OSRM_BASE_URL', 'https://router.project-osrm.org'),

@@ -3,6 +3,7 @@ import { hasNhost, nhost } from './nhostClient';
 import { apiClient, hasApiBackend } from './apiClient';
 import { getApiAccessToken } from './apiSession';
 import { environment } from './environment';
+import { BETA_RESTRICTION_MESSAGE, isBetaRestrictedRequest } from './betaPolicy';
 
 export type BackendFunctionResult<T> = {
   data: T | null;
@@ -37,6 +38,9 @@ export const invokeBackendFunction = async <T = any>(
   name: string,
   body?: Record<string, any>
 ): Promise<BackendFunctionResult<T>> => {
+  if (isBetaRestrictedRequest(`/functions/${normalizePath(name).slice(1)}`, 'POST', body)) {
+    return { data: null, error: { message: BETA_RESTRICTION_MESSAGE } };
+  }
   if (environment.backendProvider === 'api') {
     if (!hasApiBackend) {
       return { data: null, error: { message: 'Backend API is not configured for this build.' } };

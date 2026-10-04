@@ -40,7 +40,7 @@ from .onboarding import router as onboarding_router
 from .database import connect
 from .database import close_pools
 from .access_control import is_admin, require_admin
-from .readiness import release_capabilities
+from .readiness import checked_release_capabilities
 from .auth_security import rate_limit, token_digest, recover_password, reset_password
 from .provider_settings import router as provider_settings_router
 from .reporting import router as reporting_router
@@ -223,7 +223,7 @@ async def version(settings: Annotated[Settings, Depends(get_settings)]) -> Versi
 
 @app.get("/health/readiness", tags=["system"])
 async def health_readiness(settings: Annotated[Settings, Depends(get_settings)]):
-    return release_capabilities(settings)
+    return await checked_release_capabilities(settings)
 
 
 @app.get("/health/contract", tags=["system"])

@@ -43,6 +43,19 @@
       "env": {
         "EXPO_IOS_BUNDLE_IDENTIFIER": "com.papzi.app"
       }
+    },
+    "beta-testing": {
+      "extends": "production",
+      "distribution": "store",
+      "environment": "production",
+      "channel": "beta-testing",
+      "env": {
+        "EXPO_PUBLIC_APP_ENV": "beta",
+        "EXPO_PUBLIC_STORE_TARGET": "internal",
+        "EXPO_PUBLIC_RESTRICTED_BETA": "true",
+        "EXPO_PUBLIC_DIGITAL_BILLING_PROVIDER": "disabled",
+        "EXPO_PUBLIC_DISABLE_DIGITAL_PURCHASES": "true"
+      }
     }
   },
   "submit": {
@@ -59,6 +72,17 @@
     },
     "production-ios-local": {
       "ios": {}
+    },
+    "beta-testing": {
+      "ios": {
+        "ascAppId": "6760396864",
+        "bundleIdentifier": "com.papzi.app"
+      },
+      "android": {
+        "applicationId": "com.papziiii.paparazzi",
+        "track": "internal",
+        "releaseStatus": "draft"
+      }
     }
   }
 }

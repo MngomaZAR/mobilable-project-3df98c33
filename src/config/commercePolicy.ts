@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import { environment } from './environment';
 
 export type StoreTarget = 'development' | 'web' | 'internal' | 'appstore' | 'play' | 'both';
 export type DigitalBillingProvider = 'iap' | 'external' | 'disabled';
@@ -71,6 +72,14 @@ export const getSupabaseBaseUrl = () => {
 };
 
 export const getDefaultPayfastNotifyUrl = () => {
+  if (environment.backendProvider === 'api') {
+    const base = environment.apiBaseUrl.trim().replace(/\/+$/, '');
+    const url = new URL(base);
+    if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash) {
+      throw new Error('A public HTTPS API URL is required for payment notifications.');
+    }
+    return `${base}/payments/payfast/itn`;
+  }
   const base = getSupabaseBaseUrl();
   if (!base) {
     throw new Error('Missing EXPO_PUBLIC_SUPABASE_URL for payment notify URL.');

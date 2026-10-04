@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../store/ThemeContext';
 import { useAppData } from '../store/AppDataContext';
 import { invokeBackendFunction } from '../config/backendFunctions';
+import { BETA_RESTRICTION_MESSAGE, isRestrictedBeta } from '../config/betaPolicy';
 
 type PayoutMethod = {
   id: string;
@@ -51,7 +52,7 @@ const PayoutMethodsScreen: React.FC = () => {
   const selectedBank = BANKS.find(bank => bank.id === bankId);
 
   const fetchMethods = useCallback(async () => {
-    if (!currentUser?.id) return;
+    if (!currentUser?.id || isRestrictedBeta()) return;
     setLoading(true);
     try {
       const { data, error } = await invokeBackendFunction('payout-methods', { action: 'list' });
@@ -132,6 +133,15 @@ const PayoutMethodsScreen: React.FC = () => {
       ],
     );
   };
+
+  if (isRestrictedBeta()) {
+    return <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]}>
+      <View style={[styles.container, { paddingTop: Math.max(12, insets.top + 4) }]}>
+        <Text style={[styles.title, { color: colors.text }]}>Payouts unavailable</Text>
+        <Text accessibilityRole="alert" style={[styles.subtitle, { color: colors.textSecondary }]}>{BETA_RESTRICTION_MESSAGE}</Text>
+      </View>
+    </SafeAreaView>;
+  }
 
   return (
     <SafeAreaView edges={['left', 'right']} style={[styles.safe, { backgroundColor: colors.bg }]}>

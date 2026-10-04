@@ -1,4 +1,5 @@
 import { environment } from './environment';
+import { BETA_RESTRICTION_MESSAGE, isBetaRestrictedRequest } from './betaPolicy';
 
 export class ApiClientError extends Error {
   constructor(
@@ -33,6 +34,9 @@ const readResponseBody = async (response: Response) => {
 export const hasApiBackend = Boolean(apiBaseUrl);
 
 export const apiRequest = async <T>(path: string, options: ApiRequestOptions = {}): Promise<T> => {
+  if (isBetaRestrictedRequest(path.startsWith('/') ? path : `/${path}`, options.method, options.body)) {
+    throw new ApiClientError(BETA_RESTRICTION_MESSAGE, 403);
+  }
   if (!apiBaseUrl) {
     throw new ApiClientError('Backend API is not configured for this build.', 0);
   }

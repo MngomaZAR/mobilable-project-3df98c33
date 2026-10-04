@@ -11,6 +11,7 @@ import { canTrackBooking, getBookingChatTarget, getBookingProviderId, isReviewab
 import { fetchBookingById } from '../services/bookingService';
 import { Booking } from '../types';
 import { formatBookingStart } from '../utils/bookingTime';
+import { BETA_RESTRICTION_MESSAGE, isRestrictedBeta } from '../config/betaPolicy';
 
 type Route = RouteProp<RootStackParamList, 'BookingDetail'>;
 type Navigation = StackNavigationProp<RootStackParamList, 'BookingDetail'>;
@@ -160,7 +161,8 @@ const BookingDetailScreen: React.FC = () => {
       {actionNotice && <Text accessibilityRole="alert" style={[styles.notes, { color: colors.text }]}>{actionNotice}</Text>}
       {action(loadingAction === 'chat' ? 'Opening chat...' : 'Open chat', 'chatbubble-outline', openChatThread, !chatTarget)}
       {action('Track on map', 'navigate-outline', () => navigation.navigate('BookingTracking', { bookingId: booking.id }), !canTrackBooking(booking))}
-      {canPay ? action('Pay for shoot', 'card-outline', () => navigation.navigate('Payment', { bookingId: booking.id })) : null}
+      {canPay ? action('Pay for shoot', 'card-outline', () => navigation.navigate('Payment', { bookingId: booking.id }), isRestrictedBeta()) : null}
+      {canPay && isRestrictedBeta() ? <Text accessibilityRole="alert" style={[styles.notes, { color: colors.textSecondary }]}>{BETA_RESTRICTION_MESSAGE}</Text> : null}
       {canCancel ? <>
         {action('Discuss a new time', 'calendar-outline', openChatThread)}
         {action(loadingAction === 'cancel' ? 'Cancelling...' : 'Cancel booking', 'close-circle-outline', handleCancel, false, true)}

@@ -10,6 +10,7 @@ import { createDispatch } from '../services/dispatchService';
 import { updateBookingDispatchInDb } from '../services/bookingService';
 import HowItWorksCard from '../components/HowItWorksCard';
 import { getDefaultPayfastNotifyUrl } from '../config/commercePolicy';
+import { BETA_RESTRICTION_MESSAGE, isRestrictedBeta } from '../config/betaPolicy';
 
 type Route = RouteProp<RootStackParamList, 'Payment'>;
 type Navigation = StackNavigationProp<RootStackParamList, 'Payment'>;
@@ -47,6 +48,7 @@ const PaymentScreen: React.FC = () => {
   }, []);
 
   const startDispatchAfterVerification = useCallback(async () => {
+    if (isRestrictedBeta()) return;
     if (!dispatchIntent || dispatchStarted || !bookingId || !booking) return;
     if (booking.dispatch_request_id) {
       setDispatchStarted(true);
@@ -108,7 +110,7 @@ const PaymentScreen: React.FC = () => {
 
   const returnUrl = PAYMENT_SUCCESS_URL;
   const cancelUrl = PAYMENT_CANCEL_URL;
-  const notifyUrl = getDefaultPayfastNotifyUrl();
+  const notifyUrl = isRestrictedBeta() ? '' : getDefaultPayfastNotifyUrl();
 
   useEffect(() => {
     if (booking?.booking_date) {
@@ -181,6 +183,16 @@ const PaymentScreen: React.FC = () => {
   ]);
 
   useEffect(() => () => clearVerificationTimer(), [clearVerificationTimer]);
+
+  if (isRestrictedBeta()) {
+    return <View style={styles.emptyState}>
+      <Text style={styles.title}>Payments unavailable</Text>
+      <Text accessibilityRole="alert" style={styles.subtitle}>{BETA_RESTRICTION_MESSAGE}</Text>
+      <TouchableOpacity accessibilityRole="button" style={styles.secondary} onPress={() => navigation.goBack()}>
+        <Text style={styles.secondaryText}>Back</Text>
+      </TouchableOpacity>
+    </View>;
+  }
 
   if (!bookingId || !booking) {
     return (

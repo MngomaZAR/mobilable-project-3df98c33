@@ -91,6 +91,7 @@ export default {
         projectId: "f0c1ef90-ac26-4e4c-a799-77b377e2f452"
       },
       EXPO_PUBLIC_APP_ENV: process.env.EXPO_PUBLIC_APP_ENV || "",
+      EXPO_PUBLIC_RESTRICTED_BETA: process.env.EXPO_PUBLIC_RESTRICTED_BETA || "false",
       EXPO_PUBLIC_API_BASE_URL: process.env.EXPO_PUBLIC_API_BASE_URL || "",
       EXPO_PUBLIC_ROUTING_PROVIDER: process.env.EXPO_PUBLIC_ROUTING_PROVIDER || "osrm",
       EXPO_PUBLIC_OSRM_BASE_URL: process.env.EXPO_PUBLIC_OSRM_BASE_URL || "https://router.project-osrm.org",

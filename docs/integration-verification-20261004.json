@@ -1,0 +1,87 @@
+{
+  "checkedAt": "2026-10-04T08:24:49.268Z",
+  "backendRevision": "c48f17e211508fbcdbd855e78075fa2ca05decfe",
+  "apiImage": "ghcr.io/mngomazar/papzi-api@sha256:40b068c5747739f7e191fa4cd83941e02347282b6187748d9f8835026495a03b",
+  "workerImage": "ghcr.io/mngomazar/papzi-worker@sha256:66e833948380f81787764edcdc2a28b2a251e309ea2e8f1ebef58ae8382383f1",
+  "ci": {
+    "runId": 37187833728,
+    "url": "https://github.com/MngomaZAR/mobilable-project-3df98c33/actions/runs/37187833728",
+    "conclusion": "success",
+    "apiTests": 307,
+    "workerTests": 25,
+    "skips": 0,
+    "readLoad": { "sessions": 300, "requests": 3000, "errors": 0, "p95Ms": 1344.57 },
+    "writeLoad": { "journeys": 200, "requests": 1400, "errors": 0, "p95Ms": 5039.25 },
+    "actualGatewaySettlementTested": false,
+    "physicalPushOrVideoLoadTested": false
+  },
+  "localValidation": {
+    "frontendTests": 246,
+    "frontendSuites": 23,
+    "deploymentSafetyTests": 20,
+    "allPassed": true
+  },
+  "oracle": {
+    "publicApi": "https://papzii-api.129.151.188.15.nip.io",
+    "restoreRehearsal": "/var/backups/papzii/release-20261004T081807Z/rehearsal.json",
+    "cutover": "/var/backups/papzii/cutover-20261004T082021Z/promotion.json",
+    "merchantConfiguration": "/var/backups/papzii/configuration-20261004T082215Z/configuration.json",
+    "databaseAndIdentitiesPreserved": true,
+    "objectStorageBackedUp": true,
+    "migrationsApplied": 12,
+    "publicCorePassed": true,
+    "publicReleaseReady": false
+  },
+  "integrations": {
+    "livePayfastAuthentication": true,
+    "invalidSignatureRejected": true,
+    "merchantDashboardSettingsChanged": false,
+    "newCheckoutEnabled": false,
+    "pausedCheckoutSafetyProbePassed": true,
+    "financialTransactionPerformed": false,
+    "smtpTLSAuthentication": true,
+    "recoveryEmailDeliveredToOwnerInbox": true,
+    "accountPasswordChanged": false,
+    "recoveryJobSecretScrubbed": true,
+    "livekitCloudAuthentication": true,
+    "actualDeviceVideoVerified": false,
+    "adminAllowlistConfigured": true,
+    "nativeAdminJourneyVerified": false,
+    "temporaryRecoveryFunctionDeleted": true
+  },
+  "localDeviceInventory": {
+    "iCloudInstalled": true,
+    "appleDevicesInstalled": true,
+    "androidAvd": "Pixel_4",
+    "androidAccelerationUsable": true,
+    "adbConnectedDevices": 0,
+    "localCandidateApkFound": false,
+    "generatedAndroidPackage": "com.saicts.papzi",
+    "targetPlayPackage": "com.papziiii.paparazzi",
+    "generatedAndroidExcludedFromEas": true,
+    "physicalDeviceAcceptancePassed": false
+  },
+  "staticArchitectureAudit": {
+    "screenModules": 44,
+    "serviceModules": 24,
+    "blockers": 0,
+    "allScreenNativeActionsAccepted": false
+  },
+  "releaseEnvironmentValidator": {
+    "passed": false,
+    "reason": "Unaccepted capability gates; no gate was bypassed"
+  },
+  "remainingReadinessBlockers": [
+    "payment_checkout_enabled",
+    "payment_refund_execution",
+    "bank_payout_execution",
+    "video_call_service",
+    "instant_dispatch_service"
+  ],
+  "nativeBuildStarted": false,
+  "testInvitationsSent": false,
+  "publicStoreSubmissionStarted": false,
+  "recoveredSecretsCheckedInTrackedHead": 9,
+  "recoveredSecretsFoundInTrackedHead": 0,
+  "containsCredentialValuesOrPrivateRows": false
+}

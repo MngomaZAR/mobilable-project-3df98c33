@@ -73,8 +73,8 @@ signed download links, auth traces and store bundles do not belong in Git.
 
 ## Runtime Acceptance Gate
 
-The public Oracle API now runs backend revision `db425300` using immutable API and
-worker images. Guarded cutover `20261004T013038Z` applied all 12 migrations after
+The initial public Oracle promotion ran backend revision `db425300` using immutable
+API and worker images. Guarded cutover `20261004T013038Z` applied all 12 migrations after
 backup/restore rehearsal and preserved real account, session and business-record
 identities. The public health/version/schema/routing probes pass; anonymous
 `/auth/me` returns 401. See [Oracle Release Runbook](ORACLE_RELEASE_RUNBOOK.md).
@@ -103,6 +103,22 @@ creator payouts are unverified. Readiness now reports checkout configuration and
 activation separately. Payment callbacks remain available while checkout is paused.
 This change requires tested matching images before runtime credential configuration;
 new phone builds and public submission remain held.
+
+Guarded cutover `20261004T082021Z` subsequently deployed exact backend revision
+`c48f17e211508fbcdbd855e78075fa2ca05decfe` after GitHub CI and a fresh production
+restore rehearsal. The live merchant configuration was then applied with checkout
+paused to both API and worker; SMTP, LiveKit, allowlisting, users and data survived.
+At `2026-10-04T08:24:49Z`, public core checks passed and readiness still returned
+false with five explicit blockers: checkout activation, refunds, bank payouts,
+device video acceptance and instant dispatch acceptance. Correct credential
+configuration does not authorize new customer charges or establish settlement.
+
+Read-only probes using the running container's settings authenticated with live
+PayFast, SMTP TLS and LiveKit. The paused checkout code returned 503 without
+creating a payment. No financial transaction or additional recovery email was sent.
+EAS still targets the correct Oracle URL; server credentials were not copied into
+public mobile variables. No store build, tester invitation or public submission
+was started by this backend promotion.
 
 Tester inventory at `2026-10-04T02:29:52Z` confirms Jones is in external group
 `papzi`, which has **no builds**. Internal group `Team (Expo)` has valid build 38.
@@ -137,9 +153,23 @@ to obtain a green build or describe unit tests as full marketplace acceptance.
 - `android-submission-audit-20261004.json`: sanitized Android failure classification.
 - `play-publisher-status-20261004.json`: current API/permission results.
 - `production-runtime-20261004.json`: public core checks and capability blockers.
+- `integration-verification-20261004.json`: sanitized integration, CI/cutover and
+  local-device inventory results; no credential values or private rows.
 - `testflight-testers-20261004.json`: sanitized groups/Jones membership, no private emails.
 
 ## Latest Candidate Checks
+
+- GitHub run [37187833728](https://github.com/MngomaZAR/mobilable-project-3df98c33/actions/runs/37187833728):
+  all 307 API tests and 25 worker tests passed with database fixtures and no skips;
+  role/auth/storage/mocked-payment protocols passed, then both architectures of
+  the API/worker images were pushed. Load: 300 sessions / 3,000 reads and 200
+  booking/chat journeys / 1,400 writes, zero errors. CI write p95 was 5.04 seconds,
+  still a concern, not evidence of production latency or marketplace parity.
+  Durable in-app notifications passed; physical push and video remain unproven.
+- The latest scoped fix passed all 246 frontend tests (23 suites); existing
+  VirtualizedList `act` warnings remain. Twenty deployment safety tests passed.
+  A scan found none of nine recovered secret values in the tracked HEAD content;
+  this is not a complete repository-history or dependency security audit.
 
 - Frontend: 23 suites / 246 tests, type check, lint and private QA web compilation
   pass after booking/detail/support/KYC fixes. Four expanded Oracle QA browser

@@ -7,9 +7,9 @@ financial, native-device or app-store acceptance.
 ## Current Runtime
 
 - Public API: `https://papzii-api.129.151.188.15.nip.io`.
-- Backend source: `db425300d65f7f6336f9b6c7c99bfb2bf31927c8`.
-- API image: `ghcr.io/mngomazar/papzi-api@sha256:30736430ac0c5a497530a8bf0306b4098385adbf21f7dbd799da1fb9a470a49b`.
-- Worker image: `ghcr.io/mngomazar/papzi-worker@sha256:8dddd93a984d5e10b821a9d344287be630e3e24d91381feca7f881fc7c4fe2c8`.
+- Backend source: `c48f17e211508fbcdbd855e78075fa2ca05decfe`.
+- API image: `ghcr.io/mngomazar/papzi-api@sha256:40b068c5747739f7e191fa4cd83941e02347282b6187748d9f8835026495a03b`.
+- Worker image: `ghcr.io/mngomazar/papzi-worker@sha256:66e833948380f81787764edcdc2a28b2a251e309ea2e8f1ebef58ae8382383f1`.
 - Stable services: `papzii-api`, `papzii-worker-1`, `papzii-postgres` and existing
   storage/proxy networks. API/worker are pinned; PostgreSQL and object volumes remain.
 - Active database: `papzii_rollback_20261004t012626z`. This is the restored **real
@@ -60,6 +60,15 @@ Root-only receipts:
 - `/var/backups/papzii/cutover-20261004T013038Z/promotion.json`.
 - Frozen dump SHA-256: `354121d245a68b7f0c7bfec5367fc92284403aede8a56770fab87c777528354c`.
 
+The later payment activation guard passed CI and was promoted without changing
+database or user identities. Its root-only receipts:
+
+- `/var/backups/papzii/release-20261004T081807Z/rehearsal.json`.
+- `/var/backups/papzii/cutover-20261004T082021Z/promotion.json`.
+- Frozen dump SHA-256: `fa01a1fe608faf71b3696d80874f7f820e054625a291fcb0fc096389657cc354`.
+- Merchant settings, with checkout paused:
+  `/var/backups/papzii/configuration-20261004T082215Z/configuration.json`.
+
 Public core checks pass. The initial cutover failed seven capability checks;
 operational configuration subsequently resolved admin allowlisting and recovery
 email. The 07:40Z probe still failed five. See
@@ -86,3 +95,5 @@ Merchant settings must be submitted together with `PAYFAST_CHECKOUT_ENABLED=fals
 The helper refuses an image lacking the default-off checkout guard and refuses
 in-place merchant rotation. Independently accepted payments/refunds/payouts are
 required before a separately reviewed activation; this helper cannot enable it.
+An existing recovery encryption key cannot be silently replaced by this helper;
+key rotation must preserve the ability to decrypt pending recovery jobs.

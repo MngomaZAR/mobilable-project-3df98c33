@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-10-04T07:40:53.795Z",
+  "checkedAt": "2026-10-04T08:24:49.268Z",
   "readOnly": true,
   "api": "https://papzii-api.129.151.188.15.nip.io",
   "corePassed": true,
@@ -13,7 +13,7 @@
     },
     "version": {
       "status": 200,
-      "revision": "db425300d65f7f6336f9b6c7c99bfb2bf31927c8",
+      "revision": "c48f17e211508fbcdbd855e78075fa2ca05decfe",
       "environment": "production"
     },
     "contract": {
@@ -24,7 +24,7 @@
       "status": 200,
       "required_capabilities_available": false,
       "blockers": [
-        "payment_checkout_configured",
+        "payment_checkout_enabled",
         "payment_refund_execution",
         "bank_payout_execution",
         "video_call_service",
@@ -33,7 +33,8 @@
       "capabilities": {
         "road_routing_configured": true,
         "object_storage_configured": true,
-        "payment_checkout_configured": false,
+        "payment_checkout_configured": true,
+        "payment_checkout_enabled": false,
         "admin_access_configured": true,
         "payment_refund_execution": false,
         "bank_payout_execution": false,

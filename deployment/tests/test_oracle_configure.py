@@ -69,6 +69,14 @@ class ConfigurationSafetyTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             configure.configured_compose(config, env, env, values)
 
+    def test_preserves_persistent_recovery_encryption_key(self):
+        config = {"services": {"api": {"image": "api"}, "worker": {"image": "worker"}}}
+        env = {"DATABASE_URL": "same", "RECOVERY_ENCRYPTION_KEY": "existing-key"}
+        with self.assertRaises(ValueError):
+            configure.configured_compose(config, env, env, {"RECOVERY_ENCRYPTION_KEY": "replacement-key"})
+        result = configure.configured_compose(config, env, env, {"RECOVERY_ENCRYPTION_KEY": "existing-key"})
+        self.assertEqual(result["services"]["worker"]["environment"]["RECOVERY_ENCRYPTION_KEY"], "existing-key")
+
 
 if __name__ == "__main__":
     unittest.main()

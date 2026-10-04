@@ -61,6 +61,9 @@ def configured_compose(config, api_env, worker_env, updates, admin_id=None):
         if result["services"][name].get("build"):
             raise ValueError("Configuration-only changes cannot rebuild images")
         env = {**runtime, **updates}
+        if ("RECOVERY_ENCRYPTION_KEY" in updates and runtime.get("RECOVERY_ENCRYPTION_KEY")
+                and runtime["RECOVERY_ENCRYPTION_KEY"] != updates["RECOVERY_ENCRYPTION_KEY"]):
+            raise ValueError("Existing recovery encryption keys require a separate safe rotation")
         if set(updates) & PAYMENT_SETTINGS:
             for key in PAYMENT_SETTINGS - {"PAYFAST_CHECKOUT_ENABLED"}:
                 if runtime.get("PAYFAST_MERCHANT_ID") and runtime.get(key) != updates[key]:

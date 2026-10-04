@@ -8,14 +8,14 @@ Supabase/Nhost adapters remain for historical compatibility, not the release run
 **Public store release remains blocked as of 2026-10-04 (Africa/Johannesburg).**
 The tested backend has now been promoted to the existing public Oracle API with
 backup/restore and identity-preservation checks. Public schema and road routing
-pass; readiness still identifies seven unavailable/unaccepted capabilities.
+pass; readiness still identifies five unavailable/unaccepted capabilities.
 Passing compilation, static audits or `/health` alone does not prove readiness.
 
 | Evidence Level | Current Scope |
 |---|---|
 | Implemented in source | API auth, owner-scoped data, server-priced bookings, provider commands, media and admin controls; newer financial, dispatch, contract, video and deletion code needs its own acceptance. |
-| QA-tested | Backend CI evidence: 302 API tests and 25 worker tests. Latest local frontend: 23 suites / 246 tests, type/lint checks and four targeted Oracle browser workflows pass. Isolated PostgreSQL protocols and earlier 300-session / 200-write-journey tests pass in their recorded scope. Earlier screen inventory evidence remains 22 of 44 entry points, not all native controls. |
-| Publicly deployed | Immutable API/worker from backend revision `db425300`, with all 12 migrations, preserved real accounts and public road routing. This is not a new mobile binary or public-store approval. |
+| QA-tested | Backend CI evidence: 307 API tests and 25 worker tests, no skips. Latest local frontend: 23 suites / 246 tests and four targeted Oracle browser workflows pass. Isolated PostgreSQL protocols and 300-session / 200-write-journey tests pass in their recorded scope. Earlier screen inventory evidence remains 22 of 44 entry points, not all native controls. |
+| Publicly deployed | Immutable API/worker from backend revision `c48f17e`, with all 12 migrations, preserved real accounts and public road routing. SMTP recovery email reached the owner's inbox; LiveKit and the correct PayFast account authenticate from Oracle. New checkout is deliberately paused. This is not a new mobile binary or public-store approval. |
 | Device/store-proven | Apple confirms historical iOS build 38 is in internal beta testing; public review has not been submitted. Android build 13 cannot update the confirmed Play package. Google testing API access, EAS upload-key and submission-credential links are now verified; the internal release remains an empty draft. Neither old binary proves the new candidate on devices. |
 
 See [Release Status](docs/RELEASE_STATUS.md) and [Launch Execution](docs/LAUNCH_EXECUTION.md) for current blockers and store
@@ -40,18 +40,23 @@ The canonical release path is:
   are server-authoritative; generic data writes cannot replace domain commands.
 - PayFast checkout: `/payments/checkout`; notification: `/payments/payfast/itn`.
   Accepting a booking waits for payment; acceptance is not payment confirmation.
+  `PAYFAST_CHECKOUT_ENABLED` defaults to false. Merchant configuration cannot
+  automatically authorize customer charges; incoming ITN validation is independent.
 - Durable background work: PostgreSQL outbox and the worker service.
 - Road routes: `/routing/route` -> private OSRM container on Oracle.
 - Deployment artifacts: tested API/worker images in GHCR, promoted by verified
   digest with migrations and public contract/readiness checks.
 - Release gate: `npm run check:release`, including live schema and capability checks.
 
-Backend revision `db425300` now runs on public Oracle and in isolated QA. Later
+Backend revision `c48f17e` now runs on public Oracle after database-backed CI and
+fresh backup/restore rehearsal. Later
 frontend source work is not automatically included in installed phone builds. NATS and
 Typesense container presence does not prove integrated realtime messaging or
 search. Current messaging uses persisted HTTP reads/polling. Refund, payout,
-SMTP recovery, push and LiveKit configuration/implementation are not proof of
-money movement, delivered email or device media delivery.
+push and LiveKit configuration/implementation are not proof of money movement or
+device media delivery. SMTP recovery has one verified live email-delivery journey;
+that does not establish all-device reset UX. See
+[Integration Recovery](docs/INTEGRATION_RECOVERY_20261004.md).
 
 Supporting docs:
 
@@ -103,6 +108,8 @@ Older `com.saicts.papzi` binaries are separate identities, not interchangeable u
 The existing EAS upload key was verified against Play's upload certificate and
 linked to the confirmed package; the existing submission credential was reused.
 Do not regenerate keys or upload a differently identified legacy bundle.
+The ignored local `android/` directory is stale (`com.saicts.papzi`) and excluded
+from EAS. Its output must not be mistaken for a current-package emulator candidate.
 
 ## Run
 
@@ -137,7 +144,7 @@ This runs:
 
 These checks complement, not replace, device tests, moderation operations and real
 payment/refund/payout evidence. Capability readiness deliberately fails while
-required services are not implemented or configured.
+required services are not implemented, configured or independently accepted.
 
 ## Backend QA
 

@@ -4,10 +4,13 @@ Started: 2026-10-03. Updated: 2026-10-04 (Africa/Johannesburg).
 
 ## Release decision
 
-**Public release remains blocked. Current candidate work is not publicly
-deployed.** The observed public backend is still the older image: `/health`
-returns 200, while `/health/readiness` and `/routing/route` return 404. Do not
-bypass the readiness gate or publish a loopback/SSH-tunnel QA bundle.
+**Public store release remains blocked. The tested backend is publicly deployed.**
+Oracle now runs immutable API/worker revision `c48f17e` after a protected restore
+rehearsal and cutover. Public health, schema and road routing pass; readiness
+returns HTTP 200 with `required_capabilities_available=false`, not the older 404.
+The five blockers are checkout activation, refunds, bank payouts, video acceptance
+and instant dispatch acceptance. Do not bypass the gate or publish a loopback/
+SSH-tunnel bundle. See [current evidence](integration-verification-20261004.json).
 
 A successful build, credential synchronization or healthy container is not proof
 of a working marketplace. Production deployment, signed native builds, device
@@ -34,8 +37,8 @@ production runtime. See [Single-Flow Architecture](SINGLE_FLOW_ARCHITECTURE.md).
 | Level | Recorded State | Not Established |
 |---|---|---|
 | Implemented | Source has auth/session protection, owner-scoped data, domain booking/pricing/availability, storage and moderation commands. New financial, dispatch, contracts, video, deletion and delivery implementations are candidate work. | Source presence is not deployment or complete integration acceptance. |
-| QA-tested | October 3 isolated Oracle baseline: 144 backend units, 138 domain checks, 15 auth checks, 30 mock-gateway payment/tracking checks; 27 browser cases and 96 screenshots. Final frontend follow-up: 14 suites / 98 tests. | These revision-specific results do not certify later changes, real payments or physical devices. |
-| Publicly deployed | Older public API only. Source `291433a` GHCR images were deployed by digest to private Oracle QA. | No current candidate public cutover or release of the newer working tree is recorded here. |
+| QA-tested | Latest exact-backend CI: 307 API tests, 25 worker tests, no skips; role/auth/storage/mocked-payment protocols passed. Frontend: 23 suites / 246 tests. CI load: 300 read sessions and 200 booking/chat journeys, zero errors; write p95 5.04 seconds. Older Oracle/browser evidence remains revision-specific. | No live financial settlement, physical device media/push or complete native control acceptance. |
+| Publicly deployed | Exact `c48f17e` API/worker images promoted at `20261004T082021Z`; all 12 migrations, real identities and volumes preserved. Correct merchant, SMTP, LiveKit and admin settings are present. Recovery email reached the owner's inbox. New checkout remains paused. | This backend cutover is not a new installed phone binary or public store approval. |
 | Device/store-proven | Historical September 23 build/submission receipts below. | No current-source physical iPhone/Android paid journey, full native control acceptance or public store approval. |
 
 Business scope remains **44 screen modules** across client, photographer, model
@@ -60,12 +63,14 @@ or private QA. Unchecked items stay open even where candidate code/tests exist.
 
 - [x] Locate earlier attempts and identify the maintained repository.
 - [x] Verify SSH access and identify running production containers.
-- [x] Identify the reviewed backend candidate revision and API/worker image digests (`db425300`; see Oracle Release Runbook). Later frontend source is a separate candidate.
+- [x] Identify the reviewed backend candidate revision and API/worker image digests (`c48f17e`; see Oracle Release Runbook). Later frontend source is a separate candidate.
 - [x] Apply new migrations in isolated QA and rehearse production backup/restore and guarded pre-reopen rollback.
-- [ ] Verify current auth/ownership, protected writes, quotes, availability and concurrent transitions against that exact candidate.
+- [x] Verify auth/ownership, protected writes, quotes, availability and concurrent transitions in exact-candidate isolated CI. Public native-role acceptance remains separate.
 - [ ] Accept media privacy, delivery jobs, routing and admin moderation/incident operations.
-- [ ] Configure and independently accept payment, refund, payout, recovery email, push and any enabled video/dispatch services.
-- [x] Promote reviewed GHCR API/worker images to public Oracle with explicit migrations (cutover `20261004T013038Z`).
+- [x] Configure the restricted recovery mailbox and verify real owner-inbox delivery, durable worker completion and token scrubbing without changing the owner's password.
+- [x] Recover the correct merchant and existing LiveKit credentials, verify authentication from Oracle and configure both writers without enabling checkout.
+- [ ] Independently accept live payment/refund/payout, device push/media and enabled dispatch services before activation.
+- [x] Promote reviewed GHCR API/worker images to public Oracle with explicit migrations (latest cutover `20261004T082021Z`).
 - [x] Pass public health/version, schema contract, road geometry and anonymous access rejection.
 - [ ] Pass public version, schema contract, readiness and domain smoke checks with production HTTPS configuration.
 - [ ] Complete all enabled four-role screen controls/accessibility; targeted booking/chat/support/KYC/moderation workflows have QA evidence, not full coverage.
@@ -73,6 +78,36 @@ or private QA. Unchecked items stay open even where candidate code/tests exist.
 - [x] Recheck Apple API access; enable Android Publisher with authorization, verify app-only testing access, and link the verified existing EAS upload key and submission credential. No new candidate was uploaded.
 - [ ] Complete separately authorized live payment, refund and bank-settlement evidence.
 - [ ] Publish web and submit native releases only after applicable gates pass; record tester availability and public approval separately.
+
+## Native Testing And Tester Distribution
+
+1. Use the existing `Pixel_4` emulator and installed Android SDK; hardware
+   acceleration is available. ADB currently has no running device. Do not download
+   another emulator or confuse the stale ignored `com.saicts.papzi` native folder
+   with the accepted `com.papziiii.paparazzi` candidate. Preserve custom native
+   changes before deliberate regeneration and identify the exact APK revision.
+2. Run candidate client, photographer, model and admin journeys, then the 44-screen
+   action matrix. Include admin allowlist versus profile-role navigation, revoked
+   permissions, session expiry, offline/reconnect, private attachments, road
+   directions, moderation, recovery and durable retries. Save failures as failures.
+3. Use a real iPhone/Android for camera/microphone/GPS/push and performance
+   acceptance. Installed iCloud/Apple Devices software and Bluetooth pairing are
+   not native app-control or media-delivery evidence. Store-distribution builds
+   reuse existing credentials; iCloud personal content is not required.
+4. Build the accepted source and record exact source, runtime, bundle/package,
+   signing identity, version and EAS build ID. Submit by that ID, not `--latest`.
+   Do not silently change public release scope or bypass capability failures.
+5. For TestFlight, check Apple processing/export compliance and availability,
+   then assign the accepted build to the existing requested groups. The recorded
+   external `papzi` group includes Jones but has no candidate build; `Team (Expo)`
+   has historical build 38. External beta review is not public App Review.
+6. For Google Play, use the existing app-only testing service-account permissions
+   and matching upload key. Complete the internal-track candidate release and
+   verify registered tester-list access and the opt-in link. A draft AAB upload is
+   not an installable test release; do not grant production or financial access.
+7. Verify actual tester installation/invitation evidence separately from upload
+   receipts. Public publication remains a later gate with financial, privacy,
+   moderation, reviewer and operational acceptance.
 
 ## Historical Candidate QA
 
@@ -163,11 +198,12 @@ payment webhook replay as well as the successful journey. Do not mark device
 tests, live settlement, refunds or store review complete from source checks.
 
 SecureStore unit tests do not establish device encryption/biometric enforcement;
-SMTP configuration does not establish recovery email delivery; LiveKit/push
-handlers do not establish microphone/camera/push delivery on physical devices.
+SMTP configuration alone does not establish recovery email delivery; the latest
+owner-inbox receipt is one verified delivery journey, not all native recovery UX.
+LiveKit/push handlers do not establish microphone/camera/push delivery on physical devices.
 Media moderation operations, dependency findings, sustained load, monitoring,
 trusted-proxy handling and production rollback still need accepted evidence.
 
-The parent release task owns the new release-status report, deployment/environment
-scripts and promotion. This document summarizes the checked baseline and pending
-gates; it does not itself claim a deployment, store submission or payment run.
+The current release task maintains the release-status report, deployment scripts
+and protected promotion receipts. This document summarizes checked milestones and
+pending gates; store approval and real settlement have not been established.

@@ -53,9 +53,52 @@ apply merchant credentials to an older image that lacks this guard. It cannot
 activate checkout, enable refunds/payouts or forge financial acceptance records.
 
 The source change has five new payment tests. Local API tests: 307 run, 271 passed,
-36 database-dependent skips. Deployment guards: 19 passed. Database-backed CI,
-exact immutable image promotion and runtime merchant configuration must be recorded
-before those steps are claimed complete.
+36 database-dependent skips. The subsequent database-backed CI run passed all 307
+API tests and 25 worker tests without skips. Deployment guards: 20 passed, including
+preservation of an existing recovery encryption key.
+
+## Verified Follow-Up Deployment
+
+- GitHub run [37187833728](https://github.com/MngomaZAR/mobilable-project-3df98c33/actions/runs/37187833728)
+  passed tests and built matching immutable images for
+  `c48f17e211508fbcdbd855e78075fa2ca05decfe`.
+- Fresh production backup restoration, schema checks and identity comparison passed
+  at `20261004T081807Z`; all 12 migration ledger entries were preserved.
+- Cutover `20261004T082021Z` preserved accounts, sessions, business identities,
+  database and volumes, and created a fresh object-storage archive.
+- Merchant configuration `20261004T082215Z` applied the correct live credentials
+  to both API and worker with `PAYFAST_CHECKOUT_ENABLED=false`. It preserved the
+  existing SMTP/recovery key, LiveKit and admin settings.
+- Read-only authentication using the running API's settings passed for PayFast
+  (valid 200, invalid signature 401), SMTP with certificate verification and
+  LiveKit. A direct running-code checkout safety probe returned 503 while paused.
+  That probe is not an authenticated, native-user payment journey.
+- Public audit at `2026-10-04T08:24:49Z`: correct revision, health/schema HTTP 200,
+  road route with 122 points / 3.73 km / 450.7 seconds, anonymous auth HTTP 401.
+  Readiness remains false for checkout activation, refunds, bank payouts, video
+  and instant dispatch. No real financial transaction was performed.
+- CI load: 300 sessions / 3,000 reads, zero errors, read p95 1.345 seconds;
+  200 booking/chat journeys / 1,400 writes, zero errors, write p95 5.039 seconds.
+  These are CI measurements, not production guarantees. Actual device push/media
+  are outside that load test.
+- Nine recovered secret values were checked against tracked HEAD content; no
+  matches were found. This does not establish a clean entire Git history.
+
+## Existing Device Resources
+
+The laptop has iCloud, iTunes and Apple Devices installed, Android platform tools,
+an existing `Pixel_4` AVD and usable Windows Hypervisor acceleration. ADB currently
+reports no running emulator or USB Android device. Enumerated Apple Bluetooth
+devices are not an iPhone USB test/control connection; iCloud is not an iOS simulator.
+No personal iCloud photos, files or messages were needed or inspected.
+
+No local candidate APK was found in Downloads or Android build outputs. The ignored
+generated `android/` project still uses `com.saicts.papzi`; it must not be treated
+as a current `com.papziiii.paparazzi` candidate. `.easignore` already excludes this
+stale native project, so EAS generates the current native configuration. Local
+emulator testing needs a deliberately regenerated or correctly identified debug
+candidate, without destroying custom native changes. Installed-device acceptance
+has not passed merely because tools are installed.
 
 ## Remaining Release Evidence
 

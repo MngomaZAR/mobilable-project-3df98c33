@@ -77,6 +77,37 @@ current readiness deliberately prevents it from publishing an incomplete app.
 
 Primary instructions: [EAS environment usage](https://docs.expo.dev/eas/environment-variables/usage/).
 
+## Backend Rollout Identity
+
+The Dokploy workflow previously verified health/schema and readiness without
+checking the intended source revision. A healthy previous API could therefore
+look like a successful update. It now selects the producing workflow's full
+`head_sha` (or an explicitly selected full commit for a manual run), validates
+the HTTPS endpoints before redeploying, serializes production rollouts and bounds
+network calls. Its read-only verifier checks production environment and exact
+revision in both `/version` and `/health/readiness`, the live schema, and strict
+boolean capability values. HTML, redirects, cross-origin schema checks, missing
+capabilities and string `"true"` are rejected. It does not inspect worker image
+digests or replace the protected Oracle rehearsal/promotion procedures.
+
+Regression checks: 15 new Python verifier tests and four workflow tests passed;
+all 36 deployment-helper tests passed. A read-only check against the actual
+`200d60599c92c800ab29bba6eb8b4a4a1b7cfdf6` production API reached readiness and
+correctly failed on checkout, refunds, bank payouts, video and instant dispatch.
+No feature flag, production container or phone build was changed by this check.
+
+```powershell
+python deployment/verify_backend_release.py --health-url https://papzii-api.129.151.188.15.nip.io/health --revision 200d60599c92c800ab29bba6eb8b4a4a1b7cfdf6 --attempts 1
+```
+
+Expected current result: exit 1, stage `readiness`, five capability blockers.
+The main CI and API/worker image publication for operational commit `7827cfab`
+completed successfully. GitHub/Dokploy rollout secrets remain unconfigured;
+image publication must not be reported as an Oracle rollout. The live API and
+delivered iOS 41 / Android code 4 remain the matching `200d605` testing candidate.
+
+Primary instructions: [GitHub workflow-run events](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_run).
+
 ## Functional And Apple Gates
 
 1. Real checkout/refund/creator settlement with authorized provider accounts and

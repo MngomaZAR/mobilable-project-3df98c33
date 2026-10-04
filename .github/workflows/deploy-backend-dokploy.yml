@@ -5,7 +5,16 @@ on:
     workflows: ["Build Backend Images"]
     types: [completed]
     branches: ["main"]
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      revision:
+        description: Full source commit expected on the production API (defaults to the selected ref)
+        type: string
+        required: false
+
+concurrency:
+  group: dokploy-production
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -15,7 +24,9 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     environment: production
+    timeout-minutes: 15
     env:
+      EXPECTED_REVISION: ${{ github.event.workflow_run.head_sha || inputs.revision || github.sha }}
       DOKPLOY_URL: ${{ secrets.DOKPLOY_URL }}
       DOKPLOY_API_KEY: ${{ secrets.DOKPLOY_API_KEY }}
       DOKPLOY_COMPOSE_ID: ${{ secrets.DOKPLOY_COMPOSE_ID }}
@@ -47,61 +58,37 @@ jobs:
 
           echo "configured=true" >> "$GITHUB_OUTPUT"
 
+      - uses: actions/checkout@v4
+        if: steps.dokploy_config.outputs.configured == 'true'
+      - uses: actions/setup-python@v5
+        if: steps.dokploy_config.outputs.configured == 'true'
+        with:
+          python-version: '3.12'
+      - name: Validate intended production revision and endpoint configuration
+        if: steps.dokploy_config.outputs.configured == 'true'
+        run: >-
+          python deployment/verify_backend_release.py
+          --health-url "$DOKPLOY_API_HEALTH_URL"
+          --contract-url "$DOKPLOY_API_CONTRACT_URL"
+          --revision "$EXPECTED_REVISION" --validate-only
+
       - name: Trigger Dokploy compose redeploy
         if: steps.dokploy_config.outputs.configured == 'true'
         shell: bash
         run: |
           base="${DOKPLOY_URL%/}"
-          curl --fail-with-body --show-error --silent \
+          curl --fail --show-error --silent --connect-timeout 10 --max-time 30 \
             --request POST "$base/api/compose.redeploy" \
             --header "x-api-key: $DOKPLOY_API_KEY" \
             --header "Content-Type: application/json" \
-            --data "{\"composeId\":\"$DOKPLOY_COMPOSE_ID\"}"
+            --data "{\"composeId\":\"$DOKPLOY_COMPOSE_ID\"}" > /dev/null
 
-      - name: Smoke API health
+      - name: Verify exact serving revision, schema and public capabilities
         if: steps.dokploy_config.outputs.configured == 'true'
         shell: bash
         run: |
-          for attempt in {1..18}; do
-            if curl --fail --show-error --silent "$DOKPLOY_API_HEALTH_URL" | grep -q '"status"[[:space:]]*:[[:space:]]*"ok"'; then
-              echo "API health check passed"
-              exit 0
-            fi
-            sleep 10
-          done
-          echo "::error::API health check did not return {\"status\":\"ok\"}"
-          exit 1
-
-      - name: Smoke API contract
-        if: steps.dokploy_config.outputs.configured == 'true'
-        shell: bash
-        run: |
-          contract_url="${DOKPLOY_API_CONTRACT_URL:-${DOKPLOY_API_HEALTH_URL%/health}/health/contract}"
-          for attempt in {1..18}; do
-            body="$(curl --show-error --silent "$contract_url" || true)"
-            if echo "$body" | grep -q '"ok"[[:space:]]*:[[:space:]]*true'; then
-              echo "API contract check passed"
-              exit 0
-            fi
-            echo "Contract check attempt $attempt failed: ${body:0:600}"
-            sleep 10
-          done
-          echo "::error::API contract check did not return {\"ok\":true}"
-          exit 1
-
-      - name: Verify public capabilities before reporting a release
-        if: steps.dokploy_config.outputs.configured == 'true'
-        shell: bash
-        run: |
-          readiness_url="${DOKPLOY_API_HEALTH_URL%/health}/health/readiness"
-          curl --fail --show-error --silent "$readiness_url" > "$RUNNER_TEMP/readiness.json"
-          python3 - "$RUNNER_TEMP/readiness.json" <<'PY'
-          import json
-          import sys
-          with open(sys.argv[1], encoding="utf-8") as source:
-              result = json.load(source)
-          if result.get("required_capabilities_available") is not True:
-              print("::error::Backend is not public-release ready: " + ", ".join(result.get("blockers", [])))
-              raise SystemExit(1)
-          PY
-          echo "Public backend capabilities passed. Store/device/settlement acceptance remains separate." >> "$GITHUB_STEP_SUMMARY"
+          python deployment/verify_backend_release.py \
+            --health-url "$DOKPLOY_API_HEALTH_URL" \
+            --contract-url "$DOKPLOY_API_CONTRACT_URL" \
+            --revision "$EXPECTED_REVISION"
+          echo "Exact API revision, schema and public capabilities passed. Worker/device/settlement/store acceptance remains separate." >> "$GITHUB_STEP_SUMMARY"

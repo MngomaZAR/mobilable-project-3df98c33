@@ -1,8 +1,21 @@
 // FIX: mapPostRow lives in mappings.ts, not feedMappings (file doesn't exist)
 // FIX: Photographer uses avatar_url not avatar
-import { mapModelRow, mapPhotographerRow, mapSupabaseUser, mapPostRow } from '../src/utils/mappings';
+import { mapBookingRow, mapModelRow, mapPhotographerRow, mapSupabaseUser, mapPostRow } from '../src/utils/mappings';
 
 describe('mapping helpers', () => {
+  test('booking mapping preserves the chosen UTC shoot slot, not just the calendar date', () => {
+    const row = { id: 'booking', booking_date: '2026-10-14', start_datetime: '2026-10-14T14:00:00Z', end_datetime: '2026-10-14T15:00:00Z', package_id: 'standard', price_total: '1400' };
+    const result = mapBookingRow(row);
+    expect(result.start_datetime).toBe(row.start_datetime);
+    expect(result.end_datetime).toBe(row.end_datetime);
+    expect(result.duration_hours).toBe(1);
+    expect(result.package_id).toBe('standard');
+    expect(result.total_amount).toBe(1400);
+  });
+
+  test('booking mapping does not replace an explicit zero with a legacy price', () => {
+    expect(mapBookingRow({ id: 'booking', total_amount: 0, price_total: 900 }).total_amount).toBe(0);
+  });
   test('mapPhotographerRow maps DB row to Photographer', () => {
     const row: any = {
       id: 'p1',

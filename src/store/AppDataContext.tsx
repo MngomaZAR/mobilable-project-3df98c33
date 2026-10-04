@@ -17,7 +17,7 @@ import { AppState, AppUser, Booking, BookingStatus, Comment, ConversationSummary
 import { uid } from '../utils/id';
 import { formatAuthError, formatErrorMessage, logError } from '../utils/errors';
 import { PLACEHOLDER_IMAGE } from '../utils/constants';
-import { mapModelRow, mapPhotographerRow, mapPostRow } from '../utils/mappings';
+import { mapBookingRow, mapModelRow, mapPhotographerRow, mapPostRow } from '../utils/mappings';
 import { mapProviderUser } from '../services/legacyMappers';
 import { startConversationViaEdge } from '../services/chatService';
 import {
@@ -187,6 +187,10 @@ const BOOKING_SELECT = `
   service_type,
   client_id, 
   booking_date, 
+  start_datetime,
+  end_datetime,
+  pricing_mode,
+  package_id,
   package_type, 
   notes, 
   status, 
@@ -294,43 +298,6 @@ const PHOTOGRAPHER_SELECT = `
   review_count,
   total_bookings
 `;
-
-const mapBookingRow = (row: any): Booking => ({
-  id: row.id,
-  photographer_id: row.photographer_id,
-  model_id: row.model_id ?? null,
-  service_type: row.service_type ?? (row.model_id ? 'modeling' : 'photography'),
-  client_id: row.client_id,
-  booking_date: row.booking_date ?? '',
-  package_type: row.package_type ?? 'Photography booking',
-  notes: row.notes ?? '',
-  status: (row.status ?? 'pending') as BookingStatus,
-  payment_status: row.payment_status,
-  created_at: row.created_at ?? new Date().toISOString(),
-  user_latitude: row.user_latitude ?? null,
-  user_longitude: row.user_longitude ?? null,
-  total_amount: Number(row.total_amount || row.price_total || 0),
-  commission_amount: Number(row.commission_amount || 0),
-  payout_amount: Number(row.photographer_payout || 0),
-  fanout_count: row.fanout_count ?? 1,
-  intensity_level: row.intensity_level ?? 1,
-  quote_token: row.quote_token ?? null,
-  assignment_state: row.assignment_state ?? 'queued',
-  eta_confidence: row.eta_confidence ?? null,
-  dispatch_request_id: row.dispatch_request_id ?? null,
-  photographer: row.photographer ? {
-    id: row.photographer.id,
-    name: row.photographer.full_name,
-    avatar_url: row.photographer.avatar_url,
-    city: row.photographer.city
-  } : undefined,
-  client: row.client ? {
-    id: row.client.id,
-    name: row.client.full_name,
-    avatar_url: row.client.avatar_url,
-    city: row.client.city
-  } : undefined
-});
 
 // REDUCER
 

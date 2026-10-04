@@ -45,10 +45,10 @@ export type RootStackParamList = {
   PaidVideoCall: { creatorId?: string; role?: 'creator' | 'viewer'; testRoom?: boolean } | undefined;
   Notifications: undefined;
   PaymentHistory: undefined;
-  Support: undefined;
+  Support: { bookingId?: string; category?: 'general' | 'billing' | 'safety' | 'technical' | 'account'; subject?: string } | undefined;
   EarningsDashboard: undefined;
   CreatorSubscriptions: { creatorId: string };
-  Reviews: { photographerId: string };
+  Reviews: { photographerId: string; bookingId?: string };
   MediaLibrary: { creatorId: string; title?: string };
   AdminModeration: undefined;
   Availability: undefined;

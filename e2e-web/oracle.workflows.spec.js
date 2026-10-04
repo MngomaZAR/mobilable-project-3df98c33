@@ -149,7 +149,7 @@ test('client submits a server-priced scheduled booking and provider accepts with
     await login(providerPage, email('photographer'));
     await providerPage.getByRole('tab', { name: /Dashboard/ }).click();
     const accepting = providerPage.waitForResponse(response => response.url() === `${API}/bookings/${booking.id}` && response.request().method() === 'PATCH');
-    const dateLabel = await providerPage.evaluate(start => new Date(start).toLocaleString('en-ZA', { dateStyle: 'medium', timeStyle: 'short' }), booking.booking_date || booking.start_datetime);
+    const dateLabel = await providerPage.evaluate(start => `${new Intl.DateTimeFormat('en-ZA', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Johannesburg' }).format(new Date(start))} SAST`, booking.start_datetime);
     const card = providerPage.getByText(dateLabel, { exact: true }).filter({ visible: true }).locator('xpath=ancestor::div[.//*[text()="Accept"]][1]');
     await card.getByText('Accept', { exact: true }).click();
     expect((await accepting).ok()).toBe(true);
@@ -159,6 +159,43 @@ test('client submits a server-priced scheduled booking and provider accepts with
     await expect(providerPage.getByText('Awaiting Payment', { exact: true }).first()).toBeVisible();
     await expect(providerPage.getByText('Route to client', { exact: false })).toHaveCount(0);
     await providerPage.screenshot({ path: testInfo.outputPath('accepted-awaiting-payment.png'), fullPage: true });
+    await providerPage.goto(`/booking/${booking.id}`);
+    await expect(providerPage.getByRole('button', { name: 'Open chat', exact: true })).toBeVisible({ timeout: 30000 });
+    const shootLabel = dateLabel;
+    await expect(providerPage.getByText(shootLabel, { exact: true })).toBeVisible();
+    await expect(providerPage.getByRole('button', { name: 'Track on map', exact: true })).toBeDisabled();
+    await providerPage.getByRole('button', { name: 'Open chat', exact: true }).click();
+    await expect(providerPage).toHaveURL(/\/chat\/[^/?]+/);
+    const conversationId = new URL(providerPage.url()).pathname.split('/chat/')[1];
+    const members = await rows(request, provider, 'conversation_participants', [{ op: 'eq', column: 'conversation_id', value: conversationId }]);
+    expect(members.map(member => member.user_id).sort()).toEqual([client.id, provider.id].sort());
+    await providerPage.goto(`/booking/${booking.id}`);
+    await expect(providerPage.getByRole('button', { name: 'Booking support', exact: true })).toBeVisible({ timeout: 30000 });
+    for (const viewport of [{ width: 390, height: 844 }, { width: 1440, height: 900 }]) {
+      await providerPage.setViewportSize(viewport);
+      await expect(providerPage.getByText(`Booking reference: ${booking.id}`, { exact: true })).toBeVisible();
+      await providerPage.screenshot({ path: testInfo.outputPath(`booking-detail-${viewport.width}.png`), fullPage: true });
+      expect(await providerPage.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    }
+    await providerPage.setViewportSize({ width: 390, height: 844 });
+    await providerPage.getByRole('button', { name: 'Booking support', exact: true }).click();
+    await providerPage.getByLabel('Support description', { exact: true }).fill('Synthetic QA booking payment investigation');
+    const [submittedTicket] = await Promise.all([
+      providerPage.waitForResponse(response => response.url() === `${API}/data/support_tickets` && response.request().postDataJSON()?.action === 'insert'),
+      providerPage.getByRole('button', { name: 'Submit ticket', exact: true }).click(),
+    ]);
+    expect(submittedTicket.ok()).toBe(true);
+    await expect(providerPage.getByText(/Ticket submitted\. Reference:/)).toBeVisible();
+    const tickets = await rows(request, provider, 'support_tickets');
+    expect(tickets.some(ticket => ticket.category === 'billing' && ticket.description.includes(`Booking reference: ${booking.id}`))).toBe(true);
+    await providerPage.goto(`/booking/${booking.id}`);
+    const [cancelledByProvider] = await Promise.all([
+      providerPage.waitForResponse(response => response.url() === `${API}/bookings/${booking.id}` && response.request().method() === 'PATCH'),
+      providerPage.getByRole('button', { name: 'Cancel booking', exact: true }).click(),
+    ]);
+    expect(cancelledByProvider.ok()).toBe(true);
+    expect((await cancelledByProvider.json()).status).toBe('cancelled');
+    await expect(providerPage.getByText('Your booking has been cancelled.', { exact: true })).toBeVisible();
   } finally {
     await providerContext.close();
     if (booking) {
@@ -192,13 +229,14 @@ test('synthetic provider uploads KYC and submits; admin document and identity de
   for (const docType of ['id_book', 'selfie']) {
     const choosing = page.waitForEvent('filechooser');
     const uploading = page.waitForResponse(response => response.url() === `${API}/kyc/documents` && response.request().postDataJSON()?.doc_type === docType);
-    await page.getByText('Upload', { exact: true }).first().click();
+    await page.getByRole('button', { name: `Upload ${docType === 'id_book' ? 'SA ID / Passport' : 'Selfie with ID'}`, exact: true }).click();
     await (await choosing).setFiles({ name: `qa-${docType}.png`, mimeType: 'image/png', buffer: image });
     const uploaded = await uploading;
     expect(uploaded.ok()).toBe(true);
   }
   const submitting = page.waitForResponse(response => response.url() === `${API}/kyc/submit`);
-  await page.getByText('Submit for Review', { exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Submit for Review', exact: true })).toBeEnabled();
+  await page.getByRole('button', { name: 'Submit for Review', exact: true }).click();
   expect((await submitting).ok()).toBe(true);
   const admin = await actor(request, 'admin');
   const documents = await rows(request, admin, 'kyc_documents', [{ op: 'eq', column: 'user_id', value: provider.id }]);

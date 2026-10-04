@@ -1,417 +1,197 @@
-import React, { useMemo, useState } from 'react';
-import { Alert, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Alert, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from '../navigation/types';
 import { useAppData } from '../store/AppDataContext';
 import { useTheme } from '../store/ThemeContext';
-import { BookingStatus } from '../types';
-import { Ionicons } from '@expo/vector-icons';
-import HowItWorksCard from '../components/HowItWorksCard';
+import { canTrackBooking, getBookingChatTarget, getBookingProviderId, isReviewableBooking } from '../utils/bookingWorkflow';
+import { fetchBookingById } from '../services/bookingService';
+import { Booking } from '../types';
+import { formatBookingStart } from '../utils/bookingTime';
 
 type Route = RouteProp<RootStackParamList, 'BookingDetail'>;
 type Navigation = StackNavigationProp<RootStackParamList, 'BookingDetail'>;
 
-const steps: BookingStatus[] = ['pending', 'accepted', 'completed', 'reviewed'];
-
-// Map DB-only statuses to the nearest display step
-const normaliseForStepper = (status: BookingStatus): BookingStatus => {
-  if (status === 'paid_out') return 'completed';
-  if (status === 'in_progress') return 'accepted';
-  return status;
-};
-
-const bookingDateFormatter = new Intl.DateTimeFormat('en-ZA', {
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-});
-
-const toStepLabel = (step: BookingStatus) =>
-  step
-    .split('_')
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
+const moneyFormatter = new Intl.NumberFormat('en-ZA', { style: 'currency', currency: 'ZAR' });
 
 const BookingDetailScreen: React.FC = () => {
   const { params } = useRoute<Route>();
   const navigation = useNavigation<Navigation>();
   const insets = useSafeAreaInsets();
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const { state, startConversationWithUser, updateBookingStatus } = useAppData();
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
-
-  const booking = useMemo(
-    () => state.bookings.find((item) => item.id === params.bookingId),
-    [params.bookingId, state.bookings]
-  );
-  const photographer = useMemo(
-    () => state.photographers.find((p) => p.id === booking?.photographer_id),
-    [booking?.photographer_id, state.photographers]
-  );
-
-  const model = useMemo(
-    () => state.models.find((m) => m.id === booking?.model_id),
-    [booking?.model_id, state.models]
-  );
-  
-  const talentName = useMemo(() => {
-    if (model) return model.name;
-    if (photographer) return photographer.name;
-    return 'your talent';
-  }, [model, photographer]);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const cachedBooking = useMemo(() => state.bookings.find(item => item.id === params.bookingId), [params.bookingId, state.bookings]);
+  const [fetchedBooking, setFetchedBooking] = useState<Booking | null>(null);
+  const [loadingBooking, setLoadingBooking] = useState(!cachedBooking);
+  const [bookingError, setBookingError] = useState<string | null>(null);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const viewerId = state.currentUser?.id;
+  useEffect(() => {
+    let active = true;
+    setFetchedBooking(null);
+    setBookingError(null);
+    if (cachedBooking || !viewerId) { setLoadingBooking(false); return; }
+    setLoadingBooking(true);
+    fetchBookingById(params.bookingId)
+      .then(saved => { if (active) setFetchedBooking(saved); })
+      .catch(error => { if (active) setBookingError(error instanceof Error ? error.message : 'Could not load this booking.'); })
+      .finally(() => { if (active) setLoadingBooking(false); });
+    return () => { active = false; };
+  }, [cachedBooking, viewerId, params.bookingId, loadAttempt]);
+  const booking = cachedBooking || fetchedBooking;
 
   if (!booking) {
     return (
-      <View style={[styles.centered, { backgroundColor: colors.bg }]}>
-        <Text style={[styles.muted, { color: colors.textSecondary }]}>We could not find that booking.</Text>
+      <View style={[styles.empty, { backgroundColor: colors.bg }]}>
+        {loadingBooking ? <ActivityIndicator accessibilityLabel="Loading booking" color={colors.accent} /> : <Text style={{ color: colors.text }}>{bookingError || (viewerId ? 'This booking is unavailable or you do not have access.' : 'Sign in to view this booking.')}</Text>}
+        {bookingError && <TouchableOpacity accessibilityRole="button" accessibilityLabel="Retry booking" style={styles.action} onPress={() => setLoadAttempt(attempt => attempt + 1)}><Text style={{ color: colors.accent }}>Retry</Text></TouchableOpacity>}
+        <TouchableOpacity accessibilityRole="button" style={styles.action} onPress={() => navigation.navigate('Root', { screen: 'Bookings' })}>
+          <Text style={{ color: colors.accent }}>Back to bookings</Text>
+        </TouchableOpacity>
       </View>
     );
   }
 
-  const currentIndex = steps.indexOf(normaliseForStepper(booking.status));
+  const providerId = getBookingProviderId(booking);
+  const provider = state.models.find(item => item.id === providerId) || state.photographers.find(item => item.id === providerId);
+  const providerProfile = state.profiles.find(item => item.id === providerId);
+  const talentName = provider?.name || providerProfile?.full_name || booking.photographer?.name || 'Creator';
+  const isClient = booking.client_id === viewerId;
+  const chatTarget = getBookingChatTarget(booking, viewerId);
   const requiresPayment = booking.status === 'accepted' && booking.payment_status !== 'paid';
-  const canPay = requiresPayment && booking.client_id === state.currentUser?.id;
+  const canPay = requiresPayment && isClient;
+  const canCancel = !!chatTarget && (booking.status === 'pending' || booking.status === 'accepted');
+  const busy = loadingAction !== null;
+  const dateLabel = formatBookingStart(booking);
+  const progress = [
+    { label: 'Request sent', done: true },
+    { label: 'Creator accepted', done: ['accepted', 'in_progress', 'completed', 'reviewed', 'paid_out'].includes(booking.status) },
+    { label: 'Payment confirmed', done: booking.payment_status === 'paid' },
+    { label: 'Shoot completed', done: ['completed', 'reviewed', 'paid_out'].includes(booking.status) },
+  ];
+  const statusLabel = booking.status === 'accepted' && requiresPayment ? 'Accepted, awaiting payment' : booking.status.replace(/_/g, ' ');
 
-  // Chat with the most relevant person: model > photographer > general chat
   const openChatThread = async () => {
-    const chatTarget = model || photographer;
-    if (!chatTarget) {
-      navigation.navigate('Root', { screen: 'Chat' });
+    if (!chatTarget || busy) return;
+    const title = isClient ? talentName : booking.client?.name || 'Client';
+    setLoadingAction('chat');
+    setActionNotice(null);
+    try {
+      const conversation = await startConversationWithUser(chatTarget, title);
+      navigation.navigate('ChatThread', { conversationId: conversation.id, title: conversation.title });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Please retry.';
+      setActionNotice(message);
+      Alert.alert('Chat unavailable', message);
+    } finally {
+      setLoadingAction(null);
+    }
+  };
+
+  const openSupport = () => navigation.navigate('Support', { bookingId: booking.id, category: 'billing', subject: 'Booking issue' });
+  const cancelBooking = async () => {
+    if (busy) return;
+    setLoadingAction('cancel');
+    setActionNotice(null);
+    try {
+      const saved = await updateBookingStatus(booking.id, 'cancelled');
+      if (!saved || saved.status !== 'cancelled') throw new Error('Cancellation was not confirmed. Please refresh and retry.');
+      const message = booking.payment_status === 'paid' ? 'Your payment record is unchanged. Contact support to request a refund.' : 'Your booking has been cancelled.';
+      setFetchedBooking(saved);
+      setActionNotice(message);
+      Alert.alert('Booking cancelled', message);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Please retry.';
+      setActionNotice(message);
+      Alert.alert('Cancellation failed', message);
+    } finally {
+      setLoadingAction(null);
+    }
+  };
+  const handleCancel = () => {
+    if (busy) return;
+    if (Platform.OS === 'web') {
+      if (globalThis.confirm('Cancel booking? Cancellation does not confirm or issue a refund.')) void cancelBooking();
       return;
     }
-
-    try {
-      const convo = await startConversationWithUser(chatTarget.id, chatTarget.name);
-      navigation.navigate('ChatThread', { conversationId: convo.id, title: convo.title });
-    } catch (_err) {
-      navigation.navigate('Root', { screen: 'Chat' });
-    }
-  };
-
-  const handleCancel = () => {
-    Alert.alert(
-      'Cancel Booking',
-      'Are you sure you want to cancel this booking? Please review the cancellation policy.',
-      [
-        { text: 'Nevermind', style: 'cancel' },
-        { 
-          text: 'Confirm Cancel', 
-          style: 'destructive',
-          onPress: async () => {
-            setLoadingAction('cancel');
-            try {
-               await updateBookingStatus(booking.id, 'cancelled');
-               Alert.alert('Booking Cancelled', 'Your booking has been cancelled and any applicable refunds are being processed.');
-            } catch (e: any) {
-               Alert.alert('Error', e.message || 'Could not cancel booking.');
-            } finally {
-               setLoadingAction(null);
-            }
-          }
-        }
-      ]
-    );
-  };
-
-  const handleReschedule = () => {
-    Alert.alert('Reschedule Request', 'Please send a message to the talent to coordinate a new time, then they will update the booking.');
-  };
-
-  const handleDispute = () => {
-    Alert.alert('Open Dispute', 'A support specialist will join this conversation shortly.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Open Dispute', style: 'destructive' }
+    Alert.alert('Cancel booking?', 'Cancellation does not confirm or issue a refund.', [
+      { text: 'Keep booking', style: 'cancel' },
+      { text: 'Cancel booking', style: 'destructive', onPress: cancelBooking },
     ]);
   };
 
-  const handleBookAgain = () => {
-    if (photographer) {
-       navigation.navigate('BookingForm', { photographerId: photographer.id, serviceType: 'photography' });
-    } else if (model) {
-       navigation.navigate('BookingForm', { modelId: model.id, serviceType: 'modeling' });
-    }
-  };
-
+  const action = (label: string, icon: React.ComponentProps<typeof Ionicons>['name'], onPress: () => void, disabled = false, destructive = false) => (
+    <TouchableOpacity accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled: disabled || busy }}
+      disabled={disabled || busy} onPress={onPress}
+      style={[styles.action, { borderColor: colors.border, opacity: disabled || busy ? 0.45 : 1 }]}>
+      <Ionicons name={icon} size={20} color={destructive ? colors.destructive : colors.text} />
+      <Text style={[styles.actionLabel, { color: destructive ? colors.destructive : colors.text }]}>{label}</Text>
+      <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+    </TouchableOpacity>
+  );
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      <ScrollView contentContainerStyle={[styles.container, { paddingTop: Math.max(16, insets.top + 8) }]}>
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
-          </TouchableOpacity>
-          <Text style={[styles.title, { color: colors.text }]}>{booking.package_type}</Text>
-        </View>
-        
-        <Text style={[styles.meta, { color: colors.textSecondary }]}>With {talentName}</Text>
-        <Text style={[styles.meta, { color: colors.textSecondary }]}>
-          Date: {bookingDateFormatter.format(new Date(booking.booking_date))}
-        </Text>
-        
-        {booking.notes ? (
-          <View style={[styles.notes, { backgroundColor: isDark ? 'rgba(15,23,42,0.82)' : 'rgba(255,255,255,0.84)', borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(148,163,184,0.18)' }]}>
-            <Text style={{ color: colors.text }}>{booking.notes}</Text>
-          </View>
-        ) : null}
-
-        <View style={[styles.timeline, { backgroundColor: isDark ? 'rgba(15,23,42,0.82)' : 'rgba(255,255,255,0.84)', borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(148,163,184,0.18)' }]}>
-          {steps.map((step, index) => {
-            const active = index <= currentIndex;
-            return (
-              <View key={step} style={styles.stepRow}>
-                <View style={[styles.stepDot, { backgroundColor: colors.border }, active && [styles.stepDotActive, { backgroundColor: colors.accent }]]} />
-                <Text style={[styles.stepLabel, { color: colors.textMuted }, active && [styles.stepLabelActive, { color: colors.text }]]}>
-                  {toStepLabel(step)}
-                </Text>
-              </View>
-            );
-          })}
-        </View>
-
-        <View style={[styles.noticeCard, { backgroundColor: isDark ? 'rgba(30,41,59,0.82)' : 'rgba(239,246,255,0.86)', borderColor: isDark ? 'rgba(148,163,184,0.18)' : 'rgba(191,219,254,0.8)' }]}>
-          <Text style={[styles.noticeTitle, { color: isDark ? '#93c5fd' : '#1e3a8a' }]}>Status updates</Text>
-          <Text style={[styles.noticeText, { color: isDark ? '#cbd5e1' : '#1e40af' }]}>
-            Booking progress updates automatically after secure confirmation from payments and operations.
-          </Text>
-        </View>
-        {requiresPayment ? (
-          <View style={[styles.noticeCard, { backgroundColor: isDark ? 'rgba(47,27,27,0.82)' : 'rgba(255,247,237,0.88)', borderColor: isDark ? 'rgba(127,29,29,0.58)' : 'rgba(254,215,170,0.9)' }]}>
-            <Text style={[styles.noticeTitle, { color: isDark ? '#fca5a5' : '#c2410c' }]}>Payment required</Text>
-            <Text style={[styles.noticeText, { color: isDark ? '#fecaca' : '#9a3412' }]}>
-              Your creator accepted the request. Confirm payment for your scheduled shoot.
-            </Text>
-          </View>
-        ) : null}
-
-        <TouchableOpacity
-          style={[styles.secondary, { backgroundColor: isDark ? 'rgba(15,23,42,0.84)' : 'rgba(255,255,255,0.82)', borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(148,163,184,0.18)', borderWidth: 1 }]}
-          onPress={openChatThread}
-        >
-          <Text style={[styles.secondaryText, { color: colors.text }]}>Open chat</Text>
+    <ScrollView style={{ backgroundColor: colors.bg }} contentContainerStyle={[styles.container, { paddingTop: Math.max(16, insets.top + 8), paddingBottom: insets.bottom + 32 }]}>
+      <View style={styles.header}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Back" onPress={() => navigation.goBack()} style={styles.back}>
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
-        
-        <View style={styles.row}>
-          <TouchableOpacity
-            style={[styles.secondary, styles.rowButton, { backgroundColor: isDark ? 'rgba(15,23,42,0.84)' : 'rgba(255,255,255,0.82)', borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(148,163,184,0.18)', borderWidth: 1 }]}
-            onPress={() => navigation.navigate('BookingTracking', { bookingId: booking.id })}
-            disabled={requiresPayment}
-          >
-            <Text style={[styles.secondaryText, { color: requiresPayment ? colors.textMuted : colors.text }]}>Track on map</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.secondary, styles.rowButton, styles.rowButtonLast, { backgroundColor: colors.accent }]}
-            onPress={() => navigation.navigate('Payment', { bookingId: booking.id })}
-            disabled={!canPay}
-          >
-            <Text style={[styles.secondaryText, { color: isDark ? colors.bg : '#fff' }]}>{booking.payment_status === 'paid' ? 'Paid' : booking.status === 'pending' ? 'Awaiting acceptance' : 'Pay for shoot'}</Text>
-          </TouchableOpacity>
-        </View>
-
-        {(booking.status === 'completed' || booking.status === 'reviewed' || booking.status === 'paid_out') ? (
-           <TouchableOpacity
-             style={[styles.secondary, { backgroundColor: colors.accent, marginTop: 16, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: { width: 0, height: 6 } }]}
-             onPress={handleBookAgain}
-           >
-             <Text style={[styles.secondaryText, { color: isDark ? colors.bg : '#fff' }]}>Book Again</Text>
-           </TouchableOpacity>
-        ) : null}
-
-        {(booking.status === 'completed' || booking.status === 'paid_out') ? (
-            <TouchableOpacity
-              style={[styles.secondary, { backgroundColor: isDark ? 'rgba(15,23,42,0.84)' : 'rgba(255,255,255,0.82)', borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(148,163,184,0.18)', borderWidth: 1 }]}
-              onPress={() => {
-                const reviewTargetId = model?.id ?? photographer?.id;
-                if (!reviewTargetId) {
-                  Alert.alert('Review unavailable', 'We could not identify the service provider for this booking.');
-                  return;
-              }
-              navigation.navigate('Reviews', { photographerId: reviewTargetId });
-            }}
-          >
-            <Text style={[styles.secondaryText, { color: colors.text }]}>Leave a review</Text>
-          </TouchableOpacity>
-        ) : null}
-
-        {booking.status === 'pending' || booking.status === 'accepted' ? (
-           <>
-             <View style={styles.row}>
-             <TouchableOpacity
-                 style={[styles.secondary, styles.rowButton, { backgroundColor: isDark ? 'rgba(15,23,42,0.84)' : 'rgba(255,255,255,0.82)', borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(148,163,184,0.18)', borderWidth: 1 }]}
-                 onPress={handleReschedule}
-                 disabled={!!loadingAction}
-               >
-                 <Text style={[styles.secondaryText, { color: colors.text }]}>Reschedule</Text>
-               </TouchableOpacity>
-               <TouchableOpacity
-                 style={[styles.secondary, styles.rowButton, styles.rowButtonLast, { backgroundColor: isDark ? 'rgba(127,29,29,0.72)' : 'rgba(254,242,242,0.9)', borderColor: colors.destructive, borderWidth: 1 }]}
-                 onPress={handleCancel}
-                 disabled={!!loadingAction}
-               >
-                 <Text style={[styles.secondaryText, { color: colors.destructive }]}>
-                   {loadingAction === 'cancel' ? 'Cancelling...' : 'Cancel'}
-                 </Text>
-               </TouchableOpacity>
-             </View>
-           </>
-        ) : null}
-
-        {(booking.status === 'completed' || booking.status === 'paid_out') ? (
-           <TouchableOpacity
-             style={[styles.secondary, { backgroundColor: isDark ? 'rgba(15,23,42,0.84)' : 'rgba(255,255,255,0.82)', borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(148,163,184,0.18)', borderWidth: 1 }]}
-             onPress={handleDispute}
-             disabled={!!loadingAction}
-           >
-             <Text style={[styles.secondaryText, { color: colors.text }]}>Report Issue / Dispute</Text>
-           </TouchableOpacity>
-        ) : null}
-
-        <TouchableOpacity
-          style={[styles.secondary, { backgroundColor: isDark ? 'rgba(15,23,42,0.84)' : 'rgba(255,255,255,0.82)', borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(148,163,184,0.18)', borderWidth: 1 }]}
-          onPress={() => navigation.navigate('ModelRelease', { bookingId: booking.id })}
-        >
-          <Ionicons name="document-text-outline" size={18} color={colors.text} style={{ marginBottom: 4 }} />
-          <Text style={[styles.secondaryText, { color: colors.text }]}>Legal Documents & Contracts</Text>
-        </TouchableOpacity>
-
-        <View style={{ marginTop: 14 }}>
-          <HowItWorksCard
-            title="How Changes Work"
-            persistKey="booking-detail-how"
-            items={[
-              'Reschedule requests are coordinated in chat and reflected in booking updates.',
-              'Cancellation triggers policy-based refunds, then status syncs across both users.',
-              'Disputes create a support workflow with review logs and final resolution status.',
-              'Legal release and contract records stay attached to this booking timeline.',
-            ]}
-          />
-        </View>
-        <View style={[styles.policyCard, { backgroundColor: isDark ? 'rgba(15,23,42,0.82)' : 'rgba(255,255,255,0.84)', borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(148,163,184,0.18)' }]}>
-          <Text style={[styles.policyTitle, { color: colors.text }]}>Cancellation Policy</Text>
-          <Text style={[styles.policyText, { color: colors.textSecondary }]}>- Free cancellation for 48 hours after booking.</Text>
-          <Text style={[styles.policyText, { color: colors.textSecondary }]}>- Cancel before 7 days of the shoot for a 50% refund.</Text>
-          <Text style={[styles.policyText, { color: colors.textSecondary }]}>- No refunds within 7 days of the shoot date.</Text>
-        </View>
-      </ScrollView>
-    </View>
+        <Text style={[styles.title, { color: colors.text }]}>{booking.package_type || 'Booking'}</Text>
+      </View>
+      <Text style={[styles.provider, { color: colors.text }]}>{talentName}</Text>
+      <Text selectable style={[styles.meta, { color: colors.textSecondary }]}>{dateLabel}</Text>
+      <View style={[styles.summary, { borderColor: colors.border }]}>
+        <Text accessibilityLabel={'Booking status: ' + statusLabel} style={[styles.status, { color: colors.text }]}>{statusLabel}</Text>
+        <Text selectable style={[styles.amount, { color: colors.text }]}>{moneyFormatter.format(booking.total_amount)}</Text>
+      </View>
+      {booking.notes ? <Text selectable style={[styles.notes, { color: colors.textSecondary }]}>{booking.notes}</Text> : null}
+      <View style={[styles.timeline, { borderColor: colors.border }]}>
+        {progress.map(step => <View key={step.label} style={styles.step}>
+          <Ionicons name={step.done ? 'checkmark-circle' : 'ellipse-outline'} size={20} color={step.done ? colors.accent : colors.textMuted} />
+          <Text style={[styles.stepLabel, { color: step.done ? colors.text : colors.textSecondary }]}>{step.label}</Text>
+        </View>)}
+      </View>
+      {requiresPayment ? <Text style={[styles.notes, { color: colors.textSecondary }]}>Awaiting payment confirmation.</Text> : null}
+      {actionNotice && <Text accessibilityRole="alert" style={[styles.notes, { color: colors.text }]}>{actionNotice}</Text>}
+      {action(loadingAction === 'chat' ? 'Opening chat...' : 'Open chat', 'chatbubble-outline', openChatThread, !chatTarget)}
+      {action('Track on map', 'navigate-outline', () => navigation.navigate('BookingTracking', { bookingId: booking.id }), !canTrackBooking(booking))}
+      {canPay ? action('Pay for shoot', 'card-outline', () => navigation.navigate('Payment', { bookingId: booking.id })) : null}
+      {canCancel ? <>
+        {action('Discuss a new time', 'calendar-outline', openChatThread)}
+        {action(loadingAction === 'cancel' ? 'Cancelling...' : 'Cancel booking', 'close-circle-outline', handleCancel, false, true)}
+      </> : null}
+      {isReviewableBooking(booking, viewerId, providerId) ? action('Leave a review', 'star-outline', () => navigation.navigate('Reviews', { photographerId: providerId, bookingId: booking.id })) : null}
+      {isClient && ['completed', 'reviewed', 'paid_out'].includes(booking.status) ? action('Book again', 'refresh-outline', () => navigation.navigate('BookingForm', booking.model_id ? { modelId: providerId, serviceType: 'modeling' } : { photographerId: providerId, serviceType: 'photography' })) : null}
+      {action('Booking support', 'help-circle-outline', openSupport)}
+      {action('Documents and contracts', 'document-text-outline', () => navigation.navigate('ModelRelease', { bookingId: booking.id }))}
+      <Text selectable style={[styles.reference, { color: colors.textMuted }]}>Booking reference: {booking.id}</Text>
+    </ScrollView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    padding: 16,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  backButton: {
-    marginRight: 12,
-  },
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  muted: {
-    fontSize: 16,
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: '800',
-  },
-  meta: {
-    fontSize: 14,
-    marginTop: 4,
-  },
-  notes: {
-    padding: 12,
-    borderRadius: 12,
-    marginTop: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    overflow: 'hidden',
-  },
-  timeline: {
-    marginTop: 16,
-    borderRadius: 12,
-    padding: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    overflow: 'hidden',
-  },
-  stepRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  stepDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginRight: 10,
-  },
-  stepDotActive: {
-  },
-  stepLabel: {
-    textTransform: 'capitalize',
-    fontWeight: '600',
-  },
-  stepLabelActive: {
-  },
-  noticeCard: {
-    marginTop: 16,
-    borderRadius: 12,
-    padding: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    overflow: 'hidden',
-  },
-  noticeTitle: {
-    fontWeight: '700',
-  },
-  noticeText: {
-    marginTop: 4,
-  },
-  row: {
-    flexDirection: 'row',
-    marginTop: 10,
-  },
-  rowButton: {
-    flex: 1,
-    marginRight: 8,
-  },
-  rowButtonLast: {
-    marginRight: 0,
-  },
-  secondary: {
-    marginTop: 10,
-    padding: 14,
-    borderRadius: 14,
-    alignItems: 'center',
-    overflow: 'hidden',
-  },
-  secondaryText: {
-    fontWeight: '700',
-  },
-  policyCard: {
-    marginTop: 24,
-    marginBottom: 8,
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    overflow: 'hidden',
-  },
-  policyTitle: {
-    fontWeight: '700',
-    fontSize: 16,
-    marginBottom: 8,
-  },
-  policyText: {
-    fontSize: 13,
-    marginBottom: 4,
-    lineHeight: 18,
-  },
+  container: { paddingHorizontal: 20, width: '100%', maxWidth: 760, alignSelf: 'center' },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 },
+  back: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  title: { fontSize: 22, fontWeight: '700', flex: 1, minWidth: 0 },
+  provider: { fontSize: 18, fontWeight: '600' },
+  meta: { fontSize: 14, marginTop: 6 },
+  summary: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingVertical: 20, borderBottomWidth: StyleSheet.hairlineWidth },
+  status: { fontSize: 14, fontWeight: '600', textTransform: 'capitalize', flexShrink: 1 },
+  amount: { fontSize: 20, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  notes: { fontSize: 14, lineHeight: 21, marginTop: 16 },
+  timeline: { paddingVertical: 20, gap: 16, borderBottomWidth: StyleSheet.hairlineWidth },
+  step: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  stepLabel: { fontSize: 14, flex: 1 },
+  action: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
+  actionLabel: { flex: 1, fontSize: 15, fontWeight: '600' },
+  reference: { fontSize: 12, lineHeight: 18, marginTop: 24 },
+  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 16 },
 });
 
 export default BookingDetailScreen;

@@ -1,0 +1,147 @@
+{
+  "checkedAt": "2026-10-04T02:29:52Z",
+  "readOnly": true,
+  "appId": "6760396864",
+  "invitationsSent": false,
+  "groups": [
+    {
+      "name": "Team (Expo)",
+      "internal": true,
+      "testersStatus": 200,
+      "countInPage": 1,
+      "moreTesterPages": false,
+      "buildsStatus": 200,
+      "moreBuildPages": false,
+      "builds": [
+        {
+          "number": "38",
+          "expired": false,
+          "processingState": "VALID"
+        },
+        {
+          "number": "37",
+          "expired": true,
+          "processingState": "VALID"
+        },
+        {
+          "number": "36",
+          "expired": true,
+          "processingState": "VALID"
+        },
+        {
+          "number": "35",
+          "expired": true,
+          "processingState": "VALID"
+        },
+        {
+          "number": "33",
+          "expired": true,
+          "processingState": "VALID"
+        },
+        {
+          "number": "34",
+          "expired": true,
+          "processingState": "VALID"
+        },
+        {
+          "number": "32",
+          "expired": true,
+          "processingState": "VALID"
+        },
+        {
+          "number": "31",
+          "expired": true,
+          "processingState": "VALID"
+        },
+        {
+          "number": "30",
+          "expired": true,
+          "processingState": "VALID"
+        },
+        {
+          "number": "29",
+          "expired": true,
+          "processingState": "VALID"
+        },
+        {
+          "number": "28",
+          "expired": true,
+          "processingState": "VALID"
+        },
+        {
+          "number": "27",
+          "expired": true,
+          "processingState": "VALID"
+        },
+        {
+          "number": "26",
+          "expired": true,
+          "processingState": "VALID"
+        },
+        {
+          "number": "25",
+          "expired": true,
+          "processingState": "VALID"
+        },
+        {
+          "number": "24",
+          "expired": true,
+          "processingState": "VALID"
+        },
+        {
+          "number": "23",
+          "expired": true,
+          "processingState": "VALID"
+        },
+        {
+          "number": "22",
+          "expired": true,
+          "processingState": "VALID"
+        },
+        {
+          "number": "15",
+          "expired": true,
+          "processingState": "VALID"
+        },
+        {
+          "number": "14",
+          "expired": true,
+          "processingState": "VALID"
+        },
+        {
+          "number": "13",
+          "expired": true,
+          "processingState": "VALID"
+        },
+        {
+          "number": "12",
+          "expired": true,
+          "processingState": "VALID"
+        },
+        {
+          "number": "1",
+          "expired": true,
+          "processingState": "VALID"
+        }
+      ],
+      "jonesPresent": false
+    },
+    {
+      "name": "papzi",
+      "internal": false,
+      "testersStatus": 200,
+      "countInPage": 1,
+      "moreTesterPages": false,
+      "buildsStatus": 200,
+      "moreBuildPages": false,
+      "builds": [],
+      "jonesPresent": true
+    }
+  ],
+  "groupsStatus": 200,
+  "moreGroupPages": false,
+  "jonesLookup": {
+    "status": 200,
+    "count": 2
+  }
+}

@@ -25,6 +25,7 @@ import { isModelUser } from '../utils/userRole';
 import { summarizeRecordedEarnings } from '../utils/earningsSummary';
 import { environment } from '../config/environment';
 import { apiClient } from '../config/apiClient';
+import { formatBookingStart } from '../utils/bookingTime';
 import { getApiAccessToken } from '../config/apiSession';
 
 type Navigation = StackNavigationProp<RootStackParamList, 'Root'>;
@@ -418,9 +419,7 @@ const PhotographerDashboardScreen: React.FC = () => {
                 <View style={s.requestInfo}>
                   <Text style={s.requestPackage}>{booking.package_type ?? 'Photography'}</Text>
                   <Text style={s.requestDate}>
-                    {booking.booking_date
-                      ? new Date(booking.booking_date).toLocaleString('en-ZA', { dateStyle: 'medium', timeStyle: 'short' })
-                      : 'Date TBD'}
+                    {formatBookingStart(booking)}
                   </Text>
                   <Text style={s.requestAmount}>R{(booking.total_amount ?? 0).toLocaleString('en-ZA')}</Text>
                 </View>
@@ -457,9 +456,7 @@ const PhotographerDashboardScreen: React.FC = () => {
                 <View style={{ flex: 1 }}>
                   <Text style={s.requestPackage}>{booking.package_type ?? 'Session'}</Text>
                   <Text style={s.requestDate}>
-                    {booking.booking_date
-                      ? new Date(booking.booking_date).toLocaleString('en-ZA', { dateStyle: 'medium', timeStyle: 'short' })
-                      : 'Date TBD'}
+                    {formatBookingStart(booking)}
                   </Text>
                   {booking.payment_status !== 'paid' && <Text style={s.requestDate}>Awaiting Payment</Text>}
                 </View>

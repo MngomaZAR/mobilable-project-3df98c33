@@ -3,6 +3,13 @@ import { Booking, BookingStatus } from '../types';
 import { apiClient } from '../config/apiClient';
 import { getApiAccessToken } from '../config/apiSession';
 import { environment } from '../config/environment';
+import { mapBookingRow } from '../utils/mappings';
+
+export const fetchBookingById = async (bookingId: string): Promise<Booking | null> => {
+  const { data, error } = await backendDb.from('bookings').select('*').eq('id', bookingId).maybeSingle();
+  if (error) throw new Error(error.message || 'Could not load this booking.');
+  return data ? mapBookingRow(data) : null;
+};
 
 const BOOKING_WRITE_TIMEOUT_MS = 20000;
 

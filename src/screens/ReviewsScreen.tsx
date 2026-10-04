@@ -1,10 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   KeyboardAvoidingView,
   Platform,
-  SafeAreaView,
   StyleSheet,
   Text,
   TextInput,
@@ -12,12 +12,14 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { useTheme } from '../store/ThemeContext';
 import { useAppData } from '../store/AppDataContext';
 import { createReview, fetchReviewsForUser, ReviewRow } from '../services/reviewService';
 import { RootStackParamList } from '../navigation/types';
+import { isReviewableBooking } from '../utils/bookingWorkflow';
 
 type Route = RouteProp<RootStackParamList, 'Reviews'>;
 type Navigation = StackNavigationProp<RootStackParamList, 'Reviews'>;
@@ -34,16 +36,19 @@ const ReviewsScreen: React.FC = () => {
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  // We check if current user has any completed bookings with this photographer
-  const canReview = state.bookings.some(
-    (b) => b.photographer_id === photographerId && (b.status === 'completed' || b.status === 'paid_out')
-  );
+  const reviewBooking = state.bookings.find(booking => isReviewableBooking(booking, state.currentUser?.id, photographerId, params.bookingId));
+  const canReview = !!reviewBooking && !reviews.some(review => review.booking_id === reviewBooking.id && review.client_id === state.currentUser?.id);
 
   const loadReviews = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
     try {
       const data = await fetchReviewsForUser(photographerId);
       setReviews(data);
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : 'Reviews could not be loaded.');
     } finally {
       setLoading(false);
     }
@@ -55,12 +60,10 @@ const ReviewsScreen: React.FC = () => {
     if (!canReview) return;
     setSubmitting(true);
     try {
-      // Find the booking ID
-      const booking = state.bookings.find(b => b.photographer_id === photographerId && (b.status === 'completed' || b.status === 'paid_out'));
-      if (!booking) return;
+      if (!reviewBooking) return;
 
       const newReview = await createReview({
-        bookingId: booking.id,
+        bookingId: reviewBooking.id,
         photographerId,
         rating,
         comment: comment.trim(),
@@ -69,7 +72,7 @@ const ReviewsScreen: React.FC = () => {
       setComment('');
       setRating(5);
     } catch (err: any) {
-      alert(err.message || 'Failed to submit review');
+      Alert.alert('Review failed', err.message || 'Failed to submit review');
     } finally {
       setSubmitting(false);
     }
@@ -87,6 +90,13 @@ const ReviewsScreen: React.FC = () => {
 
         {loading ? (
           <View style={styles.centered}><ActivityIndicator color={colors.accent} /></View>
+        ) : loadError ? (
+          <View style={styles.centered}>
+            <Text selectable style={{ color: colors.text }}>{loadError}</Text>
+            <TouchableOpacity accessibilityRole="button" onPress={loadReviews} style={{ padding: 16 }}>
+              <Text style={{ color: colors.accent }}>Retry</Text>
+            </TouchableOpacity>
+          </View>
         ) : (
           <FlatList
             data={reviews}
@@ -103,6 +113,7 @@ const ReviewsScreen: React.FC = () => {
                   </Text>
                 </View>
                 {!!item.comment && <Text style={[styles.commentTxt, { color: colors.text }]}>{item.comment}</Text>}
+                {item.moderation_status === 'pending' ? <Text style={{ color: colors.textMuted }}>Pending approval</Text> : null}
               </View>
             )}
             ListEmptyComponent={<Text style={[styles.empty, { color: colors.textMuted }]}>No reviews yet.</Text>}

@@ -1,6 +1,51 @@
-import { AppUser, Model, Photographer, Post, ProfileSummary } from '../types';
+import { AppUser, Booking, BookingStatus, Model, Photographer, Post, ProfileSummary } from '../types';
 import { PLACEHOLDER_AVATAR, PLACEHOLDER_IMAGE } from './constants';
 import { resolveUserRole } from './userRole';
+
+const durationFromTimes = (start?: string, end?: string): number | null => {
+  if (!start || !end) return null;
+  const hours = (Date.parse(end) - Date.parse(start)) / 3600000;
+  return Number.isFinite(hours) && hours > 0 ? hours : null;
+};
+
+export const mapBookingRow = (row: any): Booking => ({
+  id: row.id,
+  photographer_id: row.photographer_id,
+  model_id: row.model_id ?? null,
+  service_type: row.service_type ?? (row.model_id ? 'modeling' : 'photography'),
+  client_id: row.client_id,
+  booking_date: row.booking_date ?? row.start_datetime ?? '',
+  start_datetime: row.start_datetime ?? undefined,
+  end_datetime: row.end_datetime ?? undefined,
+  duration_hours: row.duration_hours ?? durationFromTimes(row.start_datetime, row.end_datetime),
+  pricing_mode: row.pricing_mode ?? null,
+  package_id: row.package_id ?? undefined,
+  package_type: row.package_type ?? 'Photography booking',
+  notes: row.notes ?? '',
+  status: (row.status ?? 'pending') as BookingStatus,
+  payment_status: row.payment_status,
+  created_at: row.created_at ?? new Date().toISOString(),
+  user_latitude: row.user_latitude ?? null,
+  user_longitude: row.user_longitude ?? null,
+  total_amount: Number(row.total_amount ?? row.price_total ?? 0),
+  commission_amount: Number(row.commission_amount ?? 0),
+  payout_amount: Number(row.photographer_payout ?? row.payout_amount ?? 0),
+  currency: row.currency ?? 'ZAR',
+  fanout_count: row.fanout_count ?? 1,
+  intensity_level: row.intensity_level ?? 1,
+  quote_token: row.quote_token ?? null,
+  assignment_state: row.assignment_state ?? 'queued',
+  eta_confidence: row.eta_confidence ?? null,
+  dispatch_request_id: row.dispatch_request_id ?? null,
+  photographer: row.photographer ? {
+    id: row.photographer.id, name: row.photographer.full_name,
+    avatar_url: row.photographer.avatar_url, city: row.photographer.city,
+  } : undefined,
+  client: row.client ? {
+    id: row.client.id, name: row.client.full_name,
+    avatar_url: row.client.avatar_url, city: row.client.city,
+  } : undefined,
+});
 
 type ProfileRow = { 
   role?: AppUser['role']; 

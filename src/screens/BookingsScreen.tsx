@@ -9,17 +9,9 @@ import { RootStackParamList } from '../navigation/types';
 import { Booking } from '../types';
 import { Ionicons } from '@expo/vector-icons';
 import { PLACEHOLDER_AVATAR } from '../utils/constants';
+import { formatBookingStart } from '../utils/bookingTime';
 
 type Navigation = StackNavigationProp<RootStackParamList, 'BookingDetail'>;
-
-const bookingDateFormatter = new Intl.DateTimeFormat('en-US', {
-  day: 'numeric',
-  month: 'numeric',
-  year: 'numeric',
-  hour: 'numeric',
-  minute: '2-digit',
-  hour12: true,
-});
 
 const BookingsScreen: React.FC = () => {
   const { state } = useAppData();
@@ -38,12 +30,6 @@ const BookingsScreen: React.FC = () => {
     },
     [state.photographers, state.models]
   );
-
-  const formatDateTime = (value: string) => {
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return value;
-    return bookingDateFormatter.format(date).replace(',', ', ');
-  };
 
   const renderItem = ({ item }: { item: Booking }) => {
     const provider = item.photographer || providerById.get(item.photographer_id || item.model_id || '');
@@ -64,7 +50,7 @@ const BookingsScreen: React.FC = () => {
           
           <View style={styles.metaRow}>
             <Ionicons name="calendar-outline" size={14} color={colors.textSecondary} />
-            <Text style={[styles.metaText, { color: colors.textSecondary }]}>{formatDateTime(item.booking_date)}</Text>
+            <Text style={[styles.metaText, { color: colors.textSecondary }]}>{formatBookingStart(item)}</Text>
           </View>
 
           {provider ? (

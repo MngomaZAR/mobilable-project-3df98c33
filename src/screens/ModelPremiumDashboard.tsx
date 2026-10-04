@@ -20,6 +20,7 @@ import { PLACEHOLDER_AVATAR } from '../utils/constants';
 import { environment } from '../config/environment';
 import { areDigitalPurchasesAllowed } from '../config/commercePolicy';
 import { useTheme } from '../store/ThemeContext';
+import { formatBookingStart } from '../utils/bookingTime';
 import { summarizeRecordedEarnings } from '../utils/earningsSummary';
 import { apiClient } from '../config/apiClient';
 import { getApiAccessToken } from '../config/apiSession';
@@ -541,9 +542,7 @@ const ModelPremiumDashboard: React.FC = () => {
                 <View style={{ flex: 1 }}>
                   <Text style={s.pendingTitle}>{booking.package_type ?? 'Booking Request'}</Text>
                   <Text style={s.pendingMeta}>
-                    {booking.booking_date
-                      ? new Date(booking.booking_date).toLocaleDateString('en-ZA', { dateStyle: 'medium' })
-                      : 'Date TBD'}
+                    {formatBookingStart(booking)}
                   </Text>
                   <Text style={s.pendingMeta}>R{(booking.total_amount ?? 0).toLocaleString('en-ZA')}</Text>
                 </View>
@@ -674,9 +673,7 @@ const ModelPremiumDashboard: React.FC = () => {
                 <View style={{ flex: 1 }}>
                   <Text style={s.bookingTitle}>{booking.package_type ?? 'Booking'}</Text>
                   <Text style={s.bookingDate}>
-                    {booking.booking_date
-                      ? new Date(booking.booking_date).toLocaleDateString('en-ZA', { dateStyle: 'medium' })
-                      : 'Date TBD'}
+                    {formatBookingStart(booking)}
                   </Text>
                 </View>
                 <View style={[s.statusBadge, {

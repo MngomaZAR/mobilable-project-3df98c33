@@ -15,6 +15,15 @@ permissions:
   contents: read
 
 jobs:
+  deployment_safety:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify Oracle rehearsal and guarded cutover helpers
+        run: python -m unittest discover -s deployment/tests -v
   apple_store_history:
     if: github.event_name == 'workflow_dispatch' && inputs.audit_stores
     runs-on: ubuntu-latest

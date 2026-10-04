@@ -1,9 +1,8 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -12,7 +11,8 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { useTheme } from '../store/ThemeContext';
@@ -32,25 +32,38 @@ const CATEGORIES: { label: string; value: SupportTicketPayload['category']; icon
 const SupportScreen: React.FC = () => {
   const { colors } = useTheme();
   const navigation = useNavigation<Navigation>();
-  const [category, setCategory] = useState<SupportTicketPayload['category']>('general');
-  const [subject, setSubject] = useState('');
+  const { params } = useRoute<RouteProp<RootStackParamList, 'Support'>>();
+  const [category, setCategory] = useState<SupportTicketPayload['category']>(params?.category ?? 'general');
+  const [subject, setSubject] = useState(params?.subject ?? '');
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [ticketReference, setTicketReference] = useState<string | null>(null);
+  const pending = useRef(false);
 
   const handleSubmit = async () => {
+    if (pending.current || ticketReference) return;
     if (!subject.trim() || !description.trim()) {
+      setError('Please fill in both the subject and description.');
       Alert.alert('Missing fields', 'Please fill in both the subject and description.');
       return;
     }
+    pending.current = true;
     setSubmitting(true);
+    setError(null);
     try {
-      await submitSupportTicket({ subject: subject.trim(), category, description: description.trim() });
-      Alert.alert('Ticket submitted', 'Our support team will respond within 24 hours.', [
+      const details = params?.bookingId ? `Booking reference: ${params.bookingId}\n\n${description.trim()}` : description.trim();
+      const ticket = await submitSupportTicket({ subject: subject.trim(), category, description: details });
+      if (!ticket?.id) throw new Error('Support did not return a ticket reference. Please refresh before retrying.');
+      setTicketReference(ticket.id);
+      Alert.alert('Ticket submitted', `Reference: ${ticket.id}`, [
         { text: 'OK', onPress: () => navigation.goBack() },
       ]);
     } catch (e: any) {
+      setError(e.message || 'Failed to submit ticket. Please try again.');
       Alert.alert('Error', e.message || 'Failed to submit ticket. Please try again.');
     } finally {
+      pending.current = false;
       setSubmitting(false);
     }
   };
@@ -66,7 +79,8 @@ const SupportScreen: React.FC = () => {
           <Text style={[styles.title, { color: colors.text }]}>Contact Support</Text>
         </View>
 
-        <ScrollView contentContainerStyle={styles.content}>
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          {params?.bookingId ? <Text selectable style={{ color: colors.textSecondary }}>Booking reference: {params.bookingId}</Text> : null}
           {/* Category picker */}
           <Text style={[styles.label, { color: colors.text }]}>Category</Text>
           <View style={styles.categories}>
@@ -97,6 +111,7 @@ const SupportScreen: React.FC = () => {
             value={subject}
             onChangeText={setSubject}
             maxLength={100}
+            accessibilityLabel="Support subject"
           />
 
           {/* Description */}
@@ -111,20 +126,26 @@ const SupportScreen: React.FC = () => {
             numberOfLines={6}
             textAlignVertical="top"
             maxLength={2000}
+            accessibilityLabel="Support description"
           />
 
           {/* Submit */}
           <TouchableOpacity
-            style={[styles.submitBtn, { backgroundColor: colors.accent }, submitting && { opacity: 0.6 }]}
+            style={[styles.submitBtn, { backgroundColor: colors.accent }, (submitting || !!ticketReference) && { opacity: 0.6 }]}
             onPress={handleSubmit}
-            disabled={submitting}
+            disabled={submitting || !!ticketReference}
+            accessibilityRole="button"
+            accessibilityLabel="Submit ticket"
+            accessibilityState={{ disabled: submitting || !!ticketReference, busy: submitting }}
           >
             <Ionicons name="send-outline" size={18} color="#fff" />
             <Text style={styles.submitTxt}>{submitting ? 'Sending…' : 'Submit ticket'}</Text>
           </TouchableOpacity>
+          {error && <Text accessibilityRole="alert" style={{ color: colors.destructive }}>{error}</Text>}
+          {ticketReference && <Text selectable accessibilityRole="alert" style={{ color: colors.text }}>Ticket submitted. Reference: {ticketReference}</Text>}
 
           <Text style={[styles.note, { color: colors.textMuted }]}>
-            We typically respond within 24 hours. For urgent safety concerns, please contact us at {BRAND.email.support} directly.
+            {BRAND.email.support}
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>

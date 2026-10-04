@@ -60,14 +60,15 @@ or private QA. Unchecked items stay open even where candidate code/tests exist.
 
 - [x] Locate earlier attempts and identify the maintained repository.
 - [x] Verify SSH access and identify running production containers.
-- [ ] Identify the complete reviewed candidate revision and API/worker image digests.
-- [ ] Apply new migrations in isolated QA and rehearse production backup/restore and rollback.
+- [x] Identify the reviewed backend candidate revision and API/worker image digests (`db425300`; see Oracle Release Runbook). Later frontend source is a separate candidate.
+- [x] Apply new migrations in isolated QA and rehearse production backup/restore and guarded pre-reopen rollback.
 - [ ] Verify current auth/ownership, protected writes, quotes, availability and concurrent transitions against that exact candidate.
 - [ ] Accept media privacy, delivery jobs, routing and admin moderation/incident operations.
 - [ ] Configure and independently accept payment, refund, payout, recovery email, push and any enabled video/dispatch services.
-- [ ] Promote reviewed GHCR API/worker images to public Oracle with explicit migrations.
+- [x] Promote reviewed GHCR API/worker images to public Oracle with explicit migrations (cutover `20261004T013038Z`).
+- [x] Pass public health/version, schema contract, road geometry and anonymous access rejection.
 - [ ] Pass public version, schema contract, readiness and domain smoke checks with production HTTPS configuration.
-- [ ] Verify enabled four-role web workflows and remaining screen controls/accessibility; retain untested scope.
+- [ ] Complete all enabled four-role screen controls/accessibility; targeted booking/chat/support/KYC/moderation workflows have QA evidence, not full coverage.
 - [ ] Build the exact accepted source for iPhone and Android and run physical-device journeys, including permissions/reconnect/expiry.
 - [x] Recheck Apple API access; enable Android Publisher with authorization, verify app-only testing access, and link the verified existing EAS upload key and submission credential. No new candidate was uploaded.
 - [ ] Complete separately authorized live payment, refund and bank-settlement evidence.

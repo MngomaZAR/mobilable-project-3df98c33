@@ -73,9 +73,26 @@ signed download links, auth traces and store bundles do not belong in Git.
 
 ## Runtime Acceptance Gate
 
-The public Oracle API currently runs an older deployment. The tested candidate is
-on private Oracle QA, not automatically the backend used by existing phone builds.
+The public Oracle API now runs backend revision `db425300` using immutable API and
+worker images. Guarded cutover `20261004T013038Z` applied all 12 migrations after
+backup/restore rehearsal and preserved real account, session and business-record
+identities. The public health/version/schema/routing probes pass; anonymous
+`/auth/me` returns 401. See [Oracle Release Runbook](ORACLE_RELEASE_RUNBOOK.md).
+New frontend changes are not yet a new installed phone build.
 Do not promote a QA database into production or reset existing users to test users.
+
+At `2026-10-04T02:29:36Z`, readiness returned HTTP 200 but
+`required_capabilities_available=false`. Its seven blockers are payment checkout,
+production admin configuration, refund execution, bank payout execution, recovery
+email, video and instant dispatch. No native release gate was overridden.
+EAS production already points to the correct public API; additional environment
+copies cannot supply missing merchant/email credentials or acceptance evidence.
+
+Tester inventory at `2026-10-04T02:29:52Z` confirms Jones is in external group
+`papzi`, which has **no builds**. Internal group `Team (Expo)` has valid build 38.
+Build 38 remains ready for external beta submission, not externally approved.
+No new candidate invitation email was sent and no public store review was started.
+External testers need an accepted build assigned to their group, not an upload alone.
 
 Required before release:
 
@@ -103,11 +120,17 @@ to obtain a green build or describe unit tests as full marketplace acceptance.
 - `apple-store-eas-8NSCTU6X72-20261004.json`: latest successful Apple state queries.
 - `android-submission-audit-20261004.json`: sanitized Android failure classification.
 - `play-publisher-status-20261004.json`: current API/permission results.
+- `production-runtime-20261004.json`: public core checks and capability blockers.
+- `testflight-testers-20261004.json`: sanitized groups/Jones membership, no private emails.
 
 ## Latest Candidate Checks
 
-- Frontend: 20 suites / 226 tests, type check, lint and private QA web compilation
-  passed again after the age-gate cache fix. These are not native-device acceptance.
+- Frontend: 23 suites / 246 tests, type check, lint and private QA web compilation
+  pass after booking/detail/support/KYC fixes. Four expanded Oracle QA browser
+  workflows pass in 44.2 seconds; booking detail was checked at 390/1440 widths.
+  Twelve release-helper tests and eight Node release regressions pass. These are
+  not native-device, real-payment or all-screen acceptance. See
+  [October 4 Follow-Up](QA_FOLLOWUP_20261004.md).
 - October 4 browser follow-up: four enabled workflows passed against private Oracle
   QA in 1.1 minutes: model rates/availability persistence; client server-priced
   booking and photographer acceptance while awaiting payment; new-model age

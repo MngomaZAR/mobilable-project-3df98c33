@@ -5,16 +5,17 @@ backend. PostgreSQL stores application data; media uses an S3-compatible storage
 boundary. Oracle's existing storage is MinIO; isolated CI also tests SeaweedFS.
 Supabase/Nhost adapters remain for historical compatibility, not the release runtime.
 
-**Public release is blocked as of 2026-10-04 (Africa/Johannesburg).** The existing
-public backend still returns `/health` 200 but `/health/readiness` and
-`/routing/route` 404. Current candidate work has not been promoted to it.
+**Public store release remains blocked as of 2026-10-04 (Africa/Johannesburg).**
+The tested backend has now been promoted to the existing public Oracle API with
+backup/restore and identity-preservation checks. Public schema and road routing
+pass; readiness still identifies seven unavailable/unaccepted capabilities.
 Passing compilation, static audits or `/health` alone does not prove readiness.
 
 | Evidence Level | Current Scope |
 |---|---|
 | Implemented in source | API auth, owner-scoped data, server-priced bookings, provider commands, media and admin controls; newer financial, dispatch, contract, video and deletion code needs its own acceptance. |
-| QA-tested | October 4 CI passes 302 API tests and 25 worker tests. Local frontend checks pass 20 suites / 226 tests; four targeted private Oracle browser workflows pass after onboarding/booking fixes. Isolated PostgreSQL protocols pass; 300 synthetic role sessions and 200 booking/chat write journeys have zero errors in tested scope. Earlier browser coverage remains 22 of 44 entry points, not all native controls. |
-| Publicly deployed | Existing older backend only; candidate fixes are not publicly deployed. |
+| QA-tested | Backend CI evidence: 302 API tests and 25 worker tests. Latest local frontend: 23 suites / 246 tests, type/lint checks and four targeted Oracle browser workflows pass. Isolated PostgreSQL protocols and earlier 300-session / 200-write-journey tests pass in their recorded scope. Earlier screen inventory evidence remains 22 of 44 entry points, not all native controls. |
+| Publicly deployed | Immutable API/worker from backend revision `db425300`, with all 12 migrations, preserved real accounts and public road routing. This is not a new mobile binary or public-store approval. |
 | Device/store-proven | Apple confirms historical iOS build 38 is in internal beta testing; public review has not been submitted. Android build 13 cannot update the confirmed Play package. Google testing API access, EAS upload-key and submission-credential links are now verified; the internal release remains an empty draft. Neither old binary proves the new candidate on devices. |
 
 See [Release Status](docs/RELEASE_STATUS.md) and [Launch Execution](docs/LAUNCH_EXECUTION.md) for current blockers and store
@@ -22,6 +23,12 @@ receipts, [October 3 Candidate Evidence](docs/QA_CANDIDATE_FOLLOWUP_20261003.md)
 [Earlier QA Report](docs/QA_RELEASE_REPORT_20261003.md) and
 [Screen Coverage](docs/SCREEN_COVERAGE_20261003.md). Historical reports describe
 their recorded revisions, not the latest working tree.
+
+See [Marketplace Gaps](docs/MARKETPLACE_GAP_ANALYSIS.md),
+[Engineering Handbook](docs/ENGINEERING_HANDBOOK.md) and
+[Oracle Release Runbook](docs/ORACLE_RELEASE_RUNBOOK.md). Project-owner attribution:
+SAICTS is the contracted builder; Samkelo Mngoma, COO of SAICTS, is the developer
+and engineering lead.
 
 ## Canonical Architecture
 
@@ -39,8 +46,8 @@ The canonical release path is:
   digest with migrations and public contract/readiness checks.
 - Release gate: `npm run check:release`, including live schema and capability checks.
 
-The previously verified candidate runs in isolated Oracle QA. Later source work
-is not automatically included in that image or its test evidence. NATS and
+Backend revision `db425300` now runs on public Oracle and in isolated QA. Later
+frontend source work is not automatically included in installed phone builds. NATS and
 Typesense container presence does not prove integrated realtime messaging or
 search. Current messaging uses persisted HTTP reads/polling. Refund, payout,
 SMTP recovery, push and LiveKit configuration/implementation are not proof of

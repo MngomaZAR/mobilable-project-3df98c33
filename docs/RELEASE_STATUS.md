@@ -5,20 +5,34 @@ that the backend used by an installed phone build passes acceptance.
 
 ## Current Testing Release
 
-Restricted beta **1.0.0 (39)** is now validated and `IN_BETA_TESTING` for existing
+Restricted beta **1.0.0 (40)** is validated and `IN_BETA_TESTING` for existing
 internal `Team (Expo)` and external `papzi` groups. Jones belongs to `papzi` and
-already accepted his invitation. Two live-device instruction emails were accepted
-by the app SMTP server; inbox delivery and completed device tests are not confirmed.
-Automatic TestFlight notifications are enabled. The stale Apple reviewer login was
-replaced with verified, client-only review access, not administrator access.
+already accepted his invitation. Two build-40 live-device instruction emails were
+accepted by SMTP; inbox delivery and completed device tests are not confirmed.
+Automatic TestFlight notifications are enabled. Client-only reviewer sign-in,
+normal age declaration and hosted web navigation passed; no admin privileges
+were granted to the review account.
 
-Both native builds use exact candidate `deccc7a710918e96d9a01567d036a0ccfafb7151`,
-which is also running publicly on Oracle after protected cutover
-`20261004T104631Z`. Android version code 2 uploaded to an internal **draft**, not an
-activated rollout. Public App Review remains unsubmitted. Payments, bank payouts,
-video and instant dispatch are disabled in this restricted beta while their full
-production gates remain unmet. See [Testing Release](TESTING_RELEASE_20261004.md)
-for exact build/submission IDs, checks and sanitized tester/email receipts.
+Both native builds use candidate `871ec85ac00af86108b3b3525515bbb8d8814cad`,
+also running on public Oracle HTTPS after protected cutover `20261004T134217Z`.
+Android version code **3** uploaded successfully and was activated through the
+signed-in Play Console; independent Publisher API readback confirms internal
+status **completed**, and the Console reports **Active**. This is testing
+distribution, not a public Play release. The public production track is empty.
+
+Scheduled acceptance, booking-linked calls, retryable notification actions and
+SDK-54 native push registration are in this candidate. New controlled service
+permissions remain account-bound and time-limited; payments, refunds, bank payouts,
+video and instant dispatch remain paused for general use. Real settlement,
+physical-device acceptance, full UI coverage and operational/security work still
+block public launch. Public Apple App Review remains unsubmitted.
+
+The matching web testing preview is
+[papzi--n30gcfhwzg.expo.app](https://papzi--n30gcfhwzg.expo.app).
+Live client sign-in, five primary tabs and sign-out passed at phone and desktop
+widths with zero API errors or page crashes. This is not all-role/native acceptance.
+See [Latest Candidate](RELEASE_CANDIDATE_871EC85_20261004.md) and
+[Testing Release](TESTING_RELEASE_20261004.md) for exact receipts and limitations.
 
 The sections below retain earlier checks and deployment history.
 
@@ -195,7 +209,7 @@ to obtain a green build or describe unit tests as full marketplace acceptance.
   local-device inventory results; no credential values or private rows.
 - `testflight-testers-20261004.json`: sanitized groups/Jones membership, no private emails.
 
-## Latest Candidate Checks
+## Earlier Candidate Checks
 
 - GitHub run [37187833728](https://github.com/MngomaZAR/mobilable-project-3df98c33/actions/runs/37187833728):
   all 307 API tests and 25 worker tests passed with database fixtures and no skips;

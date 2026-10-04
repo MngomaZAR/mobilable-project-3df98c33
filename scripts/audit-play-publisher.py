@@ -85,5 +85,5 @@ if __name__ == '__main__':
     except Exception:
         result = {'publishingPerformed': False, 'reason': 'publisher_account_check_failed'}
     destination = Path('docs/play-publisher-status-20261004.json')
-    destination.write_text(json.dumps(result, indent=2) + '\n')
+    destination.write_text(json.dumps(result, indent=2) + '\n', newline='\n')
     print(json.dumps(result, indent=2))

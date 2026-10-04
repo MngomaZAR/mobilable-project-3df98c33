@@ -15,7 +15,7 @@ import httpx
 APP_ID = '6760396864'
 BUNDLE_ID = 'com.papzi.app'
 GROUPS = {'Team (Expo)': True, 'papzi': False}
-NOTES = (
+BUILD_NOTES = {'39': (
     'Restricted hosted beta 1.0.0 (39). Test registration, password sign-in and '
     'recovery, profile editing, creator availability/services, discovery, feed, '
     'scheduled booking requests and acceptance, chat, road directions, logout '
@@ -24,7 +24,24 @@ NOTES = (
     'video calls, digital purchases and instant dispatch are disabled in this '
     'testing build. Do not enter bank details or attempt real payments. '
     'This is not a public or fully accepted marketplace release.'
-)
+), '40': (
+    'Restricted hosted beta 1.0.0 (40). Adds scheduled booking acceptance, '
+    'notification action retry, native push registration and booking-linked call '
+    'entry. Test registration, password sign-in/recovery, profiles, discovery, '
+    'feed, scheduled bookings, chat, road directions, notification taps and '
+    'network recovery. Report build, role, device/OS, steps and screenshots via '
+    'TestFlight feedback. Payments, refunds, bank payouts, video and instant '
+    'dispatch remain paused for general use. Only explicitly authorized, '
+    'time-limited accounts can participate in separately instructed controlled '
+    'acceptance tests. Digital purchasing remains disabled. Do not enter bank '
+    'details or attempt real payments without those separate instructions. '
+    'This is not a public or fully accepted marketplace release.'
+)}
+
+
+def require_authorized_build(number, report):
+    if number not in BUILD_NOTES or report['processingState'] != 'VALID' or report['expired']:
+        raise ValueError('An explicitly authorized, validated, unexpired beta build is required')
 
 
 def apple_token():
@@ -91,11 +108,10 @@ def inventory(client, number):
 
 def prepare(client, number):
     build, detail, groups, report = inventory(client, number)
-    if number != '39' or build['attributes'].get('processingState') != 'VALID' or build['attributes'].get('expired'):
-        raise ValueError('Only the validated authorized build 39 may be prepared')
+    require_authorized_build(number, report)
     notes = listing(client, f"/v1/builds/{build['id']}/betaBuildLocalizations", {'limit': 100})
     english = next((row for row in notes if row['attributes']['locale'] == 'en-GB'), None)
-    data = {'type': 'betaBuildLocalizations', 'attributes': {'whatsNew': NOTES}}
+    data = {'type': 'betaBuildLocalizations', 'attributes': {'whatsNew': BUILD_NOTES[number]}}
     if english:
         data['id'] = english['id']
         request(client, 'PATCH', f"/v1/betaBuildLocalizations/{english['id']}", json={'data': data})
@@ -114,8 +130,7 @@ def prepare(client, number):
 
 def submit_beta_review(client, number):
     build, _, _, report = inventory(client, number)
-    if number != '39' or report['processingState'] != 'VALID' or report['expired']:
-        raise ValueError('Validated authorized build required')
+    require_authorized_build(number, report)
     if not report['reviewContactConfigured'] or not report['appDescriptionsConfigured']:
         raise ValueError('Existing beta review contact or description is incomplete')
     if report['reviewDemoRequired'] and not report['reviewDemoConfigured']:
@@ -157,8 +172,7 @@ def verify_reviewer(client):
 
 def configure_reviewer(client, number):
     report = inventory(client, number)[3]
-    if number != '39' or report['processingState'] != 'VALID':
-        raise ValueError('Only the authorized validated beta may configure reviewer access')
+    require_authorized_build(number, report)
     if verify_reviewer(client):
         report['hostedReviewerSignInVerified'] = True
         return report
@@ -176,7 +190,7 @@ def configure_reviewer(client, number):
     request(client, 'PATCH', f"/v1/betaAppReviewDetails/{review['id']}", json={'data': {
         'type': 'betaAppReviewDetails', 'id': review['id'], 'attributes': {
             'demoAccountName': credentials['name'], 'demoAccountPassword': credentials['password'],
-            'demoAccountRequired': True, 'notes': NOTES + ' Dedicated client-only review account; no administrator or payout permissions.'}}})
+            'demoAccountRequired': True, 'notes': BUILD_NOTES[number] + ' Dedicated client-only review account; no administrator or payout permissions.'}}})
     report['hostedReviewerSignInVerified'] = verify_reviewer(client)
     if not report['hostedReviewerSignInVerified']:
         raise ValueError('Updated reviewer sign-in did not pass')
@@ -185,8 +199,7 @@ def configure_reviewer(client, number):
 
 def email_testers(client, number):
     _, _, groups, report = inventory(client, number)
-    if number != '39' or report['processingState'] != 'VALID' or report['expired']:
-        raise ValueError('The exact authorized valid build is required for tester mail')
+    require_authorized_build(number, report)
     if not all(g['buildAssigned'] for g in report['groups']):
         raise ValueError('Assign the exact build to existing groups before sending tester mail')
     bridge = Path(os.environ.get('PAPZI_TESTER_MAIL_BRIDGE', ''))
@@ -216,8 +229,7 @@ def email_testers(client, number):
 
 def invite_external_testers(client, number):
     _, _, groups, report = inventory(client, number)
-    if number != '39' or report['processingState'] != 'VALID' or report['expired']:
-        raise ValueError('Validated authorized build required for invitations')
+    require_authorized_build(number, report)
     if report['beta']['externalBuildState'] != 'IN_BETA_TESTING' or not all(g['buildAssigned'] for g in report['groups']):
         raise ValueError('External build availability must be verified before invitations')
     ledger = Path(os.environ.get('PAPZI_INVITATION_LEDGER', ''))
@@ -233,7 +245,7 @@ def invite_external_testers(client, number):
         for tester in listing(client, f"/v1/betaGroups/{group['id']}/betaTesters", {'limit': 200}):
             if tester['attributes'].get('state') == 'REVOKED':
                 continue
-            key = hashlib.sha256((APP_ID + ':39:' + tester['id']).encode()).hexdigest()
+            key = hashlib.sha256((APP_ID + ':' + number + ':' + tester['id']).encode()).hexdigest()
             receipt = ledger / (key + '.json')
             if tester['attributes'].get('state') in {'ACCEPTED', 'INSTALLED'}:
                 if receipt.exists():
@@ -293,7 +305,8 @@ def main():
             else:
                 report = submit_beta_review(client, args.build)
         report.update({'checkedAt': datetime.now(timezone.utc).isoformat(), 'action': args.action})
-        Path(f'docs/testflight-build-{args.build}-{args.action}-20261004.json').write_text(json.dumps(report, indent=2) + '\n')
+        date = datetime.now(timezone.utc).strftime('%Y%m%d')
+        Path(f'docs/testflight-build-{args.build}-{args.action}-{date}.json').write_text(json.dumps(report, indent=2) + '\n', newline='\n')
         print(json.dumps(report))
     except ProviderError as error:
         print(json.dumps({'ok': False, 'status': error.status, 'errorCodes': error.codes}))

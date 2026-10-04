@@ -20,9 +20,10 @@ class TestFlightScopeTests(unittest.TestCase):
         return build, {}, [], report
 
     def test_processing_or_other_build_cannot_be_prepared(self):
-        for number, processing in [('38', 'VALID'), ('39', 'PROCESSING')]:
+        for number, processing in [('38', 'VALID'), ('41', 'VALID'), ('39', 'PROCESSING'), ('40', 'PROCESSING')]:
             state = self.state()
             state[0]['attributes']['processingState'] = processing
+            state[3]['processingState'] = processing
             with patch.object(release, 'inventory', return_value=state), patch.object(release, 'request') as request:
                 with self.assertRaises(ValueError):
                     release.prepare(None, number)
@@ -55,8 +56,24 @@ class TestFlightScopeTests(unittest.TestCase):
                 release.listing(None, '/existing-group')
 
     def test_notes_do_not_claim_financial_acceptance(self):
-        self.assertIn('disabled', release.NOTES)
-        self.assertIn('Do not enter bank details', release.NOTES)
+        for notes in release.BUILD_NOTES.values():
+            self.assertIn('disabled', notes)
+            self.assertIn('Do not enter bank details', notes)
+        self.assertIn('paused for general use', release.BUILD_NOTES['40'])
+        self.assertIn('time-limited accounts', release.BUILD_NOTES['40'])
+
+    def test_new_build_must_be_valid_and_unexpired(self):
+        report = self.state()[3]
+        release.require_authorized_build('40', report)
+        report['expired'] = True
+        with self.assertRaises(ValueError):
+            release.require_authorized_build('40', report)
+
+    def test_new_build_review_is_beta_only(self):
+        with patch.object(release, 'inventory', return_value=self.state()), patch.object(release, 'verify_reviewer', return_value=True), patch.object(release, 'listing', return_value=[]), patch.object(release, 'request', return_value=({'attributes': {'betaReviewState': 'WAITING_FOR_REVIEW'}}, {})) as request:
+            report = release.submit_beta_review(None, '40')
+            self.assertFalse(report['publicAppReviewSubmitted'])
+            self.assertEqual(request.call_args.args[2], '/v1/betaAppReviewSubmissions')
 
     def test_unavailable_external_build_cannot_invite(self):
         state = self.state()

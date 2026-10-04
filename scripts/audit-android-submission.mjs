@@ -9,7 +9,8 @@ const { createGraphqlClient } = require('../build/commandUtils/context/contextUt
 const { SubmissionQuery } = require('../build/graphql/queries/SubmissionQuery.js');
 const session = new SessionManager({ setActor() {} });
 const client = createGraphqlClient({ accessToken: session.getAccessToken(), sessionSecret: session.getSessionSecret() });
-const id = 'ee8e12fd-14d6-4f43-8a98-a84335ff6d89';
+const id = process.env.PAPZI_AUDIT_SUBMISSION_ID || 'ee8e12fd-14d6-4f43-8a98-a84335ff6d89';
+if (!/^[0-9a-f-]{36}$/i.test(id)) throw new Error('Use an explicit submission UUID.');
 const row = await SubmissionQuery.byIdAsync(client, id, { useCache: false });
 const categories = [
   ['publisher_permission_denied', /caller does not have permission|permission denied|insufficient permission|insufficientPermission/i],
@@ -40,5 +41,5 @@ for (const url of (row.logFiles || []).slice(0, 8)) {
 const report = { checkedAt: new Date().toISOString(), readOnly: true, submissionId: id, status: row.status,
   errorCode: row.error?.errorCode, logsRead, causes: [...causes],
   note: 'Provider log URLs, credential values and account emails are intentionally excluded. No submission retried.' };
-fs.writeFileSync('docs/android-submission-audit-20261004.json', JSON.stringify(report, null, 2) + '\n');
+fs.writeFileSync(process.env.PAPZI_SUBMISSION_AUDIT_OUTPUT || 'docs/android-submission-audit-20261004.json', JSON.stringify(report, null, 2) + '\n');
 console.log(JSON.stringify(report, null, 2));

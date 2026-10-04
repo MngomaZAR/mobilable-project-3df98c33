@@ -50,7 +50,44 @@ acceptance checks, rejecting sandbox evidence and failed database reads.
 
 ## Release Evidence
 
-Build IDs, Apple processing/group availability, Play upload/release state and
-invitation requests must be recorded separately after each provider returns them.
-This document is a plan and scope record, not proof that a build, submission or
-tester email has completed.
+- Exact app/backend candidate: `deccc7a710918e96d9a01567d036a0ccfafb7151`.
+- Oracle API and matching worker promoted at `20261004T104631Z` after a
+  production-backup restoration rehearsal. Existing identities and object storage
+  were preserved; schema, 122-point road route, HTTPS health/version and anonymous
+  authentication rejection passed. The five public-launch gates remain blocked.
+- GitHub backend run `37195720946` passed 327 API and 25 worker tests with no
+  skips, then published both image architectures. Frontend: 317 tests in 29 suites,
+  typecheck and lint passed. CI read/write load had zero errors; write p95 was
+  4.73 seconds. These checks are not physical-device or real-money acceptance.
+- iOS build `71aed777-dd74-4446-af71-e42689ba86e3`, version `1.0.0 (39)`, finished.
+  EAS submission `669d2b70-1689-401e-94f7-e61fe58ffdbe` uploaded it successfully.
+  Apple validates build 39 and reports `IN_BETA_TESTING` internally and externally.
+- Existing groups `Team (Expo)` and `papzi` each have one tester and build 39.
+  Jones remains in `papzi` and has already accepted his TestFlight invitation.
+  No public invitation link was created or distribution group expanded.
+- Apple beta reviewer credentials were stale. A dedicated client-only test account
+  replaced that reviewer access, with sign-in/authenticated readback/sign-out
+  verified against Oracle. Existing users and administrator permissions were not
+  changed. Credentials remain protected outside Git and in Apple's review fields.
+- Automatic TestFlight notifications are enabled. Separate live-device instruction
+  emails from the restricted app mailbox were accepted by SMTP for both registered
+  testers at `2026-10-04T10:55:09Z`. Inbox receipt and tester execution are not yet
+  confirmed. Private deduplication ledgers prevent blind resend after interruption.
+- Android build `8c597ce1-c96f-468c-a58a-50786df7c714`, version `1.0.0` / code `2`,
+  finished for the correct package. EAS submission
+  `02782156-552e-49d9-8baa-88925802d5cc` uploaded successfully to an **internal draft**.
+  This is not an activated Play testing release or public publication.
+
+See the sanitized `testflight-build-39-*-20261004.json` and tester-inventory
+receipts. No claim of public App Store review, production payments or Play rollout
+is implied by this restricted beta.
+
+## Operator Safety
+
+`scripts/manage-testflight-release.mjs` uses the existing authenticated EAS key
+and an explicit build number. It supports inspection, truthful notes/group setup,
+verified reviewer access, beta-only review, invitation checks and tester notices.
+It refuses unrelated builds/groups, incomplete/paginated scopes and unavailable
+external builds. Mail/reviewer operations require separately selected protected
+bridges; private credentials, recipients and retry ledgers remain outside Git.
+Eleven offline safety tests cover those gates and duplicate-invitation handling.

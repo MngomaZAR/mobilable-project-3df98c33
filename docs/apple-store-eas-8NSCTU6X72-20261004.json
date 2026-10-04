@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-10-04T00:13:52Z",
+  "checkedAt": "2026-10-04T11:01:33Z",
   "readOnly": true,
   "apps": [
     {
@@ -20,6 +20,27 @@
       "builds": {
         "status": 200,
         "resources": [
+          {
+            "id": "192610fb-ce8a-49b2-ae42-e6ce2c9d9d09",
+            "type": "builds",
+            "attributes": {
+              "version": "39",
+              "uploadedDate": "2026-10-04T03:43:14-07:00",
+              "expirationDate": "2027-01-02T02:43:14-08:00",
+              "expired": false,
+              "processingState": "VALID"
+            },
+            "relationships": {
+              "preReleaseVersion": {
+                "type": "preReleaseVersions",
+                "id": "71dd189e-8393-45a9-b1ac-ffaef37bf105"
+              },
+              "buildBetaDetail": {
+                "type": "buildBetaDetails",
+                "id": "192610fb-ce8a-49b2-ae42-e6ce2c9d9d09"
+              }
+            }
+          },
           {
             "id": "b18c42bb-fe4b-4144-bdfd-3eddb123da03",
             "type": "builds",
@@ -491,6 +512,14 @@
             }
           },
           {
+            "id": "192610fb-ce8a-49b2-ae42-e6ce2c9d9d09",
+            "type": "buildBetaDetails",
+            "attributes": {
+              "internalBuildState": "IN_BETA_TESTING",
+              "externalBuildState": "IN_BETA_TESTING"
+            }
+          },
+          {
             "id": "b18c42bb-fe4b-4144-bdfd-3eddb123da03",
             "type": "buildBetaDetails",
             "attributes": {
@@ -720,7 +749,7 @@
             }
           },
           {
-            "id": "63ade522-006f-428e-be54-b9d5637487fc",
+            "id": "192610fb-ce8a-49b2-ae42-e6ce2c9d9d09",
             "type": "betaAppReviewSubmissions",
             "attributes": {
               "betaReviewState": "APPROVED",

@@ -5,12 +5,17 @@ Started: 2026-10-03. Updated: 2026-10-04 (Africa/Johannesburg).
 ## Release decision
 
 **Public store release remains blocked. The tested backend is publicly deployed.**
-Oracle now runs immutable API/worker revision `403cd0e` after a protected restore
+Oracle now runs immutable API/worker revision `deccc7a` after a protected restore
 rehearsal and cutover. Public health, schema and road routing pass; readiness
 returns HTTP 200 with `required_capabilities_available=false`, not the older 404.
 The five blockers are checkout activation, refunds, bank payouts, video acceptance
-and instant dispatch acceptance. Do not bypass the gate or publish a loopback/
-SSH-tunnel bundle. See [current evidence](competitive-release-20261004.json) and
+and instant dispatch acceptance. Restricted beta build `1.0.0 (39)` is now available
+to the existing internal/external TestFlight groups; two instruction emails were
+SMTP-accepted. This is not a public launch or verified device acceptance.
+Android code 2 uploaded to an internal draft, not an activated rollout. Do not
+bypass the public gate or publish a loopback/SSH-tunnel bundle. See
+[current testing evidence](TESTING_RELEASE_20261004.md),
+[preceding candidate evidence](competitive-release-20261004.json) and
 [earlier integration evidence](integration-verification-20261004.json).
 
 A successful build, credential synchronization or healthy container is not proof
@@ -38,9 +43,9 @@ production runtime. See [Single-Flow Architecture](SINGLE_FLOW_ARCHITECTURE.md).
 | Level | Recorded State | Not Established |
 |---|---|---|
 | Implemented | Source has auth/session protection, owner-scoped data, domain booking/pricing/availability, storage and moderation commands. New financial, dispatch, contracts, video, deletion and delivery implementations are candidate work. | Source presence is not deployment or complete integration acceptance. |
-| QA-tested | Exact-backend CI: 323 API tests, 25 worker tests, no skips; role/auth/storage/mocked-payment protocols passed. Frontend: 27 suites / 300 tests and six synthetic-transport profile/admin browser checks. CI load: 300 read sessions and 200 booking/chat journeys, zero errors; write p95 5.16 seconds. Older Oracle/browser evidence remains revision-specific. | No live financial settlement, physical device media/push or complete native control acceptance. |
-| Publicly deployed | Exact `403cd0e` API/worker images promoted at `20261004T095413Z`; all 12 migrations, real identities and volumes preserved. Public review aggregate and runtime admin capability pass narrow probes. Correct merchant, SMTP and LiveKit settings survive; recovery email reached the owner's inbox earlier. Checkout remains paused. | This backend cutover is not a new installed phone binary or public store approval. |
-| Device/store-proven | Historical September 23 build/submission receipts below. | No current-source physical iPhone/Android paid journey, full native control acceptance or public store approval. |
+| QA-tested | Exact-backend CI: 327 API tests, 25 worker tests, no skips; role/auth/storage/mocked-payment protocols passed. Frontend: 29 suites / 317 tests. CI load: 300 read sessions and 200 booking/chat journeys, zero errors; write p95 4.73 seconds. Older Oracle/browser evidence remains revision-specific. | No live financial settlement, physical device media/push or complete native control acceptance. |
+| Publicly deployed | Exact `deccc7a` API/worker images promoted at `20261004T104631Z`; all 12 migrations, real identities and volumes preserved. Public health/schema/auth rejection/road routing pass. Merchant, SMTP and LiveKit settings survive. Checkout remains paused. | This backend cutover is not marketplace acceptance or public store approval. |
+| Device/store-proven | Build 39 is available to existing internal/external TestFlight groups. Two tester instruction emails were SMTP-accepted. Android code 2 uploaded as internal draft. | No completed current-source physical iPhone/Android journey, full native control acceptance or public store approval. |
 
 Business scope remains **44 screen modules** across client, photographer, model
 and administrator roles. Recorded browser entry-point coverage is **22/44**, not

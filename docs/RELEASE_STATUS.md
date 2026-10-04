@@ -3,6 +3,25 @@
 Last evidence check: 2026-10-04. An upload receipt is not store approval or proof
 that the backend used by an installed phone build passes acceptance.
 
+## Current Testing Release
+
+Restricted beta **1.0.0 (39)** is now validated and `IN_BETA_TESTING` for existing
+internal `Team (Expo)` and external `papzi` groups. Jones belongs to `papzi` and
+already accepted his invitation. Two live-device instruction emails were accepted
+by the app SMTP server; inbox delivery and completed device tests are not confirmed.
+Automatic TestFlight notifications are enabled. The stale Apple reviewer login was
+replaced with verified, client-only review access, not administrator access.
+
+Both native builds use exact candidate `deccc7a710918e96d9a01567d036a0ccfafb7151`,
+which is also running publicly on Oracle after protected cutover
+`20261004T104631Z`. Android version code 2 uploaded to an internal **draft**, not an
+activated rollout. Public App Review remains unsubmitted. Payments, bank payouts,
+video and instant dispatch are disabled in this restricted beta while their full
+production gates remain unmet. See [Testing Release](TESTING_RELEASE_20261004.md)
+for exact build/submission IDs, checks and sanitized tester/email receipts.
+
+The sections below retain earlier checks and deployment history.
+
 ## Verified History
 
 - EAS project: `@papz/papzi`, project ID
@@ -18,7 +37,7 @@ that the backend used by an installed phone build passes acceptance.
 - Android submission `ee8e12fd-14d6-4f43-8a98-a84335ff6d89` failed. Its
   private logs identify a disabled Android Publisher API, not a successful release.
 
-## Current Store Blockers
+## Earlier Store Checks
 
 Apple's agreement block has **cleared**. The latest read-only check returns HTTP
 200 for both iOS IDs. Earlier checks returned HTTP 403
@@ -26,8 +45,8 @@ Apple's agreement block has **cleared**. The latest read-only check returns HTTP
 HTTP 401 and its three existing secret entries were securely synchronized from EAS.
 No new secret names or keys were created.
 
-App Store Connect confirms `6760396864` is `com.papzi.app`, with valid build 38
-currently `IN_BETA_TESTING` internally and `READY_FOR_BETA_SUBMISSION` externally.
+The earlier check confirmed `6760396864` is `com.papzi.app`, with valid build 38
+then `IN_BETA_TESTING` internally and `READY_FOR_BETA_SUBMISSION` externally.
 The public store version remains `PREPARE_FOR_SUBMISSION`, not under review.
 The other app, `6760158086` / `com.saicts.papzi`, has expired build 4. The current
 iOS configuration now targets the existing, successful `com.papzi.app` record.
@@ -73,7 +92,7 @@ signed download links, auth traces and store bundles do not belong in Git.
 
 ## Runtime Acceptance Gate
 
-Latest guarded cutover `20261004T095413Z` promoted revision
+The preceding guarded cutover `20261004T095413Z` promoted revision
 `403cd0ef3ad032c9bdc3d58ef5b2752535ca1d69` after exact-candidate frontend CI,
 323 API / 25 worker tests with no skips, and a restored-production rehearsal.
 Real accounts, business records, sessions, storage and existing integration

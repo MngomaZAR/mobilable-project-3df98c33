@@ -1,0 +1,39 @@
+{
+  "appId": "6760396864",
+  "bundleId": "com.papzi.app",
+  "build": "39",
+  "processingState": "VALID",
+  "expired": false,
+  "beta": {
+    "autoNotifyEnabled": true,
+    "internalBuildState": "IN_BETA_TESTING",
+    "externalBuildState": "IN_BETA_TESTING"
+  },
+  "groups": [
+    {
+      "name": "Team (Expo)",
+      "internal": true,
+      "testerCount": 1,
+      "buildAssigned": true
+    },
+    {
+      "name": "papzi",
+      "internal": false,
+      "testerCount": 1,
+      "buildAssigned": true
+    }
+  ],
+  "reviewContactConfigured": true,
+  "reviewDemoRequired": true,
+  "reviewDemoConfigured": true,
+  "appDescriptionsConfigured": true,
+  "email": {
+    "recipientCount": 2,
+    "smtpAccepted": 2,
+    "alreadyAccepted": 0,
+    "deliveryToInboxVerified": false,
+    "externalApprovalPending": false
+  },
+  "checkedAt": "2026-10-04T10:55:09.217950+00:00",
+  "action": "email-testers"
+}

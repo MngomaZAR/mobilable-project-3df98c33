@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-10-04T11:01:33Z",
+  "checkedAt": "2026-10-04T16:20:03Z",
   "readOnly": true,
   "apps": [
     {
@@ -20,6 +20,48 @@
       "builds": {
         "status": 200,
         "resources": [
+          {
+            "id": "603520cb-030c-47b0-8623-8fb69cf856e0",
+            "type": "builds",
+            "attributes": {
+              "version": "41",
+              "uploadedDate": "2026-10-04T07:52:20-07:00",
+              "expirationDate": "2027-01-02T06:52:20-08:00",
+              "expired": false,
+              "processingState": "VALID"
+            },
+            "relationships": {
+              "preReleaseVersion": {
+                "type": "preReleaseVersions",
+                "id": "71dd189e-8393-45a9-b1ac-ffaef37bf105"
+              },
+              "buildBetaDetail": {
+                "type": "buildBetaDetails",
+                "id": "603520cb-030c-47b0-8623-8fb69cf856e0"
+              }
+            }
+          },
+          {
+            "id": "05ee41e6-9766-435e-a0a4-b8a0c9e6dda6",
+            "type": "builds",
+            "attributes": {
+              "version": "40",
+              "uploadedDate": "2026-10-04T06:50:42-07:00",
+              "expirationDate": "2027-01-02T05:50:42-08:00",
+              "expired": false,
+              "processingState": "VALID"
+            },
+            "relationships": {
+              "preReleaseVersion": {
+                "type": "preReleaseVersions",
+                "id": "71dd189e-8393-45a9-b1ac-ffaef37bf105"
+              },
+              "buildBetaDetail": {
+                "type": "buildBetaDetails",
+                "id": "05ee41e6-9766-435e-a0a4-b8a0c9e6dda6"
+              }
+            }
+          },
           {
             "id": "192610fb-ce8a-49b2-ae42-e6ce2c9d9d09",
             "type": "builds",
@@ -512,6 +554,22 @@
             }
           },
           {
+            "id": "603520cb-030c-47b0-8623-8fb69cf856e0",
+            "type": "buildBetaDetails",
+            "attributes": {
+              "internalBuildState": "IN_BETA_TESTING",
+              "externalBuildState": "IN_BETA_TESTING"
+            }
+          },
+          {
+            "id": "05ee41e6-9766-435e-a0a4-b8a0c9e6dda6",
+            "type": "buildBetaDetails",
+            "attributes": {
+              "internalBuildState": "IN_BETA_TESTING",
+              "externalBuildState": "IN_BETA_TESTING"
+            }
+          },
+          {
             "id": "192610fb-ce8a-49b2-ae42-e6ce2c9d9d09",
             "type": "buildBetaDetails",
             "attributes": {
@@ -741,7 +799,7 @@
         "status": 200,
         "resources": [
           {
-            "id": "b7d8329d-55c8-4a41-82ef-ac31324e896e",
+            "id": "192610fb-ce8a-49b2-ae42-e6ce2c9d9d09",
             "type": "betaAppReviewSubmissions",
             "attributes": {
               "betaReviewState": "APPROVED",
@@ -749,7 +807,15 @@
             }
           },
           {
-            "id": "192610fb-ce8a-49b2-ae42-e6ce2c9d9d09",
+            "id": "05ee41e6-9766-435e-a0a4-b8a0c9e6dda6",
+            "type": "betaAppReviewSubmissions",
+            "attributes": {
+              "betaReviewState": "APPROVED",
+              "submittedDate": null
+            }
+          },
+          {
+            "id": "603520cb-030c-47b0-8623-8fb69cf856e0",
             "type": "betaAppReviewSubmissions",
             "attributes": {
               "betaReviewState": "APPROVED",

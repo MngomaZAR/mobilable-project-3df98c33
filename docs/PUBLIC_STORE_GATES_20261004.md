@@ -4,6 +4,30 @@ Observed October 4, 2026 in the signed-in account and public endpoints. Existing
 credential access resolves upload permissions, not functional acceptance or
 store eligibility. iOS 41 / Android code 4 are testing releases only.
 
+## Submission Recheck
+
+Direct provider reads at 16:20Z confirmed:
+
+- Apple `com.papzi.app`: store version is `PREPARE_FOR_SUBMISSION`, not waiting
+  for public review. Build 41 is valid and internally/externally in beta testing;
+  beta review approval is not public App Review approval. The legacy
+  `com.saicts.papzi` listing also remains unsubmitted and its latest build 4 expired.
+- Google `com.papziiii.paparazzi`: internal code 4 is `completed`; production,
+  beta and alpha releases are empty. The read-only audit discarded its temporary
+  edit without publishing anything.
+- The matching Oracle `200d605` API passes health/revision/schema but fails the
+  same five public capability checks. No incomplete binary was submitted for
+  public review to conceal those failures.
+
+Bank encryption initialization subsequently succeeded at 16:39Z, with a protected
+server backup and a round-trip-verified Windows user-encrypted recovery copy.
+Seven focused safety tests passed; all 43 deployment-helper tests passed. No
+existing encrypted bank rows were present, no financial acceptance records were
+created, and no transfers or charges occurred. API/worker images and database
+were preserved. This removes a secure-storage configuration gap, not the missing
+Stitch account credentials or financial/device acceptance gates. See the
+[Oracle runbook](ORACLE_RELEASE_RUNBOOK.md).
+
 ## Google Play
 
 - Correct package: `com.papziiii.paparazzi`, personal developer account.

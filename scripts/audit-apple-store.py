@@ -98,7 +98,7 @@ if __name__ == '__main__':
     result = audit()
     destination = Path(os.environ.get('STORE_AUDIT_OUTPUT', 'docs/apple-store-status-20261003.json'))
     destination.parent.mkdir(parents=True, exist_ok=True)
-    destination.write_text(json.dumps(result, indent=2) + '\n')
+    destination.write_text(json.dumps(result, indent=2) + '\n', encoding='utf-8', newline='\n')
     print(json.dumps({'report': str(destination), 'readOnly': True, 'reason': result.get('reason'), 'apps': [
         {'bundleIdentifier': app['bundleIdentifier'], 'lookupStatus': app['appLookup'].get('status'),
          'apps': app['appLookup'].get('resources', []), 'storeVersions': app.get('storeVersions', {}),

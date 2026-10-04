@@ -1,7 +1,9 @@
 import importlib.util
+import base64
 from pathlib import Path
 import sys
 import unittest
+from unittest.mock import patch
 from datetime import datetime, timedelta, timezone
 
 
@@ -13,6 +15,61 @@ spec.loader.exec_module(configure)
 
 
 class ConfigurationSafetyTests(unittest.TestCase):
+    def test_bank_key_must_be_canonical_32_byte_fernet_key(self):
+        key = base64.urlsafe_b64encode(b'K' * 32).decode()
+        self.assertEqual(configure.validate_updates({configure.BANK_KEY: key}), {configure.BANK_KEY: key})
+        for value in ('placeholder', base64.urlsafe_b64encode(b'K' * 16).decode(), key.rstrip('='), key + ' '):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                configure.validate_updates({configure.BANK_KEY: value})
+
+    def test_initialization_uses_secure_random_bytes_only_when_both_keys_are_missing(self):
+        with patch.object(configure.secrets, 'token_bytes', return_value=b'K' * 32) as random:
+            updates = configure.bank_initialization_updates({}, {})
+        random.assert_called_once_with(32)
+        self.assertEqual(set(updates), {configure.BANK_KEY})
+        configure.validate_bank_key(updates[configure.BANK_KEY])
+
+    def test_initialization_preserves_existing_matching_key_without_generating_another(self):
+        key = base64.urlsafe_b64encode(b'K' * 32).decode()
+        env = {configure.BANK_KEY: key}
+        with patch.object(configure.secrets, 'token_bytes') as random:
+            self.assertEqual(configure.bank_initialization_updates(env, env), env)
+        random.assert_not_called()
+
+    def test_partial_or_different_runtime_keys_require_reconciliation(self):
+        key = base64.urlsafe_b64encode(b'K' * 32).decode()
+        other = base64.urlsafe_b64encode(b'J' * 32).decode()
+        for api, worker in (({configure.BANK_KEY: key}, {}), ({}, {configure.BANK_KEY: key}),
+                            ({configure.BANK_KEY: key}, {configure.BANK_KEY: other})):
+            with self.subTest(api_has_key=bool(api), worker_has_key=bool(worker)), self.assertRaises(ValueError):
+                configure.bank_initialization_updates(api, worker)
+            with self.assertRaises(ValueError):
+                configure.guard_bank_key_update(api, worker, {configure.BANK_KEY: key}, 0)
+
+    def test_missing_key_is_initialized_only_over_an_empty_bank_store(self):
+        updates = {configure.BANK_KEY: base64.urlsafe_b64encode(b'K' * 32).decode()}
+        configure.guard_bank_key_update({}, {}, updates, 0)
+        for count in (1, 10, -1):
+            with self.subTest(count=count), self.assertRaises(ValueError):
+                configure.guard_bank_key_update({}, {}, updates, count)
+
+    def test_existing_key_is_preserved_with_or_without_bank_records(self):
+        env = {configure.BANK_KEY: base64.urlsafe_b64encode(b'K' * 32).decode()}
+        configure.guard_bank_key_update(env, env, env, 20)
+        changed = {configure.BANK_KEY: base64.urlsafe_b64encode(b'J' * 32).decode()}
+        with self.assertRaises(ValueError):
+            configure.guard_bank_key_update(env, env, changed, 0)
+
+    def test_compose_cannot_replace_an_existing_bank_key(self):
+        config = {"services": {"api": {"image": "api"}, "worker": {"image": "worker"}}}
+        env = {"DATABASE_URL": "same", configure.BANK_KEY: base64.urlsafe_b64encode(b'K' * 32).decode()}
+        changed = {configure.BANK_KEY: base64.urlsafe_b64encode(b'J' * 32).decode()}
+        with self.assertRaises(ValueError):
+            configure.configured_compose(config, env, env, changed)
+        result = configure.configured_compose(config, env, env, {configure.BANK_KEY: env[configure.BANK_KEY]})
+        self.assertEqual(result['services']['api']['environment'][configure.BANK_KEY], env[configure.BANK_KEY])
+        self.assertNotIn('STITCH_PAYOUTS_ENABLED', result['services']['api']['environment'])
+
     def test_named_acceptance_access_is_bounded_and_payment_cap_is_validated(self):
         expiry = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
         config = {'SERVICE_ACCEPTANCE_USER_IDS': 'client,creator', 'SERVICE_ACCEPTANCE_EXPIRES_AT': expiry,

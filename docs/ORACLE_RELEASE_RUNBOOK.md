@@ -7,15 +7,17 @@ financial, native-device or app-store acceptance.
 ## Current Runtime
 
 - Public API: `https://papzii-api.129.151.188.15.nip.io`.
-- Backend source: `c48f17e211508fbcdbd855e78075fa2ca05decfe`.
-- API image: `ghcr.io/mngomazar/papzi-api@sha256:40b068c5747739f7e191fa4cd83941e02347282b6187748d9f8835026495a03b`.
-- Worker image: `ghcr.io/mngomazar/papzi-worker@sha256:66e833948380f81787764edcdc2a28b2a251e309ea2e8f1ebef58ae8382383f1`.
+- Backend source: `200d60599c92c800ab29bba6eb8b4a4a1b7cfdf6`.
+- API image: `ghcr.io/mngomazar/papzi-api@sha256:b170091c1b3646693407f966583d0a0360da178f82160642f9385722480b1ca4`.
+- Worker image: `ghcr.io/mngomazar/papzi-worker@sha256:bb782614ef5301b316affab86d221624caf82acfcea2c9a69861fb68e268b102`.
 - Stable services: `papzii-api`, `papzii-worker-1`, `papzii-postgres` and existing
   storage/proxy networks. API/worker are pinned; PostgreSQL and object volumes remain.
 - Active database: `papzii_rollback_20261004t012626z`. This is the restored **real
   production dataset**, not QA data. Both writers use this exact source. Do not
   point them back to the older `papzii` database merely because its name looks nicer.
-- All 12 ledger migrations applied. Runtime schema mutation is disabled.
+- All 13 ledger migrations applied. Runtime schema mutation is disabled.
+- Delivered iOS 41 / Android code 4 match this restricted testing candidate.
+  The later repository/deployment-helper revisions do not change these binaries.
 
 ## Promotion Procedure
 
@@ -97,3 +99,38 @@ in-place merchant rotation. Independently accepted payments/refunds/payouts are
 required before a separately reviewed activation; this helper cannot enable it.
 An existing recovery encryption key cannot be silently replaced by this helper;
 key rotation must preserve the ability to decrypt pending recovery jobs.
+
+## Bank Encryption Initialization
+
+Only on the existing Oracle host, using the exact running revision:
+
+```bash
+printf '{}' | sudo python3 deployment/oracle_configure.py --expected-revision 200d60599c92c800ab29bba6eb8b4a4a1b7cfdf6 --initialize-bank-encryption
+```
+
+The explicit JSON input closes stdin; do not leave a remote configuration process
+waiting for input while it holds the release lock. Upload the tested helper folder
+before running the command; do not run it on the laptop or against the LMS host.
+
+The helper generates a canonical 32-byte Fernet key on Oracle only when both
+services lack one. It reuses an existing matching key, rejects mismatched or
+partial runtime keys, and refuses a new key if any encrypted bank records exist.
+Lost keys must be recovered, not replaced. An existing key cannot be rotated by
+this operational helper. An isolated container performs an encryption/decryption
+round trip before the runtime changes; database/image/core-health guards and
+configuration rollback still apply. No payout flags or acceptance rows are added.
+
+On October 4 at 16:39Z, initialization succeeded with zero existing bank rows,
+zero financial operations and zero provider acceptances. Both running services
+have the same key, retain the same database and immutable images, and keep runtime
+schema changes disabled. The secret was not printed or committed. Private receipt:
+`/var/backups/papzii/configuration-20261004T163900Z/configuration.json`.
+
+A separate Windows user-scoped DPAPI recovery copy was created and its decryption
+round trip verified. This does not establish complete off-site database/storage
+disaster recovery; that remains a launch gate. Keep this key server-side and in
+protected recovery storage, never in `EXPO_PUBLIC_*`, mobile manifests, public
+repository variables or store metadata. Creator transfers still require an
+authorized provider account, independent verification and confirmed settlement.
+
+Primary reference: [Fernet key handling](https://cryptography.io/en/latest/fernet/).

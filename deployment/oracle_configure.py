@@ -4,6 +4,8 @@ Run as root on the existing Oracle host. Read JSON from stdin, never secret CLI
 arguments. Credentials and resolved Compose backups remain root-only on Oracle.
 """
 import argparse
+import base64
+import binascii
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
@@ -11,6 +13,7 @@ import json
 import os
 from pathlib import Path
 import re
+import secrets
 import sys
 from urllib.parse import urlsplit
 
@@ -26,9 +29,41 @@ ALLOWED = {
     "PAYFAST_SANDBOX", "PAYFAST_CHECKOUT_ENABLED",
     "SERVICE_ACCEPTANCE_USER_IDS", "SERVICE_ACCEPTANCE_EXPIRES_AT", "PAYFAST_ACCEPTANCE_MAX_AMOUNT",
     "VIDEO_ACCEPTANCE_ID", "DISPATCH_ACCEPTANCE_ID", "INSTANT_DISPATCH_ENABLED",
+    "FINANCIAL_BANK_ENCRYPTION_KEY",
 }
 PAYMENT_SETTINGS = {"PAYFAST_MERCHANT_ID", "PAYFAST_MERCHANT_KEY", "PAYFAST_PASSPHRASE",
                     "PAYFAST_SANDBOX", "PAYFAST_CHECKOUT_ENABLED"}
+BANK_KEY = "FINANCIAL_BANK_ENCRYPTION_KEY"
+
+
+def validate_bank_key(key):
+    try:
+        raw = base64.b64decode(key, altchars=b"-_", validate=True)
+    except (ValueError, TypeError, binascii.Error):
+        raise ValueError("Bank encryption requires a valid Fernet key") from None
+    if len(raw) != 32 or base64.urlsafe_b64encode(raw).decode() != key:
+        raise ValueError("Bank encryption requires a canonical 32-byte Fernet key")
+
+
+def bank_initialization_updates(api_env, worker_env):
+    existing = [env.get(BANK_KEY, "") for env in (api_env, worker_env)]
+    if any(existing):
+        if existing[0] != existing[1]:
+            raise ValueError("Existing API and worker bank keys need reconciliation, not initialization")
+        validate_bank_key(existing[0])
+        return {BANK_KEY: existing[0]}
+    return {BANK_KEY: base64.urlsafe_b64encode(secrets.token_bytes(32)).decode()}
+
+
+def guard_bank_key_update(api_env, worker_env, updates, record_count):
+    if BANK_KEY not in updates:
+        return
+    validate_bank_key(updates[BANK_KEY])
+    existing = [env.get(BANK_KEY, "") for env in (api_env, worker_env)]
+    if any(existing) and any(value != updates[BANK_KEY] for value in existing):
+        raise ValueError("Existing bank encryption keys require a separate reconciled rotation")
+    if not any(existing) and record_count != 0:
+        raise ValueError("Restore the original key before accessing existing encrypted bank records")
 
 
 def validate_updates(updates):
@@ -39,6 +74,8 @@ def validate_updates(updates):
             raise ValueError("Expected nonempty single-line integration settings")
         if len(value) > 8192:
             raise ValueError("Integration setting is too large")
+    if BANK_KEY in updates:
+        validate_bank_key(updates[BANK_KEY])
     for key in ("LIVEKIT_ENABLED", "SMTP_SSL", "PAYFAST_SANDBOX", "PAYFAST_CHECKOUT_ENABLED", "INSTANT_DISPATCH_ENABLED"):
         if key in updates and updates[key] not in {"true", "false"}:
             raise ValueError("Boolean integration settings must be explicit")
@@ -85,9 +122,9 @@ def configured_compose(config, api_env, worker_env, updates, admin_id=None):
         if result["services"][name].get("build"):
             raise ValueError("Configuration-only changes cannot rebuild images")
         env = {**runtime, **updates}
-        if ("RECOVERY_ENCRYPTION_KEY" in updates and runtime.get("RECOVERY_ENCRYPTION_KEY")
-                and runtime["RECOVERY_ENCRYPTION_KEY"] != updates["RECOVERY_ENCRYPTION_KEY"]):
-            raise ValueError("Existing recovery encryption keys require a separate safe rotation")
+        for key in ("RECOVERY_ENCRYPTION_KEY", BANK_KEY):
+            if key in updates and runtime.get(key) and runtime[key] != updates[key]:
+                raise ValueError("Existing encryption keys require a separate safe rotation")
         if set(updates) & PAYMENT_SETTINGS:
             for key in PAYMENT_SETTINGS - {"PAYFAST_CHECKOUT_ENABLED"}:
                 if runtime.get("PAYFAST_MERCHANT_ID") and runtime.get(key) != updates[key]:
@@ -117,6 +154,10 @@ def configure(args, payload):
         release.validate_image(container["Config"]["Image"], service, args.expected_revision)
     if api_env.get("APP_ENV") != "production" or worker_env.get("DATABASE_URL") != api_env.get("DATABASE_URL"):
         raise ValueError("Expected aligned production API and worker")
+    if BANK_KEY in updates:
+        # A lost key must be restored, never replaced by a fresh key over ciphertext.
+        count = int(release.sql(user, database, "SELECT count(*) FROM financial_bank_accounts"))
+        guard_bank_key_update(api_env, worker_env, updates, count)
     if set(updates) & PAYMENT_SETTINGS:
         # Older images ignore unknown env fields and would inadvertently enable charging.
         release.command(["docker", "exec", "papzii-api", "python", "-c",
@@ -149,6 +190,16 @@ def configure(args, payload):
     (root / "previous-compose.yml").write_text(original)
     release.private_json(root / "candidate-compose.json", candidate)
     try:
+        if BANK_KEY in updates:
+            envfile = root / 'bank-preflight.env'
+            release.write_env(envfile, candidate['services']['api']['environment'])
+            probe = (
+                "from app.financial_operations import FinancialConfig,cipher; "
+                "f=cipher(FinancialConfig.from_env()); "
+                "assert f.decrypt(f.encrypt(b'bank-configuration-probe'))==b'bank-configuration-probe'"
+            )
+            release.command(['docker','run','--rm','--network','papzii_default','--env-file',str(envfile),
+                             api['Config']['Image'],'python','-c',probe])
         if set(updates) & {'SERVICE_ACCEPTANCE_USER_IDS', 'SERVICE_ACCEPTANCE_EXPIRES_AT', 'VIDEO_ACCEPTANCE_ID', 'DISPATCH_ACCEPTANCE_ID', 'INSTANT_DISPATCH_ENABLED'}:
             envfile = root / 'preflight.env'
             release.write_env(envfile, candidate['services']['api']['environment'])
@@ -199,6 +250,7 @@ asyncio.run(main())
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--expected-revision", required=True)
+    parser.add_argument("--initialize-bank-encryption", action="store_true")
     args = parser.parse_args()
     try:
         import fcntl
@@ -207,7 +259,14 @@ if __name__ == "__main__":
         raw = sys.stdin.read(65537)
         if len(raw) > 65536:
             raise ValueError("Integration request is too large")
-        configure(args, json.loads(raw))
+        payload = json.loads(raw or '{}')
+        if args.initialize_bank_encryption:
+            if payload != {}:
+                raise ValueError("Key initialization cannot be combined with other configuration changes")
+            api_env = release.environment(release.inspect('papzii-api'))
+            worker_env = release.environment(release.inspect('papzii-worker-1'))
+            payload = {'updates': bank_initialization_updates(api_env, worker_env)}
+        configure(args, payload)
     except Exception as error:
         print(json.dumps({"ok": False, "error_type": type(error).__name__,
                           "message": "Configuration failed; private details remain on Oracle"}))

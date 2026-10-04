@@ -8,6 +8,7 @@ from fastapi import HTTPException
 
 from .config import Settings
 from .database import connect
+from .booking_engine import enqueue
 from .service_acceptance import canary_active, require_access
 
 
@@ -163,7 +164,12 @@ async def handle_video_call(settings: Settings, user: dict[str, Any], payload: d
             access.with_grants(api.VideoGrants(room_join=True, room=room['room_name'], can_publish=True, can_subscribe=True,
                                               can_publish_data=False, can_publish_sources=['camera', 'microphone'],
                                               can_update_own_metadata=False, room_create=False, room_admin=False, room_list=False, room_record=False))
-            return {'token': access.to_jwt(), 'url': settings.livekit_url, 'sessionId': room['id'], 'bookingId': booking_id,
+            token = access.to_jwt()
+            for recipient in sorted(members - {user['id']}):
+                await enqueue(conn, 'notification', {'user_id': recipient, 'event_type': 'booking_call_invite',
+                    'booking_id': booking_id, 'session_id': room['id'], 'title': 'Booking call invitation',
+                    'body': 'A booking participant is inviting you to a video call.'}, f"video:{room['id']}:invite:{recipient}")
+            return {'token': token, 'url': settings.livekit_url, 'sessionId': room['id'], 'bookingId': booking_id,
                     'expiresAt': (datetime.now(UTC) + ttl).isoformat(), 'roomExpiresAt': room['expires_at'].isoformat(),
                     'billing': 'none', 'status': 'open'}
     finally:

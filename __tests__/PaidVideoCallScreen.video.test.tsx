@@ -7,6 +7,7 @@ let mockParams: any;
 let mockConnection: string;
 let mockMicrophone: boolean;
 let mockCamera: boolean;
+let mockAccess: any;
 const mockGoBack = jest.fn();
 const mockDisconnect = jest.fn();
 const mockMic = jest.fn();
@@ -18,7 +19,7 @@ const mockRoom = { disconnect: mockDisconnect };
 const mockTracks: any[] = [];
 
 jest.mock('../src/config/backendFunctions', () => ({ invokeBackendFunction: jest.fn() }));
-jest.mock('../src/hooks/useServiceAccess', () => ({ useServiceAccess: () => ({ allowed: () => true }) }));
+jest.mock('../src/hooks/useServiceAccess', () => ({ useServiceAccess: () => mockAccess }));
 jest.mock('../src/utils/videoCalls', () => ({
   ...jest.requireActual('../src/utils/videoCalls'),
   getLiveVideoSDK: jest.fn(), requestBookingCall: jest.fn(), endBookingCall: jest.fn(),
@@ -56,6 +57,7 @@ describe('Native booking call controls', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockParams = { bookingId: 'booking-1' };
+    mockAccess = { allowed: () => true, loading: false, error: null, retry: jest.fn() };
     mockConnection = 'connected'; mockMicrophone = true; mockCamera = true;
     (getLiveVideoSDK as jest.Mock).mockReturnValue(sdk);
     (requestBookingCall as jest.Mock).mockResolvedValue(session);
@@ -75,6 +77,18 @@ describe('Native booking call controls', () => {
     (getLiveVideoSDK as jest.Mock).mockReturnValue(null);
     const view = render(<PaidVideoCallScreen />);
     expect(view.getByText('Video calling is unavailable on this build. Chat and bookings remain available.')).toBeTruthy();
+    expect(requestBookingCall).not.toHaveBeenCalled();
+  });
+
+  it('distinguishes availability loading from a missing native SDK and can retry a failed check', () => {
+    mockAccess = { ...mockAccess, loading: true, allowed: () => false };
+    const view = render(<PaidVideoCallScreen />);
+    expect(view.getByText('Checking call availability...')).toBeTruthy();
+    expect(view.queryByText('Video calling is unavailable on this build. Chat and bookings remain available.')).toBeNull();
+    mockAccess = { ...mockAccess, loading: false, error: 'Timed out' };
+    view.rerender(<PaidVideoCallScreen />);
+    fireEvent.press(view.getByRole('button', { name: 'Retry call availability' }));
+    expect(mockAccess.retry).toHaveBeenCalledTimes(1);
     expect(requestBookingCall).not.toHaveBeenCalled();
   });
 

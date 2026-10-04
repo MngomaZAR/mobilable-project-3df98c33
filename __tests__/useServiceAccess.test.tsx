@@ -42,6 +42,16 @@ test('an old account response cannot enable the new account after a switch', asy
   expect(isBetaRestrictedRequest('/payments/checkout', 'POST', {}, 'b')).toBe(true);
 });
 
+test('a same-user token rotation immediately invalidates the old screen permissions', async () => {
+  (apiClient.get as jest.Mock).mockResolvedValue(permission());
+  const view = render(<Screen />);
+  await waitFor(() => expect(view.getByText('Checkout available')).toBeTruthy());
+  mockSession = { user: { id: mockUser }, access_token: 'rotated' };
+  resetServiceAccess('rotated');
+  view.rerender(<Screen />);
+  expect(view.getByText('Checkout disabled')).toBeTruthy();
+});
+
 test.each(['wrong-user', 'expired', 'malformed'])('unverified %s permissions remain disabled', async kind => {
   const response: any = permission();
   if (kind === 'wrong-user') response.user_id = 'other';

@@ -42,7 +42,7 @@ export type RootStackParamList = {
   ChatThread: { conversationId: string; title?: string; avatarUrl?: string };
   AccountConfig: undefined;
   ModelPremiumDashboard: undefined;
-  PaidVideoCall: { creatorId?: string; role?: 'creator' | 'viewer'; testRoom?: boolean } | undefined;
+  PaidVideoCall: { bookingId: string };
   Notifications: undefined;
   PaymentHistory: undefined;
   Support: { bookingId?: string; category?: 'general' | 'billing' | 'safety' | 'technical' | 'account'; subject?: string } | undefined;

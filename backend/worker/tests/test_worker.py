@@ -44,6 +44,17 @@ class WorkerTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('ON CONFLICT (id) DO NOTHING', first.args[0])
         self.assertIn('ON CONFLICT (job_id,token_id) DO NOTHING', second.args[0])
 
+    async def test_booking_call_message_and_payment_notifications_have_navigation_and_category(self):
+        cases = [('booking_call_invite', {'booking_id': 'booking-1'}, 'booking', 'booking'),
+                 ('message_received', {'conversation_id': 'chat-1'}, 'chat', 'message'),
+                 ('payment_received', {'booking_id': 'booking-1'}, 'booking', 'earnings')]
+        for event, destination, action, category in cases:
+            conn = connection()
+            job = self.job('notification')
+            job['payload'].update(event_type=event, title='Update', body='Ready', **destination)
+            await process_notification(conn, job)
+            self.assertEqual(conn.execute.call_args_list[0].args[-2:], (action, category))
+
     async def test_deletion_financial_hold_defers_24h_without_failure_attempt(self):
         conn = connection(self.job())
         callback = AsyncMock(return_value=False)

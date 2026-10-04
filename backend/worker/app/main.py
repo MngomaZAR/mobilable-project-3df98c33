@@ -19,11 +19,13 @@ logger = logging.getLogger('papzi-worker')
 async def process_notification(conn, job) -> None:
     payload = json.loads(job['payload']) if isinstance(job['payload'], str) else job['payload']
     event_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"papzi-job:{job['id']}"))
+    action_type = 'chat' if payload.get('conversation_id') else 'booking' if payload.get('booking_id') else None
+    category = 'message' if action_type == 'chat' else 'earnings' if payload['event_type'].startswith(('payment_', 'payout_')) else 'booking' if action_type == 'booking' else 'social'
     async with conn.transaction():
         await conn.execute(
-            """INSERT INTO notification_events (id,user_id,event_type,title,body,status,action_payload)
-            VALUES ($1,$2,$3,$4,$5,'unread',$6::jsonb) ON CONFLICT (id) DO NOTHING""",
-            event_id, payload['user_id'], payload['event_type'], payload['title'], payload['body'], json.dumps(payload),
+            """INSERT INTO notification_events (id,user_id,event_type,title,body,status,action_payload,action_type,category)
+            VALUES ($1,$2,$3,$4,$5,'unread',$6::jsonb,$7,$8) ON CONFLICT (id) DO NOTHING""",
+            event_id, payload['user_id'], payload['event_type'], payload['title'], payload['body'], json.dumps(payload), action_type, category,
         )
         await conn.execute(
             """INSERT INTO push_deliveries (id,job_id,token_id,notification_id,expo_push_token)

@@ -8,7 +8,7 @@ import { RootStackParamList } from '../navigation/types';
 import { useAppData } from '../store/AppDataContext';
 import { useTheme } from '../store/ThemeContext';
 import { canTrackBooking, getBookingChatTarget, getBookingProviderId, isReviewableBooking } from '../utils/bookingWorkflow';
-import { fetchBookingById } from '../services/bookingService';
+import { fetchBookingById, updateBookingStatusInDb } from '../services/bookingService';
 import { Booking } from '../types';
 import { formatBookingStart } from '../utils/bookingTime';
 import { BETA_RESTRICTION_MESSAGE } from '../config/betaPolicy';
@@ -83,11 +83,29 @@ const BookingDetailScreen: React.FC = () => {
   const providerProfile = state.profiles.find(item => item.id === providerId);
   const talentName = provider?.name || providerProfile?.full_name || booking.photographer?.name || 'Creator';
   const isClient = booking.client_id === viewerId;
+  const isProvider = !!viewerId && providerId === viewerId;
+  const canRespond = isProvider && booking.status === 'pending' && !booking.is_instant && !booking.dispatch_request_id;
+  const canCall = (isClient || isProvider) && ['accepted', 'in_progress'].includes(booking.status) &&
+    ['photography', 'modeling', 'combined'].includes(booking.service_type || '');
   const chatTarget = getBookingChatTarget(booking, viewerId);
   const requiresPayment = booking.status === 'accepted' && booking.payment_status === 'unpaid';
   const canPay = requiresPayment && isClient;
   const canCancel = !!chatTarget && (booking.status === 'pending' || booking.status === 'accepted');
   const busy = loadingAction !== null;
+  const saveStatus = (status: 'accepted' | 'declined' | 'cancelled') => cachedBooking
+    ? updateBookingStatus(booking.id, status) : updateBookingStatusInDb(booking.id, status);
+  const respondToBooking = async (status: 'accepted' | 'declined') => {
+    if (busy || !canRespond) return;
+    setLoadingAction(status);
+    setActionNotice(null);
+    try {
+      const saved = await saveStatus(status);
+      if (!saved || saved.status !== status) throw new Error('Your response was not confirmed. Please retry.');
+      setFetchedBooking(saved);
+      setActionNotice(status === 'accepted' ? 'Booking accepted. Awaiting payment.' : 'Booking declined.');
+    } catch (error) { setActionNotice(error instanceof Error ? error.message : 'Could not respond to this booking.'); }
+    finally { setLoadingAction(null); }
+  };
   const dateLabel = formatBookingStart(booking);
   const progress = [
     { label: 'Request sent', done: true },
@@ -132,7 +150,7 @@ const BookingDetailScreen: React.FC = () => {
     setLoadingAction('cancel');
     setActionNotice(null);
     try {
-      const saved = await updateBookingStatus(booking.id, 'cancelled');
+      const saved = await saveStatus('cancelled');
       if (!saved || saved.status !== 'cancelled') throw new Error('Cancellation was not confirmed. Please refresh and retry.');
       const message = booking.payment_status === 'paid' ? 'Your payment record is unchanged. Contact support to request a refund.' : 'Your booking has been cancelled.';
       setFetchedBooking(saved);
@@ -194,7 +212,15 @@ const BookingDetailScreen: React.FC = () => {
       {bookingError && <Text accessibilityRole="alert" style={[styles.notes, { color: colors.textSecondary }]}>{bookingError}</Text>}
       {booking.is_instant && booking.status === 'pending' && !booking.dispatch_request_id ? action('Retry creator matching', 'refresh-outline', () => void retryMatching(), !access.allowed('dispatch')) : null}
       {booking.dispatch_request_id && booking.status === 'pending' ? <Text style={[styles.notes, { color: colors.textSecondary }]}>Creator matching: {booking.assignment_state || 'offered'}</Text> : null}
+      {canRespond ? <>
+        {action(loadingAction === 'accepted' ? 'Accepting...' : 'Accept booking', 'checkmark-circle-outline', () => void respondToBooking('accepted'))}
+        {action(loadingAction === 'declined' ? 'Declining...' : 'Decline booking', 'close-circle-outline', () => void respondToBooking('declined'), false, true)}
+      </> : null}
       {action(loadingAction === 'chat' ? 'Opening chat...' : 'Open chat', 'chatbubble-outline', openChatThread, !chatTarget)}
+      {canCall && Platform.OS !== 'web' ? <>
+        {action('Booking video call', 'videocam-outline', () => navigation.navigate('PaidVideoCall', { bookingId: booking.id }), !access.allowed('video'))}
+        {access.error ? action('Retry service connection', 'refresh-outline', access.retry, access.loading) : null}
+      </> : null}
       {action('Track on map', 'navigate-outline', () => navigation.navigate('BookingTracking', { bookingId: booking.id }), !canTrackBooking(booking))}
       {canPay ? action('Pay for shoot', 'card-outline', () => navigation.navigate('Payment', { bookingId: booking.id }), !access.allowed('checkout')) : null}
       {canPay && !access.allowed('checkout') ? <Text accessibilityRole="alert" style={[styles.notes, { color: colors.textSecondary }]}>{BETA_RESTRICTION_MESSAGE}</Text> : null}

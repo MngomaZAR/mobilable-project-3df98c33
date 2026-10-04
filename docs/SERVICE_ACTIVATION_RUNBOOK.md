@@ -68,6 +68,21 @@ The CLI does not activate services. It must run in an image with the production
 database configuration and read-only archive mounts; keep credentials off CLI
 arguments and terminal output.
 
+Booking detail is the native call entry point for both participants of an accepted
+physical-service booking. Room creation queues a deduplicated invitation only
+after the LiveKit room and media token succeed; push payloads contain booking and
+session references, never media tokens. Tapping the notification opens booking
+detail, where access is checked again before joining. Native push registration uses
+SDK 54's execution environment, not the deprecated null `appOwnership` value.
+Cold-start and foreground push responses are restricted to the signed-in recipient
+and known booking/chat routes; arbitrary URLs and cross-account payloads are ignored.
+
+In-app notifications refresh while mounted, retain failed actions, and persist
+read/dismissed state on the server. Viewing an instant offer does not accept or
+consume it. Scheduled requests can be accepted or declined in booking detail,
+including requests outside the local booking cache. Instant offers must use their
+dedicated server dispatch response, not scheduled acceptance.
+
 Records are server-only, immutable by ID, revision/endpoint/reviewer-bound, expire
 after 30 days and can be revoked. Reports cannot be future-dated or older than
 seven days at review. Deploying a different source revision invalidates service
@@ -93,3 +108,9 @@ database error fails closed.
 
 No live charge, payout, device report or store approval is fabricated by the tests
 in this change. Financial protocol tests use explicitly isolated mock gateways.
+
+Primary integration references:
+- https://docs.expo.dev/versions/v54.0.0/sdk/constants/
+- https://docs.expo.dev/versions/v54.0.0/sdk/notifications/
+- https://docs.livekit.io/frontends/reference/tokens-grants/
+- https://docs.expo.dev/submit/android/

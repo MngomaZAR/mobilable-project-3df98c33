@@ -1,16 +1,17 @@
 import React from 'react';
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import BookingDetailScreen from '../src/screens/BookingDetailScreen';
 import { useAppData } from '../src/store/AppDataContext';
-import { fetchBookingById } from '../src/services/bookingService';
+import { fetchBookingById, updateBookingStatusInDb } from '../src/services/bookingService';
 
 const mockNavigate = jest.fn();
 const mockChat = jest.fn();
 const mockUpdate = jest.fn();
+let mockVideoAllowed = true;
 jest.mock('../src/store/AppDataContext', () => ({ useAppData: jest.fn() }));
-jest.mock('../src/hooks/useServiceAccess', () => ({ useServiceAccess: () => ({ allowed: () => true }) }));
-jest.mock('../src/services/bookingService', () => ({ fetchBookingById: jest.fn() }));
+jest.mock('../src/hooks/useServiceAccess', () => ({ useServiceAccess: () => ({ allowed: () => mockVideoAllowed, loading: false, error: null }) }));
+jest.mock('../src/services/bookingService', () => ({ fetchBookingById: jest.fn(), updateBookingStatusInDb: jest.fn() }));
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: mockNavigate, goBack: jest.fn() }),
   useRoute: () => ({ params: { bookingId: 'booking-1' } }),
@@ -18,10 +19,11 @@ jest.mock('@react-navigation/native', () => ({
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }) }));
 
-const booking = { id: 'booking-1', client_id: 'client', photographer_id: 'photographer', model_id: null, booking_date: '2026-10-20', package_type: 'Portrait shoot', status: 'accepted', payment_status: 'unpaid', total_amount: 1200 };
+const booking = { id: 'booking-1', client_id: 'client', photographer_id: 'photographer', model_id: null, service_type: 'photography', booking_date: '2026-10-20', package_type: 'Portrait shoot', status: 'accepted', payment_status: 'unpaid', total_amount: 1200 };
 let context: any;
 beforeEach(() => {
   jest.clearAllMocks();
+  mockVideoAllowed = true;
   context = { state: { currentUser: { id: 'client' }, bookings: [{ ...booking }], photographers: [{ id: 'photographer', name: 'Creator' }], models: [], profiles: [] }, startConversationWithUser: mockChat, updateBookingStatus: mockUpdate };
   (useAppData as jest.Mock).mockReturnValue(context);
   mockChat.mockResolvedValue({ id: 'conversation', title: 'Booking chat' });
@@ -93,4 +95,59 @@ test('missing dates render safely and unpaid bookings cannot open tracking', () 
   const screen = render(<BookingDetailScreen />);
   expect(screen.getByText('Date unavailable')).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Track on map' })).toBeDisabled();
+});
+
+test('both booking parties can open the exact accepted physical booking call', () => {
+  const screen = render(<BookingDetailScreen />);
+  fireEvent.press(screen.getByRole('button', { name: 'Booking video call' }));
+  expect(mockNavigate).toHaveBeenCalledWith('PaidVideoCall', { bookingId: 'booking-1' });
+  context.state.currentUser.id = 'photographer';
+  screen.rerender(<BookingDetailScreen />);
+  expect(screen.getByRole('button', { name: 'Booking video call' })).toBeEnabled();
+});
+
+test('pending, digital and nonparticipant bookings do not expose a video entry', () => {
+  context.state.bookings[0].status = 'pending';
+  const screen = render(<BookingDetailScreen />);
+  expect(screen.queryByRole('button', { name: 'Booking video call' })).toBeNull();
+  context.state.bookings[0].status = 'accepted';
+  context.state.bookings[0].service_type = 'video_call';
+  screen.rerender(<BookingDetailScreen />);
+  expect(screen.queryByRole('button', { name: 'Booking video call' })).toBeNull();
+  context.state.bookings[0].service_type = 'photography';
+  context.state.currentUser.id = 'other';
+  screen.rerender(<BookingDetailScreen />);
+  expect(screen.queryByRole('button', { name: 'Booking video call' })).toBeNull();
+});
+
+test('unavailable account access and web builds cannot enter a video call', () => {
+  mockVideoAllowed = false;
+  const screen = render(<BookingDetailScreen />);
+  expect(screen.getByRole('button', { name: 'Booking video call' })).toBeDisabled();
+  const os = Platform.OS;
+  try {
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'web' });
+    screen.rerender(<BookingDetailScreen />);
+    expect(screen.queryByRole('button', { name: 'Booking video call' })).toBeNull();
+  } finally { Object.defineProperty(Platform, 'OS', { configurable: true, value: os }); }
+});
+
+test('a scheduled creator response works outside the cached booking list', async () => {
+  context.state.currentUser.id = 'photographer';
+  context.state.bookings = [];
+  (fetchBookingById as jest.Mock).mockResolvedValue({ ...booking, status: 'pending' });
+  (updateBookingStatusInDb as jest.Mock).mockResolvedValue({ ...booking, status: 'accepted' });
+  const screen = render(<BookingDetailScreen />);
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Accept booking' })).toBeTruthy());
+  await act(async () => { fireEvent.press(screen.getByRole('button', { name: 'Accept booking' })); });
+  expect(updateBookingStatusInDb).toHaveBeenCalledWith('booking-1', 'accepted');
+  expect(mockUpdate).not.toHaveBeenCalled();
+  expect(screen.getByText('Booking accepted. Awaiting payment.')).toBeTruthy();
+});
+
+test('prepared instant bookings cannot use scheduled acceptance', () => {
+  context.state.currentUser.id = 'photographer';
+  context.state.bookings[0] = { ...booking, status: 'pending', is_instant: true };
+  const screen = render(<BookingDetailScreen />);
+  expect(screen.queryByRole('button', { name: 'Accept booking' })).toBeNull();
 });

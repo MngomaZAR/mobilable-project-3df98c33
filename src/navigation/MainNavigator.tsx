@@ -56,6 +56,8 @@ import { useAppData } from '../store/AppDataContext';
 import { useTheme } from '../store/ThemeContext';
 import { getEffectiveRole, isEffectiveModel, isEffectivePhotographer, roleRequiresKyc } from '../utils/userRole';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { getLastPushPayload, subscribeToPushResponses } from '../services/notificationService';
+import { notificationDeepLink } from '../utils/notificationNavigation';
 
 const Tab = createBottomTabNavigator<TabParamList>();
 const Stack = createStackNavigator<RootStackParamList>();
@@ -101,7 +103,7 @@ const TabsNavigator = () => {
   const { currentUser, state } = useAppData();
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
-  const unreadNotifications = state.notifications.filter(n => n.status === 'queued').length;
+  const unreadNotifications = state.notifications.filter(n => ['queued', 'unread'].includes(n.status)).length;
 
   const role = getEffectiveRole(currentUser);
   const isClient = role === 'client';
@@ -180,6 +182,18 @@ export const MainNavigator: React.FC<MainNavigatorProps> = ({ logoSource }) => {
 
   const linking = {
     prefixes: [Linking.createURL('/'), 'papzi://'],
+    async getInitialURL() {
+      const url = await Linking.getInitialURL();
+      return url ?? notificationDeepLink(await getLastPushPayload(), currentUser?.id);
+    },
+    subscribe(listener: (url: string) => void) {
+      const links = Linking.addEventListener('url', ({ url }) => listener(url));
+      const removePush = subscribeToPushResponses(data => {
+        const url = notificationDeepLink(data, currentUser?.id);
+        if (url) listener(url);
+      });
+      return () => { links.remove(); removePush(); };
+    },
     config: {
       screens: {
         Root: {

@@ -155,6 +155,20 @@ class VideoCallTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(sum('INSERT INTO booking_video_rooms' in sql for sql, _ in self.conn.sql), 1)
         self.assertTrue(any('livekit_room_end' in sql for sql, _ in self.conn.sql))
 
+    async def test_invite_is_recipient_scoped_deduplicated_and_contains_no_media_credentials(self):
+        response = await self.call()
+        await self.call()
+        jobs = [args for sql, args in self.conn.sql if 'INSERT INTO job_outbox' in sql and 'livekit_room_end' not in sql]
+        self.assertEqual(len(jobs), 2)
+        payload = json.loads(jobs[0][2])
+        self.assertEqual(payload['user_id'], 'provider-1')
+        self.assertEqual(payload['booking_id'], 'booking-1')
+        self.assertEqual(payload['session_id'], response['sessionId'])
+        self.assertEqual(payload['event_type'], 'booking_call_invite')
+        self.assertEqual(jobs[0][3], jobs[1][3])
+        self.assertNotIn('token', payload)
+        self.assertNotIn('url', payload)
+
     async def test_failed_room_creation_preserves_scheduled_cleanup(self):
         self.client.room.create_room.side_effect = RuntimeError('not exposed')
         with self.assertRaises(HTTPException) as error:
@@ -162,6 +176,7 @@ class VideoCallTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(error.exception.status_code, 503)
         self.assertIsNotNone(self.conn.room)
         self.assertTrue(any('livekit_room_end' in sql for sql, _ in self.conn.sql))
+        self.assertFalse(any('booking_call_invite' in str(args) for sql, args in self.conn.sql))
 
     async def test_ended_or_expired_room_cannot_issue_new_token(self):
         await self.call()

@@ -4,7 +4,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
+import { RootStackParamList } from '../navigation/types';
 import { ConnectionState, Track } from 'livekit-client';
 import { useServiceAccess } from '../hooks/useServiceAccess';
 import {
@@ -130,8 +132,8 @@ const CallRoom: React.FC<{
 };
 
 const PaidVideoCallScreen: React.FC = () => {
-  const navigation = useNavigation<any>();
-  const route = useRoute<any>();
+  const navigation = useNavigation<StackNavigationProp<RootStackParamList, 'PaidVideoCall'>>();
+  const route = useRoute<RouteProp<RootStackParamList, 'PaidVideoCall'>>();
   const bookingId = typeof route.params?.bookingId === 'string' ? route.params.bookingId : '';
   const access = useServiceAccess();
   const videoAllowed = access.allowed('video');
@@ -223,7 +225,11 @@ const PaidVideoCallScreen: React.FC = () => {
   };
 
   if (!session || !sdk) {
-    const unavailable = !sdk ? LIVE_VIDEO_UNAVAILABLE_MESSAGE : !bookingId ? 'An accepted booking is required to join this call.' : null;
+    const unavailable = !bookingId ? 'An accepted booking is required to join this call.'
+      : access.loading ? 'Checking call availability...'
+      : access.error ? 'Call availability could not be checked.'
+      : !videoAllowed ? 'Booking calls are not available for this account.'
+      : !sdk ? LIVE_VIDEO_UNAVAILABLE_MESSAGE : null;
     return (
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle="light-content" />
@@ -232,6 +238,10 @@ const PaidVideoCallScreen: React.FC = () => {
           <Text style={styles.title}>Booking call</Text>
           <Text style={styles.secondary}>{unavailable || (loading ? 'Preparing call...' : 'Ready to join')}</Text>
           {error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
+          {access.error && <TouchableOpacity accessibilityRole="button" accessibilityLabel="Retry call availability"
+            style={styles.action} onPress={access.retry} disabled={access.loading}>
+            <Ionicons name="refresh-outline" size={20} color="#fff" /><Text style={styles.actionText}>Retry</Text>
+          </TouchableOpacity>}
           {!unavailable && (
             <TouchableOpacity accessibilityRole="button" accessibilityLabel="Join booking call" disabled={loading || ending}
               style={[styles.action, (loading || ending) && styles.disabled]} onPress={() => void join()}>

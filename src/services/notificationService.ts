@@ -1,16 +1,16 @@
 import * as Device from 'expo-device';
 import { Platform } from 'react-native';
-import Constants from 'expo-constants';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { backendDb } from './backendGateway';
 
 let notificationsModule: typeof import('expo-notifications') | null = null;
 
-const shouldUseNotifications = () => (Constants.appOwnership ?? 'expo') !== 'expo';
+const shouldUseNotifications = () => Platform.OS !== 'web' && Constants.executionEnvironment !== ExecutionEnvironment.StoreClient && Constants.appOwnership !== 'expo';
 
 const getNotifications = async () => {
   if (!shouldUseNotifications()) return null;
   if (!notificationsModule) {
-    notificationsModule = await import('expo-notifications');
+    notificationsModule = require('expo-notifications') as typeof import('expo-notifications');
     notificationsModule.setNotificationHandler({
       handleNotification: async () => ({
         shouldShowAlert: true,
@@ -23,6 +23,27 @@ const getNotifications = async () => {
   }
   return notificationsModule;
 };
+
+export async function getLastPushPayload(): Promise<Record<string, unknown> | null> {
+  try {
+    const notifications = await getNotifications();
+    if (!notifications) return null;
+    const response = await notifications.getLastNotificationResponseAsync();
+    return response?.actionIdentifier === notifications.DEFAULT_ACTION_IDENTIFIER ? response.notification.request.content.data : null;
+  } catch { return null; }
+}
+
+export function subscribeToPushResponses(listener: (data: Record<string, unknown>) => void) {
+  let cancelled = false;
+  let subscription: { remove: () => void } | undefined;
+  void getNotifications().then(notifications => {
+    if (cancelled || !notifications) return;
+    subscription = notifications.addNotificationResponseReceivedListener(response => {
+      if (!cancelled && response.actionIdentifier === notifications.DEFAULT_ACTION_IDENTIFIER) listener(response.notification.request.content.data);
+    });
+  }).catch(() => {});
+  return () => { cancelled = true; subscription?.remove(); };
+}
 
 export async function registerForPushNotificationsAsync() {
   if (!shouldUseNotifications()) {

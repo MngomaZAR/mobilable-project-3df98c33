@@ -10,8 +10,8 @@ work continues. TestFlight testing is not a public App Store release.
 - iOS `com.papzi.app`, App Store Connect `6760396864`.
 - Android `com.papziiii.paparazzi`, internal testing only.
 - Profile/channel `beta-testing`, production-hosted Oracle HTTPS API.
-- Digital purchasing disabled. Client-side guards also refuse checkout, financial
-  execution, video joins and instant-dispatch writes before any network call.
+- Digital purchasing disabled. Build 39's client-side guards refuse checkout,
+  financial execution, video joins and instant-dispatch writes before any network call.
 - Profile/discovery/feed, registration/password login/recovery, scheduled booking
   requests, acceptance, chat, routing and authorized moderation remain testable.
 - No test redirect or mock can mark payment, completion or bank settlement true.
@@ -91,3 +91,17 @@ It refuses unrelated builds/groups, incomplete/paginated scopes and unavailable
 external builds. Mail/reviewer operations require separately selected protected
 bridges; private credentials, recipients and retry ledgers remain outside Git.
 Eleven offline safety tests cover those gates and duplicate-invitation handling.
+
+## Guarded Activation Follow-Up
+
+The follow-up candidate after build 39 implements account-bound, short-lived
+server permissions for controlled acceptance, rather than removing the beta
+restriction globally. Deploying the server alone does not update build 39's
+JavaScript. A newly built testing version is required to exercise these changes.
+Public checkout still requires independently accepted live refunds and creator
+bank settlement; public video and instant dispatch require reviewed native-device
+evidence. Missing provider credentials or evidence remain real launch blockers.
+
+See [Service Activation Runbook](SERVICE_ACTIVATION_RUNBOOK.md) for the exact
+controlled-test limits, physical-device cases, financial prerequisites and
+revision-bound acceptance process. No public store approval is claimed here.

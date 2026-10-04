@@ -138,9 +138,15 @@ async def write_load(client, actors):
             await asyncio.sleep(2)
         counts = {row["status"]: row["count"] for row in await conn.fetch("SELECT status,count(*) AS count FROM job_outbox GROUP BY status")}
         notifications = await conn.fetchval("SELECT count(*) FROM notification_events")
-        report["async_worker"] = {"outbox": counts, "persisted_notifications": notifications, "passed": not pending and notifications >= 600, "scope": "Durable in-app delivery, not device push delivery"}
+        unmapped = await conn.fetchval("""SELECT count(*) FROM notification_events WHERE
+            (action_payload ? 'booking_id' AND (action_type IS DISTINCT FROM 'booking' OR category IS NULL)) OR
+            (action_payload ? 'conversation_id' AND (action_type IS DISTINCT FROM 'chat' OR category IS DISTINCT FROM 'message'))""")
+        report["async_worker"] = {"outbox": counts, "persisted_notifications": notifications, "unmapped_destinations": unmapped,
+                                 "passed": not pending and notifications >= 600 and unmapped == 0, "scope": "Durable navigable in-app delivery, not device push delivery"}
         if pending:
             report["blockers"].append({"feature": "Durable background notifications", "reason": f"{pending} jobs did not finish"})
+        if unmapped:
+            report["blockers"].append({"feature": "Notification navigation", "reason": f"{unmapped} notifications lack their canonical destination"})
     finally:
         await conn.close()
 

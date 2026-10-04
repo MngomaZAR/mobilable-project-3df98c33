@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     admin_user_ids: str = Field(default="", alias="ADMIN_USER_IDS")
     commission_rate: float = Field(default=0.20, alias="COMMISSION_RATE", ge=0, le=1)
     payfast_sandbox: bool = Field(default=True, alias="PAYFAST_SANDBOX")
+    payfast_checkout_enabled: bool = Field(default=False, alias="PAYFAST_CHECKOUT_ENABLED")
     payfast_return_url: str = Field(default="", alias="PAYFAST_RETURN_URL")
     payfast_cancel_url: str = Field(default="", alias="PAYFAST_CANCEL_URL")
     osrm_base_url: str = Field(default="", alias="OSRM_BASE_URL")

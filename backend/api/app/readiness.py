@@ -7,7 +7,8 @@ def release_capabilities(settings: Settings) -> dict:
     capabilities = {
         "road_routing_configured": bool(settings.osrm_base_url),
         "object_storage_configured": bool(settings.minio_endpoint and settings.minio_access_key and settings.minio_secret_key),
-        "payment_checkout_configured": bool(settings.payfast_merchant_id and settings.payfast_merchant_key and settings.payfast_passphrase),
+        "payment_checkout_configured": bool(settings.payfast_merchant_id and settings.payfast_merchant_key and settings.payfast_passphrase and settings.api_public_url.startswith("https://")),
+        "payment_checkout_enabled": settings.payfast_checkout_enabled,
         "admin_access_configured": bool(settings.admin_user_ids.strip()),
         "payment_refund_execution": False,
         "bank_payout_execution": False,

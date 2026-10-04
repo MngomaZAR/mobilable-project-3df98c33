@@ -28,6 +28,8 @@ def require_configuration(settings: Settings) -> str:
 
 
 async def checkout(settings: Settings, booking_id: str, user: dict[str, Any]) -> dict[str, str]:
+    if not settings.payfast_checkout_enabled:
+        raise HTTPException(status_code=503, detail="Payment checkout is paused while financial verification is completed. No payment has been created.")
     host = require_configuration(settings)
     conn = await connect(settings)
     try:

@@ -88,6 +88,22 @@ email, video and instant dispatch. No native release gate was overridden.
 EAS production already points to the correct public API; additional environment
 copies cannot supply missing merchant/email credentials or acceptance evidence.
 
+At `2026-10-04T07:40:53Z`, guarded configuration updates had resolved production
+admin allowlisting and recovery-email configuration. The restricted app mailbox
+sent a real recovery email through the public API/Oracle worker, and receipt in
+the owner's Gmail inbox was verified. No account password was changed. Core checks
+still pass; the then-running backend reported five blockers: merchant checkout,
+refunds, bank payouts, video acceptance and instant dispatch acceptance.
+LiveKit cloud authentication passed from Oracle, but actual device media did not.
+See [Integration Recovery](INTEGRATION_RECOVERY_20261004.md).
+
+The current source adds `PAYFAST_CHECKOUT_ENABLED=false` by default. Complete live
+credentials must not automatically authorize collecting money while refunds and
+creator payouts are unverified. Readiness now reports checkout configuration and
+activation separately. Payment callbacks remain available while checkout is paused.
+This change requires tested matching images before runtime credential configuration;
+new phone builds and public submission remain held.
+
 Tester inventory at `2026-10-04T02:29:52Z` confirms Jones is in external group
 `papzi`, which has **no builds**. Internal group `Team (Expo)` has valid build 38.
 Build 38 remains ready for external beta submission, not externally approved.

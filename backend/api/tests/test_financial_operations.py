@@ -478,7 +478,7 @@ class FinancialTests(unittest.IsolatedAsyncioTestCase):
     async def test_checkout_does_not_reuse_another_merchant_pending_payment(self):
         self.store.booking['status'] = 'accepted'
         self.store.payment.update(status='pending', merchant_id='different-merchant')
-        settings = Settings(_env_file=None, PAYFAST_MERCHANT_ID='unit-merchant', PAYFAST_MERCHANT_KEY='unit-key', PAYFAST_PASSPHRASE='unit phrase', API_PUBLIC_URL='https://unit.invalid')
+        settings = Settings(_env_file=None, PAYFAST_MERCHANT_ID='unit-merchant', PAYFAST_MERCHANT_KEY='unit-key', PAYFAST_PASSPHRASE='unit phrase', API_PUBLIC_URL='https://unit.invalid', PAYFAST_CHECKOUT_ENABLED=True)
         with patch('app.payments.connect', self.store.connect), self.assertRaises(HTTPException) as error:
             await checkout(settings, 'booking', {'id': 'client'})
         self.assertEqual(error.exception.status_code, 409)

@@ -60,6 +60,29 @@ Root-only receipts:
 - `/var/backups/papzii/cutover-20261004T013038Z/promotion.json`.
 - Frozen dump SHA-256: `354121d245a68b7f0c7bfec5367fc92284403aede8a56770fab87c777528354c`.
 
-Public core checks pass, but readiness still fails seven capabilities. Backup
+Public core checks pass. The initial cutover failed seven capability checks;
+operational configuration subsequently resolved admin allowlisting and recovery
+email. The 07:40Z probe still failed five. See
+[Integration Recovery](INTEGRATION_RECOVERY_20261004.md) for provider evidence.
+Backup
 retention scheduling, off-host protected copies, alert ownership and repeat restore
 acceptance remain operational work. A backup on the same host is not disaster recovery.
+
+## Configuration-Only Updates
+
+Run `deployment/oracle_configure.py --expected-revision <exact-running-revision>`
+as root on Oracle with a JSON request through stdin, never secret CLI arguments.
+The helper locks the release, validates the exact running images and database,
+backs up resolved Compose privately, updates only allowlisted server environment
+keys in API and worker, and checks core acceptance. A failed change restores the
+previous configuration without rolling back user data.
+
+Owner admin addition requires one active, verified account matching the specified
+email. Existing allowlisted administrators are preserved. Integration settings
+must not change image versions, database identity, public URL, runtime schema
+policy or financial acceptance records.
+
+Merchant settings must be submitted together with `PAYFAST_CHECKOUT_ENABLED=false`.
+The helper refuses an image lacking the default-off checkout guard and refuses
+in-place merchant rotation. Independently accepted payments/refunds/payouts are
+required before a separately reviewed activation; this helper cannot enable it.

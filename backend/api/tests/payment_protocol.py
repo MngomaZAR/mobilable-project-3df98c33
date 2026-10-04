@@ -25,7 +25,7 @@ async def main():
     url = os.environ['DATABASE_URL']
     if '_qa_' not in url.rsplit('/', 1)[-1]:
         raise RuntimeError('QA database required')
-    settings = Settings(API_PUBLIC_URL='https://qa.example.invalid', PAYFAST_MERCHANT_ID='QA-MOCK-MERCHANT', PAYFAST_MERCHANT_KEY='QA-MOCK-KEY', PAYFAST_PASSPHRASE='QA mock passphrase', PAYFAST_SANDBOX=True)
+    settings = Settings(API_PUBLIC_URL='https://qa.example.invalid', PAYFAST_MERCHANT_ID='QA-MOCK-MERCHANT', PAYFAST_MERCHANT_KEY='QA-MOCK-KEY', PAYFAST_PASSPHRASE='QA mock passphrase', PAYFAST_SANDBOX=True, PAYFAST_CHECKOUT_ENABLED=True)
     app.dependency_overrides[get_settings] = lambda: settings
     conn = await asyncpg.connect(url)
     results = []

@@ -890,7 +890,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const stored = await AsyncStorage.getItem(STORAGE_KEY);
         if (stored) {
           const parsed: AppState = JSON.parse(stored);
-          setState({ ...initialState, ...parsed, loading: true, currentUser: parsed.currentUser ? { ...parsed.currentUser, verified: Boolean(parsed.currentUser.verified) }: null });
+          setState({ ...initialState, ...parsed, loading: true, currentUser: parsed.currentUser ? { ...parsed.currentUser, is_admin: false, verified: Boolean(parsed.currentUser.verified) }: null });
         }
 
         if (hasBackendProvider) {
@@ -2123,7 +2123,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const profile = data.user ? await fetchProfile(data.user.id) : null;
       const metadataRole = data.user?.user_metadata?.role as AppUser['role'] | undefined;
       const safeFallbackRole: AppUser['role'] =
-        metadataRole && ['client', 'photographer', 'model', 'admin', 'guest'].includes(metadataRole)
+        metadataRole && ['client', 'photographer', 'model', 'guest'].includes(metadataRole)
           ? metadataRole
           : 'client';
       const user: AppUser | null = data.user ? mapProviderUser(data.user, safeFallbackRole, profile) : null;
@@ -2189,11 +2189,14 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       // Revalidation follows mutations such as age confirmation; cached reads may predate the write.
       const profile = await fetchProfile(user.id, true);
       const currentRole = profile?.role || stateRef.current.currentUser?.role || 'client';
-      const nextUser = mapProviderUser({ id: user.id, email: user.email ?? 'unknown-user', user_metadata: {} }, currentRole ?? 'client', profile);
+      const nextUser = mapProviderUser({ id: user.id, email: user.email ?? 'unknown-user', is_admin: user.is_admin === true, user_metadata: {} }, currentRole ?? 'client', profile);
       setState({ currentUser: nextUser });
       return nextUser;
     } catch (err) {
       logError('revalidate_session', err);
+      if (environment.backendProvider === 'api' && stateRef.current.currentUser) {
+        setState({ currentUser: { ...stateRef.current.currentUser, is_admin: false } });
+      }
       setError(formatErrorMessage(err, 'Unable to validate your current session.'));
       return null;
     }
@@ -2461,6 +2464,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, []);
 
   const updateProfile = useCallback(async (changes: Partial<AppUser>) => {
+    if (changes.is_admin !== undefined) throw new Error('Administrator access is managed by the server.');
     const userId = stateRef.current.currentUser?.id;
     const currentRole = stateRef.current.currentUser?.role;
     const newRole = changes.role ?? currentRole;

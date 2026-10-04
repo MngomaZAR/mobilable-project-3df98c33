@@ -13,7 +13,7 @@ from fastapi import HTTPException, status
 
 from .config import Settings
 from .database import connect
-from .access_control import PUBLIC_ROLES
+from .access_control import PUBLIC_ROLES, is_admin
 from .auth_security import rate_limit, token_digest
 
 
@@ -103,7 +103,7 @@ async def ensure_local_auth_schema(settings: Settings) -> None:
         await conn.close()
 
 
-def user_response(row: asyncpg.Record | dict[str, Any]) -> dict[str, Any]:
+def user_response(row: asyncpg.Record | dict[str, Any], settings: Settings) -> dict[str, Any]:
     metadata = row.get("metadata") if isinstance(row, dict) else row["metadata"]
     if isinstance(metadata, str):
         metadata = json.loads(metadata or "{}")
@@ -111,6 +111,7 @@ def user_response(row: asyncpg.Record | dict[str, Any]) -> dict[str, Any]:
     return {
         "id": row.get("id") if isinstance(row, dict) else row["id"],
         "email": row.get("email") if isinstance(row, dict) else row["email"],
+        "is_admin": is_admin(settings, row),
         "user_metadata": {
             "role": metadata.get("role") or "client",
             "full_name": metadata.get("full_name") or metadata.get("name"),
@@ -167,7 +168,7 @@ async def create_session(settings: Settings, user: asyncpg.Record | dict[str, An
         "access_token": access_token,
         "refresh_token": refresh_token,
         "expires_at": int(expires_at.timestamp()),
-        "user": user_response(user),
+        "user": user_response(user, settings),
     }
 
 
@@ -258,7 +259,7 @@ async def user_from_access_token(settings: Settings, token: str) -> dict[str, An
     if not row:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session expired or invalid.")
     assert_account_access(row)
-    return user_response(row)
+    return user_response(row, settings)
 
 
 async def local_refresh(settings: Settings, refresh_token: str | None) -> dict[str, Any]:
@@ -290,7 +291,7 @@ async def local_refresh(settings: Settings, refresh_token: str | None) -> dict[s
     finally:
         await conn.close()
     session = {"access_token": access_token, "refresh_token": next_refresh,
-               "expires_at": int(expires_at.timestamp()), "user": user_response(row)}
+               "expires_at": int(expires_at.timestamp()), "user": user_response(row, settings)}
     return {"session": session, "user": session["user"]}
 
 
@@ -334,4 +335,4 @@ async def local_update_user(settings: Settings, token: str, attributes: dict[str
         )
     finally:
         await conn.close()
-    return {"user": user_response(row)}
+    return {"user": user_response(row, settings)}

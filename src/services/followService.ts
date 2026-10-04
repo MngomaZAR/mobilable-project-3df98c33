@@ -4,6 +4,7 @@ import { requireCurrentAuthenticatedUser } from '../config/currentUser';
 export const toggleFollow = async (followingId: string): Promise<boolean> => {
     const user = await requireCurrentAuthenticatedUser();
     if (!user) throw new Error("Must be logged in to follow users");
+    if (!followingId || followingId === user.id) throw new Error('Choose another creator to follow.');
     
     // Check if already following
     const { data: existing, error: checkErr } = await backendDb
@@ -11,7 +12,7 @@ export const toggleFollow = async (followingId: string): Promise<boolean> => {
         .select('*')
         .eq('follower_id', user.id)
         .eq('following_id', followingId)
-        .single();
+        .maybeSingle();
         
     if (checkErr && checkErr.code !== 'PGRST116') {
         throw checkErr;

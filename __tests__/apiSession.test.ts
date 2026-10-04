@@ -1,5 +1,5 @@
 jest.mock('../src/config/apiClient', () => ({
-  apiClient: { post: jest.fn() },
+  apiClient: { post: jest.fn(), get: jest.fn() },
   ApiClientError: class extends Error { status: number; constructor(message: string, status: number) { super(message); this.status = status; } },
 }));
 
@@ -8,7 +8,7 @@ jest.mock('../src/services/sessionStorage', () => ({
 }));
 
 describe('API session persistence and refresh', () => {
-  let apiClient: { post: jest.Mock };
+  let apiClient: { post: jest.Mock; get: jest.Mock };
   let storage: { getItem: jest.Mock; setItem: jest.Mock; removeItem: jest.Mock };
   let session: typeof import('../src/config/apiSession');
   let clearApiSession: typeof session.clearApiSession;
@@ -116,5 +116,85 @@ describe('API session persistence and refresh', () => {
     await expect(getApiAccessToken()).rejects.toThrow('expired');
     expect(session.getCachedApiSession()).toBeNull();
     expect(storage.removeItem).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not trust a persisted admin capability before live validation', async () => {
+    storage.getItem.mockResolvedValue(JSON.stringify({ access_token: 'saved', user: { id: 'owner', is_admin: true } }));
+    expect((await session.getApiSession())?.user?.is_admin).toBe(false);
+    apiClient.get.mockResolvedValue({ user: { id: 'owner', is_admin: true, user_metadata: { role: 'client' } } });
+    expect((await session.validateApiSession())?.user?.is_admin).toBe(true);
+    expect(apiClient.get).toHaveBeenCalledWith('/auth/me', { token: 'saved' });
+  });
+
+  it('shares concurrent live validation and applies a removed allowlist capability', async () => {
+    await setApiSession({ access_token: 'saved', user: { id: 'owner', is_admin: true } });
+    apiClient.get.mockResolvedValue({ user: { id: 'owner', is_admin: false, user_metadata: { role: 'model' } } });
+    const results = await Promise.all([session.validateApiSession(), session.validateApiSession()]);
+    expect(apiClient.get).toHaveBeenCalledTimes(1);
+    expect(results.every(result => result?.user?.is_admin === false)).toBe(true);
+    expect(session.getCachedApiSession()?.user?.user_metadata?.role).toBe('model');
+  });
+
+  it('does not inherit missing capability from cached or metadata admin claims', async () => {
+    await setApiSession({ access_token: 'saved', user: { id: 'owner', is_admin: true } });
+    apiClient.get.mockResolvedValue({ user: { id: 'owner', user_metadata: { role: 'admin', is_admin: true } } });
+    expect((await session.validateApiSession())?.user?.is_admin).toBe(false);
+  });
+
+  it('drops cached admin access on validation network failure but retains credentials', async () => {
+    await setApiSession({ access_token: 'saved', user: { id: 'owner', is_admin: true } });
+    apiClient.get.mockRejectedValue(new Error('offline'));
+    await expect(session.validateApiSession()).rejects.toThrow('offline');
+    expect(session.getCachedApiSession()?.user?.is_admin).toBe(false);
+    expect(await getApiAccessToken()).toBe('saved');
+  });
+
+  it('rejects missing or mismatched server identity without retaining admin access', async () => {
+    for (const response of [{}, { user: { id: 'other', is_admin: true } }]) {
+      await setApiSession({ access_token: 'saved', user: { id: 'owner', is_admin: true } });
+      apiClient.get.mockResolvedValue(response);
+      await expect(session.validateApiSession()).rejects.toThrow('Unable to validate the current account.');
+      expect(session.getCachedApiSession()?.user?.is_admin).toBe(false);
+    }
+  });
+
+  it('clears credentials when auth/me rejects the token', async () => {
+    await setApiSession({ access_token: 'saved', user: { id: 'owner', is_admin: true } });
+    const { ApiClientError } = jest.requireMock('../src/config/apiClient');
+    apiClient.get.mockRejectedValue(new ApiClientError('expired', 401));
+    await expect(session.validateApiSession()).rejects.toThrow('expired');
+    expect(session.getCachedApiSession()).toBeNull();
+  });
+
+  it('does not restore a signed-out account when a live admin response arrives late', async () => {
+    await setApiSession({ access_token: 'saved', user: { id: 'owner', is_admin: true } });
+    let finish!: (response: unknown) => void;
+    apiClient.get.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+    const loading = session.validateApiSession();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    await clearApiSession();
+    finish({ user: { id: 'owner', is_admin: true } });
+    expect(await loading).toBeNull();
+    expect(session.getCachedApiSession()).toBeNull();
+  });
+
+  it('does not let an old validation overwrite or block a newly signed-in account', async () => {
+    await setApiSession({ access_token: 'old', user: { id: 'old-owner', is_admin: true } });
+    let finish!: (response: unknown) => void;
+    apiClient.get.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const loading = session.validateApiSession();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    await setApiSession({ access_token: 'new', user: { id: 'new-user', is_admin: false } });
+    apiClient.get.mockResolvedValue({ user: { id: 'new-user', is_admin: false } });
+    expect((await session.validateApiSession())?.user?.id).toBe('new-user');
+    finish({ user: { id: 'old-owner', is_admin: true } });
+    expect(await loading).toBeNull();
+    expect(session.getCachedApiSession()?.user?.id).toBe('new-user');
+  });
+
+  it('refresh replaces a previously granted capability with the current server result', async () => {
+    await setApiSession({ access_token: 'old', refresh_token: 'refresh', expires_at: 1, user: { id: 'owner', is_admin: true } });
+    apiClient.post.mockResolvedValue({ session: { access_token: 'new', user: { id: 'owner', is_admin: false } } });
+    expect((await session.getApiSession())?.user?.is_admin).toBe(false);
   });
 });

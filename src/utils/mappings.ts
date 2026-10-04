@@ -110,6 +110,7 @@ type PostRow = {
 export const mapSupabaseUser = (user: any, fallbackRole: AppUser['role'] = 'client', profile: ProfileRow = null): AppUser => ({
   id: user.id,
   email: user.email ?? 'unknown-user',
+  is_admin: user.is_admin === true,
   role: resolveUserRole(
     {
       role: (profile?.role as AppUser['role']) ?? fallbackRole,

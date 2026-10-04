@@ -25,6 +25,7 @@ receipts, [October 3 Candidate Evidence](docs/QA_CANDIDATE_FOLLOWUP_20261003.md)
 their recorded revisions, not the latest working tree.
 
 See [Marketplace Gaps](docs/MARKETPLACE_GAP_ANALYSIS.md),
+[Competitive Comparison And Execution](docs/COMPETITIVE_EXECUTION_20261004.md),
 [Engineering Handbook](docs/ENGINEERING_HANDBOOK.md) and
 [Oracle Release Runbook](docs/ORACLE_RELEASE_RUNBOOK.md). Project-owner attribution:
 SAICTS is the contracted builder; Samkelo Mngoma, COO of SAICTS, is the developer

@@ -9,6 +9,7 @@ export type AnalyticsEvent =
   | 'tip_sent'
   | 'subscription_started'
   | 'profile_view'
+  | 'profile_shared'
   | 'booking_accepted'
   | 'booking_declined';
 

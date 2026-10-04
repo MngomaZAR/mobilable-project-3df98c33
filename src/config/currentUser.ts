@@ -1,15 +1,15 @@
 import { hasNhost, getNhostSession, hydrateNhostSessionStorage, nhost } from './nhostClient';
 import { hasSupabase, supabase } from './supabaseClient';
 import { environment } from './environment';
-import { getApiSession } from './apiSession';
+import { validateApiSession } from './apiSession';
 
-type CurrentUser = { id: string; email?: string | null } | null;
+type CurrentUser = { id: string; email?: string | null; is_admin?: boolean } | null;
 
 export const getCurrentAuthenticatedUser = async (): Promise<CurrentUser> => {
   if (environment.backendProvider === 'api') {
-    const session = await getApiSession();
+    const session = await validateApiSession();
     if (session?.user?.id) {
-      return { id: session.user.id, email: session.user.email ?? null };
+      return { id: session.user.id, email: session.user.email ?? null, is_admin: session.user.is_admin === true };
     }
     return null;
   }

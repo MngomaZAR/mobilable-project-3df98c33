@@ -13,12 +13,14 @@ import { backendDb } from '../services/backendGateway';
 import { apiClient } from '../config/apiClient';
 import { getApiAccessToken } from '../config/apiSession';
 import { environment } from '../config/environment';
+import { isAdminUser } from '../utils/userRole';
 
 type Navigation = StackNavigationProp<RootStackParamList>;
 
 const AdminDashboardScreen: React.FC = () => {
   const navigation = useNavigation<Navigation>();
   const { state, fetchBookings } = useAppData();
+  const isAdmin = isAdminUser(state.currentUser);
   const { startConversationWithUser } = useMessaging();
   const [showNewMessage, setShowNewMessage] = React.useState(false);
   const [liveRevenue, setLiveRevenue] = useState<number | null>(null);
@@ -91,7 +93,7 @@ const AdminDashboardScreen: React.FC = () => {
     React.useCallback(() => {
       let active = true;
       const run = async () => {
-        if (!active || state.currentUser?.role !== 'admin') return;
+        if (!active || !isAdmin) return;
         const userId = state.currentUser?.id;
         await Promise.allSettled([
           fetchBookings(userId),
@@ -106,7 +108,7 @@ const AdminDashboardScreen: React.FC = () => {
         active = false;
         clearInterval(timer);
       };
-    }, [fetchBookings, fetchOpsMetrics, fetchRevenue, fetchContentCount, state.currentUser?.id, state.currentUser?.role]),
+    }, [fetchBookings, fetchOpsMetrics, fetchRevenue, fetchContentCount, state.currentUser?.id, isAdmin]),
   );
 
   const pendingBookings = useMemo(
@@ -118,7 +120,7 @@ const AdminDashboardScreen: React.FC = () => {
     [state.bookings]
   );
 
-  if (state.currentUser?.role !== 'admin') return <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.bg }]}><Text accessibilityRole="alert" style={{ color: colors.text }}>Administrator access required.</Text></SafeAreaView>;
+  if (!isAdmin) return <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.bg }]}><Text accessibilityRole="alert" style={{ color: colors.text }}>Administrator access required.</Text></SafeAreaView>;
 
   return (
     <SafeAreaView edges={['left', 'right']} style={[styles.safeArea, { backgroundColor: colors.bg }]}>

@@ -26,6 +26,7 @@ import { RootStackParamList } from '../navigation/types';
 import { useAppData } from '../store/AppDataContext';
 import { apiClient } from '../config/apiClient';
 import { getApiAccessToken } from '../config/apiSession';
+import { isAdminUser } from '../utils/userRole';
 import { environment } from '../config/environment';
 
 type ContentTable = 'posts' | 'stories' | 'post_comments' | 'reviews';
@@ -118,7 +119,7 @@ const AdminModerationScreen: React.FC = () => {
   const navigation = useNavigation<StackNavigationProp<RootStackParamList, 'Root'>>();
   const { startConversationWithUser } = useMessaging();
   const { state } = useAppData();
-  const isAdmin = state.currentUser?.role === 'admin';
+  const isAdmin = isAdminUser(state.currentUser);
   const apiMode = environment.backendProvider === 'api';
 
   const [cases, setCases] = useState<ModerationCase[]>([]);

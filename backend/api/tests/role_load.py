@@ -150,6 +150,9 @@ async def main():
     client_actor, provider, model, admin = [actors[role][0] for role in ["client", "photographer", "model", "admin"]]
     async with httpx.AsyncClient(base_url=BASE_URL, timeout=30, limits=httpx.Limits(max_connections=400, max_keepalive_connections=100)) as client:
         await check(client, "Database schema contract", "GET", "/health/contract", 200)
+        summary = (await check(client, "Published review summary is available without authentication", "GET", f"/reviews/summary/{provider['id']}", 200)).json()
+        assert set(summary) == {"count", "average"} and summary["count"] >= 0
+        await check(client, "Missing creator review summary is not a fabricated rating", "GET", "/reviews/summary/qa-missing-creator", 404)
         readiness = (await check(client, "Release gate reports unavailable capabilities", "GET", "/health/readiness", 200)).json()
         assert readiness["required_capabilities_available"] is False
         report["release_capabilities"] = readiness

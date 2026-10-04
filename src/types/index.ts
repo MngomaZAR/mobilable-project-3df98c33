@@ -25,6 +25,7 @@ export interface AppUser {
   id: string;
   email: string;
   role: UserRole;
+  is_admin?: boolean;
   is_photographer?: boolean;
   is_model?: boolean;
   is_test_account?: boolean;

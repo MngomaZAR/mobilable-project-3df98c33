@@ -249,13 +249,14 @@ def bearer_token(request: Request) -> str | None:
     return header.split(" ", 1)[1].strip() or None
 
 
-def normalize_user(raw: dict[str, Any] | None) -> dict[str, Any] | None:
+def normalize_user(raw: dict[str, Any] | None, settings: Settings) -> dict[str, Any] | None:
     if not raw:
         return None
     metadata = raw.get("metadata") or raw.get("user_metadata") or raw.get("raw_user_meta_data") or {}
     return {
         "id": raw.get("id") or raw.get("sub"),
         "email": raw.get("email"),
+        "is_admin": is_admin(settings, {"id": raw.get("id") or raw.get("sub")}),
         "user_metadata": {
             "role": raw.get("defaultRole") or metadata.get("role") or "client",
             "full_name": raw.get("displayName") or metadata.get("full_name") or metadata.get("name"),
@@ -266,10 +267,10 @@ def normalize_user(raw: dict[str, Any] | None) -> dict[str, Any] | None:
     }
 
 
-def normalize_session(raw: dict[str, Any] | None) -> dict[str, Any] | None:
+def normalize_session(raw: dict[str, Any] | None, settings: Settings) -> dict[str, Any] | None:
     if not raw:
         return None
-    user = normalize_user(raw.get("user"))
+    user = normalize_user(raw.get("user"), settings)
     return {
         "access_token": raw.get("accessToken") or raw.get("access_token"),
         "refresh_token": raw.get("refreshToken") or raw.get("refresh_token"),
@@ -370,7 +371,7 @@ async def auth_me(request: Request, settings: Annotated[Settings, Depends(get_se
         role = (user.get("user_metadata") or {}).get("role") or "client"
         return {"user": user, "id": user.get("id"), "email": user.get("email"), "roles": [role]}
     body = await nhost_auth_request(settings, "GET", "/user", token=token)
-    user = normalize_user(body)
+    user = normalize_user(body, settings)
     return {"user": user, "id": user.get("id") if user else "", "email": user.get("email") if user else None, "roles": []}
 
 
@@ -387,8 +388,8 @@ async def auth_sign_in(
         "/signin/email-password",
         {"email": payload.get("email"), "password": payload.get("password")},
     )
-    session = normalize_session(body.get("session") or body)
-    return {"session": session, "user": session.get("user") if session else normalize_user(body.get("user"))}
+    session = normalize_session(body.get("session") or body, settings)
+    return {"session": session, "user": session.get("user") if session else normalize_user(body.get("user"), settings)}
 
 
 @app.post("/auth/sign-up", tags=["auth"])
@@ -409,8 +410,8 @@ async def auth_sign_up(
             "options": options,
         },
     )
-    session = normalize_session(body.get("session") or body)
-    user = session.get("user") if session else normalize_user(body.get("user"))
+    session = normalize_session(body.get("session") or body, settings)
+    user = session.get("user") if session else normalize_user(body.get("user"), settings)
     if user:
         await ensure_signup_profile(settings, user, options, session.get("access_token") if session else None)
     return {"session": session, "user": user}
@@ -435,7 +436,7 @@ async def auth_refresh(
     if settings.postgres_url:
         return await local_refresh(settings, payload.get("refresh_token"))
     body = await nhost_auth_request(settings, "POST", "/token", {"refreshToken": payload.get("refresh_token")})
-    session = normalize_session(body.get("session") or body)
+    session = normalize_session(body.get("session") or body, settings)
     return {"session": session, "user": session.get("user") if session else None}
 
 
@@ -513,8 +514,8 @@ async def auth_exchange(
         "/token/exchange",
         {"code": code, "codeVerifier": code_verifier},
     )
-    session = normalize_session(body.get("session") or body)
-    return {"session": session, "user": session.get("user") if session else normalize_user(body.get("user"))}
+    session = normalize_session(body.get("session") or body, settings)
+    return {"session": session, "user": session.get("user") if session else normalize_user(body.get("user"), settings)}
 
 
 @app.post("/auth/update-user", tags=["auth"])
@@ -530,13 +531,13 @@ async def auth_update_user(
         return await local_update_user(settings, token, payload)
     try:
         body = await nhost_auth_request(settings, "PATCH", "/user", payload, token=token)
-        return {"user": normalize_user(body.get("user") or body)}
+        return {"user": normalize_user(body.get("user") or body, settings)}
     except HTTPException:
         # Profile updates should not fail just because the auth provider rejected
         # a cosmetic metadata update. Return the current user and let the profile
         # table update continue on the client.
         body = await nhost_auth_request(settings, "GET", "/user", token=token)
-        return {"user": normalize_user(body)}
+        return {"user": normalize_user(body, settings)}
 
 
 @app.post("/data/{table}", tags=["data"])

@@ -22,6 +22,32 @@ export interface ReviewRow {
   created_at: string;
 }
 
+export interface ReviewSummary {
+  count: number;
+  average: number | null;
+}
+
+export const fetchPublishedReviewSummary = async (creatorId: string): Promise<ReviewSummary> => {
+  if (environment.backendProvider === 'api') {
+    return apiClient.get<ReviewSummary>(`/reviews/summary/${encodeURIComponent(creatorId)}`);
+  }
+  // Legacy adapters must aggregate every page rather than claim the first 50 is the total.
+  let count = 0;
+  let sum = 0;
+  for (let offset = 0; ; offset += 200) {
+    const { data, error } = await backendDb.from('reviews').select('rating')
+      .eq('photographer_id', creatorId).eq('moderation_status', 'approved')
+      .order('id', { ascending: true }).range(offset, offset + 199);
+    if (error) throw new Error(error.message || 'Could not load published reviews.');
+    for (const row of data ?? []) {
+      const value = Number(row.rating);
+      if (Number.isFinite(value) && value >= 1 && value <= 5) { count++; sum += value; }
+    }
+    if ((data ?? []).length < 200) break;
+  }
+  return { count, average: count ? Math.round(sum / count * 10) / 10 : null };
+};
+
 /** Submit a review for a completed booking */
 export const createReview = async (payload: ReviewPayload): Promise<ReviewRow> => {
   const user = await requireCurrentAuthenticatedUser();
@@ -62,8 +88,5 @@ export const fetchReviewsForUser = async (photographerId: string): Promise<Revie
 
 /** Fetch the average rating for a user */
 export const fetchAverageRating = async (photographerId: string): Promise<number> => {
-  const reviews = await fetchReviewsForUser(photographerId);
-  if (!reviews.length) return 0;
-  const sum = reviews.reduce((acc, r) => acc + r.rating, 0);
-  return Math.round((sum / reviews.length) * 10) / 10;
+  return (await fetchPublishedReviewSummary(photographerId)).average ?? 0;
 };

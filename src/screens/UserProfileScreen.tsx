@@ -1,6 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { FlatList, Image, StyleSheet, Text, View, TouchableOpacity, Platform, Alert, Modal, TextInput, ActionSheetIOS, Linking, ScrollView } from 'react-native';
-import * as Haptics from 'expo-haptics';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, FlatList, Image, Linking, Modal, Platform, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,570 +8,330 @@ import { RootStackParamList } from '../navigation/types';
 import { useAppData } from '../store/AppDataContext';
 import { useTheme } from '../store/ThemeContext';
 import { reportContent } from '../services/reportService';
-import { createTipCheckoutLink } from '../services/monetisationService';
 import { toggleFollow } from '../services/followService';
 import { trackEvent } from '../services/analyticsService';
+import { CreatorProfileDetail, fetchCreatorPosts, fetchCreatorProfile } from '../services/creatorProfileService';
+import { fetchPublishedReviewSummary, ReviewSummary } from '../services/reviewService';
 import { PLACEHOLDER_IMAGE } from '../utils/constants';
-import { getStatusLeaderboard } from '../services/dispatchService';
-import { backendDb } from '../services/backendGateway';
-import { getDefaultPayfastNotifyUrl } from '../config/commercePolicy';
+import { Post } from '../types';
 
 type Route = RouteProp<RootStackParamList, 'UserProfile'>;
 type Navigation = StackNavigationProp<RootStackParamList, 'UserProfile'>;
+type ProfileLoad = { id: string; status: 'loading' | 'ready' | 'missing' | 'error'; data?: CreatorProfileDetail; error?: string };
+const errorMessage = (error: unknown, fallback: string) => error instanceof Error ? error.message : fallback;
 
 const UserProfileScreen: React.FC = () => {
   const { params } = useRoute<Route>();
   const navigation = useNavigation<Navigation>();
   const insets = useSafeAreaInsets();
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const { state, startConversationWithUser, setState } = useAppData();
-  
-  const [tipModalVisible, setTipModalVisible] = useState(false);
-  const [tipAmount, setTipAmount] = useState('50');
-  const [isSendingTip, setIsSendingTip] = useState(false);
-  const [activeTab, setActiveTab] = useState<'grid' | 'portfolio' | 'tagged'>('grid');
-  const [seenScore, setSeenScore] = useState<number>(0);
-  const [sceneRank, setSceneRank] = useState<number>(0);
-  const [localTrendRank, setLocalTrendRank] = useState<number | null>(null);
-  const [taggedPosts, setTaggedPosts] = useState<any[]>([]);
-  const [taggedLoading, setTaggedLoading] = useState(false);
+  const userId = params.userId;
+  const styles = makeStyles(colors);
+  const [load, setLoad] = useState<ProfileLoad>({ id: userId, status: 'loading' });
+  const [reload, setReload] = useState(0);
+  const [postReload, setPostReload] = useState(0);
+  const [reviewReload, setReviewReload] = useState(0);
+  const [postResult, setPostResult] = useState<{ id: string; posts: Post[] } | null>(null);
+  const [postsLoading, setPostsLoading] = useState(true);
+  const [postError, setPostError] = useState<string | null>(null);
+  const [reviewResult, setReviewResult] = useState<{ id: string; summary: ReviewSummary } | null>(null);
+  const [reviewError, setReviewError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [following, setFollowing] = useState(false);
+  const [chatting, setChatting] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const [reporting, setReporting] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportReason, setReportReason] = useState('');
+  const [reportError, setReportError] = useState<string | null>(null);
+  const followBusy = useRef(false);
+  const chatBusy = useRef(false);
+  const shareBusy = useRef(false);
+  const reportBusy = useRef(false);
+  const activeUserId = useRef(userId);
+  const stateRef = useRef(state);
+  activeUserId.current = userId;
+  stateRef.current = state;
 
-  React.useEffect(() => {
-    if (activeTab !== 'tagged' || !params.userId) return;
+  useEffect(() => {
     let active = true;
-    const loadTagged = async () => {
-      setTaggedLoading(true);
-      try {
-        const { data } = await backendDb
-          .from('posts')
-          .select('id, image_url, caption, created_at, likes_count, author_id')
-          .ilike('caption', `%@${params.userId}%`)
-          .order('created_at', { ascending: false })
-          .limit(30);
-        if (active) setTaggedPosts(data ?? []);
-      } catch {
-        if (active) setTaggedPosts([]);
-      } finally {
-        if (active) setTaggedLoading(false);
-      }
-    };
-    loadTagged();
+    setLoad({ id: userId, status: 'loading' });
+    setActionError(null);
+    setReportOpen(false);
+    setReportReason('');
+    setReportError(null);
+    void fetchCreatorProfile(userId).then(data => {
+      if (active) setLoad({ id: userId, status: data ? 'ready' : 'missing', data: data ?? undefined });
+    }).catch(error => {
+      if (active) setLoad({ id: userId, status: 'error', error: errorMessage(error, 'Could not load this profile.') });
+    });
     return () => { active = false; };
-  }, [activeTab, params.userId]);
-  
-  const s = makeStyles(colors);
+  }, [userId, reload]);
 
-  const talent = useMemo(
-    () => state.photographers.find((p) => p.id === params.userId) || state.models.find((m) => m.id === params.userId) || params.photographer,
-    [params.photographer, params.userId, state.photographers, state.models]
-  );
-  
-  const profileFallback = useMemo(
-    () => state.profiles.find((p) => p.id === params.userId),
-    [state.profiles, params.userId]
-  );
+  const loaded = load.id === userId && load.status === 'ready' ? load.data : undefined;
+  const profile = loaded?.profile;
+  const talent = loaded?.talent;
+  const isModel = profile?.role === 'model';
+  const isOwnProfile = state.currentUser?.id === userId;
+  const isFollowing = state.follows?.some(item => item.follower_id === state.currentUser?.id && item.following_id === userId) ?? false;
+  const verified = Boolean(profile?.verified || profile?.kyc_status === 'approved');
+  const rate = Number(talent?.hourly_rate);
+  const canBook = Boolean(talent && verified && profile?.age_verified && !isOwnProfile);
+  const summary = reviewResult?.id === userId ? reviewResult.summary : null;
+  const name = talent?.name || profile?.full_name || 'Profile';
+  const cachedPosts = useMemo(() => state.posts.filter(post => post.author_id === userId), [state.posts, userId]);
+  const posts = postResult?.id === userId ? postResult.posts : cachedPosts;
 
-  const isModelProfile = useMemo(
-    () => state.models.some((model) => model.id === (talent?.id ?? params.userId)),
-    [params.userId, state.models, talent?.id]
-  );
-  
-  const isFollowing = useMemo(
-    () => state.follows?.some(f => f.following_id === talent?.id) ?? false,
-    [state.follows, talent?.id]
-  );
-
-  const posts = useMemo(
-    () => state.posts.filter((post) => post.author_id === params.userId),
-    [state.posts, params.userId]
-  );
-
-  React.useEffect(() => {
+  useEffect(() => {
+    if (!loaded) return;
     let active = true;
-    const hydrateStatus = async () => {
-      const userId = params.userId;
-      try {
-        const [{ data: score }, board] = await Promise.all([
-          backendDb.from('status_scores').select('seen_score,scene_rank').eq('user_id', userId).maybeSingle(),
-          getStatusLeaderboard({ city: talent?.location || profileFallback?.city || 'Cape Town', limit: 100 }),
-        ]);
-        if (!active) return;
-        setSeenScore(Number(score?.seen_score || 0));
-        setSceneRank(Number(score?.scene_rank || 0));
-        const idx = (board.leaderboard ?? []).findIndex((entry) => entry.user_id === userId);
-        setLocalTrendRank(idx >= 0 ? idx + 1 : null);
-      } catch {
-        if (!active) return;
-        setSeenScore(0);
-        setSceneRank(0);
-        setLocalTrendRank(null);
-      }
-    };
-    hydrateStatus();
+    setPostsLoading(true);
+    setPostError(null);
+    void fetchCreatorPosts(userId).then(items => {
+      if (active) setPostResult({ id: userId, posts: items });
+    }).catch(error => {
+      if (active) setPostError(errorMessage(error, 'Could not load recent work.'));
+    }).finally(() => { if (active) setPostsLoading(false); });
     return () => { active = false; };
-  }, [params.userId, talent?.location, profileFallback?.city]);
+  }, [loaded, userId, postReload]);
 
-  const pinnedPosts = useMemo(
-    () => posts.filter(p => talent?.pinned_post_ids?.includes(p.id)).slice(0, 3),
-    [posts, talent?.pinned_post_ids]
+  useEffect(() => {
+    if (!talent) return;
+    let active = true;
+    setReviewError(null);
+    void fetchPublishedReviewSummary(userId).then(value => {
+      if (active) setReviewResult({ id: userId, summary: value });
+    }).catch(error => {
+      if (active) setReviewError(errorMessage(error, 'Published reviews are unavailable.'));
+    });
+    return () => { active = false; };
+  }, [talent, userId, reviewReload]);
+
+  const book = () => {
+    if (!canBook) return;
+    void trackEvent('booking_initiated', { creator_id: userId, source: 'profile' });
+    navigation.navigate('BookingForm', isModel
+      ? { modelId: userId, serviceType: 'modeling' }
+      : { photographerId: userId, serviceType: 'photography' });
+  };
+
+  const message = async () => {
+    if (!talent || isOwnProfile || chatBusy.current) return;
+    chatBusy.current = true;
+    setChatting(true);
+    setActionError(null);
+    try {
+      // The server checks booking eligibility; a limited local cache must not deny an existing chat.
+      const conversation = await startConversationWithUser(userId, name);
+      if (activeUserId.current === userId) navigation.navigate('ChatThread', { conversationId: conversation.id, title: conversation.title });
+    } catch (error) {
+      if (activeUserId.current === userId) setActionError(errorMessage(error, 'Could not open this conversation.'));
+    } finally { chatBusy.current = false; setChatting(false); }
+  };
+
+  const follow = async () => {
+    const actorId = state.currentUser?.id;
+    if (!actorId || isOwnProfile || followBusy.current) return;
+    followBusy.current = true;
+    setFollowing(true);
+    setActionError(null);
+    try {
+      const nowFollowing = await toggleFollow(userId);
+      if (stateRef.current.currentUser?.id !== actorId) return;
+      const retained = (stateRef.current.follows ?? []).filter(item => !(item.follower_id === actorId && item.following_id === userId));
+      setState({ follows: nowFollowing ? [...retained, { follower_id: actorId, following_id: userId, created_at: new Date().toISOString() }] : retained });
+    } catch (error) {
+      if (activeUserId.current === userId) setActionError(errorMessage(error, 'Could not update your follow.'));
+    } finally { followBusy.current = false; setFollowing(false); }
+  };
+
+  const share = async () => {
+    if (!profile || shareBusy.current) return;
+    shareBusy.current = true;
+    setSharing(true);
+    setActionError(null);
+    const url = `papzi://user/${encodeURIComponent(userId)}`;
+    try {
+      let shared = false;
+      if (Platform.OS === 'web' && typeof navigator !== 'undefined') {
+        if (typeof navigator.share === 'function') {
+          await navigator.share({ title: `${name} on Papzi`, text: `${name} on Papzi\n${url}` });
+          shared = true;
+        } else if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(url);
+          setActionError('Profile link copied.');
+        } else { throw new Error('Profile sharing is unavailable in this browser.'); }
+      } else {
+        const result = await Share.share({ title: `${name} on Papzi`, message: `${name} on Papzi\n${url}` });
+        shared = result.action === Share.sharedAction;
+      }
+      if (shared) void trackEvent('profile_shared', { creator_id: userId, source: 'profile' });
+    } catch (error) {
+      if (!(error instanceof Error && error.name === 'AbortError')) setActionError(errorMessage(error, 'Could not share this profile.'));
+    } finally { shareBusy.current = false; setSharing(false); }
+  };
+
+  const report = async () => {
+    if (reportBusy.current || !reportReason.trim() || !state.currentUser) return;
+    reportBusy.current = true;
+    setReporting(true);
+    setReportError(null);
+    try {
+      await reportContent({ targetType: 'profile', targetId: userId, reason: reportReason.trim() });
+      if (activeUserId.current === userId) {
+        setReportOpen(false);
+        setReportReason('');
+        setActionError('Report submitted for review.');
+      }
+    } catch (error) {
+      if (activeUserId.current === userId) setReportError(errorMessage(error, 'Could not submit the report.'));
+    } finally { reportBusy.current = false; setReporting(false); }
+  };
+
+  const openExternal = async (value: string) => {
+    try {
+      const url = new URL(value);
+      if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password) throw new Error('This profile link is invalid.');
+      await Linking.openURL(url.toString());
+    } catch (error) { setActionError(errorMessage(error, 'Could not open this link.')); }
+  };
+
+  const button = (label: string, icon: React.ComponentProps<typeof Ionicons>['name'], action: () => void, disabled = false) => (
+    <TouchableOpacity accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled}
+      onPress={action} style={[styles.button, { opacity: disabled ? 0.5 : 1 }]}>
+      <Ionicons name={icon} size={20} color={colors.text} />
+      <Text style={styles.buttonText}>{label}</Text>
+    </TouchableOpacity>
   );
 
-  const handleMessage = async () => {
-    const targetId = params.userId;
-    const targetName = talent?.name ?? profileFallback?.full_name ?? 'User';
-    const currentUserId = state.currentUser?.id;
-    const hasBooking = currentUserId
-      ? state.bookings.some((booking) =>
-          booking.client_id === currentUserId &&
-          (booking.photographer_id === targetId || booking.model_id === targetId)
-        )
-      : false;
-    if (!hasBooking) {
-      Alert.alert(
-        'Booking required',
-        'Start a booking before messaging this creator.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Book now',
-            onPress: () =>
-              navigation.navigate(
-                'BookingForm',
-                isModelProfile
-                  ? { modelId: targetId, serviceType: 'modeling' }
-                  : { photographerId: targetId, serviceType: 'photography' }
-              ),
-          },
-        ]
-      );
-      return;
-    }
-    try {
-      const convo = await startConversationWithUser(targetId, targetName);
-      navigation.navigate('ChatThread', { conversationId: convo.id, title: convo.title });
-    } catch (e) {
-      console.warn('Could not open chat thread', e);
-    }
-  };
-
-  const handleReport = async () => {
-    const targetId = talent?.id ?? params.userId;
-    if (!targetId) return;
-    const reasons = ['Inappropriate content', 'Spam', 'Fake profile', 'Harassment', 'Other'];
-    
-    if (Platform.OS === 'ios') {
-      ActionSheetIOS.showActionSheetWithOptions(
-        { options: ['Cancel', ...reasons], cancelButtonIndex: 0, title: 'Report this user' },
-        async (index) => {
-          if (index === 0) return;
-          try {
-            await reportContent({ targetType: 'profile', targetId, reason: reasons[index - 1] });
-            Alert.alert('Reported', 'Thank you. Our team will review this.');
-          } catch (e) {
-            Alert.alert('Error', 'Failed to submit report.');
-          }
-        }
-      );
-    } else {
-      Alert.alert('Report User', 'Why are you reporting this?',
-        [
-          ...reasons.map(reason => ({
-            text: reason,
-            onPress: async () => {
-              try {
-                await reportContent({ targetType: 'profile', targetId, reason });
-                Alert.alert('Reported', 'Thank you. Our team will review this.');
-              } catch (e) {
-                Alert.alert('Error', 'Failed to submit report.');
-              }
-            }
-          })),
-          { text: 'Cancel', style: 'cancel' }
-        ]
-      );
-    }
-  };
-
-  const handleTip = async () => {
-    if (!talent || !tipAmount || isNaN(Number(tipAmount))) return;
-    setIsSendingTip(true);
-    try {
-      const amountNum = Number(tipAmount);
-      if (amountNum < 5) {
-        Alert.alert('Minimum tip', 'Minimum tip is R5.');
-        return;
-      }
-
-      const { paymentUrl } = await createTipCheckoutLink({
-        receiverId: talent.id,
-        amount: amountNum,
-        message: '',
-        returnUrl: 'papzi://tips/success',
-        cancelUrl: 'papzi://tips/cancel',
-        notifyUrl: getDefaultPayfastNotifyUrl(),
-      });
-
-      setTipModalVisible(false);
-      trackEvent('tip_sent', { creator_id: talent.id, amount: amountNum, source: 'profile' });
-      await Linking.openURL(paymentUrl);
-      Alert.alert('Checkout opened', 'Complete payment to send your tip.');
-    } catch (e: any) {
-      Alert.alert('Error', e.message || 'Something went wrong.');
-    } finally {
-      setIsSendingTip(false);
-    }
-  };
-
-  const handleToggleFollow = async () => {
-    if (!talent || !state.currentUser) return;
-    const wasFollowing = isFollowing;
-    const newFollows = [...(state.follows || [])];
-    if (wasFollowing) {
-        const idx = newFollows.findIndex(f => f.following_id === talent.id);
-        if (idx !== -1) newFollows.splice(idx, 1);
-    } else {
-        newFollows.push({ follower_id: state.currentUser.id, following_id: talent.id, created_at: new Date().toISOString() });
-    }
-    setState({ follows: newFollows });
-    try {
-        await toggleFollow(talent.id);
-    } catch (e: any) {
-        setState({ follows: state.follows });
-        Alert.alert('Error', 'Failed to update follow status.');
-    }
-  };
-
-  const handleCollaborate = () => {
-    Alert.alert('Collaboration Request', `Send a collab request to ${talent?.name || 'this creator'}?`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Send Request', onPress: () => Alert.alert('Sent', 'Collaboration request sent successfully!') }
-    ]);
-  };
-
-  const openPortfolio = () => {
-    const title = `${talent?.name ?? profileFallback?.full_name ?? 'Creator'} Portfolio`;
-    navigation.navigate('MediaLibrary', { creatorId: params.userId, title });
-  };
-
-  const renderHeader = () => (
-    <View style={s.profileInfo}>
-      <View style={s.avatarWrapper}>
-        <Image source={{ uri: talent?.avatar_url ?? profileFallback?.avatar_url ?? PLACEHOLDER_IMAGE }} style={s.profileAvatar} />
-        {talent?.is_online && (
-          <View style={s.onlineBadge}>
-             <View style={s.onlineDot} />
-             <Text style={s.onlineText}>AVAILABLE NOW</Text>
-          </View>
-        )}
+  const header = (
+    <View style={styles.profile}>
+      <Image accessibilityLabel={`${name} profile photo`} source={{ uri: talent?.avatar_url || profile?.avatar_url || PLACEHOLDER_IMAGE }} style={styles.avatar} />
+      <Text selectable style={styles.name}>{name}</Text>
+      <Text style={styles.role}>{profile?.role === 'photographer' ? 'Photographer' : isModel ? 'Model' : 'Member'}</Text>
+      <View style={styles.metadata}>
+        {profile?.city ? <Text style={styles.secondary}>{profile.city}</Text> : null}
+        {talent ? <Text style={styles.secondary}>{verified ? 'Identity verified' : 'Verification pending'}</Text> : null}
       </View>
-      
-      <Text style={[s.subtitle, { color: colors.textSecondary }]}>{talent?.style ?? 'Visual storyteller'}</Text>
-      
-      <View style={s.metaRow}>
-        <Text style={[s.location, { color: colors.textMuted }]}>
-          <Ionicons name="location-outline" size={14} /> {talent?.location ?? 'Cape Town'}
-        </Text>
-        <View style={s.dot} />
-        <Text style={[s.location, { color: colors.textMuted }]}>
-          {talent?.experience_years ? `${talent.experience_years}y Experience` : 'Member'}
-        </Text>
-      </View>
-
-      {/* Specialties Tags */}
-      {(talent?.specialties || talent?.tags) && (
-        <View style={s.tagsScroll}>
-          {(talent?.specialties || talent?.tags || []).slice(0, 5).map((tag, i) => (
-            <View key={i} style={[s.tag, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Text style={[s.tagText, { color: colors.textSecondary }]}>{tag}</Text>
-            </View>
-          ))}
+      {profile?.bio ? <Text selectable style={styles.bio}>{profile.bio}</Text> : null}
+      {talent?.tags?.length ? <Text style={styles.secondary}>{talent.tags.slice(0, 5).join(' / ')}</Text> : null}
+      {talent ? <View style={styles.reviews}>
+        {summary ? <TouchableOpacity accessibilityRole="button" accessibilityLabel="View published reviews"
+          onPress={() => navigation.navigate('Reviews', { photographerId: userId })} style={styles.reviewLink}>
+          <Ionicons name="star-outline" size={18} color={colors.text} />
+          <Text style={styles.buttonText}>{summary.count ? `${summary.average?.toFixed(1)} / 5 (${summary.count} ${summary.count === 1 ? 'review' : 'reviews'})` : 'No published reviews yet'}</Text>
+        </TouchableOpacity> : reviewError ? <><Text selectable style={styles.secondary}>Published reviews unavailable</Text>{button('Retry reviews', 'refresh-outline', () => setReviewReload(value => value + 1))}</> : <Text style={styles.secondary}>Loading published reviews...</Text>}
+      </View> : null}
+      {talent ? <View style={styles.rateRow}>
+        <View style={styles.rateDetails}>
+          <Text style={styles.secondary}>{Number.isFinite(rate) && rate > 0 ? 'Published hourly rate' : 'Booking prices'}</Text>
+          <Text selectable style={styles.rate}>{Number.isFinite(rate) && rate > 0 ? `R${rate.toLocaleString('en-ZA')} / hour` : isModel ? 'Priced by service' : 'View shoot packages'}</Text>
+          <Text style={styles.secondary}>Scheduled shoots</Text>
         </View>
-      )}
-      
-      <View style={s.followRow}>
-        <TouchableOpacity 
-          style={[s.smallFollowBtn, isFollowing ? { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border } : { backgroundColor: colors.text }]}
-          onPress={handleToggleFollow}
-        >
-          <Text style={[s.smallFollowBtnText, { color: isFollowing ? colors.text : colors.bg }]}>
-             {isFollowing ? 'Following' : 'Follow'}
-          </Text>
-        </TouchableOpacity>
-
-        {state.currentUser?.role && state.currentUser.id !== talent?.id && (
-           <TouchableOpacity 
-            style={[s.smallFollowBtn, { backgroundColor: colors.accent, marginLeft: 8 }]}
-            onPress={handleCollaborate}
-          >
-            <Text style={[s.smallFollowBtnText, { color: colors.bg }]}>Collaborate</Text>
-          </TouchableOpacity>
-        )}
+        {button('Request shoot', 'calendar-outline', book, !canBook)}
+      </View> : null}
+      {talent && !canBook && !isOwnProfile ? <Text style={styles.secondary}>This creator is not currently eligible for booking requests.</Text> : null}
+      <View style={styles.actions}>
+        {!isOwnProfile && state.currentUser ? button(isFollowing ? 'Following' : 'Follow', isFollowing ? 'checkmark-outline' : 'person-add-outline', () => void follow(), following) : null}
+        {talent && !isOwnProfile ? button('Message', 'chatbubble-outline', () => void message(), chatting) : null}
+        {button('View portfolio', 'images-outline', () => navigation.navigate('MediaLibrary', { creatorId: userId, title: `${name} Portfolio` }))}
       </View>
-      
-      <TouchableOpacity 
-        style={s.ratingRow} 
-        onPress={() => talent && navigation.navigate('Reviews', { photographerId: talent.id })}
-      >
-        <Ionicons name="star" size={16} color="#fbbf24" />
-        <Text style={[s.ratingText, { color: colors.text }]}>{talent?.rating?.toFixed(1) ?? '5.0'} Rating</Text>
-        <Text style={{ color: colors.textMuted, fontSize: 13, marginLeft: 4 }}>(128 reviews)</Text>
-        <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+      {profile?.website || profile?.instagram ? <View style={styles.actions}>
+        {profile.website ? button('Website', 'globe-outline', () => void openExternal(profile.website!)) : null}
+        {profile.instagram ? button('Instagram', 'logo-instagram', () => void openExternal(`https://www.instagram.com/${encodeURIComponent(profile.instagram!.replace(/^@/, '').trim())}/`)) : null}
+      </View> : null}
+      {actionError ? <Text accessibilityRole="alert" selectable style={styles.feedback}>{actionError}</Text> : null}
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Recent work</Text>
+        {postError ? button('Retry recent work', 'refresh-outline', () => setPostReload(value => value + 1)) : null}
+      </View>
+      {postError && posts.length > 0 ? <Text selectable style={styles.feedback}>{postError} Showing previously loaded work.</Text> : null}
+    </View>
+  );
+
+  const status = load.id === userId ? load.status : 'loading';
+  return <View style={[styles.container, { paddingTop: Math.max(insets.top, 12), paddingBottom: insets.bottom }]}>
+    <View style={styles.header}>
+      <TouchableOpacity accessibilityRole="button" accessibilityLabel="Go back" onPress={() => navigation.goBack()} style={styles.iconButton}>
+        <Ionicons name="chevron-back" size={24} color={colors.text} />
       </TouchableOpacity>
-
-      <View style={[s.statusCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <Text style={[s.sectionTitle, { color: colors.textSecondary }]}>STATUS GRAPH</Text>
-        <View style={s.statusRow}>
-          <View style={s.statusMetric}>
-            <Text style={[s.statusValue, { color: colors.text }]}>{seenScore}</Text>
-            <Text style={[s.statusLabel, { color: colors.textMuted }]}>Seen Score</Text>
-          </View>
-          <View style={s.statusMetric}>
-            <Text style={[s.statusValue, { color: colors.text }]}>{sceneRank}</Text>
-            <Text style={[s.statusLabel, { color: colors.textMuted }]}>Scene Rank</Text>
-          </View>
-          <View style={s.statusMetric}>
-            <Text style={[s.statusValue, { color: colors.text }]}>{localTrendRank ? `#${localTrendRank}` : '-'}</Text>
-            <Text style={[s.statusLabel, { color: colors.textMuted }]}>Local Trend</Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Highlight Reel */}
-      {pinnedPosts.length > 0 && (
-        <View style={s.highlightSection}>
-           <Text style={[s.sectionTitle, { color: colors.textSecondary }]}>HIGHLIGHT REEL</Text>
-           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.highlightScroll}>
-              {pinnedPosts.map(post => (
-                <TouchableOpacity key={post.id} style={s.highlightItem} onPress={() => navigation.navigate('PostDetail', { postId: post.id })}>
-                   <Image source={{ uri: post.image_url }} style={s.highlightImage} />
-                   <View style={s.pinBadge}>
-                      <Ionicons name="pin" size={12} color="#fff" />
-                   </View>
-                </TouchableOpacity>
-              ))}
-           </ScrollView>
-        </View>
-      )}
-
-      {/* Price Card */}
-      {talent?.hourly_rate && (
-        <View style={[s.priceCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <View>
-            <Text style={[s.priceLabel, { color: colors.textMuted }]}>HOURLY RATE</Text>
-            <Text style={[s.priceValue, { color: colors.text }]}>R{talent.hourly_rate}</Text>
-          </View>
-          <TouchableOpacity 
-            style={[s.bookBtn, { backgroundColor: colors.text }]}
-            onPress={() => {
-              if (state.photographers.some(p => p.id === talent.id)) {
-                navigation.navigate('BookingForm', { photographerId: talent.id, serviceType: 'photography' });
-              } else {
-                navigation.navigate('BookingForm', { modelId: talent.id, serviceType: 'modeling' });
-              }
-            }}
-          >
-            <Text style={[s.bookBtnText, { color: colors.bg }]}>Book Me</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      <View style={s.socialLinks}>
-         <TouchableOpacity onPress={() => talent?.website && Linking.openURL(talent.website)}>
-           <Ionicons name="globe-outline" size={24} color={colors.textSecondary} />
-         </TouchableOpacity>
-         <TouchableOpacity onPress={() => talent?.instagram && Linking.openURL(`https://instagram.com/${talent.instagram}`)}>
-           <Ionicons name="logo-instagram" size={24} color={colors.textSecondary} />
-         </TouchableOpacity>
-         <TouchableOpacity onPress={() => talent?.tiktok && Linking.openURL(`https://tiktok.com/@${talent.tiktok}`)}>
-           <Ionicons name="logo-tiktok" size={24} color={colors.textSecondary} />
-         </TouchableOpacity>
-      </View>
-
-      <View style={s.actionRow}>
-        <TouchableOpacity style={[s.actionBtn, { backgroundColor: colors.accent }]} onPress={handleMessage}>
-          <Ionicons name="chatbubble-outline" size={18} color={isDark ? colors.bg : colors.card} />
-          <Text style={[s.actionBtnText, { color: isDark ? colors.bg : colors.card }]}>Message</Text>
+      <Text numberOfLines={2} style={styles.headerTitle}>{name}</Text>
+      {loaded ? <>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Share profile" accessibilityState={{ disabled: sharing }} disabled={sharing} onPress={() => void share()} style={styles.iconButton}>
+          <Ionicons name="share-outline" size={23} color={colors.text} />
         </TouchableOpacity>
-        <TouchableOpacity style={[s.actionBtn, { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border }]} onPress={() => talent && navigation.navigate('CreatorSubscriptions', { creatorId: talent.id })}>
-          <Ionicons name="star" size={18} color="#eab308" />
-          <Text style={[s.actionBtnText, { color: colors.text }]}>Subscribe</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={[s.actionRow, { marginTop: 10 }]}>
-          <TouchableOpacity style={[s.actionBtn, { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border }]} onPress={() => setTipModalVisible(true)}>
-            <Ionicons name="heart" size={18} color="#ec4899" />
-            <Text style={[s.actionBtnText, { color: colors.text }]}>Send Tip</Text>
-          </TouchableOpacity>
-      </View>
-
-      <View style={s.tabBar}>
-        <TouchableOpacity style={[s.tab, activeTab === 'grid' && s.activeTab]} onPress={() => setActiveTab('grid')}>
-          <Ionicons name="grid" size={22} color={activeTab === 'grid' ? colors.accent : colors.textMuted} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[s.tab, activeTab === 'portfolio' && s.activeTab]}
-          onPress={() => {
-            setActiveTab('portfolio');
-            openPortfolio();
-          }}
-        >
-          <Ionicons name="images" size={22} color={activeTab === 'portfolio' ? colors.accent : colors.textMuted} />
-        </TouchableOpacity>
-        <TouchableOpacity style={[s.tab, activeTab === 'tagged' && s.activeTab]} onPress={() => setActiveTab('tagged')}>
-          <Ionicons name="person-circle-outline" size={24} color={activeTab === 'tagged' ? colors.accent : colors.textMuted} />
-        </TouchableOpacity>
-      </View>
+        {!isOwnProfile && state.currentUser ? <TouchableOpacity accessibilityRole="button" accessibilityLabel="Report profile" onPress={() => { setReportError(null); setReportOpen(true); }} style={styles.iconButton}>
+          <Ionicons name="flag-outline" size={22} color={colors.text} />
+        </TouchableOpacity> : null}
+      </> : null}
     </View>
-  );
-
-  return (
-    <View style={[s.container, { backgroundColor: colors.bg, paddingTop: Math.max(insets.top, 16) }]}>
-      <View style={s.header}>
-        <TouchableOpacity style={s.backButton} onPress={() => navigation.goBack()}>
-          <Ionicons name="chevron-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={[s.title, { color: colors.text }]}>{talent?.name ?? profileFallback?.full_name ?? 'Creator'}</Text>
-        <TouchableOpacity style={{ marginLeft: 'auto' }} onPress={handleReport}>
-          <Ionicons name="ellipsis-vertical" size={24} color={colors.text} />
-        </TouchableOpacity>
-      </View>
-
-      <FlatList
-        ListHeaderComponent={renderHeader}
-        data={activeTab === 'grid' ? posts : activeTab === 'tagged' ? taggedPosts : []}
-        keyExtractor={(item) => item.id}
-        numColumns={3}
-        contentContainerStyle={s.listContent}
-        renderItem={({ item }) => (
-          <TouchableOpacity style={s.imageContainer} onPress={() => navigation.navigate('PostDetail', { postId: item.id })}>
-            <Image source={{ uri: item.image_url }} style={s.image} />
-          </TouchableOpacity>
-        )}
-        ListEmptyComponent={
-          <View style={s.emptyContainer}>
-            <Ionicons name={activeTab === 'tagged' ? 'person-circle-outline' : activeTab === 'grid' ? 'images-outline' : 'albums-outline'} size={48} color={colors.textMuted} />
-            {activeTab === 'portfolio' ? (
-              <>
-                <Text style={[s.empty, { color: colors.textMuted }]}>Open this creator's portfolio gallery.</Text>
-                <TouchableOpacity style={s.portfolioCta} onPress={openPortfolio}>
-                  <Text style={s.portfolioCtaText}>View Portfolio</Text>
-                </TouchableOpacity>
-              </>
-            ) : activeTab === 'tagged' ? (
-              <Text style={[s.empty, { color: colors.textMuted }]}>
-                {taggedLoading ? 'Loading tagged posts…' : 'No tagged posts yet.'}
-              </Text>
-            ) : (
-              <Text style={[s.empty, { color: colors.textMuted }]}>No posts yet.</Text>
-            )}
-          </View>
-        }
-      />
-
-      <Modal visible={tipModalVisible} transparent animationType="slide" onRequestClose={() => setTipModalVisible(false)}>
-        <View style={s.modalBg}>
-          <View style={[s.modalContent, { backgroundColor: colors.bg }]}>
-            <View style={s.modalHeader}>
-              <Text style={[s.modalTitle, { color: colors.text }]}>Send Tip</Text>
-              <TouchableOpacity onPress={() => setTipModalVisible(false)} style={s.iconBtn}>
-                <Ionicons name="close" size={24} color={colors.text} />
-              </TouchableOpacity>
-            </View>
-            <View style={s.modalBody}>
-              <Text style={[s.modalLabel, { color: colors.textSecondary }]}>Amount in ZAR</Text>
-              <TextInput
-                style={[s.modalInput, { backgroundColor: colors.card, color: colors.text, borderColor: colors.border }]}
-                keyboardType="numeric"
-                value={tipAmount}
-                onChangeText={setTipAmount}
-                placeholder="50"
-                placeholderTextColor={colors.textMuted}
-              />
-              <View style={s.presets}>
-                {['20', '50', '100', '250'].map(p => (
-                  <TouchableOpacity key={p} style={[s.presetBtn, { backgroundColor: colors.card, borderColor: colors.border }, tipAmount === p && { backgroundColor: colors.accent, borderColor: colors.accent }]} onPress={() => setTipAmount(p)}>
-                    <Text style={[s.presetText, { color: colors.text }, tipAmount === p && { color: colors.bg }]}>R{p}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-              <TouchableOpacity style={[s.confirmBtn, { backgroundColor: colors.accent }]} onPress={handleTip} disabled={isSendingTip}>
-                <Text style={[s.confirmBtnText, { color: colors.bg }]}>{isSendingTip ? 'Sending...' : 'Send Tip'}</Text>
-              </TouchableOpacity>
-            </View>
+    {status === 'ready' ? <FlatList
+      data={posts} numColumns={3} keyExtractor={item => item.id} ListHeaderComponent={header}
+      contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.listContent}
+      renderItem={({ item }) => <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Open post ${item.caption || 'Recent work'}`}
+        onPress={() => navigation.navigate('PostDetail', { postId: item.id })} style={styles.imageContainer}>
+        <Image source={{ uri: item.image_url }} style={styles.image} />
+      </TouchableOpacity>}
+      ListEmptyComponent={<View style={styles.empty}>
+        {postsLoading ? <ActivityIndicator accessibilityLabel="Loading recent work" color={colors.accent} /> : postError ? <>
+          <Text selectable style={styles.secondary}>{postError}</Text>
+          {button('Retry recent work', 'refresh-outline', () => setPostReload(value => value + 1))}
+        </> : <Text style={styles.secondary}>No published work yet.</Text>}
+      </View>}
+    /> : <View style={styles.empty}>
+      {status === 'loading' ? <ActivityIndicator accessibilityLabel="Loading profile" color={colors.accent} /> : <>
+        <Text selectable style={styles.feedback}>{status === 'error' ? load.error : 'This profile is unavailable.'}</Text>
+        {status === 'error' ? button('Retry profile', 'refresh-outline', () => setReload(value => value + 1)) : null}
+      </>}
+    </View>}
+    <Modal visible={reportOpen} transparent animationType="fade" onRequestClose={() => { if (!reporting) setReportOpen(false); }}>
+      <View style={styles.modalBackdrop}>
+        <View accessibilityViewIsModal style={styles.reportDialog}>
+          <Text accessibilityRole="header" style={styles.sectionTitle}>Report profile</Text>
+          <TextInput accessibilityLabel="Report reason" value={reportReason} onChangeText={setReportReason} editable={!reporting}
+            maxLength={1000} multiline placeholder="Reason" placeholderTextColor={colors.textSecondary} style={styles.reportInput} />
+          {reportError ? <Text accessibilityRole="alert" style={styles.feedback}>{reportError}</Text> : null}
+          <View style={styles.actions}>
+            {button('Cancel report', 'close-outline', () => setReportOpen(false), reporting)}
+            {button('Submit report', 'flag-outline', () => void report(), reporting || !reportReason.trim())}
           </View>
         </View>
-      </Modal>
-    </View>
-  );
+      </View>
+    </Modal>
+  </View>;
 };
 
 const makeStyles = (colors: any) => StyleSheet.create({
-  container: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 12 },
-  backButton: { marginRight: 12 },
-  title: { fontSize: 20, fontWeight: '800' },
-  profileInfo: { alignItems: 'center' },
-  avatarWrapper: { position: 'relative', marginBottom: 12 },
-  profileAvatar: { width: 100, height: 100, borderRadius: 50, backgroundColor: '#f1f5f9' },
-  onlineBadge: { position: 'absolute', bottom: -5, right: -5, backgroundColor: '#10b981', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10, flexDirection: 'row', alignItems: 'center', borderWidth: 2, borderColor: colors.bg },
-  onlineDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#fff', marginRight: 4 },
-  onlineText: { color: '#fff', fontSize: 8, fontWeight: '900' },
-  subtitle: { fontSize: 16, fontWeight: '600', marginBottom: 4 },
-  metaRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-  dot: { width: 3, height: 3, borderRadius: 2, backgroundColor: colors.textMuted, marginHorizontal: 8 },
-  location: { fontSize: 14 },
-  tagsScroll: { flexDirection: 'row', gap: 6, marginBottom: 16, paddingHorizontal: 20, flexWrap: 'wrap', justifyContent: 'center' },
-  tag: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1 },
-  tagText: { fontSize: 11, fontWeight: '600' },
-  followRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-  smallFollowBtn: { paddingHorizontal: 20, paddingVertical: 8, borderRadius: 999 },
-  smallFollowBtnText: { fontWeight: '700', fontSize: 13 },
-  ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(0,0,0,0.04)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, marginBottom: 20 },
-  ratingText: { fontWeight: '700', fontSize: 14 },
-  statusCard: { width: '90%', borderWidth: 1, borderRadius: 16, padding: 14, marginBottom: 18 },
-  statusRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 6 },
-  statusMetric: { alignItems: 'center', flex: 1 },
-  statusValue: { fontSize: 18, fontWeight: '900' },
-  statusLabel: { fontSize: 11, fontWeight: '700', marginTop: 3 },
-  highlightSection: { width: '100%', marginBottom: 20 },
-  sectionTitle: { fontSize: 10, fontWeight: '800', marginLeft: 20, marginBottom: 10, letterSpacing: 1 },
-  highlightScroll: { paddingHorizontal: 16 },
-  highlightItem: { width: 140, height: 180, marginRight: 10, borderRadius: 12, overflow: 'hidden', position: 'relative' },
-  highlightImage: { width: '100%', height: '100%' },
-  pinBadge: { position: 'absolute', top: 8, right: 8, backgroundColor: 'rgba(0,0,0,0.5)', width: 24, height: 24, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
-  socialLinks: { flexDirection: 'row', gap: 20, marginBottom: 20, marginTop: 4 },
-  priceCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '90%', padding: 16, borderRadius: 16, borderWidth: 1, marginBottom: 20 },
-  priceLabel: { fontSize: 10, fontWeight: '800' },
-  priceValue: { fontSize: 20, fontWeight: '900' },
-  bookBtn: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 12 },
-  bookBtnText: { fontWeight: '800', fontSize: 14 },
-  actionRow: { flexDirection: 'row', gap: 10, width: '100%', justifyContent: 'center', paddingHorizontal: 20 },
-  actionBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20, gap: 8, flex: 1, justifyContent: 'center' },
-  actionBtnText: { fontWeight: '700', fontSize: 13 },
-  tabBar: { flexDirection: 'row', borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, marginTop: 20, width: '100%' },
-  tab: { flex: 1, alignItems: 'center', paddingVertical: 12, borderBottomWidth: 2, borderBottomColor: 'transparent' },
-  activeTab: { borderBottomColor: colors.accent },
-  listContent: { padding: 1 },
-  imageContainer: { width: '33.33%', aspectRatio: 1, padding: 1 },
-  image: { width: '100%', height: '100%' },
-  emptyContainer: { alignItems: 'center', paddingVertical: 60, width: '100%' },
-  empty: { textAlign: 'center', marginTop: 12, fontWeight: '600' },
-  portfolioCta: { marginTop: 12, backgroundColor: colors.accent, paddingHorizontal: 18, paddingVertical: 10, borderRadius: 12 },
-  portfolioCtaText: { color: colors.bg, fontWeight: '800', fontSize: 13 },
-  modalBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalContent: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 40 },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  modalTitle: { fontSize: 22, fontWeight: '800' },
-  iconBtn: { padding: 8, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.05)' },
-  modalBody: { gap: 16 },
-  modalLabel: { fontSize: 14, fontWeight: '700' },
-  modalInput: { padding: 16, borderRadius: 12, fontSize: 24, fontWeight: '800', textAlign: 'center', borderWidth: 1 },
-  presets: { flexDirection: 'row', gap: 8 },
-  presetBtn: { flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center', borderWidth: 1 },
-  presetText: { fontWeight: '700' },
-  confirmBtn: { paddingVertical: 16, borderRadius: 14, alignItems: 'center', marginTop: 10 },
-  confirmBtnText: { fontSize: 18, fontWeight: '800' },
+  container: { flex: 1, backgroundColor: colors.bg },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, gap: 4, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+  iconButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { flex: 1, fontSize: 18, fontWeight: '700', color: colors.text, paddingVertical: 10 },
+  listContent: { paddingBottom: 24, width: '100%', maxWidth: 800, alignSelf: 'center' },
+  profile: { paddingHorizontal: 20, paddingTop: 24, gap: 12 },
+  avatar: { width: 96, height: 96, borderRadius: 48, backgroundColor: colors.card },
+  name: { color: colors.text, fontSize: 24, fontWeight: '700', flexShrink: 1 },
+  role: { color: colors.textSecondary, fontSize: 15 },
+  metadata: { flexDirection: 'row', flexWrap: 'wrap', gap: 16 },
+  secondary: { color: colors.textSecondary, fontSize: 14, lineHeight: 21, flexShrink: 1 },
+  bio: { color: colors.text, fontSize: 15, lineHeight: 23 },
+  reviews: { alignItems: 'flex-start' },
+  reviewLink: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, minHeight: 44 },
+  rateRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, paddingVertical: 16, alignItems: 'center' },
+  rateDetails: { flexGrow: 1, flexShrink: 1, gap: 4 },
+  rate: { color: colors.text, fontSize: 20, fontWeight: '700' },
+  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  button: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderColor: colors.border, borderRadius: 6, maxWidth: '100%', flexShrink: 1 },
+  buttonText: { color: colors.text, fontWeight: '600', fontSize: 14, flexShrink: 1 },
+  feedback: { color: colors.text, fontSize: 14, lineHeight: 21 },
+  sectionHeader: { marginTop: 12, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 },
+  sectionTitle: { color: colors.text, fontWeight: '700', fontSize: 18 },
+  imageContainer: { width: '33.333333%', aspectRatio: 1, padding: 1 },
+  image: { width: '100%', height: '100%', backgroundColor: colors.card },
+  empty: { padding: 24, alignItems: 'center', gap: 16 },
+  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', padding: 20 },
+  reportDialog: { width: '100%', maxWidth: 440, padding: 20, gap: 16, borderRadius: 8, backgroundColor: colors.bg },
+  reportInput: { minHeight: 100, padding: 12, borderWidth: 1, borderRadius: 6, borderColor: colors.border, color: colors.text, fontSize: 16, textAlignVertical: 'top' },
 });
 
 export default UserProfileScreen;

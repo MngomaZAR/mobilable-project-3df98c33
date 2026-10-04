@@ -7,6 +7,7 @@ import {
   getApiSession,
   refreshApiSession,
   setApiSession,
+  validateApiSession,
 } from '../config/apiSession';
 import {
   legacyDb,
@@ -246,18 +247,17 @@ class ApiQueryBuilder<T = any> implements PromiseLike<QueryResult<T>> {
 const createApiBackendDb = () => {
   const auth = {
     getSession: async () => {
-      const session = await getApiSession();
-      return { data: { session }, error: null };
+      try {
+        const session = await validateApiSession();
+        return { data: { session }, error: null };
+      } catch (error) {
+        return { data: { session: null }, error: toBackendError(error, 'Unable to validate current session.') };
+      }
     },
     getUser: async () => {
       try {
-        const token = await getApiAccessToken();
-        const session = await getApiSession();
-        if (!token) return { data: { user: null }, error: null };
-        const response = await apiClient.get<AuthResponse>('/auth/me', { token });
-        const user = response.user ?? session?.user ?? null;
-        if (user && session) await setApiSession({ ...session, user });
-        return { data: { user }, error: null };
+        const session = await validateApiSession();
+        return { data: { user: session?.user ?? null }, error: null };
       } catch (error) {
         return { data: { user: null }, error: toBackendError(error, 'Unable to load current user.') };
       }
@@ -340,11 +340,14 @@ const createApiBackendDb = () => {
       }
     },
     onAuthStateChange: (callback: (event: string, session: ApiSession | null) => void) => {
-      void getApiSession().then((session) => callback(session ? 'INITIAL_SESSION' : 'SIGNED_OUT', session));
+      let active = true;
+      void validateApiSession().then((session) => {
+        if (active) callback(session ? 'INITIAL_SESSION' : 'SIGNED_OUT', session);
+      }).catch(() => { if (active) callback('SIGNED_OUT', null); });
       return {
         data: {
           subscription: {
-            unsubscribe: () => undefined,
+            unsubscribe: () => { active = false; },
           },
         },
       };

@@ -20,7 +20,7 @@ Safety and financial blockers override an average score.
 | Trust and support | 2/5 | KYC upload/review and moderation have targeted QA. Support retains booking references; duplicate action guards and error states are added. Staff coverage, escalation and real deletion operations are unverified. | Auditable decisions, privacy checks, support response ownership, blocked-user tests and production admin access. |
 | Creator monetization | 1/5 | Payment/refund/payout protocols have mocked-provider evidence, not verified money movement. Store digital purchases remain disabled. | Live merchant credentials, signed callbacks, duplicate reconciliation, refund execution and independently verified bank settlement. |
 | UI and accessibility | 2/5 | Targeted booking/KYC/support improvements and phone/desktop browser checks. Earlier inventory evidence covers 22/44 entry points, not all buttons or native devices. | Every enabled screen/action, large text, keyboard/screen reader, dark/light themes and small/large devices. |
-| Reliability and operations | 2/5 | Immutable API/worker cutover, backup restore, migrations and public core probes accepted. Recovery email, push/video, backup retention and incident ownership are unfinished. Prior write p95 ~6.26 seconds is too slow. | Target p95 <2 seconds for booking/chat writes under the defined 300-session workload; alerts, scheduled backups, restore drills and on-call response. This is a project target, not a competitor benchmark. |
+| Reliability and operations | 2/5 | Immutable API/worker cutover, backup restore, migrations and public core probes accepted. Recovery email reached the owner inbox; this is not recovery acceptance for every user. Push/video, backup retention and incident ownership are unfinished. Baseline CI write p95 ~5.04 seconds remains too slow. | Target p95 <2 seconds for booking/chat writes under the defined 300-session workload; alerts, scheduled backups, restore drills and on-call response. This is a project target, not a competitor benchmark. |
 
 ## Relevant Market Standards
 
@@ -57,8 +57,14 @@ Safety and financial blockers override an average score.
 
 ## Launch Order
 
-1. Configure existing merchant, SMTP and admin access on Oracle without moving
-   secrets into mobile code. Execute real payment/refund/settlement and recovery checks.
+The six-product comparison, additional source gaps and execution plan are in
+[Competitive Execution](COMPETITIVE_EXECUTION_20261004.md). Improvements to one
+profile surface do not raise the whole app to sustained-production maturity.
+
+1. Existing merchant and restricted SMTP credentials are configured on Oracle;
+   checkout remains disabled and admin capability requires candidate acceptance.
+   Execute real payment/refund/settlement and complete recovery checks without
+   moving secrets into mobile code.
 2. Finish operational acceptance for dispatch, push and video. Keep unavailable
    functionality explicitly disabled; do not override readiness flags.
 3. Reduce booking/chat write latency using measured query/lock/outbox traces,

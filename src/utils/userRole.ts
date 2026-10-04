@@ -1,13 +1,15 @@
 import { AppUser } from '../types';
 
-type RoleLike = Pick<AppUser, 'role' | 'is_photographer' | 'is_model'> | null | undefined;
+type RoleLike = Pick<AppUser, 'role' | 'is_photographer' | 'is_model' | 'is_admin'> | null | undefined;
 type ResolvableRole = RoleLike | AppUser['role'] | null | undefined;
 
 export const resolveUserRole = (
   user: RoleLike,
   fallback: AppUser['role'] = 'client'
 ): AppUser['role'] => {
-  const explicitRole = user?.role;
+  // Admin is a server capability, never a business role supplied by metadata or a profile.
+  const explicitRole = user?.role === 'admin' ? 'client' : user?.role;
+  const safeFallback = fallback === 'admin' ? 'client' : fallback;
 
   if (explicitRole && explicitRole !== 'client') {
     return explicitRole;
@@ -18,14 +20,17 @@ export const resolveUserRole = (
   if (user?.is_photographer) {
     return 'photographer';
   }
-  return explicitRole ?? fallback;
+  return explicitRole ?? safeFallback;
 };
 
 export const resolveRoleValue = (input: ResolvableRole, fallback: AppUser['role'] = 'client') =>
-  typeof input === 'string' ? input : resolveUserRole(input, fallback);
+  typeof input === 'string' ? (input === 'admin' ? 'client' : input) : resolveUserRole(input, fallback);
+
+export const isAdminUser = (user: RoleLike) => user?.is_admin === true;
 
 // Backward-compatible aliases used by older call sites and audit notes.
-export const getEffectiveRole = resolveRoleValue;
+export const getEffectiveRole = (input: ResolvableRole, fallback: AppUser['role'] = 'client') =>
+  typeof input !== 'string' && isAdminUser(input) ? 'admin' : resolveRoleValue(input, fallback);
 
 export const isModelUser = (user: ResolvableRole) => resolveRoleValue(user) === 'model';
 export const isPhotographerUser = (user: ResolvableRole) => resolveRoleValue(user) === 'photographer';

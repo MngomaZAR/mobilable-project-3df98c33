@@ -29,7 +29,7 @@ jest.mock('../src/components/NewMessageModal', () => ({ NewMessageModal: () => n
 
 const item = { id: 'pending-post', caption: 'Needs content review', author_id: 'creator', moderation_status: 'pending', created_at: '2026-10-03T10:00:00Z' };
 const queue = () => ({ content: { posts: [item], stories: [], post_comments: [], reviews: [] }, counts: { posts: 1, stories: 0, post_comments: 0, reviews: 0 } });
-const adminContext = () => ({ state: { currentUser: { id: 'admin', role: 'admin' }, bookings: [], profiles: [] }, fetchBookings: jest.fn(async () => undefined) });
+const adminContext = () => ({ state: { currentUser: { id: 'admin', role: 'client', is_admin: true }, bookings: [], profiles: [] }, fetchBookings: jest.fn(async () => undefined) });
 
 describe('Admin moderation UI', () => {
   beforeEach(() => {
@@ -54,6 +54,24 @@ describe('Admin moderation UI', () => {
     const view = render(<AdminModerationScreen />);
     expect(view.getByText('Administrator access required.')).toBeTruthy();
     expect(apiClient.get).not.toHaveBeenCalled();
+  });
+
+  it.each([AdminModerationScreen, AdminDashboardScreen])('does not unlock an admin screen with a stored or metadata admin role', Screen => {
+    (useAppData as jest.Mock).mockReturnValue({ ...adminContext(), state: { ...adminContext().state,
+      currentUser: { id: 'attacker', role: 'admin', is_admin: false, user_metadata: { is_admin: true } } } });
+    const view = render(<Screen />);
+    expect(view.getByText('Administrator access required.')).toBeTruthy();
+    expect(apiClient.get).not.toHaveBeenCalled();
+  });
+
+  it('closes moderation UI after capability revocation while preserving the client role', async () => {
+    const view = render(<AdminModerationScreen />);
+    expect(await view.findByRole('button', { name: 'Review post pending-post' })).toBeTruthy();
+    (useAppData as jest.Mock).mockReturnValue({ ...adminContext(), state: { ...adminContext().state,
+      currentUser: { id: 'admin', role: 'client', is_admin: false } } });
+    view.rerender(<AdminModerationScreen />);
+    expect(view.getByText('Administrator access required.')).toBeTruthy();
+    expect(view.queryByRole('button', { name: 'Review post pending-post' })).toBeNull();
   });
 
   it.each(['stories', 'post_comments', 'reviews'])('renders and submits the correct %s queue item', async table => {

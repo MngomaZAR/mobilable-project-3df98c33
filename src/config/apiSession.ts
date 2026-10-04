@@ -4,6 +4,7 @@ import { sessionStorage } from '../services/sessionStorage';
 export type ApiSessionUser = {
   id: string;
   email?: string | null;
+  is_admin?: boolean;
   user_metadata?: Record<string, unknown>;
 };
 
@@ -18,6 +19,8 @@ let cachedSession: ApiSession | null = null;
 let hydrated = false;
 let hydration: Promise<ApiSession | null> | null = null;
 let refresh: Promise<ApiSession | null> | null = null;
+let validation: Promise<ApiSession | null> | null = null;
+let validationGeneration = 0;
 let generation = 0;
 
 export const hydrateApiSession = async () => {
@@ -39,7 +42,8 @@ export const hydrateApiSession = async () => {
             (session.expires_at != null && (typeof session.expires_at !== 'number' || !Number.isFinite(session.expires_at)))) {
           throw new Error('Invalid stored session');
         }
-        cachedSession = session;
+        // A stored capability is not proof of the current server allowlist.
+        cachedSession = { ...session, user: session.user ? { ...session.user, is_admin: false } : session.user };
       } catch {
         cachedSession = null;
         await sessionStorage.removeItem();
@@ -89,6 +93,37 @@ export const refreshApiSession = async (): Promise<ApiSession | null> => {
 };
 
 export const getCachedApiSession = () => cachedSession;
+
+export const validateApiSession = async (): Promise<ApiSession | null> => {
+  const session = await getApiSession();
+  if (!session?.access_token) return null;
+  if (validation && validationGeneration === generation) return validation;
+  const startingGeneration = generation;
+  validationGeneration = startingGeneration;
+  validation = (async () => {
+    try {
+      const response = await apiClient.get<{ user?: ApiSessionUser | null }>('/auth/me', { token: session.access_token! });
+      if (generation !== startingGeneration) return null;
+      if (!response.user?.id || (session.user?.id && response.user.id !== session.user.id)) {
+        throw new Error('Unable to validate the current account.');
+      }
+      await setApiSession({ ...session, user: { ...response.user, is_admin: response.user.is_admin === true } });
+      return generation === startingGeneration + 1 ? cachedSession : null;
+    } catch (error) {
+      if (generation === startingGeneration) {
+        if (error instanceof ApiClientError && error.status === 401) {
+          await clearApiSession();
+        } else if (session.user) {
+          await setApiSession({ ...session, user: { ...session.user, is_admin: false } });
+        }
+      }
+      throw error;
+    } finally {
+      if (validationGeneration === startingGeneration) validation = null;
+    }
+  })();
+  return validation;
+};
 
 export const getApiAccessToken = async () => {
   const session = await getApiSession();

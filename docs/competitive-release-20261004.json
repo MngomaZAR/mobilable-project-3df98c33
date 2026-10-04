@@ -1,0 +1,28 @@
+{
+  "date": "2026-10-04",
+  "scope": "Competitive comparison and targeted profile/admin reliability pass; not whole-app public acceptance",
+  "local": {
+    "frontendSuites": 27,
+    "frontendTests": 300,
+    "frontendPassed": true,
+    "apiTestsRun": 323,
+    "apiSkippedForDatabase": 37,
+    "apiExecutedPassed": true,
+    "deploymentSafetyTests": 20,
+    "releaseGateRegressionTests": 8,
+    "typecheckPassed": true,
+    "lintPassed": true,
+    "architectureBlockers": 0,
+    "dashboardChecks": 18,
+    "singleFlowChecks": 6
+  },
+  "candidate": { "revision": null, "githubCi": "pending", "oraclePromotion": "pending", "browserAcceptance": { "checksPassed": 6, "transport": "Synthetic browser API fixtures, not live backend or native financial acceptance", "viewports": [320, 390, 1440], "themes": ["light", "dark"], "screenshotsReviewed": true, "mediaFixture": "Existing Papzi logo, not a real creator portfolio" } },
+  "release": {
+    "publicReady": false,
+    "nativeBuildStarted": false,
+    "testerInvitesSent": false,
+    "publicReviewSubmitted": false,
+    "blockingCapabilities": ["payment_checkout_enabled", "payment_refund_execution", "bank_payout_execution", "video_call_service", "instant_dispatch_service"],
+    "additionalAcceptance": ["Real paid shoot, refunds and creator bank settlement", "Enabled native screen/action matrix and four-role physical-device journeys", "Performance, moderation, privacy and operational service levels"]
+  }
+}

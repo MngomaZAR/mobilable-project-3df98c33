@@ -38,7 +38,7 @@ export const invokeBackendFunction = async <T = any>(
   name: string,
   body?: Record<string, any>
 ): Promise<BackendFunctionResult<T>> => {
-  if (isBetaRestrictedRequest(`/functions/${normalizePath(name).slice(1)}`, 'POST', body)) {
+  if (environment.backendProvider !== 'api' && isBetaRestrictedRequest(`/functions/${normalizePath(name).slice(1)}`, 'POST', body)) {
     return { data: null, error: { message: BETA_RESTRICTION_MESSAGE } };
   }
   if (environment.backendProvider === 'api') {

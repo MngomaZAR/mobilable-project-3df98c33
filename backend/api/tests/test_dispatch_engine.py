@@ -85,6 +85,22 @@ class AccountGuardTests(unittest.IsolatedAsyncioTestCase):
 
 
 class DispatchDatabaseTests(DatabaseCase):
+    async def test_prepared_mobile_booking_only_accepts_through_its_matching_offer(self):
+        from app.booking_engine import transition_booking
+        booking = await self.pending(prepare_dispatch=True)
+        self.assertTrue(booking['is_instant'])
+        self.assertEqual((await self.row("SELECT count(*) AS n FROM job_outbox WHERE kind='notification'"))['n'], 0)
+        with self.assert_http(409):
+            await transition_booking(self.settings, booking['id'], 'accepted', {'id': 'p1'})
+        result = await engine.create_dispatch(self.settings,
+            DispatchCreate(booking_id=booking['id'], fanout_count=2, intensity_level=1), {'id': 'client'})
+        actor = result['offers'][0]['provider_id']
+        await self.respond(result, actor)
+        saved = await self.row('SELECT * FROM bookings WHERE id=$1', booking['id'])
+        self.assertEqual(saved['status'], 'accepted')
+        self.assertEqual(saved['payment_status'], 'unpaid')
+        self.assertEqual(saved['assignment_state'], 'accepted')
+
     async def respond(self, result, actor, response="accept", **extra):
         return await engine.respond_to_dispatch(self.settings, DispatchRespond(dispatch_request_id=result["dispatch_request"]["id"], response=response, **extra), {"id": actor})
 

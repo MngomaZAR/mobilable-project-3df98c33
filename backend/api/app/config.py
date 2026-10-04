@@ -1,4 +1,6 @@
 from functools import lru_cache
+from datetime import datetime
+from decimal import Decimal
 from ipaddress import ip_network
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -15,6 +17,12 @@ class Settings(BaseSettings):
     commission_rate: float = Field(default=0.20, alias="COMMISSION_RATE", ge=0, le=1)
     payfast_sandbox: bool = Field(default=True, alias="PAYFAST_SANDBOX")
     payfast_checkout_enabled: bool = Field(default=False, alias="PAYFAST_CHECKOUT_ENABLED")
+    payfast_acceptance_max_amount: Decimal = Field(default=Decimal('50.00'), alias="PAYFAST_ACCEPTANCE_MAX_AMOUNT", ge=5, le=500)
+    service_acceptance_user_ids: str = Field(default="", alias="SERVICE_ACCEPTANCE_USER_IDS")
+    service_acceptance_expires_at: datetime | None = Field(default=None, alias="SERVICE_ACCEPTANCE_EXPIRES_AT")
+    video_acceptance_id: str = Field(default="", alias="VIDEO_ACCEPTANCE_ID")
+    dispatch_acceptance_id: str = Field(default="", alias="DISPATCH_ACCEPTANCE_ID")
+    instant_dispatch_enabled: bool = Field(default=False, alias="INSTANT_DISPATCH_ENABLED")
     payfast_return_url: str = Field(default="", alias="PAYFAST_RETURN_URL")
     payfast_cancel_url: str = Field(default="", alias="PAYFAST_CANCEL_URL")
     osrm_base_url: str = Field(default="", alias="OSRM_BASE_URL")
@@ -63,6 +71,18 @@ class Settings(BaseSettings):
     payfast_merchant_id: str = Field(default="", alias="PAYFAST_MERCHANT_ID")
     payfast_merchant_key: str = Field(default="", alias="PAYFAST_MERCHANT_KEY")
     payfast_passphrase: str = Field(default="", alias="PAYFAST_PASSPHRASE")
+
+    @field_validator("service_acceptance_expires_at")
+    @classmethod
+    def validate_acceptance_expiry(cls, value):
+        if value is not None and value.utcoffset() is None:
+            raise ValueError("Acceptance test expiry must include its timezone.")
+        return value
+
+    @field_validator('service_acceptance_expires_at', mode='before')
+    @classmethod
+    def empty_acceptance_expiry_is_disabled(cls, value):
+        return None if value == '' else value
 
     @field_validator("forwarded_allow_ips")
     @classmethod

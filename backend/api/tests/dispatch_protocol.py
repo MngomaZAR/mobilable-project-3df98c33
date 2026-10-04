@@ -2,7 +2,7 @@
 
 Run: python dispatch_protocol.py --database-url postgresql://user@127.0.0.1:PORT/postgres
 Only an explicitly supplied loopback database is permitted. Each test uses and drops
-its own generated schema, applying migrations 001-007 without changing QA data.
+its own generated schema, applying migrations 001-013 without changing QA data.
 """
 
 import argparse
@@ -50,7 +50,7 @@ class DatabaseCase(unittest.IsolatedAsyncioTestCase):
             await admin.execute("SELECT set_config('search_path',$1,false)", self.schema + ",public")
             migrations = Path(__file__).resolve().parents[1] / "migrations"
             for migration in sorted(migrations.glob("*.sql")):
-                if migration.name[:12] <= "202610030007":
+                if migration.name[:12] <= "202610040013":
                     await admin.execute(migration.read_text(encoding="utf-8"))
         except BaseException:
             await admin.execute(f'DROP SCHEMA IF EXISTS "{self.schema}" CASCADE')

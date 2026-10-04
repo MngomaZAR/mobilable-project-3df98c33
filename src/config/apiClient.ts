@@ -34,7 +34,7 @@ const readResponseBody = async (response: Response) => {
 export const hasApiBackend = Boolean(apiBaseUrl);
 
 export const apiRequest = async <T>(path: string, options: ApiRequestOptions = {}): Promise<T> => {
-  if (isBetaRestrictedRequest(path.startsWith('/') ? path : `/${path}`, options.method, options.body)) {
+  if (isBetaRestrictedRequest(path.startsWith('/') ? path : `/${path}`, options.method, options.body, options.token)) {
     throw new ApiClientError(BETA_RESTRICTION_MESSAGE, 403);
   }
   if (!apiBaseUrl) {

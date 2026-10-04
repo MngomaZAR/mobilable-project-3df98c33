@@ -5,7 +5,8 @@ arguments. Credentials and resolved Compose backups remain root-only on Oracle.
 """
 import argparse
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from decimal import Decimal, InvalidOperation
 import json
 import os
 from pathlib import Path
@@ -23,6 +24,8 @@ ALLOWED = {
     "SMTP_USER", "SMTP_PASSWORD", "SMTP_FROM", "SMTP_SSL", "RECOVERY_ENCRYPTION_KEY",
     "PAYFAST_MERCHANT_ID", "PAYFAST_MERCHANT_KEY", "PAYFAST_PASSPHRASE",
     "PAYFAST_SANDBOX", "PAYFAST_CHECKOUT_ENABLED",
+    "SERVICE_ACCEPTANCE_USER_IDS", "SERVICE_ACCEPTANCE_EXPIRES_AT", "PAYFAST_ACCEPTANCE_MAX_AMOUNT",
+    "VIDEO_ACCEPTANCE_ID", "DISPATCH_ACCEPTANCE_ID", "INSTANT_DISPATCH_ENABLED",
 }
 PAYMENT_SETTINGS = {"PAYFAST_MERCHANT_ID", "PAYFAST_MERCHANT_KEY", "PAYFAST_PASSPHRASE",
                     "PAYFAST_SANDBOX", "PAYFAST_CHECKOUT_ENABLED"}
@@ -36,7 +39,7 @@ def validate_updates(updates):
             raise ValueError("Expected nonempty single-line integration settings")
         if len(value) > 8192:
             raise ValueError("Integration setting is too large")
-    for key in ("LIVEKIT_ENABLED", "SMTP_SSL", "PAYFAST_SANDBOX", "PAYFAST_CHECKOUT_ENABLED"):
+    for key in ("LIVEKIT_ENABLED", "SMTP_SSL", "PAYFAST_SANDBOX", "PAYFAST_CHECKOUT_ENABLED", "INSTANT_DISPATCH_ENABLED"):
         if key in updates and updates[key] not in {"true", "false"}:
             raise ValueError("Boolean integration settings must be explicit")
     for key, scheme in (("LIVEKIT_URL", "wss"), ("LIVEKIT_API_URL", "https")):
@@ -49,6 +52,27 @@ def validate_updates(updates):
     if set(updates) & PAYMENT_SETTINGS:
         if not PAYMENT_SETTINGS <= set(updates) or updates["PAYFAST_CHECKOUT_ENABLED"] != "false":
             raise ValueError("Merchant settings must be complete and new checkout must remain paused")
+    if 'SERVICE_ACCEPTANCE_USER_IDS' in updates:
+        ids = updates['SERVICE_ACCEPTANCE_USER_IDS'].split(',')
+        if len(ids) > 20 or any(not re.fullmatch(r'[A-Za-z0-9_-]{1,120}', value) for value in ids):
+            raise ValueError('Acceptance access requires at most 20 explicit account IDs')
+        if 'SERVICE_ACCEPTANCE_EXPIRES_AT' not in updates:
+            raise ValueError('Acceptance accounts require an explicit short expiry')
+    if 'SERVICE_ACCEPTANCE_EXPIRES_AT' in updates:
+        expiry = datetime.fromisoformat(updates['SERVICE_ACCEPTANCE_EXPIRES_AT'])
+        now = datetime.now(timezone.utc)
+        if expiry.utcoffset() is None or expiry > now + timedelta(hours=24):
+            raise ValueError('Acceptance expiry must include a timezone and cannot exceed 24 hours')
+    for key in ('VIDEO_ACCEPTANCE_ID', 'DISPATCH_ACCEPTANCE_ID'):
+        if key in updates and not re.fullmatch(r'[A-Za-z0-9_-]{1,120}', updates[key]):
+            raise ValueError('Invalid service acceptance ID')
+    if 'PAYFAST_ACCEPTANCE_MAX_AMOUNT' in updates:
+        try:
+            amount = Decimal(updates['PAYFAST_ACCEPTANCE_MAX_AMOUNT'])
+            if not amount.is_finite() or not Decimal('5.00') <= amount <= Decimal('500.00') or amount != amount.quantize(Decimal('0.01')):
+                raise ValueError('Invalid controlled payment cap')
+        except InvalidOperation:
+            raise ValueError('Invalid controlled payment cap') from None
     return updates
 
 
@@ -125,6 +149,29 @@ def configure(args, payload):
     (root / "previous-compose.yml").write_text(original)
     release.private_json(root / "candidate-compose.json", candidate)
     try:
+        if set(updates) & {'SERVICE_ACCEPTANCE_USER_IDS', 'SERVICE_ACCEPTANCE_EXPIRES_AT', 'VIDEO_ACCEPTANCE_ID', 'DISPATCH_ACCEPTANCE_ID', 'INSTANT_DISPATCH_ENABLED'}:
+            envfile = root / 'preflight.env'
+            release.write_env(envfile, candidate['services']['api']['environment'])
+            probe = '''import asyncio,json
+from app.config import Settings
+from app.database import connect,close_pools
+from app.service_acceptance import canary_active,capabilities
+async def main():
+ s=Settings()
+ if canary_active(s):
+  ids=list({v for v in s.service_acceptance_user_ids.split(',') if v})
+  conn=await connect(s)
+  try:
+   count=await conn.fetchval("SELECT count(*) FROM api_users WHERE id=ANY($1::text[]) AND email_verified AND coalesce(metadata->>'deletion_status','')=''",ids)
+   assert count==len(ids),'Unverified or closing acceptance account'
+  finally: await conn.close()
+ accepted=await capabilities(s)
+ if s.instant_dispatch_enabled: assert accepted['instant_dispatch_service'],'Dispatch activation needs reviewed native evidence'
+ if s.video_acceptance_id: assert accepted['video_call_service'],'Video activation needs reviewed native evidence'
+ await close_pools()
+asyncio.run(main())
+'''
+            release.command(['docker','run','--rm','--network','papzii_default','--env-file',str(envfile),api['Config']['Image'],'python','-c',probe])
         promote.replace_file(compose, json.dumps(candidate, indent=2) + "\n")
         promote.start_services(compose)
         evidence = promote.internal_acceptance(args.expected_revision)

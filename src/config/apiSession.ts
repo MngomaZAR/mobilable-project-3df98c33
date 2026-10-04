@@ -1,5 +1,6 @@
 import { apiClient, ApiClientError } from './apiClient';
 import { sessionStorage } from '../services/sessionStorage';
+import { resetServiceAccess } from './betaPolicy';
 
 export type ApiSessionUser = {
   id: string;
@@ -51,6 +52,7 @@ export const hydrateApiSession = async () => {
     } else {
       cachedSession = null;
     }
+    resetServiceAccess(cachedSession?.access_token ?? null);
     hydrated = true;
     return cachedSession;
   })().finally(() => { hydration = null; });
@@ -133,6 +135,7 @@ export const getApiAccessToken = async () => {
 export const setApiSession = async (session: ApiSession | null) => {
   generation += 1;
   cachedSession = session;
+  resetServiceAccess(session?.access_token ?? null);
   hydrated = true;
   if (!session) {
     await sessionStorage.removeItem();

@@ -1,12 +1,12 @@
 import { environment } from '../src/config/environment';
-import { BETA_RESTRICTION_MESSAGE, isBetaRestrictedRequest } from '../src/config/betaPolicy';
+import { BETA_RESTRICTION_MESSAGE, isBetaRestrictedRequest, recordServiceAccess, resetServiceAccess } from '../src/config/betaPolicy';
 import { apiClient } from '../src/config/apiClient';
 
 jest.mock('../src/config/environment', () => ({ environment: {
   restrictedBeta: true, backendProvider: 'api', apiBaseUrl: 'https://api.unit.invalid',
 } }));
 
-beforeEach(() => { environment.restrictedBeta = true; jest.clearAllMocks(); });
+beforeEach(() => { environment.restrictedBeta = true; resetServiceAccess(); jest.clearAllMocks(); });
 
 test.each(['/functions/payfast-handler', '/functions/escrow-release', '/financial/refunds',
   '/financial/payouts', '/financial/operations/id/execute', '/dispatch/requests',
@@ -40,4 +40,25 @@ test('auth, scheduled bookings, messages, moderation, readback and routing remai
 test('non-beta builds retain server-owned capability decisions', () => {
   environment.restrictedBeta = false;
   expect(isBetaRestrictedRequest('/financial/payouts', 'POST')).toBe(false);
+});
+
+test('short-lived account permissions cannot carry across tokens or sign-out', () => {
+  resetServiceAccess('account-a');
+  const permissions = { checkout: true, payouts: false, video: true, dispatch: true };
+  expect(recordServiceAccess('account-b', new Date(Date.now() + 60000).toISOString(), permissions)).toBe(false);
+  expect(recordServiceAccess('account-a', new Date(Date.now() + 60000).toISOString(), permissions)).toBe(true);
+  expect(isBetaRestrictedRequest('/payments/checkout', 'POST', {}, 'account-a')).toBe(false);
+  expect(isBetaRestrictedRequest('/payments/checkout', 'POST', {}, 'account-b')).toBe(true);
+  expect(isBetaRestrictedRequest('/financial/payouts', 'POST', {}, 'account-a')).toBe(true);
+  expect(isBetaRestrictedRequest('/functions/tip-payment', 'POST', {}, 'account-a')).toBe(true);
+  resetServiceAccess();
+  expect(isBetaRestrictedRequest('/payments/checkout', 'POST', {}, 'account-a')).toBe(true);
+});
+
+test('expired or excessively long grants do not relax restricted requests', () => {
+  resetServiceAccess('token');
+  const permissions = { checkout: true, payouts: true, video: true, dispatch: true };
+  for (const offset of [-1, 70000]) expect(recordServiceAccess('token', new Date(Date.now() + offset).toISOString(), permissions)).toBe(false);
+  expect(isBetaRestrictedRequest('/dispatch/respond', 'POST', { response: 'decline' })).toBe(false);
+  expect(isBetaRestrictedRequest('/dispatch/respond', 'POST', { response: 'accept' }, 'token')).toBe(true);
 });

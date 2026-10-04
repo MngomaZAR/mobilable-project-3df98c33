@@ -11,7 +11,9 @@ import { canTrackBooking, getBookingChatTarget, getBookingProviderId, isReviewab
 import { fetchBookingById } from '../services/bookingService';
 import { Booking } from '../types';
 import { formatBookingStart } from '../utils/bookingTime';
-import { BETA_RESTRICTION_MESSAGE, isRestrictedBeta } from '../config/betaPolicy';
+import { BETA_RESTRICTION_MESSAGE } from '../config/betaPolicy';
+import { useServiceAccess } from '../hooks/useServiceAccess';
+import { createDispatch } from '../services/dispatchService';
 
 type Route = RouteProp<RootStackParamList, 'BookingDetail'>;
 type Navigation = StackNavigationProp<RootStackParamList, 'BookingDetail'>;
@@ -24,6 +26,7 @@ const BookingDetailScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { state, startConversationWithUser, updateBookingStatus } = useAppData();
+  const access = useServiceAccess();
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
   const cachedBooking = useMemo(() => state.bookings.find(item => item.id === params.bookingId), [params.bookingId, state.bookings]);
@@ -44,7 +47,24 @@ const BookingDetailScreen: React.FC = () => {
       .finally(() => { if (active) setLoadingBooking(false); });
     return () => { active = false; };
   }, [cachedBooking, viewerId, params.bookingId, loadAttempt]);
-  const booking = cachedBooking || fetchedBooking;
+  const booking = fetchedBooking || cachedBooking;
+  const refreshStatus = booking?.status;
+  useEffect(() => {
+    if (!viewerId || !['pending', 'accepted', 'in_progress'].includes(refreshStatus || '')) return;
+    let active = true;
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      try {
+        const saved = await fetchBookingById(params.bookingId);
+        if (active) { setFetchedBooking(saved); setBookingError(null); }
+      } catch (error) {
+        if (active) setBookingError(error instanceof Error ? error.message : 'Could not refresh booking.');
+      }
+      if (active) timer = setTimeout(poll, 5000);
+    };
+    timer = setTimeout(poll, 5000);
+    return () => { active = false; clearTimeout(timer); };
+  }, [viewerId, params.bookingId, refreshStatus]);
 
   if (!booking) {
     return (
@@ -64,7 +84,7 @@ const BookingDetailScreen: React.FC = () => {
   const talentName = provider?.name || providerProfile?.full_name || booking.photographer?.name || 'Creator';
   const isClient = booking.client_id === viewerId;
   const chatTarget = getBookingChatTarget(booking, viewerId);
-  const requiresPayment = booking.status === 'accepted' && booking.payment_status !== 'paid';
+  const requiresPayment = booking.status === 'accepted' && booking.payment_status === 'unpaid';
   const canPay = requiresPayment && isClient;
   const canCancel = !!chatTarget && (booking.status === 'pending' || booking.status === 'accepted');
   const busy = loadingAction !== null;
@@ -76,6 +96,18 @@ const BookingDetailScreen: React.FC = () => {
     { label: 'Shoot completed', done: ['completed', 'reviewed', 'paid_out'].includes(booking.status) },
   ];
   const statusLabel = booking.status === 'accepted' && requiresPayment ? 'Accepted, awaiting payment' : booking.status.replace(/_/g, ' ');
+  const retryMatching = async () => {
+    if (busy || !access.allowed('dispatch')) return;
+    setLoadingAction('dispatch');
+    try {
+      await createDispatch({ booking_id: booking.id, service_type: booking.model_id ? 'modeling' : 'photography',
+        fanout_count: booking.fanout_count || 1, intensity_level: booking.intensity_level || 1,
+        idempotency_key: `dispatch:${booking.id}` });
+      setFetchedBooking(await fetchBookingById(booking.id));
+      setActionNotice('Matching started. Waiting for creator acceptance.');
+    } catch (error) { setActionNotice(error instanceof Error ? error.message : 'Matching failed. Please retry.'); }
+    finally { setLoadingAction(null); }
+  };
 
   const openChatThread = async () => {
     if (!chatTarget || busy) return;
@@ -159,10 +191,13 @@ const BookingDetailScreen: React.FC = () => {
       </View>
       {requiresPayment ? <Text style={[styles.notes, { color: colors.textSecondary }]}>Awaiting payment confirmation.</Text> : null}
       {actionNotice && <Text accessibilityRole="alert" style={[styles.notes, { color: colors.text }]}>{actionNotice}</Text>}
+      {bookingError && <Text accessibilityRole="alert" style={[styles.notes, { color: colors.textSecondary }]}>{bookingError}</Text>}
+      {booking.is_instant && booking.status === 'pending' && !booking.dispatch_request_id ? action('Retry creator matching', 'refresh-outline', () => void retryMatching(), !access.allowed('dispatch')) : null}
+      {booking.dispatch_request_id && booking.status === 'pending' ? <Text style={[styles.notes, { color: colors.textSecondary }]}>Creator matching: {booking.assignment_state || 'offered'}</Text> : null}
       {action(loadingAction === 'chat' ? 'Opening chat...' : 'Open chat', 'chatbubble-outline', openChatThread, !chatTarget)}
       {action('Track on map', 'navigate-outline', () => navigation.navigate('BookingTracking', { bookingId: booking.id }), !canTrackBooking(booking))}
-      {canPay ? action('Pay for shoot', 'card-outline', () => navigation.navigate('Payment', { bookingId: booking.id }), isRestrictedBeta()) : null}
-      {canPay && isRestrictedBeta() ? <Text accessibilityRole="alert" style={[styles.notes, { color: colors.textSecondary }]}>{BETA_RESTRICTION_MESSAGE}</Text> : null}
+      {canPay ? action('Pay for shoot', 'card-outline', () => navigation.navigate('Payment', { bookingId: booking.id }), !access.allowed('checkout')) : null}
+      {canPay && !access.allowed('checkout') ? <Text accessibilityRole="alert" style={[styles.notes, { color: colors.textSecondary }]}>{BETA_RESTRICTION_MESSAGE}</Text> : null}
       {canCancel ? <>
         {action('Discuss a new time', 'calendar-outline', openChatThread)}
         {action(loadingAction === 'cancel' ? 'Cancelling...' : 'Cancel booking', 'close-circle-outline', handleCancel, false, true)}

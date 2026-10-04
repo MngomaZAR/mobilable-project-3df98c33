@@ -18,6 +18,7 @@ const mockRoom = { disconnect: mockDisconnect };
 const mockTracks: any[] = [];
 
 jest.mock('../src/config/backendFunctions', () => ({ invokeBackendFunction: jest.fn() }));
+jest.mock('../src/hooks/useServiceAccess', () => ({ useServiceAccess: () => ({ allowed: () => true }) }));
 jest.mock('../src/utils/videoCalls', () => ({
   ...jest.requireActual('../src/utils/videoCalls'),
   getLiveVideoSDK: jest.fn(), requestBookingCall: jest.fn(), endBookingCall: jest.fn(),

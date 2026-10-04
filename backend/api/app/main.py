@@ -40,7 +40,7 @@ from .onboarding import router as onboarding_router
 from .database import connect
 from .database import close_pools
 from .access_control import is_admin, require_admin
-from .readiness import checked_release_capabilities
+from .readiness import checked_release_capabilities, account_service_access
 from .auth_security import rate_limit, token_digest, recover_password, reset_password
 from .provider_settings import router as provider_settings_router
 from .reporting import router as reporting_router
@@ -470,6 +470,12 @@ async def auth_recover(payload: Annotated[dict[str, Any], Body()], settings: Ann
 @app.post('/auth/reset-password', tags=['auth'])
 async def auth_reset(payload: Annotated[dict[str, Any], Body()], settings: Annotated[Settings, Depends(get_settings)]):
     return await reset_password(settings, str(payload.get('token') or ''), str(payload.get('password') or ''))
+
+
+@app.get('/auth/service-access', tags=['auth'])
+async def auth_service_access(request: Request, settings: Annotated[Settings, Depends(get_settings)]):
+    user = await require_user(settings, bearer_token(request))
+    return JSONResponse(await account_service_access(settings, user['id']), headers={'Cache-Control': 'no-store'})
 
 
 @app.get('/auth/sessions', tags=['auth'])

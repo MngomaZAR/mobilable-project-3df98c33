@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { ConnectionState, Track } from 'livekit-client';
+import { useServiceAccess } from '../hooks/useServiceAccess';
 import {
   BookingCallSession, connectedSeconds, endBookingCall, getLiveVideoSDK,
   LIVE_VIDEO_UNAVAILABLE_MESSAGE, requestBookingCall,
@@ -132,7 +133,9 @@ const PaidVideoCallScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const bookingId = typeof route.params?.bookingId === 'string' ? route.params.bookingId : '';
-  const sdk = useMemo(() => getLiveVideoSDK(), []);
+  const access = useServiceAccess();
+  const videoAllowed = access.allowed('video');
+  const sdk = useMemo(() => videoAllowed ? getLiveVideoSDK() : null, [videoAllowed]);
   const [session, setSession] = useState<BookingCallSession | null>(null);
   const [loading, setLoading] = useState(false);
   const [ending, setEnding] = useState(false);

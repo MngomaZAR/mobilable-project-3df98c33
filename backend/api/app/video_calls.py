@@ -8,6 +8,7 @@ from fastapi import HTTPException
 
 from .config import Settings
 from .database import connect
+from .service_acceptance import canary_active, require_access
 
 
 TOKEN_TTL = timedelta(seconds=120)
@@ -23,9 +24,10 @@ def livekit_sdk():
         raise HTTPException(status_code=503, detail='Live video SDK is unavailable.') from error
 
 
-def require_configuration(settings: Settings):
+def require_configuration(settings: Settings, *, cleanup=False):
     url = urlparse(settings.livekit_url)
-    if not getattr(settings, 'livekit_enabled', False) or not settings.livekit_api_key or not settings.livekit_api_secret:
+    if ((not cleanup and not getattr(settings, 'livekit_enabled', False) and not canary_active(settings))
+            or not settings.livekit_api_key or not settings.livekit_api_secret):
         raise HTTPException(status_code=503, detail='Booking video calls are not enabled.')
     local_qa = getattr(settings, 'app_env', 'production') in {'development', 'test'} and url.hostname in {'localhost', '127.0.0.1', '::1'} and url.scheme == 'ws'
     if (url.scheme != 'wss' and not local_qa) or not url.hostname or url.username or url.password or url.query or url.fragment:
@@ -93,7 +95,7 @@ async def handle_video_call(settings: Settings, user: dict[str, Any], payload: d
     action = payload.get('action', 'join')
     if action not in ('join', 'end'):
         raise HTTPException(status_code=400, detail='Unsupported video call action.')
-    api = require_configuration(settings)
+    api = require_configuration(settings, cleanup=action == 'end')
     conn = await connect(settings)
     try:
         async with conn.transaction():
@@ -112,6 +114,7 @@ async def handle_video_call(settings: Settings, user: dict[str, Any], payload: d
                 await conn.execute("UPDATE booking_video_rooms SET status='ending',end_requested_at=coalesce(end_requested_at,now()),ended_by=$2,updated_at=now() WHERE id=$1", session_id, user['id'])
                 await queue_room_end(conn, session_id, now)
             else:
+                await require_access(settings, 'video_call_service', members, connection=conn)
                 if booking['service_type'] not in PHYSICAL_SERVICES:
                     raise HTTPException(status_code=403, detail='Paid digital video is unavailable without compliant billing.')
                 if booking['status'] not in ('accepted', 'in_progress') or len(members) < 2:
@@ -123,8 +126,8 @@ async def handle_video_call(settings: Settings, user: dict[str, Any], payload: d
                 if not room:
                     session_id = str(uuid.uuid4())
                     room = await conn.fetchrow(
-                        "INSERT INTO booking_video_rooms (id,booking_id,room_name,expires_at) VALUES ($1,$2,$3,$4) RETURNING *",
-                        session_id, booking_id, f'papzii-booking-{uuid.uuid4().hex}', now + ROOM_TTL,
+                        "INSERT INTO booking_video_rooms (id,booking_id,room_name,expires_at,source_revision) VALUES ($1,$2,$3,$4,$5) RETURNING *",
+                        session_id, booking_id, f'papzii-booking-{uuid.uuid4().hex}', now + ROOM_TTL, getattr(settings, 'app_version', ''),
                     )
                     await queue_room_end(conn, room['id'], room['expires_at'])
         if action == 'end':
@@ -147,6 +150,7 @@ async def handle_video_call(settings: Settings, user: dict[str, Any], payload: d
                 raise HTTPException(status_code=409, detail='This booking call is no longer available.')
             if await conn.fetchval('SELECT EXISTS(SELECT 1 FROM user_blocks WHERE (blocker_id=$1 AND blocked_id=ANY($2::text[])) OR (blocked_id=$1 AND blocker_id=ANY($2::text[])))', user['id'], sorted(members - {user['id']})):
                 raise HTTPException(status_code=403, detail='This booking call is unavailable.')
+            await require_access(settings, 'video_call_service', members, connection=conn)
             try:
                 async with _client(settings, api) as client:
                     await client.room.create_room(api.CreateRoomRequest(name=room['room_name'], empty_timeout=120, departure_timeout=30, max_participants=len(members)))
@@ -167,7 +171,7 @@ async def handle_video_call(settings: Settings, user: dict[str, Any], payload: d
 
 
 async def handle_video_webhook(settings: Settings, body: str, authorization: str | None):
-    api = require_configuration(settings)
+    api = require_configuration(settings, cleanup=True)
     if not authorization or len(body.encode('utf-8')) > 262144:
         raise HTTPException(status_code=401, detail='Invalid LiveKit webhook.')
     try:
@@ -189,6 +193,11 @@ async def handle_video_webhook(settings: Settings, body: str, authorization: str
                 booking = await conn.fetchrow('SELECT id,client_id,photographer_id,model_id,status,service_type FROM bookings WHERE id=$1', room['booking_id'])
                 members = {booking[key] for key in ('client_id', 'photographer_id', 'model_id') if booking[key]} if booking else set()
                 authorized = booking and booking['status'] in ('accepted', 'in_progress') and booking['service_type'] in PHYSICAL_SERVICES and event.participant.identity in members
+                if authorized:
+                    try:
+                        await require_access(settings, 'video_call_service', members, connection=conn)
+                    except HTTPException:
+                        authorized = False
                 blocked = authorized and await conn.fetchval('SELECT EXISTS(SELECT 1 FROM user_blocks WHERE blocker_id=ANY($1::text[]) AND blocked_id=ANY($1::text[]))', sorted(members))
                 if not authorized or blocked or room['status'] != 'open' or room['expires_at'] <= datetime.now(UTC):
                     await conn.execute("UPDATE booking_video_rooms SET status='ending',end_requested_at=coalesce(end_requested_at,now()),updated_at=now() WHERE id=$1", room['id'])

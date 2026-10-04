@@ -19,11 +19,11 @@ import { backendDb } from '../services/backendGateway';
 import { ProfileSummary } from '../types';
 import { scheduledShootStart } from '../utils/bookingTime';
 import { uid } from '../utils/id';
+import { createDispatch } from '../services/dispatchService';
+import { useServiceAccess } from '../hooks/useServiceAccess';
 
 type Route = RouteProp<RootStackParamList, 'BookingForm'>;
 type Navigation = StackNavigationProp<RootStackParamList, 'BookingForm'>;
-type PaymentDispatchIntent = NonNullable<RootStackParamList['Payment']['dispatchIntent']>;
-
 type ProviderBookingOptions = {
   role: 'model' | 'photographer';
   packages: { id: string; label: string; rate_zar: number; pricing_basis: string }[];
@@ -41,12 +41,14 @@ const BookingFormScreen: React.FC = () => {
   const { params } = useRoute<Route>();
   const navigation = useNavigation<Navigation>();
   const { state, createBooking, refresh } = useAppData();
+  const serviceAccess = useServiceAccess();
   const { startConversationWithUser } = useMessaging();
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [timeSlot, setTimeSlot] = useState('Golden hour (4-7)');
   const [selectedServiceType, setSelectedServiceType] = useState<string | null>(null);
   const [selectedTierId, setSelectedTierId] = useState(TIER_OPTIONS[1]?.id ?? 'standard');
   const [bookingTimeMode, setBookingTimeMode] = useState<'now' | 'schedule'>('schedule');
+  const [instantStart, setInstantStart] = useState(() => new Date(Date.now() + 30 * 60 * 1000));
   const [locationLabel, setLocationLabel] = useState(state.currentUser?.city ?? '');
   const [locationCoords, setLocationCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [distanceKm, setDistanceKm] = useState(0);
@@ -134,6 +136,7 @@ const BookingFormScreen: React.FC = () => {
   const canBookTalent = talentKycApproved && talentAgeVerified;
 
   const validationError = useMemo(() => {
+    if (bookingTimeMode === 'now' && !serviceAccess.allowed('dispatch')) return 'Instant matching is not available for this account.';
     if (usesApi && !providerOptions) return optionsError || 'Loading creator prices...';
     if (usesApi && isModelTalent && !providerOptions?.services.length) return 'This model has no active services.';
     if (!selectedServiceType) return 'Select a service type to continue.';
@@ -152,7 +155,7 @@ const BookingFormScreen: React.FC = () => {
     bookingTimeMode,
     selectedDate,
     canBookTalent,
-    usesApi, providerOptions, optionsError, isModelTalent,
+    usesApi, providerOptions, optionsError, isModelTalent, serviceAccess,
   ]);
 
   React.useEffect(() => {
@@ -177,8 +180,8 @@ const BookingFormScreen: React.FC = () => {
     [selectedTierId, tierOptions]
   );
   const quoteCommand = useMemo(() => {
-    if (!selectedDate || !locationCoords || !talentId || !selectedServiceType || (usesApi && !providerOptions)) return null;
-    const start = scheduledShootStart(selectedDate, timeSlot);
+    if ((bookingTimeMode === 'schedule' && !selectedDate) || !locationCoords || !talentId || !selectedServiceType || (usesApi && !providerOptions)) return null;
+    const start = bookingTimeMode === 'now' ? instantStart : scheduledShootStart(selectedDate!, timeSlot);
     return {
       photographer_id: isModelTalent ? null : talentId,
       model_id: isModelTalent ? talentId : null,
@@ -193,9 +196,10 @@ const BookingFormScreen: React.FC = () => {
       end_datetime: new Date(start.getTime() + 3600000).toISOString(),
       user_latitude: locationCoords.lat,
       user_longitude: locationCoords.lng,
+      prepare_dispatch: bookingTimeMode === 'now',
     };
   }, [selectedDate, locationCoords, talentId, isModelTalent, selectedTierId, timeSlot, selectedServiceType,
-    selectedCamera, selectedLenses, selectedLighting, selectedExtras, usesApi, providerOptions]);
+    selectedCamera, selectedLenses, selectedLighting, selectedExtras, usesApi, providerOptions, bookingTimeMode, instantStart]);
   const commandFingerprint = JSON.stringify(quoteCommand);
   const currentQuote = serverQuote?.commandFingerprint === commandFingerprint ? serverQuote : null;
 
@@ -266,6 +270,7 @@ const BookingFormScreen: React.FC = () => {
   }
 
   const handleSubmit = async () => {
+    if (submitting) return;
     if (usesApi && (!currentQuote || !quoteCommand || quoteLoading || quoteError)) {
       Alert.alert('Quote unavailable', quoteError || 'Wait for your shoot quote before sending the request.');
       return;
@@ -277,7 +282,7 @@ const BookingFormScreen: React.FC = () => {
 
     try {
       setSubmitting(true);
-      const bookingDateSource = scheduledShootStart(selectedDate!, timeSlot);
+      const bookingDateSource = bookingTimeMode === 'now' ? instantStart : scheduledShootStart(selectedDate!, timeSlot);
       const normalizedDate = new Date(bookingDateSource);
       normalizedDate.setUTCHours(12, 0, 0, 0);
       const bookingDate = normalizedDate.toISOString().split('T')[0];
@@ -330,28 +335,21 @@ const BookingFormScreen: React.FC = () => {
       });
       if (usesApi) void refresh().catch(() => undefined);
 
-      const dispatchIntent: RootStackParamList['Payment']['dispatchIntent'] = bookingTimeMode === 'now'
-        ? {
-            serviceType: (isModelTalent ? 'modeling' : selectedServiceType === 'video' ? 'combined' : 'photography') as PaymentDispatchIntent['serviceType'],
-            fanoutCount,
-            intensityLevel,
-            baseAmount: estimatedTotalAmount,
-            requestedLat: locationCoords?.lat ?? talent.latitude,
-            requestedLng: locationCoords?.lng ?? talent.longitude,
-            tierId: selectedTier.id,
-            locationLabel: resolvedLocation,
-            equipment: {
-              camera: Array.from(selectedCamera),
-              lenses: Array.from(selectedLenses),
-              lighting: Array.from(selectedLighting),
-              extras: Array.from(selectedExtras),
-            },
-          }
-        : undefined;
+      if (bookingTimeMode === 'now') {
+        try {
+          await createDispatch({ booking_id: booking.id, service_type: isModelTalent ? 'modeling' : 'photography',
+            fanout_count: fanoutCount, intensity_level: intensityLevel, sla_timeout_seconds: 90,
+            idempotency_key: `dispatch:${booking.id}` });
+        } catch (error) {
+          Alert.alert('Booking saved, matching not confirmed', error instanceof Error ? error.message : 'Open the booking to retry matching.',
+            [{ text: 'View booking', onPress: () => navigation.replace('BookingDetail', { bookingId: booking.id }) }]);
+          return;
+        }
+      }
 
       Alert.alert(
         'Booking requested',
-        'Your creator will review the request. Payment becomes available after they accept.',
+        bookingTimeMode === 'now' ? 'Finding an available creator. Payment becomes available after a creator accepts.' : 'Your creator will review the request. Payment becomes available after they accept.',
         [
           { text: 'View booking', onPress: () => navigation.replace('BookingDetail', { bookingId: booking.id }) },
         ]
@@ -512,9 +510,10 @@ const BookingFormScreen: React.FC = () => {
       <View style={styles.detailsCard}>
         <Text style={styles.label}>Time</Text>
         <View style={styles.choiceRow}>
-          {environment.backendProvider !== 'api' ? <TouchableOpacity
+          {usesApi && serviceAccess.allowed('dispatch') ? <TouchableOpacity
+            accessibilityRole="button" accessibilityLabel="Book an available creator now"
             style={[styles.choiceChip, bookingTimeMode === 'now' && styles.choiceChipActive]}
-            onPress={() => { Haptics.selectionAsync(); setBookingTimeMode('now'); }}
+            onPress={() => { Haptics.selectionAsync(); setInstantStart(new Date(Date.now() + 30 * 60 * 1000)); setBookingTimeMode('now'); }}
           >
             <Text style={[styles.choiceChipText, bookingTimeMode === 'now' && styles.choiceChipTextActive]}>Now</Text>
           </TouchableOpacity> : null}
@@ -643,7 +642,7 @@ const BookingFormScreen: React.FC = () => {
           persistKey="booking-form-how"
           items={[
             'Select every requirement: service type, tier, equipment, time, and location.',
-            'Payment is required before dispatch and confirmation can begin.',
+            'A creator must accept before payment becomes available.',
             'Instant requests fan out offers and the first accepted offer wins.',
             'Cancellation and refund timing is shown on your booking detail screen.',
           ]}

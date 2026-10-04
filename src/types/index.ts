@@ -132,6 +132,7 @@ export interface Model {
 }
 
 export interface Booking {
+  is_instant?: boolean;
   id: string;
   photographer_id: string;
   client_id: string;

@@ -1,12 +1,12 @@
 import { Platform } from 'react-native';
 import { invokeBackendFunction } from '../config/backendFunctions';
-import { isRestrictedBeta } from '../config/betaPolicy';
+import { isServiceRestricted } from '../config/betaPolicy';
 
 type NativeSDK = typeof import('@livekit/react-native');
 let nativeSDK: NativeSDK | null | undefined;
 
 export const getLiveVideoSDK = (): NativeSDK | null => {
-  if (isRestrictedBeta()) return null;
+  if (isServiceRestricted('video')) return null;
   if (Platform.OS === 'web') return null;
   if (nativeSDK !== undefined) return nativeSDK;
   try {

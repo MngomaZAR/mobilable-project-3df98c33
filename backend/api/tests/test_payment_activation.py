@@ -1,5 +1,7 @@
 import unittest
-from unittest.mock import AsyncMock, patch
+from datetime import UTC, datetime, timedelta
+from decimal import Decimal
+from unittest.mock import AsyncMock, Mock, patch
 from urllib.parse import urlencode
 
 from fastapi import HTTPException
@@ -7,6 +9,7 @@ from fastapi import HTTPException
 from app.config import Settings
 from app.payments import checkout, confirm_notification, signature
 from app.readiness import release_capabilities
+from app.financial_operations import FinancialConfig
 
 
 class PaymentActivationTests(unittest.IsolatedAsyncioTestCase):
@@ -53,6 +56,35 @@ class PaymentActivationTests(unittest.IsolatedAsyncioTestCase):
     def test_plain_http_callbacks_are_not_ready(self):
         settings = self.settings().model_copy(update={"api_public_url": "http://api.unit.invalid"})
         self.assertIn("payment_checkout_configured", release_capabilities(settings)["blockers"])
+
+    async def test_production_flag_alone_cannot_collect_money(self):
+        settings = self.settings().model_copy(update={'app_env': 'production', 'payfast_checkout_enabled': True, 'payfast_sandbox': False})
+        with patch('app.payments.FinancialConfig.from_env', return_value=FinancialConfig(stitch_mode='live')), \
+                patch('app.payments.financial_capabilities', AsyncMock(return_value={'refund_execution': True, 'creator_payout_execution': False})), \
+                patch('app.payments.connect', AsyncMock()) as database:
+            with self.assertRaises(HTTPException) as error:
+                await checkout(settings, 'booking', {'id': 'client'})
+            self.assertEqual(error.exception.status_code, 503)
+            database.assert_not_awaited()
+
+    async def test_controlled_checkout_rejects_oversized_quote_before_payment_insert(self):
+        settings = self.settings().model_copy(update={'app_env': 'production', 'service_acceptance_user_ids': 'client,creator',
+            'service_acceptance_expires_at': datetime.now(UTC) + timedelta(hours=1)})
+        conn = AsyncMock()
+        conn.transaction = Mock(return_value=Transaction())
+        conn.fetchrow.return_value = {'client_id': 'client', 'photographer_id': 'creator', 'model_id': None, 'status': 'accepted', 'payment_status': 'unpaid', 'quote_amount': Decimal('51.00')}
+        with patch('app.payments.connect', AsyncMock(return_value=conn)):
+            with self.assertRaises(HTTPException) as error:
+                await checkout(settings, 'booking', {'id': 'client'})
+        self.assertEqual(error.exception.status_code, 409)
+        self.assertIn('payment limit', error.exception.detail)
+        conn.execute.assert_not_awaited()
+        self.assertEqual(conn.fetchrow.await_count, 1)
+
+
+class Transaction:
+    async def __aenter__(self): return self
+    async def __aexit__(self, *args): return False
 
 
 if __name__ == "__main__":

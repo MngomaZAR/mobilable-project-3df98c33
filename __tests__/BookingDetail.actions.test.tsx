@@ -9,6 +9,7 @@ const mockNavigate = jest.fn();
 const mockChat = jest.fn();
 const mockUpdate = jest.fn();
 jest.mock('../src/store/AppDataContext', () => ({ useAppData: jest.fn() }));
+jest.mock('../src/hooks/useServiceAccess', () => ({ useServiceAccess: () => ({ allowed: () => true }) }));
 jest.mock('../src/services/bookingService', () => ({ fetchBookingById: jest.fn() }));
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: mockNavigate, goBack: jest.fn() }),

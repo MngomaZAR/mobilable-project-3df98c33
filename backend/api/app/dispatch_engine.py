@@ -22,6 +22,7 @@ from .config import Settings, get_settings
 from .database import connect
 from .location_tracking import LOCATION_TTL, actor_id
 from .provider_settings import PACKAGES, load_pricing
+from .service_acceptance import canary_user, require_access
 
 
 router = APIRouter(tags=["dispatch"])
@@ -272,6 +273,7 @@ async def state_result(conn, request, actor: str) -> dict[str, Any]:
 
 async def create_dispatch(settings: Settings, command: DispatchCreate, user: dict[str, Any]) -> dict[str, Any]:
     actor = actor_id(user)
+    public_access = await require_access(settings, 'instant_dispatch_service', {actor})
     conn = await connect(settings)
     try:
         async with conn.transaction():
@@ -301,12 +303,12 @@ async def create_dispatch(settings: Settings, command: DispatchCreate, user: dic
             request = await conn.fetchrow(
                 """INSERT INTO dispatch_requests (id,booking_id,client_id,service_type,fanout_count,intensity_level,
                 sla_timeout_seconds,status,quote_token,requested_lat,requested_lng,price_base,price_multiplier,
-                price_estimate,expires_at,idempotency_key,request_fingerprint,booking_snapshot)
-                VALUES ($1,$2,$3,$4,$5,$6,$7,'queued',$8,$9,$10,$11,1,$11,$12,$13,$14,$15::jsonb) RETURNING *""",
+                price_estimate,expires_at,idempotency_key,request_fingerprint,booking_snapshot,source_revision)
+                VALUES ($1,$2,$3,$4,$5,$6,$7,'queued',$8,$9,$10,$11,1,$11,$12,$13,$14,$15::jsonb,$16) RETURNING *""",
                 request_id, booking["id"], actor, "photography" if role == "photographer" else "modeling",
                 command.fanout_count, command.intensity_level, command.sla_timeout_seconds, str(uuid.uuid4()),
                 original.user_latitude, original.user_longitude, ceiling, expires, key, fingerprint,
-                json.dumps(original.model_dump(mode="json")),
+                json.dumps(original.model_dump(mode="json")), settings.app_version,
             )
             table = "photographers" if role == "photographer" else "models"
             candidates = await conn.fetch(
@@ -320,6 +322,8 @@ async def create_dispatch(settings: Settings, command: DispatchCreate, user: dic
             eligible = []
             for candidate in candidates:
                 provider_id = candidate["id"]
+                if not public_access and not canary_user(settings, provider_id):
+                    continue
                 # Sorted acquisition avoids deadlocks when requests share candidate sets.
                 await conn.execute("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", f"provider:{provider_id}")
                 try:
@@ -432,6 +436,8 @@ async def accept_winner(conn, request, booking, offer, actor: str):
 
 
 async def respond_to_dispatch(settings: Settings, command: DispatchRespond, user: dict[str, Any]) -> dict[str, Any]:
+    if command.response == 'accept':
+        await require_access(settings, 'instant_dispatch_service', {actor_id(user)})
     actor = actor_id(user)
     conn = await connect(settings)
     error = None

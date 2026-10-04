@@ -156,6 +156,10 @@ class PricingTests(unittest.TestCase):
         other = BookingInput.model_validate({**command.model_dump(), "expected_total_amount": "1400.00"})
         self.assertEqual(fingerprint(command), fingerprint(other))
 
+    def test_matching_preparation_is_not_a_scheduled_retry(self):
+        command = booking()
+        self.assertNotEqual(fingerprint(command), fingerprint(command.model_copy(update={'prepare_dispatch': True})))
+
     def test_fingerprint_includes_selections_not_retry_key_or_order(self):
         command = booking(equipment_selection={"lenses": ["zoom", "prime"]})
         other = BookingInput.model_validate({**command.model_dump(), "idempotency_key": "another-key", "equipment_selection": {"lenses": ["prime", "zoom"]}})

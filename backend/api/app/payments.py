@@ -12,6 +12,8 @@ from fastapi import HTTPException
 from .booking_engine import enqueue, money
 from .config import Settings
 from .database import connect
+from .service_acceptance import canary_user
+from .financial_operations import FinancialConfig, capabilities as financial_capabilities
 
 
 def signature(params: dict[str, Any], passphrase: str) -> str:
@@ -28,9 +30,19 @@ def require_configuration(settings: Settings) -> str:
 
 
 async def checkout(settings: Settings, booking_id: str, user: dict[str, Any]) -> dict[str, str]:
-    if not settings.payfast_checkout_enabled:
+    acceptance_test = settings.app_env == 'production' and canary_user(settings, user.get('id', ''))
+    if not settings.payfast_checkout_enabled and not acceptance_test:
         raise HTTPException(status_code=503, detail="Payment checkout is paused while financial verification is completed. No payment has been created.")
     host = require_configuration(settings)
+    if settings.app_env == 'production' and not acceptance_test:
+        config = FinancialConfig.from_env()
+        try:
+            accepted = await financial_capabilities(settings, config)
+        except Exception:
+            accepted = {}
+        if settings.payfast_sandbox or config.stitch_mode != 'live' or not all(
+                accepted.get(key) is True for key in ('refund_execution', 'creator_payout_execution')):
+            raise HTTPException(503, 'Checkout requires accepted live refunds and creator settlement. No payment has been created.')
     conn = await connect(settings)
     try:
         async with conn.transaction():
@@ -39,11 +51,15 @@ async def checkout(settings: Settings, booking_id: str, user: dict[str, Any]) ->
                 raise HTTPException(status_code=404, detail="Booking not found.")
             if booking["client_id"] != user["id"]:
                 raise HTTPException(status_code=403, detail="Only the booking client can pay.")
-            if booking["status"] != "accepted" or booking["payment_status"] == "paid":
+            if acceptance_test and not canary_user(settings, booking['photographer_id'] or booking['model_id'] or ''):
+                raise HTTPException(403, 'Controlled checkout requires a named test creator as well as a test client.')
+            if booking["status"] != "accepted" or booking["payment_status"] != "unpaid":
                 raise HTTPException(status_code=409, detail="The creator must accept an unpaid booking before checkout.")
             amount = money(booking["quote_amount"])
             if amount <= 0:
                 raise HTTPException(status_code=409, detail="Booking has no valid server quote.")
+            if acceptance_test and amount > settings.payfast_acceptance_max_amount:
+                raise HTTPException(409, 'This quote exceeds the controlled acceptance-test payment limit.')
             payment = await conn.fetchrow("SELECT * FROM payments WHERE booking_id=$1 AND status='pending'", booking_id)
             mode = 'sandbox' if settings.payfast_sandbox else 'live'
             if payment and payment.get('merchant_id') and (payment['merchant_id'] != settings.payfast_merchant_id or payment.get('provider_mode') != mode):

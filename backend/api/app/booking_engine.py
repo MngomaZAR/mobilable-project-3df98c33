@@ -51,6 +51,7 @@ class BookingInput(BaseModel):
     idempotency_key: str = Field(min_length=8, max_length=120)
     notes: str = Field(default="", max_length=4000)
     is_instant: bool = False
+    prepare_dispatch: bool = False
 
     @model_validator(mode="after")
     def validate_request(self):
@@ -133,7 +134,7 @@ def calculate_quote(settings: Settings, command: BookingInput, provider: dict[st
 def fingerprint(command: BookingInput) -> str:
     body = command.model_dump(mode="json", exclude={"idempotency_key"})
     # Preserve retry hashes for pre-migration bookings with no new selections.
-    for field, default in {"model_service_type": None, "photography_service_type": "photoshoot", "expected_total_amount": None}.items():
+    for field, default in {"model_service_type": None, "photography_service_type": "photoshoot", "expected_total_amount": None, "prepare_dispatch": False}.items():
         if body.get(field) == default:
             body.pop(field)
     if not any(body["equipment_selection"].values()):
@@ -180,6 +181,9 @@ async def quote_booking(settings: Settings, command: BookingInput, user: dict[st
         raise HTTPException(status_code=400, detail="You cannot book yourself.")
     if command.is_instant:
         raise HTTPException(status_code=409, detail="Instant booking is not available in this release. Choose a scheduled shoot.")
+    if command.prepare_dispatch:
+        from .service_acceptance import require_access
+        await require_access(settings, 'instant_dispatch_service', {user['id']})
     conn = await connect(settings)
     try:
         async with conn.transaction():
@@ -217,6 +221,11 @@ async def create_booking(settings: Settings, command: BookingInput, user: dict[s
         raise HTTPException(status_code=401, detail="Authentication is required.")
     if command.is_instant:
         raise HTTPException(status_code=409, detail="Instant booking is not available in this release.")
+    if command.prepare_dispatch:
+        from .service_acceptance import require_access
+        await require_access(settings, 'instant_dispatch_service', {user['id']})
+        if not datetime.now(UTC) < command.start_datetime <= datetime.now(UTC) + timedelta(hours=2):
+            raise HTTPException(409, 'Instant matching requires a shoot within the next two hours.')
     provider_id = command.photographer_id or command.model_id
     if provider_id == user["id"]:
         raise HTTPException(status_code=400, detail="You cannot book yourself.")
@@ -247,7 +256,8 @@ async def create_booking(settings: Settings, command: BookingInput, user: dict[s
                 idempotency_key,request_fingerprint,hold_expires_at,is_instant,assignment_state,
                 model_service_type,photography_service_type,equipment_selection,pricing_snapshot)
                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'pending','unpaid',
-                $14::numeric,$14::numeric,$14::numeric,$15::numeric,$16::numeric,$16::numeric,$17,$18,$19,now()+interval '24 hours',false,'queued',
+                $14::numeric,$14::numeric,$14::numeric,$15::numeric,$16::numeric,$16::numeric,$17,$18,$19,
+                CASE WHEN $24 THEN now()+interval '5 minutes' ELSE now()+interval '24 hours' END,$24,'queued',
                 $20,$21,$22::jsonb,$23::jsonb) RETURNING *""",
                 str(uuid.uuid4()), user["id"], command.photographer_id, command.model_id, quote["package_id"],
                 quote["package_name"], "photography" if command.photographer_id else "modeling",
@@ -257,8 +267,10 @@ async def create_booking(settings: Settings, command: BookingInput, user: dict[s
                 command.idempotency_key, request_hash,
                 quote["model_service_type"], quote["photography_service_type"], json.dumps(quote["equipment_selection"]),
                 json.dumps({"version": 1, **quote}, default=str),
+                command.prepare_dispatch,
             )
-            await enqueue(conn, "notification", {"user_id": provider_id, "event_type": "booking_request", "booking_id": row["id"], "title": "New booking request", "body": "Review the shoot details and respond."}, f"booking:{row['id']}:request")
+            if not command.prepare_dispatch:
+                await enqueue(conn, "notification", {"user_id": provider_id, "event_type": "booking_request", "booking_id": row["id"], "title": "New booking request", "body": "Review the shoot details and respond."}, f"booking:{row['id']}:request")
             return dict(row)
     finally:
         await conn.close()
@@ -291,7 +303,7 @@ async def transition_booking(settings: Settings, booking_id: str, target: str, u
             if target == "accepted" and row["hold_expires_at"] and row["hold_expires_at"] <= datetime.now(UTC):
                 raise HTTPException(status_code=409, detail="This booking request has expired.")
             if target == "accepted":
-                if row.get("dispatch_request_id"):
+                if row.get("dispatch_request_id") or row.get('is_instant'):
                     raise HTTPException(status_code=409, detail="Accept your own dispatch offer instead of the scheduled booking command.")
                 await conn.execute("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", f"provider:{provider}")
                 await require_open_booking_parties(conn, actor, row["client_id"], provider)

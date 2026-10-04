@@ -35,6 +35,7 @@ export const mapBookingRow = (row: any): Booking => ({
   intensity_level: row.intensity_level ?? 1,
   quote_token: row.quote_token ?? null,
   assignment_state: row.assignment_state ?? 'queued',
+  is_instant: row.is_instant === true,
   eta_confidence: row.eta_confidence ?? null,
   dispatch_request_id: row.dispatch_request_id ?? null,
   photographer: row.photographer ? {

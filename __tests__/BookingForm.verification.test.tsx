@@ -6,11 +6,13 @@ import { backendDb } from '../src/services/backendGateway';
 import { apiClient } from '../src/config/apiClient';
 
 jest.mock('../src/store/AppDataContext', () => ({ useAppData: jest.fn() }));
+jest.mock('../src/hooks/useServiceAccess', () => ({ useServiceAccess: () => ({ allowed: () => false }) }));
 jest.mock('../src/store/MessagingContext', () => ({ useMessaging: () => ({ startConversationWithUser: jest.fn() }) }));
 jest.mock('../src/config/environment', () => ({ environment: { backendProvider: 'api' } }));
 jest.mock('../src/config/apiSession', () => ({ getApiAccessToken: async () => 'synthetic-unit-token' }));
 jest.mock('../src/config/apiClient', () => ({ apiClient: { get: jest.fn(), post: jest.fn() } }));
 jest.mock('../src/services/backendGateway', () => ({ backendDb: { from: jest.fn() } }));
+jest.mock('../src/services/dispatchService', () => ({ createDispatch: jest.fn() }));
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: jest.fn(), replace: jest.fn() }),
   useRoute: () => ({ params: { photographerId: 'creator-beyond-first-page' } }),

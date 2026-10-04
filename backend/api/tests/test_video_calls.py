@@ -75,10 +75,13 @@ class VideoCallTests(unittest.IsolatedAsyncioTestCase):
         self.client.__aenter__.return_value = self.client
         self.connect_patch = patch('app.video_calls.connect', AsyncMock(return_value=self.conn))
         self.client_patch = patch('app.video_calls._client', return_value=self.client)
+        self.access_patch = patch('app.video_calls.require_access', AsyncMock(return_value=True))
         self.connect_patch.start()
         self.client_patch.start()
+        self.access_patch.start()
         self.addCleanup(self.connect_patch.stop)
         self.addCleanup(self.client_patch.stop)
+        self.addCleanup(self.access_patch.stop)
 
     async def call(self, **payload):
         return await handle_video_call(self.settings, self.user, {'booking_id': 'booking-1', **payload})
@@ -127,6 +130,23 @@ class VideoCallTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(HTTPException) as error:
             await self.call()
         self.assertEqual(error.exception.status_code, 403)
+
+    async def test_unaccepted_service_cannot_issue_a_new_room(self):
+        self.access_patch.stop()
+        with patch('app.video_calls.require_access', AsyncMock(side_effect=HTTPException(503, 'pending acceptance'))):
+            with self.assertRaises(HTTPException) as error:
+                await self.call()
+        self.assertEqual(error.exception.status_code, 503)
+        self.assertIsNone(self.conn.room)
+        self.client.room.create_room.assert_not_called()
+
+    async def test_pausing_service_does_not_prevent_participant_room_cleanup(self):
+        response = await self.call()
+        self.settings.livekit_enabled = False
+        self.access_patch.stop()
+        with patch('app.video_calls.require_access', AsyncMock(side_effect=HTTPException(503, 'paused'))):
+            ended = await self.call(action='end', session_id=response['sessionId'])
+        self.assertEqual(ended['status'], 'ended')
 
     async def test_retries_reuse_the_persisted_room(self):
         first = await self.call()

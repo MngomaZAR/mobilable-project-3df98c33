@@ -2,6 +2,7 @@ import importlib.util
 from pathlib import Path
 import sys
 import unittest
+from datetime import datetime, timedelta, timezone
 
 
 directory = Path(__file__).parents[1]
@@ -12,6 +13,20 @@ spec.loader.exec_module(configure)
 
 
 class ConfigurationSafetyTests(unittest.TestCase):
+    def test_named_acceptance_access_is_bounded_and_payment_cap_is_validated(self):
+        expiry = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
+        config = {'SERVICE_ACCEPTANCE_USER_IDS': 'client,creator', 'SERVICE_ACCEPTANCE_EXPIRES_AT': expiry,
+                  'PAYFAST_ACCEPTANCE_MAX_AMOUNT': '50.00'}
+        self.assertEqual(configure.validate_updates(config), config)
+        for changes in ({'SERVICE_ACCEPTANCE_USER_IDS': '*'}, {'SERVICE_ACCEPTANCE_EXPIRES_AT': '2026-10-04T12:00:00'},
+                        {'SERVICE_ACCEPTANCE_EXPIRES_AT': (datetime.now(timezone.utc) + timedelta(hours=25)).isoformat()},
+                        {'PAYFAST_ACCEPTANCE_MAX_AMOUNT': '501'}, {'PAYFAST_ACCEPTANCE_MAX_AMOUNT': 'NaN'},
+                        {'PAYFAST_ACCEPTANCE_MAX_AMOUNT': '0'}, {'PAYFAST_ACCEPTANCE_MAX_AMOUNT': '50.001'}):
+            with self.subTest(changes=changes), self.assertRaises(ValueError):
+                configure.validate_updates({**config, **changes})
+        with self.assertRaises(ValueError):
+            configure.validate_updates({'SERVICE_ACCEPTANCE_USER_IDS': 'client'})
+
     def test_cannot_change_release_or_financial_acceptance(self):
         for key in ("DATABASE_URL", "API_PUBLIC_URL", "ADMIN_USER_IDS", "APP_ENV", "PAYFAST_SANDBOX", "FINANCIAL_PAYOUT_ACCEPTANCE_ID", "ALLOW_RUNTIME_SCHEMA_CHANGES", "EXPO_PUBLIC_API_KEY"):
             with self.subTest(key=key), self.assertRaises(ValueError):

@@ -15,7 +15,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../store/ThemeContext';
 import { useAppData } from '../store/AppDataContext';
 import { invokeBackendFunction } from '../config/backendFunctions';
-import { BETA_RESTRICTION_MESSAGE, isRestrictedBeta } from '../config/betaPolicy';
+import { BETA_RESTRICTION_MESSAGE } from '../config/betaPolicy';
+import { useServiceAccess } from '../hooks/useServiceAccess';
 
 type PayoutMethod = {
   id: string;
@@ -40,6 +41,8 @@ const PayoutMethodsScreen: React.FC = () => {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const { currentUser } = useAppData();
+  const access = useServiceAccess();
+  const payoutsUnavailable = !access.allowed('payouts');
   const [methods, setMethods] = useState<PayoutMethod[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -52,7 +55,7 @@ const PayoutMethodsScreen: React.FC = () => {
   const selectedBank = BANKS.find(bank => bank.id === bankId);
 
   const fetchMethods = useCallback(async () => {
-    if (!currentUser?.id || isRestrictedBeta()) return;
+    if (!currentUser?.id || payoutsUnavailable) return;
     setLoading(true);
     try {
       const { data, error } = await invokeBackendFunction('payout-methods', { action: 'list' });
@@ -63,7 +66,7 @@ const PayoutMethodsScreen: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [currentUser?.id]);
+  }, [currentUser?.id, payoutsUnavailable]);
 
   useEffect(() => {
     fetchMethods();
@@ -134,7 +137,7 @@ const PayoutMethodsScreen: React.FC = () => {
     );
   };
 
-  if (isRestrictedBeta()) {
+  if (payoutsUnavailable) {
     return <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]}>
       <View style={[styles.container, { paddingTop: Math.max(12, insets.top + 4) }]}>
         <Text style={[styles.title, { color: colors.text }]}>Payouts unavailable</Text>

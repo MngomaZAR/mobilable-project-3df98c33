@@ -599,7 +599,7 @@ const MapScreen: React.FC = () => {
         testID="talent-map-sheet"
         style={[s.bottomSheet, { height: mapHeight, backgroundColor: panelBackground, borderColor: panelBorder, transform: [{ translateY: sheetY }] }]}
       >
-        <View accessibilityRole="adjustable" accessibilityLabel="Talent panel" style={s.dragHandleArea} {...panResponder.panHandlers}>
+        <View testID="talent-panel-handle" accessibilityRole="adjustable" accessibilityLabel="Talent panel" style={s.dragHandleArea} {...panResponder.panHandlers}>
           <View style={s.dragHandle} />
         </View>
 

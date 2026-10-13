@@ -23,13 +23,17 @@ name: Papzii signed-in pilot navigation
 - takeScreenshot: pilot-settings
 - tapOn:
     id: tab-map
-- assertVisible: Nearby Talent
+- assertVisible: Explore Talent|Provider Availability
+- assertVisible:
+    id: talent-panel-handle
+- assertNotVisible: Find Talent Near Me
 - takeScreenshot: pilot-map
 - swipe:
-    start: 50%, 85%
-    end: 50%, 65%
+    from:
+      id: talent-panel-handle
+    direction: UP
     duration: 800
-- assertVisible: Nearby Talent
+- assertVisible: Find Talent Near Me
 - takeScreenshot: pilot-map-sheet-after-swipe
 - stopApp
 - launchApp

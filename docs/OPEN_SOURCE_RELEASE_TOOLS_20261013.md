@@ -13,8 +13,10 @@
 
 The new selector IDs require a new mobile binary; builds 42/5 do not contain them.
 Use `.maestro/pilot-navigation.yaml` after manually signing in to an authorized
-pilot account with completed age confirmation. It performs read-only navigation,
-a map gesture and reopen persistence checks. Use the login flow separately with
+pilot account with completed age confirmation and no selected/active booking.
+It performs read-only navigation,
+a handle-targeted map gesture that must reveal the previously hidden location
+control, and reopen persistence checks. Use the login flow separately with
 private environment values; never commit passwords or share login screenshots.
 Run each role on phone/tablet and both orientations, retaining device/build
 metadata. A smoke flow cannot establish every feature or visual constraint.

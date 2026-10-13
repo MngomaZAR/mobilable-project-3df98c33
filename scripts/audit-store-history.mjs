@@ -108,7 +108,8 @@ const report = {
     : { exitCode: currentStoreQuery.exitCode, reason: currentStoreQuery.reason },
   warning: 'FINISHED build status is not evidence of upload, tester availability, successful user journeys or public approval. Google Play production state is not provided by EAS submit:status.',
 };
-const destination = path.join(root, 'docs/store-history-20261003.json');
+const reportDate = report.checkedAt.slice(0, 10).replaceAll('-', '');
+const destination = path.join(root, `docs/store-history-${reportDate}.json`);
 fs.writeFileSync(destination, `${JSON.stringify(report, null, 2)}\n`);
 console.log(JSON.stringify({
   report: path.relative(root, destination),

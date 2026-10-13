@@ -5,6 +5,7 @@ import AdminDashboardScreen from '../src/screens/AdminDashboardScreen';
 import { useAppData } from '../src/store/AppDataContext';
 import { apiClient } from '../src/config/apiClient';
 import { getApiAccessToken } from '../src/config/apiSession';
+import { invokeBackendFunction } from '../src/config/backendFunctions';
 
 jest.mock('../src/store/AppDataContext', () => ({ useAppData: jest.fn() }));
 jest.mock('../src/store/MessagingContext', () => ({ useMessaging: () => ({ startConversationWithUser: jest.fn() }) }));
@@ -94,6 +95,22 @@ describe('Admin moderation UI', () => {
     const view = render(<AdminModerationScreen />);
     expect(await view.findByText('Sign in again to load the moderation queue.')).toBeTruthy();
     expect(apiClient.get).not.toHaveBeenCalled();
+  });
+
+  it('does not allow blind KYC approval when the document has no preview', async () => {
+    (invokeBackendFunction as jest.Mock).mockResolvedValueOnce({ data: {
+      verifications: [], payout_methods: [], kyc_documents: [{
+        id: 'doc-1', user_id: 'creator-1', user_name: 'Creator One', user_role: 'photographer',
+        doc_type: 'selfie', status: 'submitted', storage_path: 'kyc-documents::users/creator-1/selfie.jpg',
+        signed_url: null, created_at: null,
+      }],
+    }, error: null });
+    const view = render(<AdminModerationScreen />);
+    fireEvent.press(view.getByText('QUEUE'));
+    expect(await view.findByText('Creator One')).toBeTruthy();
+    expect(view.getByRole('button', { name: 'Approve KYC document doc-1' })).toBeDisabled();
+    fireEvent.press(view.getByRole('button', { name: 'Approve KYC document doc-1' }));
+    expect(invokeBackendFunction).toHaveBeenCalledTimes(1);
   });
 
   it('loads the real queue and requires a reason before either decision', async () => {

@@ -33,6 +33,10 @@ beforeEach(() => {
   (backendDb.channel as jest.Mock).mockReturnValue(channel);
   (backendDb.from as jest.Mock).mockReturnValue({ select: async () => ({ data: [{ id: 'photographer', availability_status: 'online' }], error: null }) });
   context = { state: { currentUser: { id: 'client', role: 'client' }, bookings: [], models: [],
+    profiles: [
+      { id: 'photographer', role: 'photographer', kyc_status: 'approved', age_verified: true },
+      { id: 'model', role: 'model', kyc_status: 'approved', age_verified: true },
+    ],
     photographers: [{ id: 'photographer', name: 'Photo Creator', latitude: -26.196, longitude: 28.05 }] } };
   (useAppData as jest.Mock).mockReturnValue(context);
 });
@@ -69,7 +73,7 @@ test('instant entry is account-gated even for an online creator', async () => {
 test('failed routing exposes retry without a fabricated ETA or road distance', async () => {
   const screen = render(<MapScreen />);
   fireEvent.press(screen.getByRole('button', { name: 'Locate me' }));
-  await waitFor(() => expect(screen.getByText(/online nearby/)).toBeTruthy());
+  await waitFor(() => expect(screen.getByText(/online on map/)).toBeTruthy());
   fireEvent.press(screen.getByText('Photo Creator'));
   expect(screen.getByText('Road route and ETA unavailable.')).toBeTruthy();
   expect(screen.getByText('Direct distance')).toBeTruthy();
@@ -103,4 +107,16 @@ test('the native sheet uses measured map height rather than covering tabs or fal
   expect(screen.getByTestId('talent-map-sheet')).toHaveStyle({ height: 620 });
   fireEvent(screen.getByTestId('native-talent-map'), 'layout', { nativeEvent: { layout: { height: 310, width: 844 } } });
   expect(screen.getByTestId('talent-map-sheet')).toHaveStyle({ height: 310 });
+});
+
+test('unapproved and synthetic talent cannot appear on the map', async () => {
+  context.state.profiles[0].is_test_account = true;
+  const screen = render(<MapScreen />);
+  await act(async () => {});
+  expect(screen.queryByText('Photo Creator')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Book Photo Creator' })).toBeNull();
+  context.state.profiles[0].is_test_account = false;
+  context.state.profiles[0].kyc_status = 'pending';
+  screen.rerender(<MapScreen />);
+  expect(screen.queryByText('Photo Creator')).toBeNull();
 });

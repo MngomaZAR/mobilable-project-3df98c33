@@ -281,6 +281,9 @@ const AuthScreen: React.FC = () => {
                   return (
                     <TouchableOpacity
                       key={opt.role}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Continue as ${opt.label}`}
+                      accessibilityState={{ selected: active }}
                       style={[styles.roleCard, active && { borderColor: opt.color, borderWidth: 2, backgroundColor: opt.color + '12' }]}
                       onPress={() => setSelectedRole(opt.role)}
                     >
@@ -288,16 +291,11 @@ const AuthScreen: React.FC = () => {
                         <Ionicons name={opt.icon as any} size={20} color={active ? '#fff' : '#64748b'} />
                       </View>
                       <Text style={[styles.roleTitle, active && { color: opt.color, fontWeight: '800' }]}>{opt.label}</Text>
-                      <Text style={styles.roleDesc}>{opt.description}</Text>
-                      {active && (
-                        <View style={[styles.roleCheck, { backgroundColor: opt.color }]}>
-                          <Ionicons name="checkmark" size={12} color="#fff" />
-                        </View>
-                      )}
                     </TouchableOpacity>
                   );
                 })}
               </View>
+              <Text style={styles.roleDesc}>{ROLE_OPTIONS.find(option => option.role === selectedRole)?.description}</Text>
             </View>
           )}
 
@@ -573,13 +571,14 @@ const styles = StyleSheet.create({
   switchTxt: { color: '#5f6f89', fontWeight: '600', fontSize: 14 },
   switchTxtActive: { color: '#07111f', fontWeight: '800' },
   // Role picker
-  roleSection: { marginBottom: 24 },
+  roleSection: { marginBottom: 18 },
   roleLabel: { fontSize: 13, fontWeight: '700', color: '#64748b', marginBottom: 12, letterSpacing: 0.5, textTransform: 'uppercase' },
-  roleRow: { flexDirection: 'row', gap: 10 },
+  roleRow: { flexDirection: 'row', gap: 8 },
   roleCard: {
     flex: 1,
-    borderRadius: 14,
-    padding: 12,
+    borderRadius: 8,
+    minHeight: 68,
+    padding: 8,
     borderWidth: 1.5,
     borderColor: 'rgba(148,163,184,0.28)',
     alignItems: 'center',
@@ -587,10 +586,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.72)',
     overflow: 'hidden',
   },
-  roleIconBox: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
-  roleTitle: { fontSize: 13, fontWeight: '700', color: '#07111f', textAlign: 'center', marginBottom: 4 },
-  roleDesc: { fontSize: 10, color: '#7687a0', textAlign: 'center', lineHeight: 14 },
-  roleCheck: { position: 'absolute', top: 6, right: 6, width: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  roleIconBox: { width: 27, height: 27, borderRadius: 6, alignItems: 'center', justifyContent: 'center', marginBottom: 3 },
+  roleTitle: { fontSize: 12, fontWeight: '700', color: '#07111f', textAlign: 'center' },
+  roleDesc: { fontSize: 13, color: '#52627a', lineHeight: 18, marginTop: 10 },
   genderSection: { marginTop: 14 },
   genderGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
   genderChip: {

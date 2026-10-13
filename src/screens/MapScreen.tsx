@@ -33,7 +33,13 @@ const MAP_STYLES = {
 };
 
 const SCREEN_HEIGHT = Dimensions.get('window').height;
-const SHEET_COLLAPSED = 100;
+const SHEET_COLLAPSED = 136;
+const CITY_CENTERS: Record<string, [number, number]> = {
+  durban: [31.0218, -29.8587],
+  johannesburg: [28.0473, -26.2041],
+  pretoria: [28.1878, -25.7479],
+  'cape town': [18.4241, -33.9249],
+};
 
 const formatAccuracy = (a?: number | null) => {
   if (!a) return 'Approximate';
@@ -86,6 +92,7 @@ const MapScreen: React.FC = () => {
   const MAP_STYLE_URL = MAP_STYLES[mapStyle] ?? MAP_STYLES.light;
   const lastRequestRef = useRef<number>(0);
   const cameraRef = useRef<any>(null);
+  const annotationRefs = useRef<Record<string, { refresh?: () => void }>>({});
   const pulse = useRef(new Animated.Value(0)).current;
   const [routeProgress, setRouteProgress] = useState(0);
   const roadRoute = useRoadRoute(
@@ -244,6 +251,9 @@ const MapScreen: React.FC = () => {
 
   // Build map markers
   const baseMarkers: MapMarker[] = useMemo(() => {
+    const visibleProfiles = new Set((state.profiles ?? [])
+      .filter((profile: any) => profile.kyc_status === 'approved' && profile.age_verified === true && profile.is_test_account !== true)
+      .map((profile) => profile.id));
     let result: MapMarker[] = [];
     if (isEffectivePhotographer(role)) {
       result = state.models.map(m => ({ id: `model-${m.id}`, sourceId: m.id, title: m.name, description: 'Model', latitude: m.latitude, longitude: m.longitude, type: 'model' as const, avatarUrl: m.avatar_url, rating: m.rating }));
@@ -257,13 +267,14 @@ const MapScreen: React.FC = () => {
     }
     const seen = new Set<string>();
     return result.filter(m => {
+      if (!m.sourceId || !visibleProfiles.has(m.sourceId)) return false;
       // Missing provider locations are mapped to zero upstream, not a real pin.
       if (!Number.isFinite(m.latitude) || !Number.isFinite(m.longitude) ||
           !validateSouthAfricanLocation(m.latitude, m.longitude) || seen.has(m.id)) return false;
       seen.add(m.id);
       return true;
     });
-  }, [role, state.photographers, state.models]);
+  }, [role, state.photographers, state.models, state.profiles]);
 
   const filteredMarkers = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
@@ -271,25 +282,34 @@ const MapScreen: React.FC = () => {
     return baseMarkers.filter(m => (m.title ?? '').toLowerCase().includes(q) || (m.description ?? '').toLowerCase().includes(q));
   }, [baseMarkers, searchQuery]);
 
+  const cityCenter = useMemo(() => {
+    const city = String(currentUser?.city ?? '').trim().toLowerCase();
+    return Object.entries(CITY_CENTERS).find(([name]) => city.includes(name))?.[1] ?? null;
+  }, [currentUser?.city]);
+  const distanceOrigin = useMemo(() => userCoords
+    ? { latitude: userCoords.lat, longitude: userCoords.lng }
+    : cityCenter ? { latitude: cityCenter[1], longitude: cityCenter[0] } : null,
+  [cityCenter, userCoords]);
+
   const nearbyTalent = useMemo(() => {
     return [...filteredMarkers].sort((a, b) => {
       const aOnline = onlineProfiles.has(a.sourceId ?? '') ? 1 : 0;
       const bOnline = onlineProfiles.has(b.sourceId ?? '') ? 1 : 0;
       if (aOnline !== bOnline) return bOnline - aOnline;
-      if (userCoords) {
+      if (distanceOrigin) {
         const aDistance = haversineDistanceKm(
-          { latitude: userCoords.lat, longitude: userCoords.lng },
+          distanceOrigin,
           { latitude: a.latitude, longitude: a.longitude }
         );
         const bDistance = haversineDistanceKm(
-          { latitude: userCoords.lat, longitude: userCoords.lng },
+          distanceOrigin,
           { latitude: b.latitude, longitude: b.longitude }
         );
         return aDistance - bDistance;
       }
       return String(a.title ?? '').localeCompare(String(b.title ?? ''));
     });
-  }, [filteredMarkers, onlineProfiles, userCoords]);
+  }, [distanceOrigin, filteredMarkers, onlineProfiles]);
 
   const markers = useMemo(() => userMarker ? [userMarker, ...filteredMarkers] : filteredMarkers, [filteredMarkers, userMarker]);
 
@@ -301,9 +321,10 @@ const MapScreen: React.FC = () => {
 
   const mapCenter = useMemo(() => {
     if (userCoords) return [userCoords.lng, userCoords.lat];
+    if (cityCenter) return cityCenter;
     if (filteredMarkers[0]) return [filteredMarkers[0].longitude, filteredMarkers[0].latitude];
     return [18.4241, -33.9249]; // Cape Town default
-  }, [filteredMarkers, userCoords]);
+  }, [cityCenter, filteredMarkers, userCoords]);
 
   const requestLocation = useCallback(async () => {
     const now = Date.now();
@@ -436,7 +457,7 @@ const MapScreen: React.FC = () => {
           mapStyle={MAP_STYLE_URL}
           logoEnabled={false}
           attributionEnabled
-          attributionPosition={{ top: insets.top + 130, left: 16 }}
+          attributionPosition={{ top: insets.top + (role === 'admin' && heatmapSummary ? 148 : 108), left: 16 }}
           compassEnabled
         >
           <MapLibreGL.Camera
@@ -458,6 +479,10 @@ const MapScreen: React.FC = () => {
             <MapLibreGL.PointAnnotation
               key={marker.id}
               id={`pin-${marker.id}`}
+              ref={(annotation: any) => {
+                if (annotation) annotationRefs.current[marker.id] = annotation;
+                else delete annotationRefs.current[marker.id];
+              }}
               coordinate={[marker.longitude, marker.latitude]}
               onSelected={() => {
                 setSelectedMarker(marker);
@@ -466,6 +491,7 @@ const MapScreen: React.FC = () => {
             >
               <MapAvatarPin
                 uri={marker.avatarUrl}
+                onImageLoad={() => annotationRefs.current[marker.id]?.refresh?.()}
                 online={onlineProfiles.has(marker.sourceId ?? '')}
                 rating={marker.rating}
                 label={isClientFacing ? marker.title : undefined}
@@ -500,12 +526,12 @@ const MapScreen: React.FC = () => {
       )}
 
       {/* Map style + locate controls */}
-      <SafeAreaView style={[s.safeOverlay, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
+      <SafeAreaView edges={['top', 'left', 'right']} style={[s.safeOverlay, { paddingTop: 8 }]} pointerEvents="box-none">
         <View style={[s.topBar, { backgroundColor: overlaySurface, borderColor: panelBorder }]}>
           <View style={s.searchBox}>
             <Ionicons name="search" size={16} color={colors.textMuted} />
             <TextInput
-              placeholder={state.currentUser?.city ? `Search near ${state.currentUser.city}` : 'Search near Durban'}
+              placeholder="Search creators by name"
               placeholderTextColor={colors.textMuted}
               value={searchQuery}
               onChangeText={setSearchQuery}
@@ -527,7 +553,7 @@ const MapScreen: React.FC = () => {
           <View style={[s.statusPill, { backgroundColor: overlaySurface, borderColor: panelBorder }]}>
             <View style={s.liveDot} />
             <Text style={[s.liveText, { color: colors.text }]}>
-              Live • {filteredMarkers.filter(m => onlineProfiles.has(m.sourceId ?? '')).length} online nearby
+              Live • {filteredMarkers.filter(m => onlineProfiles.has(m.sourceId ?? '')).length} online on map
             </Text>
           </View>
         )}
@@ -549,7 +575,10 @@ const MapScreen: React.FC = () => {
       </SafeAreaView>
 
       {/* Floating action buttons */}
-      <View style={[s.fabColumn, { bottom: SHEET_COLLAPSED + insets.bottom + 20 }]}>
+      <Animated.View style={[s.fabColumn, {
+        bottom: SHEET_COLLAPSED + 12,
+        transform: [{ translateY: Animated.subtract(sheetY, mapHeight - SHEET_COLLAPSED) }],
+      }]}>
         <TouchableOpacity accessibilityRole="button" accessibilityLabel="Locate me" style={[s.fab, { backgroundColor: panelBackground, borderColor: panelBorder }]} onPress={requestLocation} disabled={requesting}>
           <Ionicons name={requesting ? 'hourglass' : 'locate'} size={22} color={colors.accent} />
         </TouchableOpacity>
@@ -563,16 +592,16 @@ const MapScreen: React.FC = () => {
             </TouchableOpacity>
           </>
         ) : null}
-      </View>
+      </Animated.View>
 
       {/* Gesture-driven bottom sheet */}
       <Animated.View
         testID="talent-map-sheet"
         style={[s.bottomSheet, { height: mapHeight, backgroundColor: panelBackground, borderColor: panelBorder, transform: [{ translateY: sheetY }] }]}
-        {...panResponder.panHandlers}
       >
-        {/* Drag handle */}
-        <View style={s.dragHandle} />
+        <View accessibilityRole="adjustable" accessibilityLabel="Talent panel" style={s.dragHandleArea} {...panResponder.panHandlers}>
+          <View style={s.dragHandle} />
+        </View>
 
         <View style={[s.sheetInner, { paddingBottom: Math.max(insets.bottom, 16) }]}>
           {selectedMarker ? (
@@ -761,10 +790,10 @@ const MapScreen: React.FC = () => {
             /* DEFAULT VIEW */
             <>
               <Text style={[s.sheetTitle, { color: colors.text }]}>
-                Nearby {isClientFacing ? 'Talent' : 'Availability'}
+                {isClientFacing ? 'Explore Talent' : 'Provider Availability'}
               </Text>
               <Text style={[s.sheetSub, { color: colors.textSecondary }]}>
-                {onlineProfiles.size} available now • Tap a card or map pin to view details
+                {nearbyTalent.filter(marker => onlineProfiles.has(marker.sourceId ?? '')).length} online on map • Tap a card or map pin to view details
               </Text>
               <TouchableOpacity style={[s.primaryBtn, { marginTop: 12, backgroundColor: primaryButtonColor }]} onPress={requestLocation} disabled={requesting}>
                 <Ionicons name="navigate" size={18} color={primaryButtonText} style={{ marginRight: 8 }} />
@@ -779,12 +808,12 @@ const MapScreen: React.FC = () => {
                 >
                   {nearbyTalent.slice(0, 6).map((marker) => {
                     const isOnline = onlineProfiles.has(marker.sourceId ?? '');
-                    const distanceLabel = userCoords
+                    const distanceLabel = distanceOrigin
                       ? `${haversineDistanceKm(
-                          { latitude: userCoords.lat, longitude: userCoords.lng },
+                          distanceOrigin,
                           { latitude: marker.latitude, longitude: marker.longitude }
                         ).toFixed(1)} km`
-                      : 'Nearby';
+                      : 'Location unavailable';
                     return (
                       <View key={marker.id} style={[s.nearbyCard, { backgroundColor: panelCard, borderColor: panelBorder }]}>
                         <TouchableOpacity
@@ -845,7 +874,7 @@ const MapScreen: React.FC = () => {
               ) : (
                 <View style={[s.emptyNearbyState, { backgroundColor: panelCard, borderColor: panelBorder }]}>
                   <Ionicons name="search" size={18} color={colors.textMuted} />
-                  <Text style={[s.emptyNearbyText, { color: colors.textSecondary }]}>No nearby talent matches that search yet.</Text>
+                  <Text style={[s.emptyNearbyText, { color: colors.textSecondary }]}>No creators match this search yet.</Text>
                 </View>
               )}
             </>
@@ -874,7 +903,8 @@ const s = StyleSheet.create({
   userPinCore: { width: 16, height: 16, borderRadius: 8, backgroundColor: '#2563eb', borderWidth: 3, borderColor: '#fff' },
   userPinRing: { position: 'absolute', width: 26, height: 26, borderRadius: 13, borderWidth: 2, borderColor: '#3b82f6' },
   bottomSheet: { position: 'absolute', left: 0, right: 0, height: SCREEN_HEIGHT, borderTopLeftRadius: 28, borderTopRightRadius: 28, borderTopWidth: 1, shadowColor: '#000', shadowOpacity: 0.22, shadowRadius: 20, shadowOffset: { width: 0, height: -8 }, elevation: 16 },
-  dragHandle: { width: 52, height: 5, borderRadius: 4, backgroundColor: '#b3a48d', alignSelf: 'center', marginTop: 12, marginBottom: 6 },
+  dragHandleArea: { minHeight: 32, justifyContent: 'center' },
+  dragHandle: { width: 52, height: 5, borderRadius: 4, backgroundColor: '#b3a48d', alignSelf: 'center' },
   sheetInner: { paddingHorizontal: 22, paddingTop: 10 },
   sheetHeader: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 16 },
   sheetAvatar: { width: 54, height: 54, borderRadius: 27, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(223, 196, 150, 0.35)' },

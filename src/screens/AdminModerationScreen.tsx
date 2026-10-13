@@ -522,7 +522,7 @@ const AdminModerationScreen: React.FC = () => {
                 </View>
               )}
               <View style={styles.actions}>
-                <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Approve KYC document ${doc.id}`} style={[styles.actionBtn, { backgroundColor: '#16a34a' }]} onPress={() => reviewKycDocument(doc.id, 'approved')}>
+                <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Approve KYC document ${doc.id}`} disabled={!doc.signed_url} style={[styles.actionBtn, { backgroundColor: doc.signed_url ? '#16a34a' : colors.border }]} onPress={() => reviewKycDocument(doc.id, 'approved')}>
                   <Text style={styles.actionText}>Approve</Text>
                 </TouchableOpacity>
                 <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Reject KYC document ${doc.id}`} style={[styles.actionBtn, { backgroundColor: '#dc2626' }]} onPress={() => reviewKycDocument(doc.id, 'rejected')}>

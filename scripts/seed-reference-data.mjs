@@ -31,6 +31,16 @@ loadLocalEnv();
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '';
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
+// These fixtures contain synthetic identities, approvals and payment outcomes.
+// Never run them against a shared staging or production database.
+const seedHost = (() => {
+  try { return new URL(SUPABASE_URL).hostname; } catch { return ''; }
+})();
+if (process.env.PAPZII_SEED_MODE !== 'local' || !['localhost', '127.0.0.1'].includes(seedHost)) {
+  console.error('Reference seed is local-only. Set PAPZII_SEED_MODE=local and use a localhost Supabase URL.');
+  process.exit(1);
+}
+
 if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
   console.error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in env.');
   process.exit(1);

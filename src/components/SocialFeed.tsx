@@ -37,6 +37,7 @@ import { environment } from '../config/environment';
 import { areDigitalPurchasesAllowed, getDigitalPurchaseRestrictionMessage } from '../config/commercePolicy';
 import { reportContent } from '../services/reportService';
 import { resolveStorageRef } from '../services/uploadService';
+import { isProviderUser } from '../utils/userRole';
 
 type SocialFeedProps = {
   onCreatePost?: () => void;
@@ -75,6 +76,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
   const { startConversationWithUser } = useMessaging();
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
+  const canCreatePost = Boolean(onCreatePost && isProviderUser(appState.currentUser));
   
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -449,13 +451,16 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
     >
       <View style={styles.headerInner}>
         <Text style={[styles.headerTitle, { color: colors.text }]}>Feed</Text>
-        <TouchableOpacity 
-          style={[styles.primaryIconButton, { backgroundColor: colors.card, borderColor: colors.border }]} 
-          onPress={onCreatePost} 
-          disabled={!onCreatePost}
-        >
-          <Ionicons name="add" size={24} color={colors.accent} />
-        </TouchableOpacity>
+        {canCreatePost ? (
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Create post"
+            style={[styles.primaryIconButton, { backgroundColor: colors.card, borderColor: colors.border }]}
+            onPress={onCreatePost}
+          >
+            <Ionicons name="add" size={24} color={colors.accent} />
+          </TouchableOpacity>
+        ) : null}
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.textRail} style={styles.textRailWrapper}>
         <TouchableOpacity 
@@ -699,10 +704,33 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
 
   const renderEmpty = () => {
     if (loading) return null;
+    const filtered = Boolean(selectedProfileId || followingOnly || forYouOnly);
     return (
       <View style={styles.emptyContainer}>
         <Ionicons name="images-outline" size={48} color={colors.textMuted} />
-        <Text style={[styles.emptyText, { color: colors.textMuted }]}>No posts yet.</Text>
+        <Text style={[styles.emptyText, { color: colors.text }]}>
+          {filtered ? 'No posts match this view' : 'No creator posts yet'}
+        </Text>
+        <Text style={[styles.emptyDetail, { color: colors.textMuted }]}>
+          {filtered ? 'Try the full feed or pull down to refresh.' : 'Approved creators can share their work here.'}
+        </Text>
+        {filtered ? (
+          <TouchableOpacity
+            accessibilityRole="button"
+            style={[styles.emptyAction, { borderColor: colors.border }]}
+            onPress={() => {
+              setSelectedProfileId(null);
+              setFollowingOnly(false);
+              setForYouOnly(false);
+            }}
+          >
+            <Text style={[styles.emptyActionText, { color: colors.text }]}>Show all posts</Text>
+          </TouchableOpacity>
+        ) : canCreatePost ? (
+          <TouchableOpacity accessibilityRole="button" style={[styles.emptyAction, { borderColor: colors.border }]} onPress={onCreatePost}>
+            <Text style={[styles.emptyActionText, { color: colors.text }]}>Create a post</Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
     );
   };
@@ -778,7 +806,7 @@ const styles = StyleSheet.create({
   listContent: { padding: 16, paddingBottom: 108 },
   headerContainer: { paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth },
   headerInner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 16, paddingBottom: 10 },
-  headerTitle: { fontSize: 62, lineHeight: 64, fontWeight: '900' },
+  headerTitle: { fontSize: 38, lineHeight: 46, fontWeight: '800' },
   primaryIconButton: { width: 50, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center', borderWidth: 1 },
   textRailWrapper: { paddingLeft: 16 },
   textRail: { paddingRight: 32 },
@@ -867,6 +895,9 @@ const styles = StyleSheet.create({
   },
   emptyContainer: { alignItems: 'center', paddingVertical: 40 },
   emptyText: { marginTop: 16, fontWeight: '600', fontSize: 16 },
+  emptyDetail: { marginTop: 6, fontSize: 14, textAlign: 'center' },
+  emptyAction: { minHeight: 44, marginTop: 20, paddingHorizontal: 18, borderRadius: 8, borderWidth: 1, justifyContent: 'center' },
+  emptyActionText: { fontSize: 14, fontWeight: '700' },
   storyAvatarWrap: {
     width: 64,
     height: 64,

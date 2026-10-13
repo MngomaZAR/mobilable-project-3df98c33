@@ -153,6 +153,18 @@ describe('Home hourly budget integration', () => {
     expect(view.getByText('0 matching profiles')).toBeTruthy();
   });
 
+  it('explains an empty approved catalog and lets the client retry', async () => {
+    const data = context();
+    data.state.photographers = [];
+    data.state.profiles = [];
+    (useAppData as jest.Mock).mockReturnValue(data);
+    (fetchRecommendedMatches as jest.Mock).mockResolvedValue([]);
+    const view = await renderHome();
+    expect(view.getByText('No verified photographers are available yet.')).toBeTruthy();
+    fireEvent.press(view.getByRole('button', { name: 'Retry creator discovery' }));
+    expect(data.refresh).toHaveBeenCalled();
+  });
+
   it('applies the same numeric cap to models without requesting photographer matches', async () => {
     const view = await renderHome();
     await waitFor(() => expect(view.getAllByTestId('home-provider-high')).toHaveLength(2));

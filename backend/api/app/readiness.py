@@ -15,6 +15,7 @@ def release_capabilities(settings: Settings, financial: dict | None = None, serv
         "object_storage_configured": bool(settings.minio_endpoint and settings.minio_access_key and settings.minio_secret_key),
         "payment_checkout_configured": bool(settings.payfast_merchant_id and settings.payfast_merchant_key and settings.payfast_passphrase and settings.api_public_url.startswith("https://")),
         "payment_checkout_enabled": settings.payfast_checkout_enabled,
+        "booking_commission_30_configured": abs(settings.commission_rate - 0.30) < 0.000001,
         "admin_access_configured": bool(settings.admin_user_ids.strip()),
         "payment_refund_execution": financial.get('refund_execution') is True,
         "bank_payout_execution": financial.get('creator_payout_execution') is True,

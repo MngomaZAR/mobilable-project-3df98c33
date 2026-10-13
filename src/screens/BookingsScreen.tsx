@@ -1,7 +1,7 @@
-import React, { useMemo } from 'react';
-import { FlatList, StyleSheet, Text, TouchableOpacity, View, Image } from 'react-native';
+import React, { useCallback, useMemo } from 'react';
+import { AppState, FlatList, StyleSheet, Text, TouchableOpacity, View, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useAppData } from '../store/AppDataContext';
 import { useTheme } from '../store/ThemeContext';
@@ -10,16 +10,31 @@ import { Booking } from '../types';
 import { Ionicons } from '@expo/vector-icons';
 import { PLACEHOLDER_AVATAR } from '../utils/constants';
 import { formatBookingStart } from '../utils/bookingTime';
+import { environment } from '../config/environment';
 
 type Navigation = StackNavigationProp<RootStackParamList, 'BookingDetail'>;
 
 const BookingsScreen: React.FC = () => {
-  const { state } = useAppData();
+  const { state, fetchBookings } = useAppData();
   const navigation = useNavigation<Navigation>();
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
   const cardSurface = isDark ? 'rgba(15,23,42,0.86)' : 'rgba(255,255,255,0.86)';
   const cardShadow = isDark ? '#020611' : '#3f2e1a';
+
+  useFocusEffect(useCallback(() => {
+    if (environment.backendProvider !== 'api' || !state.currentUser?.id) return undefined;
+    let inFlight = false;
+    const refresh = async () => {
+      if (AppState.currentState !== 'active' || inFlight) return;
+      inFlight = true;
+      try { await fetchBookings(state.currentUser?.id); }
+      finally { inFlight = false; }
+    };
+    void refresh();
+    const interval = setInterval(() => { void refresh(); }, 15000);
+    return () => clearInterval(interval);
+  }, [fetchBookings, state.currentUser?.id]));
 
   const providerById = useMemo(
     () => {
@@ -75,7 +90,16 @@ const BookingsScreen: React.FC = () => {
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={
           <View style={styles.emptyWrap}>
-            <Text style={[styles.empty, { color: colors.textMuted }]}>No bookings yet. Start one from a profile.</Text>
+            <Ionicons name="calendar-outline" size={38} color={colors.textMuted} />
+            <Text style={[styles.empty, { color: colors.textMuted }]}>No bookings yet.</Text>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Explore creators"
+              style={[styles.emptyAction, { backgroundColor: colors.accent }]}
+              onPress={() => navigation.navigate('Root', { screen: 'Home' })}
+            >
+              <Text style={styles.emptyActionText}>Explore creators</Text>
+            </TouchableOpacity>
           </View>
         }
       />
@@ -166,6 +190,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 18,
   },
+  emptyAction: {
+    marginTop: 18,
+    paddingHorizontal: 22,
+    minHeight: 48,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyActionText: { color: '#1f1a12', fontSize: 15, fontWeight: '700' },
   empty: {
     textAlign: 'center',
     fontSize: 16,

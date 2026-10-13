@@ -239,6 +239,20 @@ async def handle_admin_review(settings: Settings, payload: dict[str, Any], user:
         )
         payout_methods = await select_rows(settings, "payout_methods", "*", [{"op": "eq", "column": "verified", "value": False}], limit=200)
         kyc_documents = await select_rows(settings, "kyc_documents", "*", [{"op": "in", "column": "status", "value": ["pending", "submitted"]}], limit=200)
+        from .storage import signed_url
+        profiles_by_id = {str(profile["id"]): profile for profile in verifications}
+        for document in kyc_documents:
+            owner = str(document.get("user_id") or "")
+            profile = profiles_by_id.get(owner, {})
+            document["user_name"] = profile.get("full_name")
+            document["user_role"] = profile.get("role")
+            bucket, separator, path = str(document.get("storage_path") or "").partition("::")
+            document["signed_url"] = None
+            if separator and bucket == "kyc-documents" and path.startswith(f"users/{owner}/"):
+                try:
+                    document["signed_url"] = signed_url(settings, bucket, path, expires_in=300)["url"]
+                except HTTPException:
+                    pass
         content = {table: await select_rows(settings, table, '*', [{"op": "eq", "column": "moderation_status", "value": "pending"}], limit=200) for table in ['posts', 'stories', 'post_comments', 'reviews']}
         return {"verifications": verifications, "payout_methods": payout_methods, "kyc_documents": kyc_documents, 'content': content}
     if action == "decide_verification":

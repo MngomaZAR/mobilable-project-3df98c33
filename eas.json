@@ -81,7 +81,7 @@
       "android": {
         "applicationId": "com.papziiii.paparazzi",
         "track": "internal",
-        "releaseStatus": "draft"
+        "releaseStatus": "completed"
       }
     }
   }

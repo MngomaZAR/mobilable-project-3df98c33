@@ -1,6 +1,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { assertRestrictedTestingConfig, isRestrictedTestingProfile, shouldValidateRelease } from '../eas-release-gate.mjs';
+
+test('restricted beta automatically releases only to internal Android testers', () => {
+  const config = JSON.parse(fs.readFileSync(new URL('../../eas.json', import.meta.url), 'utf8'));
+  assert.equal(config.submit['beta-testing'].android.track, 'internal');
+  assert.equal(config.submit['beta-testing'].android.releaseStatus, 'completed');
+  assert.equal(config.submit.production.android.releaseStatus, 'draft');
+  assert.equal(config.build['beta-testing'].env.EXPO_PUBLIC_RESTRICTED_BETA, 'true');
+  assert.equal(config.build['beta-testing'].env.EXPO_PUBLIC_DIGITAL_BILLING_PROVIDER, 'disabled');
+});
 
 test('development build is not a public release', () => {
   assert.equal(shouldValidateRelease({ EAS_BUILD_PROFILE: 'development' }), false);

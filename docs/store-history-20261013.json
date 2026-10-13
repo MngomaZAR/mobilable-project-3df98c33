@@ -1,8 +1,31 @@
 {
-  "checkedAt": "2026-10-13T11:21:29.605Z",
+  "checkedAt": "2026-10-13T13:06:29.150Z",
   "scope": "Read-only EAS build/submission receipts and App Store Connect status; no build or submission triggered.",
   "projectId": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
   "builds": [
+    {
+      "id": "bbd7496e-0aef-4924-b891-7b21ffcf06ec",
+      "platform": "IOS",
+      "status": "FINISHED",
+      "appVersion": "1.0.0",
+      "appBuildVersion": "42",
+      "gitCommitHash": "ae6657699771fa7ff025c7b329026c6859d6ae37",
+      "buildProfile": "beta-testing",
+      "createdAt": "2026-10-13T12:50:09.608Z",
+      "completedAt": "2026-10-13T12:56:22.822Z",
+      "artifactAvailable": true
+    },
+    {
+      "id": "0d1e6ff9-caa5-4b2d-ae9b-9cb2a70d618e",
+      "platform": "ANDROID",
+      "status": "IN_PROGRESS",
+      "appVersion": "1.0.0",
+      "appBuildVersion": "5",
+      "gitCommitHash": "ae6657699771fa7ff025c7b329026c6859d6ae37",
+      "buildProfile": "beta-testing",
+      "createdAt": "2026-10-13T12:49:08.214Z",
+      "artifactAvailable": false
+    },
     {
       "id": "86de4fe4-9d56-4b09-9cf8-ff15e017eb4e",
       "platform": "ANDROID",
@@ -330,39 +353,523 @@
       "createdAt": "2026-06-17T18:25:21.605Z",
       "completedAt": "2026-06-17T18:35:18.797Z",
       "artifactAvailable": true
-    },
-    {
-      "id": "3ce796cf-1167-4a26-913e-0999921a4b24",
-      "platform": "IOS",
-      "status": "FINISHED",
-      "appVersion": "1.0.0",
-      "appBuildVersion": "30",
-      "gitCommitHash": "e2b1b729452e151e3a657a1ceb9e5f9e8c15465a",
-      "buildProfile": "production",
-      "createdAt": "2026-06-17T18:23:16.255Z",
-      "completedAt": "2026-06-17T18:29:05.287Z",
-      "artifactAvailable": true
-    },
-    {
-      "id": "b81583f2-c1ab-44b5-8ea8-10883c464649",
-      "platform": "IOS",
-      "status": "FINISHED",
-      "appVersion": "1.0.0",
-      "appBuildVersion": "29",
-      "gitCommitHash": "cd4c27423bcc59fc675fe7412c074489011630fb",
-      "buildProfile": "production",
-      "createdAt": "2026-06-17T14:12:48.428Z",
-      "completedAt": "2026-06-17T14:23:42.879Z",
-      "artifactAvailable": true
     }
   ],
   "submissions": {
     "exitCode": 2,
     "reason": "unsupported_cli_command"
   },
-  "submissionTargets": {
-    "reason": "authenticated_submission_target_query_failed"
-  },
+  "submissionTargets": [
+    {
+      "id": "8b7c2efc-abaf-4da7-bb2e-822f7abacb12",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "37d320e4-4185-4fca-9442-134092375801",
+      "status": "AWAITING_BUILD",
+      "platform": "ANDROID",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "androidConfig": {
+        "track": "internal",
+        "releaseStatus": "DRAFT"
+      }
+    },
+    {
+      "id": "cbfae5a4-beca-4f6a-b172-93dd576df956",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "9058d4f2-9214-472f-a75b-ab6690939d6b",
+      "status": "FINISHED",
+      "platform": "ANDROID",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "androidConfig": {
+        "track": "internal",
+        "releaseStatus": "DRAFT"
+      }
+    },
+    {
+      "id": "99e7358d-aed2-4ae7-bd2e-9f5fc060002f",
+      "status": "FINISHED",
+      "platform": "ANDROID",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "androidConfig": {
+        "track": "internal",
+        "releaseStatus": "DRAFT"
+      }
+    },
+    {
+      "id": "ea1f7933-68e3-4c63-9aaf-c858a69e4234",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "02782156-552e-49d9-8baa-88925802d5cc",
+      "status": "FINISHED",
+      "platform": "ANDROID",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "androidConfig": {
+        "track": "internal",
+        "releaseStatus": "DRAFT"
+      }
+    },
+    {
+      "id": "669d2b70-1689-401e-94f7-e61fe58ffdbe",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "ee8e12fd-14d6-4f43-8a98-a84335ff6d89",
+      "status": "ERRORED",
+      "platform": "ANDROID",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "androidConfig": {
+        "track": "internal",
+        "releaseStatus": "DRAFT"
+      },
+      "error": {
+        "errorCode": "SUBMISSION_SERVICE_ANDROID_UNKNOWN_ERROR"
+      },
+      "failureCategory": "provider_error_requires_private_log_review"
+    },
+    {
+      "id": "094be3d5-a1f5-4530-a585-b6bc265bd759",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "5f78f0a2-f3d3-4dc9-a9a7-f5ab45a2f391",
+      "status": "ERRORED",
+      "platform": "ANDROID",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "androidConfig": {
+        "track": "internal",
+        "releaseStatus": "DRAFT"
+      },
+      "error": {
+        "errorCode": "SUBMISSION_SERVICE_ANDROID_UNKNOWN_ERROR"
+      },
+      "failureCategory": "provider_error_requires_private_log_review"
+    },
+    {
+      "id": "fea42e52-de19-4638-a541-148356af5fe2",
+      "status": "ERRORED",
+      "platform": "ANDROID",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "androidConfig": {
+        "track": "internal",
+        "releaseStatus": "DRAFT"
+      },
+      "error": {
+        "errorCode": "SUBMISSION_SERVICE_ANDROID_UNKNOWN_ERROR"
+      },
+      "failureCategory": "provider_error_requires_private_log_review"
+    },
+    {
+      "id": "2f0adac6-6062-473a-8211-84d04b60ae69",
+      "status": "ERRORED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "bff50394-65a5-482a-8a9c-6494da037697",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "cbc06ad9-c2c9-4824-822d-fc0753fe14e6",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "8dbf4186-5573-48fa-97f9-bb8b8614b054",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "7dd77c4a-45e2-4d16-8018-c50f30ef89a3",
+      "status": "ERRORED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "286d10e6-e676-41c1-9149-efb1a7383a79",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "3cdd9b2b-b0f6-483f-80db-33555a8b6f2a",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "e199d146-accb-4a91-82f6-b86806822f83",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "e269861b-c8f1-4917-8f1f-96acd36929ae",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "4adf6a0c-3af0-43c7-a714-05c6c7e10f4b",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "b53fa0cb-9396-46ad-8886-5a40d0693907",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "6589918f-b95c-4159-b489-40acdaed3a67",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "ec43b3e1-7aee-48d5-bedc-caa768b60390",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "851b0c98-39c2-4c41-b97f-1c3c5eefd05f",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "468c78aa-8415-4685-8478-e19f1b35cff4",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "3f6dd255-2137-4d83-b92e-9d11f070c3e6",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "524a0698-61f2-4eec-803c-56b0bca56496",
+      "status": "ERRORED",
+      "platform": "ANDROID",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "androidConfig": {
+        "track": "internal",
+        "releaseStatus": "DRAFT"
+      },
+      "error": {
+        "errorCode": "SUBMISSION_SERVICE_ANDROID_UNKNOWN_ERROR"
+      },
+      "failureCategory": "provider_error_requires_private_log_review"
+    },
+    {
+      "id": "6b23f7a5-9fcc-4c0a-aafa-5b6d133b8583",
+      "status": "ERRORED",
+      "platform": "ANDROID",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "androidConfig": {
+        "track": "internal",
+        "releaseStatus": "DRAFT"
+      },
+      "error": {
+        "errorCode": "SUBMISSION_SERVICE_ANDROID_UNKNOWN_ERROR"
+      },
+      "failureCategory": "provider_error_requires_private_log_review"
+    }
+  ],
   "appStoreStatus": {
     "exitCode": 2,
     "reason": "unsupported_cli_command"

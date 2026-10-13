@@ -158,6 +158,11 @@ async function purgeRoleAccount(admin, spec) {
 }
 
 async function prepareRoleAccounts() {
+  const fixtureHost = SUPABASE_URL ? new URL(SUPABASE_URL).hostname : '';
+  if (process.env.PAPZII_ALLOW_LOCAL_SUPABASE_FIXTURES !== 'true'
+      || !['127.0.0.1', 'localhost', '[::1]'].includes(fixtureHost)) {
+    throw new Error('Legacy role fixtures may only modify explicitly opted-in local Supabase. Use Oracle role tests for the release app.');
+  }
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !SUPABASE_SERVICE_ROLE_KEY) {
     throw new Error('Missing Supabase env for role dashboard E2E.');
   }
@@ -286,8 +291,12 @@ async function prepareRoleAccounts() {
   }));
 }
 
-test.describe('PAPZI Role Dashboards via Web', () => {
+test.describe('Legacy local Supabase role dashboards (not release acceptance)', () => {
   test('all roles pass age verification and land on correct dashboard', async ({ browser }) => {
+    const fixtureHost = SUPABASE_URL ? new URL(SUPABASE_URL).hostname : '';
+    test.skip(process.env.PAPZII_ALLOW_LOCAL_SUPABASE_FIXTURES !== 'true'
+      || !['127.0.0.1', 'localhost', '[::1]'].includes(fixtureHost),
+    'Legacy local fixtures only; current release roles are tested by oracle.roles.spec.js');
     test.setTimeout(420_000);
     const users = await prepareRoleAccounts();
     const screenshotDir = path.join(process.cwd(), 'test-results', 'role-dashboard-proof');

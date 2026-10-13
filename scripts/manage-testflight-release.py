@@ -50,6 +50,17 @@ BUILD_NOTES = {'39': (
     'without those separate instructions. Report build, role, device/OS, exact '
     'steps and screenshots via TestFlight feedback. This is not a public or '
     'fully accepted marketplace release.'
+), '42': (
+    'Restricted hosted beta 1.0.0 (42). Adds consent-based client-to-creator '
+    'application, strict identity eligibility and repaired notification '
+    'navigation. Includes map sheet/layout, settings and booking-flow fixes. '
+    'Test sign-in/recovery, creator application and KYC submission, profile '
+    'editing, services/availability, search/map, scheduled requests/acceptance, '
+    'chat, notification taps and reconnect on iPhone and iPad. Payments, refunds, '
+    'bank payouts, video calls, instant dispatch and digital purchases remain '
+    'disabled for this pilot. Do not enter bank details or attempt real payments. '
+    'Report build, role, device/OS, exact steps and screenshots through TestFlight. '
+    'This is not a public or fully accepted marketplace release.'
 )}
 
 

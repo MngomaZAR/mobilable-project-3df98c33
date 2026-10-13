@@ -68,7 +68,7 @@ async function submissionTargets() {
   const session = new SessionManager({ setActor() {} });
   const client = createGraphqlClient({ accessToken: session.getAccessToken(), sessionSecret: session.getSessionSecret() });
   try {
-    const rows = await SubmissionQuery.forProjectStatusAsync(client, 'f0c1ef90-ac26-4e4c-a799-77b377e2f452', { limit: 30, offset: 0 });
+    const rows = await SubmissionQuery.allForAppAsync(client, 'f0c1ef90-ac26-4e4c-a799-77b377e2f452', { limit: 30, offset: 0 });
     return rows.map(row => ({ ...sanitize(row), failureCategory: categorizeFailure(row.error?.message) }));
   } catch {
     return { reason: 'authenticated_submission_target_query_failed' };

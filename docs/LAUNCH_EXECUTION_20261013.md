@@ -117,8 +117,6 @@ operates the Papzii product and receives the platform commission. Bundled
 company identity is corrected accordingly; public policy publication and
 the remaining policy review are still outstanding.
 
-## Release rule
-
 ## Live promotion and user-flow follow-up
 
 Production SSH access was recovered using the existing authorized key, matched
@@ -170,3 +168,22 @@ until all nine gates have named evidence and the live backend verifier passes
 against the exact deployed commit. The current public API fails readiness. No
 credentials or synthetic acceptance rows may be substituted for real provider
 and device evidence.
+
+## Latest verified deployment
+
+Revision `5e3dfc384fb3f38edc2566e9129a342af011267d` was promoted successfully
+on 13 October using the corrected wrapper, backup/restore rehearsal and immutable
+API/worker digests. The public `/version` reports that exact revision and
+`/health` reports `ok`. API and worker commission configuration is explicitly 30%.
+This deploy includes consent-based creator enrolment and the legacy notification
+destination migration. Deployment regression tests passed (3/3).
+
+Public `/health/readiness` still reports five blockers: checkout activation,
+refund execution, bank payout execution, video acceptance and instant dispatch
+acceptance. These are not resolved by deployment. Updated native builds have
+not been submitted for public review. The current store uploads remain older
+versions. The actionable team checklist is `RELEASE_CHECKLIST_20261013.md`.
+
+EAS upload exclusions now explicitly omit environment files, private key formats,
+credentials.json and internal documentation. Do not deploy the local QA web
+export: it targets the private localhost API tunnel.

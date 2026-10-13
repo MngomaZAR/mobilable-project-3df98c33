@@ -61,3 +61,22 @@ The final live suite passed 24 checks: six policies at three sizes, four web
 authentication viewport/reload checks, HTTP-to-HTTPS redirect and API-CORS/static
 asset checks. This establishes the public web shell and policy deployment, not
 authenticated production booking acceptance or native-device acceptance.
+
+## Mobile candidate status
+
+Provider status checked after the latest source upload:
+
+- Source: `9832f9077d654e6a925451cfa3be7115d26d1b2c`.
+- iOS build 43: `2e46575a-ea6f-4c0a-adde-d5c917e2c8fe`, IN_PROGRESS.
+- Android version 6: `9cccfbba-27b0-4a7a-aa8f-865053f1bebe`, IN_QUEUE.
+- Beta auto-submission was requested with the builds. Upload completion and
+  availability of these new versions are not yet confirmed.
+- Existing iOS build 42 is externally IN_BETA_TESTING. Existing Android version
+  5 is completed on the internal track. Neither is public-store approval.
+
+The owner confirmed no payout arrangement exists. The next financial release
+gate is an approved PAPZ merchant settlement arrangement, followed by verified
+checkout, cancellation/refund, completion and creator settlement reconciliation.
+No public paid launch or public-store submission is claimed. Native phone
+acceptance, media/dispatch acceptance and scheduled independent backup custody
+also remain open.

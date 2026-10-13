@@ -101,6 +101,22 @@ media access, then build that revision for TestFlight and Play internal testing.
 Do not activate payments or submit public store releases until merchant refund
 and payout evidence, reviewed public policies, and physical-device journeys pass.
 
+## Verified candidate and operator evidence
+
+Candidate `4de12cf6e59bea1b1542a1c50c60331ae7ca8f3e` passed frontend CI
+and backend run `38385315425`, including the PostgreSQL protocol job and
+both API and worker image builds. The payment protocol now expects ZAR 980
+in pending creator earnings on the ZAR 1,400 fixture, matching the 30/70 split.
+The live `/version` endpoint still reports `200d60599c92c800ab29bba6eb8b4a4a1b7cfdf6`.
+This candidate has not been promoted or submitted to the stores.
+
+The owner confirmed SAICTS is not Papzii's legal operator. The local certificate
+`C:/Users/27790/Downloads/CoR15_1_A_9430620677.pdf` identifies
+PAPZ (Pty) Ltd, registration 2025/188861/07. The owner confirmed that PAPZ
+operates the Papzii product and receives the platform commission. Bundled
+company identity is corrected accordingly; public policy publication and
+the remaining policy review are still outstanding.
+
 ## Release rule
 
 Do not publish, switch on live payments or represent Papzii as publicly ready

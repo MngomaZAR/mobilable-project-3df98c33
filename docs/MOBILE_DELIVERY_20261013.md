@@ -61,3 +61,22 @@ beta submission, not native acceptance or public App Store review.
 
 Android version 5 was still building at the last check; its internal/draft upload
 submission remains scheduled. No Android upload success is claimed yet.
+
+## Live pilot handoff confirmed
+
+Subsequent Apple inspection confirmed iOS 42 `IN_BETA_TESTING` externally.
+Android 5 finished building and was uploaded as an internal draft. The exact
+authorized version was promoted on the existing internal track; a fresh Play
+query confirmed version 5 `completed`, with production/closed tracks unchanged
+and empty. This is internal distribution, not public Play approval.
+
+Ten additional phone/tablet chat/map/role browser checks passed. Jones and Sam
+were sent the pilot guide and a ZIP with 80 synthetic-QA browser screenshots
+through the configured app mailbox. SMTP accepted both messages; inbox delivery
+and recipient readback have not been verified. The server maintains a private
+send ledger to avoid duplicate or ambiguous retries. See
+`pilot-handoff-delivery-20261013.json` and `PILOT_HANDOFF_20261013.md`.
+
+Live production readiness still reports checkout, refunds, payouts, video and
+instant dispatch unavailable. Neither the tester email nor store distribution
+represents full public-launch readiness or approval of the pilot creators.

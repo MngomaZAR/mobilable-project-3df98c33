@@ -12,7 +12,7 @@ Passing a source test does not mean a native build, payment settlement or store 
 | 5. Advertised integrations | Integrations / QA | Routing and object storage pass; video and instant dispatch acceptance still unavailable | Test supported integrations end to end or remove them from the initial release scope and claims |
 | 6. Production operations | Backend / operations | Oracle API and worker deployed with immutable images; guarded backup restoration and cutover | Verify newest revision, migrations, permissions, alerts, off-host backup restore and rollback drill; retain production data |
 | 7. Legal and safety | Operator / security | Operator confirmed; public policy HTML prepared | Publish branded policy URLs, review cancellation/refund/retention terms; verify moderation, blocking, recovery, deletion and incident ownership |
-| 8. Native delivery and stores | Release / operator | Apple build 42 valid, uploaded, assigned to testers and waiting for external beta review; Android version 5 building with internal upload scheduled | Verify installed binaries, listing/declarations, reviewer access and test eligibility; public review remains gated |
+| 8. Native delivery and stores | Release / operator | Apple build 42 valid and in external beta testing; Play version 5 completed on internal testing; Jones/Sam handoff SMTP accepted | Verify installed binaries, listing/declarations, reviewer access and test eligibility; public review remains gated |
 | 9. Paid-feature classification | Operator / billing | Digital purchases disabled for the current release configuration | Review every SKU against store rules; keep unsupported digital purchases disabled; validate physical-service payment flows |
 
 ## Execution order

@@ -20,7 +20,7 @@ class TestFlightScopeTests(unittest.TestCase):
         return build, {}, [], report
 
     def test_processing_or_other_build_cannot_be_prepared(self):
-        for number, processing in [('38', 'VALID'), ('43', 'VALID'), ('39', 'PROCESSING'), ('40', 'PROCESSING'), ('41', 'PROCESSING'), ('42', 'PROCESSING')]:
+        for number, processing in [('38', 'VALID'), ('44', 'VALID'), ('39', 'PROCESSING'), ('40', 'PROCESSING'), ('41', 'PROCESSING'), ('42', 'PROCESSING'), ('43', 'PROCESSING')]:
             state = self.state()
             state[0]['attributes']['processingState'] = processing
             state[3]['processingState'] = processing
@@ -66,6 +66,7 @@ class TestFlightScopeTests(unittest.TestCase):
         report = self.state()[3]
         release.require_authorized_build('41', report)
         release.require_authorized_build('42', report)
+        release.require_authorized_build('43', report)
         report['expired'] = True
         with self.assertRaises(ValueError):
             release.require_authorized_build('41', report)

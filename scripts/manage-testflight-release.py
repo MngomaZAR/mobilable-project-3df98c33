@@ -61,6 +61,18 @@ BUILD_NOTES = {'39': (
     'disabled for this pilot. Do not enter bank details or attempt real payments. '
     'Report build, role, device/OS, exact steps and screenshots through TestFlight. '
     'This is not a public or fully accepted marketplace release.'
+), '43': (
+    'Restricted hosted beta 1.0.0 (43). Updates pilot policy copy to match '
+    'disabled money services, removes unconfirmed cancellation charges, '
+    'clarifies express model-release consent and adds stable native test '
+    'selectors for sign-in and navigation. Public policies are now hosted on '
+    'papzii.co.za over enforced HTTPS. Test sign-in/reopen, role navigation, '
+    'map sheet gestures, permission denial, profiles, scheduled request/acceptance, '
+    'chat, settings and policy links on phones/tablets. Payments, refunds, bank '
+    'payouts, paid video, instant dispatch and digital purchases remain disabled '
+    'for general use. Do not enter bank details or attempt real payments. '
+    'Report build, role, device/OS, steps and screenshots through TestFlight. '
+    'This is not a public or fully accepted marketplace release.'
 )}
 
 

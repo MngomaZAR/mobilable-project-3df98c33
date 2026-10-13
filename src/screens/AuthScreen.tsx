@@ -380,6 +380,8 @@ const AuthScreen: React.FC = () => {
             <View style={[styles.inputRow, mode === 'signup' ? { marginTop: 14 } : undefined]}>
               <Ionicons name="mail-outline" size={20} color="#64748b" style={styles.inputIcon} />
               <TextInput
+                testID="auth-email"
+                accessibilityLabel="Email address"
                 value={email}
                 onChangeText={setEmail}
                 autoCapitalize="none"
@@ -394,6 +396,8 @@ const AuthScreen: React.FC = () => {
             <View style={[styles.inputRow, { marginTop: 14 }]}>
               <Ionicons name="lock-closed-outline" size={20} color="#64748b" style={styles.inputIcon} />
               <TextInput
+                testID="auth-password"
+                accessibilityLabel="Password"
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
@@ -472,6 +476,10 @@ const AuthScreen: React.FC = () => {
             ) : null}
 
             <TouchableOpacity
+              testID="auth-submit"
+              accessibilityRole="button"
+              accessibilityLabel={mode === 'signin' ? 'Sign In' : 'Create account'}
+              disabled={authenticating}
               style={[styles.submitBtn, authenticating && styles.submitBtnDisabled]}
               onPress={submit}
             >

@@ -1,0 +1,13 @@
+Options -Indexes
+DirectoryIndex index.html
+AddType text/javascript .mjs
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  # Missing static assets must remain errors, not receive the app shell.
+  RewriteRule ^(?:_expo|assets|maplibre)/ - [L]
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+  RewriteRule ^ index.html [L]
+</IfModule>

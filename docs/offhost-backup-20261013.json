@@ -1,0 +1,18 @@
+{
+  "checkedAt": "2026-10-13T14:49:50.780173+00:00",
+  "tool": "restic",
+  "snapshot": "48aab1137b162300020ce1eebca24969a1afd4c3aedbae78bb11eeae26dad73d",
+  "encryptedOffHostCopy": true,
+  "repositoryCheckPassed": true,
+  "retrievedBytesMatch": true,
+  "bytes": 170176,
+  "sha256": "fc39677c1acecbc38f8da532eb34198423274f3bf151c1eec7256a664888c762",
+  "plaintextLocalDumpWritten": false,
+  "productionReplaced": false,
+  "databaseRestoreFromOffHostTested": true,
+  "scheduledRemoteStorageConfigured": false,
+  "schemaContractPassed": true,
+  "authUserCount": 17,
+  "profileCount": 17,
+  "isolatedRestoreDatabaseRemoved": true
+}

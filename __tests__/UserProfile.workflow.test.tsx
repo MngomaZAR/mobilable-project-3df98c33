@@ -52,6 +52,19 @@ test('uncached creator loads authoritative details without fabricated rating or 
   expect(screen.queryByText(/128 reviews|5.0 Rating|Cape Town|Scene Rank|Collaboration request sent/)).toBeNull();
 });
 
+test.each([{ verified: false }, { kyc_status: 'pending' }, { age_verified: false }])('incomplete approval cannot display a verified badge or offer booking: %p', async changes => {
+  const creator = detail();
+  Object.assign(creator.profile, changes);
+  (fetchCreatorProfile as jest.Mock).mockResolvedValue(creator);
+  const screen = render(<UserProfileScreen />);
+  await waitFor(() => expect(screen.getByText('Verification pending')).toBeTruthy());
+  expect(screen.queryByText('Identity verified')).toBeNull();
+  const request = screen.getByRole('button', { name: 'Request shoot' });
+  expect(request.props.accessibilityState.disabled).toBe(true);
+  fireEvent.press(request);
+  expect(mockNavigate).not.toHaveBeenCalled();
+});
+
 test('actual full-set published review summary replaces marketing counters', async () => {
   (fetchPublishedReviewSummary as jest.Mock).mockResolvedValue({ count: 256, average: 4.7 });
   const screen = render(<UserProfileScreen />);

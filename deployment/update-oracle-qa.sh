@@ -18,6 +18,8 @@ fi
 # This value is never copied into production or used by native release builds.
 sed -i '/^API_PUBLIC_URL=/d' "$root/qa.env"
 printf '%s\n' 'API_PUBLIC_URL=http://127.0.0.1:18000' >> "$root/qa.env"
+sed -i '/^CORS_ORIGINS=/d' "$root/qa.env"
+printf '%s\n' 'CORS_ORIGINS=http://127.0.0.1:4173,http://localhost:4173' >> "$root/qa.env"
 if docker inspect papzii-osrm >/dev/null 2>&1; then
     sed -i '/^OSRM_BASE_URL=/d' "$root/qa.env"
     printf '%s\n' 'OSRM_BASE_URL=http://papzii-osrm:5000' >> "$root/qa.env"

@@ -139,8 +139,10 @@ async def write_load(client, actors):
         counts = {row["status"]: row["count"] for row in await conn.fetch("SELECT status,count(*) AS count FROM job_outbox GROUP BY status")}
         notifications = await conn.fetchval("SELECT count(*) FROM notification_events")
         unmapped = await conn.fetchval("""SELECT count(*) FROM notification_events WHERE
-            (action_payload ? 'booking_id' AND (action_type IS DISTINCT FROM 'booking' OR category IS NULL)) OR
-            (action_payload ? 'conversation_id' AND (action_type IS DISTINCT FROM 'chat' OR category IS DISTINCT FROM 'message'))""")
+            (nullif(action_payload->>'conversation_id','') IS NULL AND nullif(action_payload->>'booking_id','') IS NOT NULL
+                AND (action_type IS DISTINCT FROM 'booking' OR category IS NULL)) OR
+            (nullif(action_payload->>'conversation_id','') IS NOT NULL
+                AND (action_type IS DISTINCT FROM 'chat' OR category IS DISTINCT FROM 'message'))""")
         report["async_worker"] = {"outbox": counts, "persisted_notifications": notifications, "unmapped_destinations": unmapped,
                                  "passed": not pending and notifications >= 600 and unmapped == 0, "scope": "Durable navigable in-app delivery, not device push delivery"}
         if pending:

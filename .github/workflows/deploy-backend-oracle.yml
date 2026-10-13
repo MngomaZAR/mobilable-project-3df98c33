@@ -79,7 +79,7 @@ jobs:
           target="$ORACLE_SSH_USER@129.151.188.15"
           options=(-i "$key" -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$hosts" -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=4)
           stage="/tmp/papzii-candidate-$REVISION-$GITHUB_RUN_ID"
-          ssh "${options[@]}" "$target" "umask 077; mkdir '$stage'"
+          ssh "${options[@]}" "$target" "sudo -n install -d -m 700 -o '$ORACLE_SSH_USER' '$stage'"
           scp "${options[@]}" -r deployment "$target:$stage/"
           ssh "${options[@]}" "$target" "sudo -n bash '$stage/deployment/promote-oracle-candidate.sh' '$REVISION' '$API_IMAGE' '$WORKER_IMAGE' '$stage/deployment'"
       - name: Verify public revision and schema

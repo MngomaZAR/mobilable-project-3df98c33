@@ -279,7 +279,7 @@ async def handle_builtin_function(settings: Settings, name: str, token: str | No
     if not settings.postgres_url:
         return None
     user = await require_user(settings, token)
-    if (user.get('user_metadata') or {}).get('deletion_status') and name in {'recommendation-events', 'compliance-consent', 'dispatch-create'}:
+    if (user.get('user_metadata') or {}).get('deletion_status') and name in {'recommendation-events', 'compliance-consent', 'dispatch-create', 'creator-enrolment'}:
         raise HTTPException(status_code=409, detail='New activity is disabled while account deletion is pending.')
     if name.startswith('dispatch-'):
         from .dispatch_engine import DispatchCreate, DispatchRespond, DispatchState, create_dispatch, respond_to_dispatch, get_dispatch_state
@@ -293,6 +293,9 @@ async def handle_builtin_function(settings: Settings, name: str, token: str | No
                 return await get_dispatch_state(settings, DispatchState.model_validate(payload).dispatch_request_id, user)
         except ValidationError:
             raise HTTPException(status_code=400, detail='Provide a valid booking-backed dispatch command.') from None
+    if name == 'creator-enrolment':
+        from .creator_enrolment import enrol_creator
+        return await enrol_creator(settings, user, payload)
     if name == 'livekit-token':
         from .video_calls import handle_video_call
         return await handle_video_call(settings, user, payload)

@@ -119,6 +119,52 @@ the remaining policy review are still outstanding.
 
 ## Release rule
 
+## Live promotion and user-flow follow-up
+
+Production SSH access was recovered using the existing authorized key, matched
+against the owner's Cloud Shell public key. The target is exclusively
+`papzi-prod-a1` / `129.151.188.15`; the older `papzi` micro instance at
+`84.12.74.134` has no backend installation. Madabukela remains a separate project.
+
+Candidate `0fb2e585b803718df0acf21b8f5beda1dc5e6ced` passed CI and matching backend
+image builds and was promoted through backup restoration and guarded cutover.
+The public revision/schema/routing/anonymous-access checks passed. A subsequent
+guarded configuration applied explicit `COMMISSION_RATE=0.30` in API and worker,
+preserving images and database. Private configuration receipt:
+`/var/backups/papzii/configuration-20261013T114409Z/configuration.json`.
+
+The initial wrapper's follow-up configuration call used the wrong request
+envelope; its backend promotion had succeeded, but the configuration call was
+rejected. The correct `updates` envelope was then applied successfully. The
+wrapper and its regression check are corrected. The staging step also now uses
+sudo to create only its owned private directory on this host's restricted `/tmp`.
+
+Ten browser chat/map checks passed on phone and desktop viewports after clearing
+a stale local bundle that still targeted production. The rebuilt private client
+targets the isolated QA API through SSH. An upgraded QA protocol run exposed old
+notification records without navigation metadata; a targeted migration is now
+covered by real isolated PostgreSQL tests. Its notification bodies and read states
+are preserved. Current-source creator enrolment was also tested against isolated
+PostgreSQL, including concurrent retries and consent-failure rollback.
+
+Both requested pilot accounts currently have client roles. A new consent-based
+client-to-creator application flow is prepared; it never approves identity or
+lists the creator automatically. The users must choose their role and complete
+their own identity/profile/service/payout onboarding.
+
+Public policy pages are generated from the bundled documents and their mobile
+layout was inspected. They have not yet been uploaded to the branded website.
+PayFast checkout credentials are configured; no PayFast split-payment integration
+or creator split-account configuration was found. Completion-based bank payouts
+currently use the unconfigured Stitch adapter. Do not imply automatic 70% bank
+settlement from a pending earnings row or a mocked protocol check.
+
+The Apple API confirms `com.papzi.app` is in `PREPARE_FOR_SUBMISSION`; build 41 is
+the latest valid uploaded build. Public paid-service/native-device acceptance
+and new mobile distribution remain open.
+
+## Public Release Rule
+
 Do not publish, switch on live payments or represent Papzii as publicly ready
 until all nine gates have named evidence and the live backend verifier passes
 against the exact deployed commit. The current public API fails readiness. No

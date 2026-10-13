@@ -39,4 +39,7 @@ test('Oracle wrapper rehearses before promotion and verifies preserved identitie
   assert.ok(script.includes('r["production_replaced"] and r["identities_preserved"]'));
   assert.ok(script.includes('r["revision"] == sys.argv[2]'));
   assert.equal(/PAYFAST_CHECKOUT_ENABLED|STITCH_PAYOUTS_ENABLED|PAYFAST_REFUNDS_ENABLED/.test(script), false);
+  const payload = script.match(/printf '%s\\n' '(\{"updates":.+\})' \| python3/);
+  assert.ok(payload, 'Configuration helper needs the updates envelope');
+  assert.deepEqual(JSON.parse(payload[1]), { updates: { COMMISSION_RATE: '0.30' } });
 });

@@ -43,7 +43,7 @@ docker exec "$container" psql -U qa -d papzii_domain_qa_oracle -v ON_ERROR_STOP=
 url="postgresql://qa:synthetic-qa-only@127.0.0.1:$port/papzii_domain_qa_oracle"
 docker run --rm --network host -e APP_ENV=qa -e DATABASE_URL="$url" \
     -e PAPZII_DISPATCH_TEST_DATABASE_URL="$url" -e ADMIN_MODERATION_TEST_DATABASE_URL="$url" \
-    "$image" python -m unittest tests.test_dispatch_engine tests.test_contracts tests.test_admin_moderation -v
+    "$image" python -m unittest tests.test_dispatch_engine tests.test_contracts tests.test_admin_moderation tests.test_creator_enrolment tests.test_notification_migration -v
 docker run --rm --network host -e APP_ENV=qa -e DATABASE_URL="$url" \
     -e FINANCIAL_PROTOCOL_ALLOW_QA=true "$image" python -m tests.financial_protocol
 docker run --rm --network host -e APP_ENV=qa -e DATABASE_URL="$url" \

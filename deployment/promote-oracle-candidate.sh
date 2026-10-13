@@ -30,3 +30,7 @@ promotion=$(mktemp /var/backups/papzii/promotion-output-XXXXXX.json)
 python3 "$destination/oracle_promote.py" --rehearsal "$receipt" \
   --compatibility-sql "$destination/sql/preserve_legacy_dispatch.sql" > "$promotion"
 python3 -c 'import json,sys; r=json.load(open(sys.argv[1])); assert r["production_replaced"] and r["identities_preserved"] and r["revision"] == sys.argv[2]; print("Oracle promotion verified: " + r["revision"])' "$promotion" "$revision"
+configuration=$(mktemp /var/backups/papzii/commission-output-XXXXXX.json)
+printf '%s\n' '{"COMMISSION_RATE":"0.30"}' | python3 "$destination/oracle_configure.py" \
+  --expected-revision "$revision" > "$configuration"
+echo 'Approved 30 percent commission configured in API and worker'

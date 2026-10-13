@@ -84,6 +84,18 @@ class ConfigurationSafetyTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             configure.validate_updates({'SERVICE_ACCEPTANCE_USER_IDS': 'client'})
 
+    def test_approved_commission_is_exact_and_does_not_enable_money_movement(self):
+        self.assertEqual(configure.validate_updates({"COMMISSION_RATE": "0.30"}), {"COMMISSION_RATE": "0.30"})
+        for rate in ("0.2", "0.7", "NaN", "Infinity", "invalid"):
+            with self.subTest(rate=rate), self.assertRaises(ValueError):
+                configure.validate_updates({"COMMISSION_RATE": rate})
+        original = {"services": {"api": {"image": "api"}, "worker": {"image": "worker"}}}
+        env = {"DATABASE_URL": "same", "COMMISSION_RATE": "0.20", "PAYFAST_CHECKOUT_ENABLED": "false"}
+        result = configure.configured_compose(original, env, env, {"COMMISSION_RATE": "0.30"})
+        for name in ("api", "worker"):
+            self.assertEqual(result["services"][name]["environment"]["COMMISSION_RATE"], "0.30")
+            self.assertEqual(result["services"][name]["environment"]["PAYFAST_CHECKOUT_ENABLED"], "false")
+
     def test_cannot_change_release_or_financial_acceptance(self):
         for key in ("DATABASE_URL", "API_PUBLIC_URL", "ADMIN_USER_IDS", "APP_ENV", "PAYFAST_SANDBOX", "FINANCIAL_PAYOUT_ACCEPTANCE_ID", "ALLOW_RUNTIME_SCHEMA_CHANGES", "EXPO_PUBLIC_API_KEY"):
             with self.subTest(key=key), self.assertRaises(ValueError):

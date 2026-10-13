@@ -30,6 +30,7 @@ ALLOWED = {
     "SERVICE_ACCEPTANCE_USER_IDS", "SERVICE_ACCEPTANCE_EXPIRES_AT", "PAYFAST_ACCEPTANCE_MAX_AMOUNT",
     "VIDEO_ACCEPTANCE_ID", "DISPATCH_ACCEPTANCE_ID", "INSTANT_DISPATCH_ENABLED",
     "FINANCIAL_BANK_ENCRYPTION_KEY",
+    "COMMISSION_RATE",
 }
 PAYMENT_SETTINGS = {"PAYFAST_MERCHANT_ID", "PAYFAST_MERCHANT_KEY", "PAYFAST_PASSPHRASE",
                     "PAYFAST_SANDBOX", "PAYFAST_CHECKOUT_ENABLED"}
@@ -76,6 +77,13 @@ def validate_updates(updates):
             raise ValueError("Integration setting is too large")
     if BANK_KEY in updates:
         validate_bank_key(updates[BANK_KEY])
+    if "COMMISSION_RATE" in updates:
+        try:
+            rate = Decimal(updates["COMMISSION_RATE"])
+        except InvalidOperation:
+            raise ValueError("Booking commission must match the approved 30 percent rate") from None
+        if not rate.is_finite() or rate != Decimal("0.30"):
+            raise ValueError("Booking commission must match the approved 30 percent rate")
     for key in ("LIVEKIT_ENABLED", "SMTP_SSL", "PAYFAST_SANDBOX", "PAYFAST_CHECKOUT_ENABLED", "INSTANT_DISPATCH_ENABLED"):
         if key in updates and updates[key] not in {"true", "false"}:
             raise ValueError("Boolean integration settings must be explicit")

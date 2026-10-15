@@ -27,57 +27,73 @@ live paid booking should be enabled. See
 [Financial Release Runbook](FINANCIAL_RELEASE_RUNBOOK_20261015.md) for the
 provider onboarding, evidence and end-to-end activation protocol.
 
-## Current Testing Release
+## Latest Testing Builds
 
-Restricted beta **1.0.0 (41)** is validated and `IN_BETA_TESTING` for existing
-internal `Team (Expo)` and external `papzi` groups. Jones belongs to `papzi` and
-already accepted his invitation. Two build-41 live-device instruction emails were
-accepted by SMTP; inbox delivery and completed device tests are not confirmed.
-Automatic TestFlight notifications are enabled. Client-only reviewer sign-in,
-normal age declaration and hosted web navigation passed; no admin privileges
-were granted to the review account.
+EAS currently lists iOS **1.0.0 (46)** (`fabb10e1-41bb-4947-8702-372a67aca798`)
+and Android **1.0.0 (9)** (`322059ed-129c-4c1e-9083-9d316c905822`) as finished
+builds from source commit `506d064c40c6ad67919d6723d917474477f9...`. The iOS
+artifact was uploaded to App Store Connect and Android 9 was submitted to the
+Play internal track; this does not establish tester installation, public review
+submission, approval, or production release. No current physical-device
+acceptance receipt was verified in this pass.
 
-Both native builds use candidate `200d60599c92c800ab29bba6eb8b4a4a1b7cfdf6`,
-also running on public Oracle HTTPS after protected cutover `20261004T145154Z`.
-Android version code **4** uploaded successfully and was activated through the
-signed-in Play Console; independent Publisher API readback confirms internal
-status **completed**, and the Console reports **Active**. This is testing
-distribution, not a public Play release. The public production track is empty.
+Production API revision `5e3dfc384fb3f38edc2566e9129a342af011267d` returns
+healthy status, a valid database contract, road routing and 401 for unauthenticated
+`/auth/me`. Readiness remains false for paid checkout/refunds/payouts, video and
+instant dispatch. The released artifacts are therefore restricted test builds,
+not evidence that these marketplace capabilities are ready for public use.
+Public App Store and Play production review submissions are not confirmed.
 
-Scheduled acceptance, booking-linked calls, retryable notification actions and
-SDK-54 native push registration are in this candidate. The map now opens canonical
-server-priced scheduling, rather than inserting instant bookings directly;
-validated road ETA, destination-bound geometry and retry replace stale/invented
-route states. New controlled service
-permissions remain account-bound and time-limited; payments, refunds, bank payouts,
-video and instant dispatch remain paused for general use. Real settlement,
-physical-device acceptance, full UI coverage and operational/security work still
-block public launch. Public Apple App Review remains unsubmitted.
+## Store And Policy Status
 
-The matching web testing preview is
-[papzi--swvsndvpq2.expo.app](https://papzi--swvsndvpq2.expo.app).
-Live client sign-in, five primary tabs and sign-out passed at phone and desktop
-widths with rendered map tiles, zero API errors or page crashes. This is not
-all-role/native acceptance.
-See [Latest Candidate](RELEASE_CANDIDATE_200D605_20261004.md) and
-[Testing Release](TESTING_RELEASE_20261004.md) for exact receipts and limitations.
+The six published policy pages and account-deletion page returned HTTP 200 in
+the 15 October 2026 live check. The old 4 October 404 findings below are history.
+Public store readiness is still blocked by backend financial/media/dispatch
+capabilities and device acceptance. The Play Console account's current production
+access/testing requirements and both stores' submission state must be checked in
+their consoles; older setup counts retained below are not current evidence.
 
-## Additional Public Store Gates
+## 15 October Verification
 
-Signed-in Play Console confirms 0 of 11 setup tasks complete and 0 closed-testers.
-Production access requires a closed release and at least 12 real testers opted
-in continuously for 14 days; existing internal lists do not satisfy it. No public
-store review or production release was submitted in this pass.
+- `npm run check:launch`: passed, 43 suites / 398 frontend tests, typecheck,
+  lint, source/runtime/architecture/schema/dashboard/payment-flow audits and web
+  export.
+- Backend API unit suite: 360 passed, 41 skipped because the isolated database
+  integration target was not configured in this checkout.
+- Public-site Playwright acceptance: 24/24 passed across 320px, 390px, 768px
+  and 1440px: six policy pages, hosted auth/reload, HTTPS redirect, API CORS,
+  static 404 behavior and worker MIME.
+- Read-only live API probe: health 200, contract `ok=true`, routing returned 122
+  road points, unauthenticated `/auth/me` returned 401. Readiness remains false
+  for checkout enablement, refund, bank payout, video and instant dispatch.
+- The owner confirms PayFast sandbox payments were successfully tested. This is
+  accepted as completed sandbox-payment evidence; it is distinct from live
+  settlement and does not, by itself, establish refunds, creator payouts, or
+  coverage on the latest native builds. Preserve the existing transaction and
+  callback evidence, and avoid repeating cases already verified.
+- The broad dashboard Playwright suite is not accepted as passed. Its role and
+  workflow specs require the isolated QA API at `127.0.0.1:18000`; that tunnel
+  was not listening, the QA hostname returned HTTP 404 / failed HTTPS, and
+  Papzi-specific SSH access was rejected. No synthetic fixture was sent to
+  production. A local-only auth smoke also logged expected CORS errors when a
+  localhost preview called the production API; the branded hosted-auth test
+  passed. Do not weaken production CORS to paper over this test setup.
+- `npm audit --omit=dev` reported 45 findings (26 high, 19 moderate, no critical).
+  Findings span Expo/React Native/Metro and media/build dependency chains; the
+  audit suggests incompatible major-version changes for some packages. Do not
+  apply a blind mass upgrade. Triage reachability, update within the supported
+  Expo SDK, rebuild both native apps, and rerun device/security acceptance.
+- Latest EAS builds are restricted `beta-testing` artifacts: iOS 46 and Android
+  9, both from `506d064c40c6ad67919d6723d917474477f99a19`. No public review
+  submission or approval was verified. No production deployment or live-money
+  configuration was changed in this verification pass.
 
-Both `https://papzii.co.za/privacy` and `https://papzii.co.za/terms` return 404.
-Existing cPanel access works and its `public_html` directory was observed empty;
-no website, DNS, customer mailbox or file was overwritten. The March native legal
-copy is not accepted policy evidence: operator identity is unverified, fees differ
-from the server default, payout timing is unsupported, and location retention
-claims exceed the implementation. Publication needs reviewed, aligned content,
-an external account-deletion resource and actual store declarations. The new
-public release check fails on unavailable legal pages; beta scope remains separate.
-See [Public Store Gates](PUBLIC_STORE_GATES_20261004.md).
+The internal feature acceptance plan is in
+[Financial Release Runbook](FINANCIAL_RELEASE_RUNBOOK_20261015.md). In
+particular, the current beta profile points to production; any further
+destructive end-to-end acceptance must use a separately verified QA API/database
+and PayFast sandbox, not synthetic production transactions. Successful sandbox
+payment testing has already been reported by the owner.
 
 The sections below retain earlier checks and deployment history.
 

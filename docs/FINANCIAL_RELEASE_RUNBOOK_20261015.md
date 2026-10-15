@@ -96,6 +96,52 @@ An accepted API request or internal ledger reservation is not a bank transfer.
    callback mismatch, stale accepted operations, ledger imbalance, and low
    Stitch float. Run a restore and replay/reconciliation rehearsal.
 
+## Internal Team Acceptance Lane
+
+Internal testers must exercise the same booking and payment screens, APIs,
+callbacks, and ledger rules that will ship, against an isolated QA backend and
+database. Do not point synthetic role, booking, message, or payment fixtures at
+production. The current `beta-testing` EAS profile still resolves to the
+production API, and therefore is not an acceptable lane for destructive or
+financial acceptance.
+
+Before the next feature-complete beta build:
+
+1. Restore QA-server access and publish a dedicated HTTPS QA API with a trusted
+   certificate, isolated database/storage, independent secrets, and a verified
+   `/health`, `/health/contract`, routing, and readiness probe. The QA host
+   checked on 15 October returned HTTP 404 and failed TLS; the expected local
+   QA tunnel at `127.0.0.1:18000` was not running.
+2. Add a separately named EAS QA profile whose API URL is the verified QA host.
+   Keep production/TestFlight and Play production artifacts pointed only at the
+   live API; do not bake an unverified or private loopback URL into a store build.
+3. The owner reports that PayFast sandbox payments have been tested
+   successfully; retain that as completed sandbox evidence, not as proof of
+   live-money settlement or every downstream workflow. Restore the isolated QA
+   lane, then record the tested app build, API revision, transaction reference,
+   callback outcome and ledger reconciliation (with secrets and personal data
+   redacted). Verify any untested cases in sandbox: failed and duplicate
+   callbacks, payment history, cancellation, full and partial refunds,
+   idempotent retry/read-back, and the actual client/provider/admin UI. Do not
+   repeat already-passed cases unless the build or integration changed.
+4. For creator payouts, use an approved Stitch sandbox if PAPZ obtains one. If
+   none exists, use the isolated provider simulator only to verify UI, idempotent
+   API commands, ledger states, webhook verification and failure recovery; label
+   the result simulated and never show it as settled money. Real bank settlement
+   remains a separate capped acceptance gate.
+5. Seed clearly synthetic QA-only accounts for client, photographer, model and
+   admin roles; test independent-account permissions and all key journeys on
+   physical iOS and Android devices. Capture traces, build IDs and sanitized
+   evidence. Do not reuse real creators' profiles or credentials as fixtures.
+
+This lane lets the team validate valuable payment features without charging
+customers or pretending production payouts exist. Production flags remain
+fail-closed until provider onboarding and separate live-settlement sign-off.
+The owner's successful sandbox-payment report supersedes any earlier implication
+that sandbox payment testing had not occurred. Refund and payout coverage must be
+tracked separately from checkout unless the existing test evidence explicitly
+shows those flows passed too.
+
 ## Release acceptance matrix
 
 | Journey | Required evidence | Must remain blocked until |

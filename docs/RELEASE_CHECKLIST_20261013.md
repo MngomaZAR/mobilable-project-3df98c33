@@ -13,13 +13,24 @@ Passing a source test does not mean a native build, payment settlement or store 
   execution, bank payout, video and instant dispatch. No production payment or
   server deployment was performed in this pass.
 - Live `/privacy`, `/terms` and `/delete-account` endpoints return HTTP 200.
-- Apple iOS 1.0.0 (45) is `VALID`, assigned to existing internal and external
-  TestFlight groups (one tester each), and external beta review is
-  `WAITING_FOR_REVIEW`. This is not public App Store review. Play version code
-  8 is the latest known internal artifact; no public Play submission is claimed.
-- The account-scoped service-access and instant-booking fallback fix is local,
-  tested, and not yet present in a distributed native build. A restricted beta
-  build from the current source is the next engineering action.
+- EAS iOS build 46 and Android version 9 are finished restricted `beta-testing`
+  artifacts from `506d064c40c6ad67919d6723d917474477f99a19`; upload to internal
+  distribution is not public review, approval, or proof of installation.
+- Read-only live API probes passed health, schema contract, road routing and
+  anonymous-auth rejection. Checkout is configured but disabled; refunds and
+  payouts are unavailable; video and instant dispatch also remain unavailable.
+- Owner confirms PayFast sandbox payments were successfully tested. Record this
+  as completed sandbox payment evidence; it does not imply live settlement,
+  refunds, or creator payouts are working, and should not be described as an
+  untested sandbox checkout.
+- The live hosted public-site Playwright set passed 24/24. Full dashboard-role
+  browser acceptance remains open because the isolated QA tunnel/host is
+  unavailable. Do not send synthetic QA records to production.
+- Backend API suite: 360 passed, 41 isolated-database tests skipped. `npm audit
+  --omit=dev` reported 45 advisories (26 high, 19 moderate); compatible
+  SDK-aligned triage and native rebuild are required before public launch.
+- No public App Store or Play production review submission was verified. No
+  production deployment or financial setting was changed in this pass.
 - Public launch is blocked on genuine payout/settlement, payment/refund
   capability, independent device acceptance, security/operations signoff, and
   applicable store declarations. No public paid launch or approval is claimed.

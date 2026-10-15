@@ -57,7 +57,7 @@ class TestFlightScopeTests(unittest.TestCase):
 
     def test_notes_do_not_claim_financial_acceptance(self):
         for notes in release.BUILD_NOTES.values():
-            self.assertIn('disabled', notes)
+            self.assertTrue('disabled' in notes or 'unavailable' in notes)
             self.assertIn('Do not enter bank details', notes)
         self.assertIn('paused for general use', release.BUILD_NOTES['40'])
         self.assertIn('time-limited accounts', release.BUILD_NOTES['40'])

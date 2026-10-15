@@ -85,6 +85,17 @@ BUILD_NOTES = {'39': (
     'real payments. Report build, role, device/OS, steps and screenshots through '
     'TestFlight feedback. This is a restricted pilot, not a public marketplace '
     'release.'
+), '46': (
+    'Restricted hosted beta 1.0.0 (46). Corrects account-scoped service-access '
+    'loading and automatically returns unsupported instant-booking links to '
+    'the available scheduled-booking flow. Test booking entry from discovery '
+    'and map, both with ordinary accounts and authorized pilot accounts, while '
+    'access checks load and after they resolve. Verify no unauthorized instant '
+    'request is sent. Payments, refunds, bank payouts, video calls, instant '
+    'dispatch and digital purchases remain unavailable for general use. Do not '
+    'enter bank details or attempt real payments. Report build, role, device/OS, '
+    'steps and screenshots through TestFlight feedback. This is a restricted '
+    'pilot, not a public marketplace release.'
 )}
 
 

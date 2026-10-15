@@ -1,0 +1,48 @@
+name: EAS Internal QA Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Platform to build
+        required: true
+        type: choice
+        options:
+          - all
+          - ios
+          - android
+
+jobs:
+  build_internal_qa:
+    runs-on: ubuntu-latest
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      EXPO_PUBLIC_API_BASE_URL: https://papzii-qa.129.151.188.15.nip.io
+      EXPO_PUBLIC_BACKEND_PROVIDER: api
+      EXPO_PUBLIC_STORE_TARGET: internal
+      EXPO_PUBLIC_DIGITAL_BILLING_PROVIDER: disabled
+      EXPO_PUBLIC_DISABLE_DIGITAL_PURCHASES: "true"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate required secret
+        run: test -n "$EXPO_TOKEN" || (echo "Missing EXPO_TOKEN" && exit 1)
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund --omit=optional
+
+      - name: Verify isolated QA API contract and routing
+        run: npm run validate:env:release
+
+      - name: Build restricted QA binary
+        run: npx eas-cli@latest build --platform "${{ inputs.platform }}" --profile internal-qa --auto-submit-with-profile beta-testing --non-interactive --wait --message "Papzii internal QA, $GITHUB_SHA"

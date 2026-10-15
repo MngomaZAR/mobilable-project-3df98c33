@@ -60,3 +60,24 @@ test('restricted beta cannot enable purchasing, change scope, or use legacy back
   assert.throws(() => assertRestrictedTestingConfig({ ...beta, EXPO_PUBLIC_DIGITAL_BILLING_PROVIDER: 'external' }));
   assert.equal(isRestrictedTestingProfile({ EAS_BUILD_PROFILE: 'production' }), false);
 });
+
+test('internal QA build targets the dedicated QA API and keeps purchases disabled', () => {
+  const config = JSON.parse(fs.readFileSync(new URL('../../eas.json', import.meta.url), 'utf8'));
+  const profile = config.build['internal-qa'];
+  assert.equal(profile.extends, 'beta-testing');
+  assert.equal(profile.environment, 'preview');
+  assert.equal(profile.env.EXPO_PUBLIC_APP_ENV, 'qa');
+  assert.match(profile.env.EXPO_PUBLIC_API_BASE_URL, /^https:\/\/papzii-qa\./);
+  assert.equal(profile.env.EXPO_PUBLIC_STORE_TARGET, 'internal');
+  assert.equal(profile.env.EXPO_PUBLIC_DISABLE_DIGITAL_PURCHASES, 'true');
+  assert.equal(profile.env.EXPO_PUBLIC_DIGITAL_BILLING_PROVIDER, 'disabled');
+  const env = {
+    ...beta,
+    EAS_BUILD_PROFILE: 'internal-qa',
+    EXPO_PUBLIC_APP_ENV: 'qa',
+    EXPO_PUBLIC_API_BASE_URL: profile.env.EXPO_PUBLIC_API_BASE_URL,
+  };
+  assert.equal(isRestrictedTestingProfile(env), true);
+  assert.doesNotThrow(() => assertRestrictedTestingConfig(env));
+  assert.throws(() => assertRestrictedTestingConfig({ ...env, EXPO_PUBLIC_API_BASE_URL: 'https://papzii-api.example.com' }));
+});

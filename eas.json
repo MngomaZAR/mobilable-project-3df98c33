@@ -56,6 +56,21 @@
         "EXPO_PUBLIC_DIGITAL_BILLING_PROVIDER": "disabled",
         "EXPO_PUBLIC_DISABLE_DIGITAL_PURCHASES": "true"
       }
+    },
+    "internal-qa": {
+      "extends": "beta-testing",
+      "distribution": "store",
+      "environment": "preview",
+      "channel": "internal-qa",
+      "env": {
+        "EXPO_PUBLIC_APP_ENV": "qa",
+        "EXPO_PUBLIC_API_BASE_URL": "https://papzii-qa.129.151.188.15.nip.io",
+        "EXPO_PUBLIC_STORE_TARGET": "internal",
+        "EXPO_PUBLIC_RESTRICTED_BETA": "true",
+        "EXPO_PUBLIC_BACKEND_PROVIDER": "api",
+        "EXPO_PUBLIC_DIGITAL_BILLING_PROVIDER": "disabled",
+        "EXPO_PUBLIC_DISABLE_DIGITAL_PURCHASES": "true"
+      }
     }
   },
   "submit": {

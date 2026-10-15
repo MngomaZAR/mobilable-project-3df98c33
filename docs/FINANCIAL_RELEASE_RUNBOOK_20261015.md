@@ -101,42 +101,47 @@ An accepted API request or internal ledger reservation is not a bank transfer.
 Internal testers must exercise the same booking and payment screens, APIs,
 callbacks, and ledger rules that will ship, against an isolated QA backend and
 database. Do not point synthetic role, booking, message, or payment fixtures at
-production. The current `beta-testing` EAS profile still resolves to the
-production API, and therefore is not an acceptable lane for destructive or
-financial acceptance.
+production. The separate `internal-qa` EAS profile now points to the QA API;
+`beta-testing` and production remain pointed at the production API.
 
 Current QA recheck (15 October 2026): the isolated API and worker are running on
-`papzi-prod-a1`; the API is reachable at `127.0.0.1:18000` through the historical
-Papzi SSH key (`C:\Users\27790\.ssh\madabukela_oci`, user `opc`). The API
-returns healthy `/health` and `/health/contract` responses; QA readiness reports
-PostgreSQL contract, OSRM routing and object storage configured. Its remaining
-blockers are sandbox checkout/refunds, payouts, recovery email, video and instant
-dispatch. The public QA hostname still returns HTTP 404, so native testers cannot
-use this private loopback API. The production VM root disk is 94% used (1.6 GB
-free); avoid image builds, broad Docker prune, or new persistent services until
-space and rollback requirements are reviewed. No QA payment credentials were
-found in local env files or the QA runtime; production live credentials were not
-copied into QA. The owner-reported successful PayFast sandbox checkout remains
-valid prior evidence, but its credentials are not currently provisioned on this
-QA runtime.
+`papzi-prod-a1`; QA is routed through the existing Traefik HTTPS ingress at
+`https://papzii-qa.129.151.188.15.nip.io`. The API still binds host port 18000 to
+loopback. TLS validates; `/health` reports `qa`, `/health/contract` reports a
+complete PostgreSQL schema, and the routing probe returns real OSRM geometry.
+The `internal-qa` EAS profile resolves correctly, uses the EAS `preview`
+environment, keeps digital purchases disabled, and does not alter production
+build configuration. The QA update script preserves the public base URL and
+reconnects the API container to the proxy network.
 
-Before the next feature-complete beta build:
+This is infrastructure/client-targeting progress, not financial acceptance.
+The QA container currently has no PayFast merchant credentials, refund
+acceptance record, Stitch payout credentials, SMTP credentials, LiveKit
+credentials, canary tester IDs, or instant-dispatch setting. Consequently QA
+checkout/refunds, payouts, account recovery, video and canary-only dispatch are
+not currently enabled. Production has live-mode PayFast and some operational
+provider settings; those secrets were not copied into QA. The owner-reported
+successful sandbox checkout remains accepted as prior evidence, but the
+credentials are not provisioned in this isolated runtime and do not prove
+refund/payout settlement. The VM root disk remains 94% used (1.6 GB free); avoid
+image pulls/rebuilds or broad Docker pruning until image size and rollback space
+are checked.
 
-1. Keep QA access on the private SSH tunnel until a dedicated HTTPS QA API is
-   configured with a trusted certificate, isolated database/storage, independent
-   secrets, and verified `/health`, `/health/contract`, routing, and readiness.
-   The current tunnel is laptop/browser-only; do not put it in a native build or
-   distribute it to testers. The public QA hostname returned HTTP 404 on
-   15 October 2026.
-2. Add a separately named EAS QA profile whose API URL is the verified QA host.
-   Keep production/TestFlight and Play production artifacts pointed only at the
-   live API; do not bake an unverified or private loopback URL into a store build.
+Before calling the internal lane feature-complete:
+
+1. Keep synthetic users and bookings in the QA database. Confirm enrollment,
+   rate limits, abuse controls, upload limits, and QA data retention are
+   appropriate for the HTTPS tester endpoint.
+2. Build and submit only the `internal-qa` profile to TestFlight internal and
+   Play internal testing; it is not a public-review candidate. Production builds
+   must continue to target the production API.
 3. The owner reports that PayFast sandbox payments have been tested
    successfully; retain that as completed sandbox evidence, not as proof of
-   live-money settlement or every downstream workflow. Restore the isolated QA
-   lane, then record the tested app build, API revision, transaction reference,
-   callback outcome and ledger reconciliation (with secrets and personal data
-   redacted). Verify any untested cases in sandbox: failed and duplicate
+   live-money settlement or every downstream workflow. Provision the actual
+   sandbox credentials through the protected server configuration path, then
+   record the tested app build, API revision, transaction reference, callback
+   outcome and ledger reconciliation (with secrets and personal data redacted).
+   Verify any untested cases in sandbox: failed and duplicate
    callbacks, payment history, cancellation, full and partial refunds,
    idempotent retry/read-back, and the actual client/provider/admin UI. Do not
    repeat already-passed cases unless the build or integration changed.

@@ -16,7 +16,7 @@ export default {
     version: "1.0.0",
     orientation: "portrait",
     icon: "./assets/icon.png",
-    userInterfaceStyle: "light",
+    userInterfaceStyle: "automatic",
     splash: {
       image: "./assets/splash-icon.png",
       resizeMode: "contain",
@@ -30,8 +30,10 @@ export default {
         NSCameraUsageDescription: `${BRAND.name} needs camera access for KYC verification and story creation.`,
         NSMicrophoneUsageDescription: `${BRAND.name} uses your microphone for booking calls and voice messages.`,
         NSPhotoLibraryUsageDescription: `${BRAND.name} needs photo access for profile pictures, posts, and story creation.`,
-        NSLocationWhenInUseUsageDescription: `${BRAND.name} uses your location to show nearby photographers and track bookings.`,
-        NSLocationAlwaysAndWhenInUseUsageDescription: `${BRAND.name} needs your location to track you during a live booking session.`,
+        NSLocationWhenInUseUsageDescription: `${BRAND.name} uses your location to show nearby creators and share live booking progress.`,
+        // The app only uses location while it is open. expo-location also writes the "Always" keys, so keep their text truthful.
+        NSLocationAlwaysAndWhenInUseUsageDescription: `${BRAND.name} uses your location while the app is open to show nearby creators and share live booking progress.`,
+        NSLocationAlwaysUsageDescription: `${BRAND.name} uses your location while the app is open to show nearby creators and share live booking progress.`,
         ITSAppUsesNonExemptEncryption: false
       }
     },
@@ -47,6 +49,12 @@ export default {
         'CAMERA',
         'RECORD_AUDIO',
         'READ_EXTERNAL_STORAGE'
+      ],
+      // WebRTC/LiveKit plugins add overlay permission, which is not needed by this app.
+      blockedPermissions: [
+        'android.permission.SYSTEM_ALERT_WINDOW',
+        'android.permission.USE_BIOMETRIC',
+        'android.permission.USE_FINGERPRINT'
       ],
       // Deep link intent filter so Android re-opens the app after OAuth redirect
       intentFilters: [
@@ -72,16 +80,12 @@ export default {
           color: "#ffffff"
         }
       ],
-      [
-        "expo-image-picker",
-        {
-          photosPermission: "The app accesses your photos to let you share them with others."
-        }
-      ],
+      "expo-image-picker",
       [
         "expo-location",
         {
-          locationAlwaysAndWhenInUsePermission: `Allow ${BRAND.name} to use your location.`
+          isIosBackgroundLocationEnabled: false,
+          isAndroidBackgroundLocationEnabled: false
         }
       ],
       "@maplibre/maplibre-react-native"

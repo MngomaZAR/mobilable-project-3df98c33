@@ -1721,7 +1721,8 @@ const styles = StyleSheet.create({
   },
   buttonGhost: {
     flex: 1,
-    backgroundColor: '#e2e8f0',
+    backgroundColor: 'transparent',
+    borderWidth: 1,
     paddingVertical: 13,
     borderRadius: 16,
     alignItems: 'center',

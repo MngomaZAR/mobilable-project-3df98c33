@@ -105,13 +105,29 @@ production. The current `beta-testing` EAS profile still resolves to the
 production API, and therefore is not an acceptable lane for destructive or
 financial acceptance.
 
+Current QA recheck (15 October 2026): the isolated API and worker are running on
+`papzi-prod-a1`; the API is reachable at `127.0.0.1:18000` through the historical
+Papzi SSH key (`C:\Users\27790\.ssh\madabukela_oci`, user `opc`). The API
+returns healthy `/health` and `/health/contract` responses; QA readiness reports
+PostgreSQL contract, OSRM routing and object storage configured. Its remaining
+blockers are sandbox checkout/refunds, payouts, recovery email, video and instant
+dispatch. The public QA hostname still returns HTTP 404, so native testers cannot
+use this private loopback API. The production VM root disk is 94% used (1.6 GB
+free); avoid image builds, broad Docker prune, or new persistent services until
+space and rollback requirements are reviewed. No QA payment credentials were
+found in local env files or the QA runtime; production live credentials were not
+copied into QA. The owner-reported successful PayFast sandbox checkout remains
+valid prior evidence, but its credentials are not currently provisioned on this
+QA runtime.
+
 Before the next feature-complete beta build:
 
-1. Restore QA-server access and publish a dedicated HTTPS QA API with a trusted
-   certificate, isolated database/storage, independent secrets, and a verified
-   `/health`, `/health/contract`, routing, and readiness probe. The QA host
-   checked on 15 October returned HTTP 404 and failed TLS; the expected local
-   QA tunnel at `127.0.0.1:18000` was not running.
+1. Keep QA access on the private SSH tunnel until a dedicated HTTPS QA API is
+   configured with a trusted certificate, isolated database/storage, independent
+   secrets, and verified `/health`, `/health/contract`, routing, and readiness.
+   The current tunnel is laptop/browser-only; do not put it in a native build or
+   distribute it to testers. The public QA hostname returned HTTP 404 on
+   15 October 2026.
 2. Add a separately named EAS QA profile whose API URL is the verified QA host.
    Keep production/TestFlight and Play production artifacts pointed only at the
    live API; do not bake an unverified or private loopback URL into a store build.

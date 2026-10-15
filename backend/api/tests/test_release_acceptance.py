@@ -7,8 +7,9 @@ from app.readiness import checked_release_capabilities
 
 
 class ReleaseAcceptanceTests(unittest.IsolatedAsyncioTestCase):
-    def settings(self, sandbox=False):
-        return Settings(_env_file=None, DATABASE_URL='postgresql://unused', PAYFAST_SANDBOX=sandbox)
+    def settings(self, sandbox=False, app_env='production'):
+        return Settings(_env_file=None, DATABASE_URL='postgresql://unused',
+                       PAYFAST_SANDBOX=sandbox, APP_ENV=app_env)
 
     async def test_accepted_live_financial_capabilities_are_not_hardcoded_false(self):
         with patch('app.readiness.FinancialConfig.from_env', return_value=FinancialConfig(stitch_mode='live')), \
@@ -24,12 +25,12 @@ class ReleaseAcceptanceTests(unittest.IsolatedAsyncioTestCase):
         with patch('app.readiness.FinancialConfig.from_env', return_value=FinancialConfig(stitch_mode='sandbox')), \
                 patch('app.readiness.financial_capabilities', AsyncMock(return_value={
                     'refund_execution': True, 'creator_payout_execution': True})):
-            result = await checked_release_capabilities(self.settings(sandbox=True))
+            result = await checked_release_capabilities(self.settings(sandbox=True, app_env='production'))
         self.assertIn('payment_refund_execution', result['blockers'])
         self.assertIn('bank_payout_execution', result['blockers'])
 
     async def test_accepted_sandbox_refunds_are_available_only_in_qa(self):
-        qa = self.settings(sandbox=True).model_copy(update={'app_env': 'qa'})
+        qa = self.settings(sandbox=True, app_env='qa')
         with patch('app.readiness.FinancialConfig.from_env', return_value=FinancialConfig(stitch_mode='sandbox')), \
                 patch('app.readiness.financial_capabilities', AsyncMock(return_value={
                     'refund_execution': True, 'creator_payout_execution': False})):
@@ -38,7 +39,7 @@ class ReleaseAcceptanceTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(result['capabilities']['bank_payout_execution'])
 
     async def test_sandbox_refunds_remain_blocked_outside_qa(self):
-        development = self.settings(sandbox=True).model_copy(update={'app_env': 'development'})
+        development = self.settings(sandbox=True, app_env='development')
         with patch('app.readiness.FinancialConfig.from_env', return_value=FinancialConfig(stitch_mode='sandbox')), \
                 patch('app.readiness.financial_capabilities', AsyncMock(return_value={
                     'refund_execution': True, 'creator_payout_execution': False})):

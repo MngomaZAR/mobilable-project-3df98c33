@@ -196,12 +196,15 @@ payout execution, video and instant dispatch. Its deployed revision remains
 capability was changed in this follow-up. The operator confirmed creator
 payouts are not arranged, so paid public bookings remain disabled.
 
-EAS reports iOS build 44 and Android build 7 finished from source revision
-`3e817cf4918d988d7ab9563ee7e63ecb1b34a0ae`, with artifacts available and
-internal beta submissions completed. These binaries include foreground booking
-and account refresh, but predate the session-isolation fix below. They are not
-public store approvals or candidates for a public paid launch. The sanitized
-EAS receipt is in `docs/store-history-20261015.json`.
+EAS reports iOS build 45 and Android build 8 finished from source revision
+`6941840b4502e11817c4b89bef8804ecf17e1696`, with artifacts available. EAS
+submission `f4c75af5-ab3c-4c00-8a62-dc7e1ff47886` finished uploading iOS 45 to
+App Store Connect/TestFlight; submission `3e60d4ac-b5b1-419a-86a3-d0fe7cd11e88`
+finished the Android 8 Google Play internal-track upload. Apple processing and
+TestFlight group availability have not been verified in App Store Connect. The
+App Store Connect browser session is signed out. These are restricted beta
+uploads, not public store approvals or candidates for a public paid launch. The
+sanitized EAS receipt is in `docs/store-history-20261015.json`.
 
 Current source clears private account state when authentication is lost or
 changes, and prevents delayed wallet, subscription and message reads from
@@ -210,7 +213,7 @@ writing data after an account boundary changes. `npm run check:launch` passed
 typecheck, lint and session-isolation regression test passed after the final
 change. Backend API unit tests passed (360; 41 isolated-database tests skipped
 because no explicit test database was configured). This is source-level proof,
-not device acceptance. The exact revision still needs fresh internal builds and
-real-device journeys. Public review remains blocked by live settlement/refund
-acceptance, creator onboarding/consent, physical device QA, advertised feature
-acceptance and the store review process.
+not device acceptance. The exact revision has fresh internal builds; real-device
+journeys remain unverified. Public review remains blocked by live settlement/
+refund acceptance, creator onboarding/consent, physical device QA, advertised
+feature acceptance and the store review process.

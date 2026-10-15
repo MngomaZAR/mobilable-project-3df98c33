@@ -71,6 +71,12 @@ const BookingFormScreen: React.FC = () => {
   const [quoteLoading, setQuoteLoading] = useState(false);
   const requestRef = React.useRef({ fingerprint: '', key: uid('booking') });
 
+  React.useEffect(() => {
+    if (serviceAccess.ready && !dispatchAllowed && bookingTimeMode === 'now') {
+      setBookingTimeMode('schedule');
+    }
+  }, [serviceAccess.ready, dispatchAllowed, bookingTimeMode]);
+
   const toggleSetValue = (set: Set<string>, setter: (next: Set<string>) => void, id: string) => {
     const next = new Set(set);
     if (next.has(id)) next.delete(id);

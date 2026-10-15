@@ -1,7 +1,31 @@
 # Release Status
 
-Last evidence check: 2026-10-04. An upload receipt is not store approval or proof
+Last evidence check: 2026-10-15. An upload receipt is not store approval or proof
 that the backend used by an installed phone build passes acceptance.
+
+## Current Snapshot (2026-10-15)
+
+The latest restricted TestFlight beta is iOS **1.0.0 (45)**. Apple reports the
+build as `VALID`, assigned to the existing internal `Team (Expo)` and external
+`papzi` groups (one tester each), with automatic notification enabled. The
+external beta review was submitted and is `WAITING_FOR_REVIEW`; external testers
+cannot install until Apple clears that review. This is TestFlight beta review,
+not public App Store review. Public App Store review has not been submitted.
+The latest Play internal testing artifact remains version code 8; no public Play
+release is claimed.
+
+The current local client changes for account-scoped service-access resolution
+and safe fallback from unavailable instant booking have passed focused and full
+frontend tests, but they are not included in build 45. A new restricted build
+is still required to put those changes on devices.
+
+The live privacy, terms and account-deletion URLs currently return HTTP 200;
+the 404 and empty-hosting findings in the historical section below are stale
+and are retained only as history. They must not be treated as current status.
+The production API is healthy but not publicly ready: checkout, refunds, bank
+payouts, video calls and instant dispatch remain unavailable. PAPZ has not
+arranged creator payouts. Do not enable paid bookings or claim a complete
+marketplace until real settlement and end-to-end acceptance are demonstrated.
 
 ## Current Testing Release
 

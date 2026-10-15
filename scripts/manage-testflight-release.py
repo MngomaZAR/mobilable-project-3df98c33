@@ -73,6 +73,18 @@ BUILD_NOTES = {'39': (
     'for general use. Do not enter bank details or attempt real payments. '
     'Report build, role, device/OS, steps and screenshots through TestFlight. '
     'This is not a public or fully accepted marketplace release.'
+), '45': (
+    'Restricted hosted beta 1.0.0 (45). Refreshes booking/request state from '
+    'the API while the app is active and clears account-scoped data on sign-out '
+    'or account switch. Test client and creator sign-in, scheduled booking '
+    'requests and acceptance, notification actions, chat, reconnect after '
+    'network loss, sign-out, then sign-in as a different account. Confirm no '
+    'previous account profile, conversations or bookings appear. Payments, '
+    'refunds, bank payouts, video calls, instant dispatch and digital purchases '
+    'remain unavailable for general use. Do not enter bank details or attempt '
+    'real payments. Report build, role, device/OS, steps and screenshots through '
+    'TestFlight feedback. This is a restricted pilot, not a public marketplace '
+    'release.'
 )}
 
 

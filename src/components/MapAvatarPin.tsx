@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React from 'react';
 import { Animated, Image, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { PLACEHOLDER_AVATAR } from '../utils/constants';
@@ -12,36 +12,17 @@ type Props = {
 };
 
 export const MapAvatarPin: React.FC<Props> = ({ uri, size = 58, online = false, rating, label }) => {
-  const pulse = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, { toValue: 1, duration: 1400, useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 0, duration: 400, useNativeDriver: true }),
-      ])
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [pulse]);
-
   const ringColor = online ? '#f1d6a4' : '#c7b293';
   const glowColor = online ? 'rgba(241,214,164,0.5)' : 'rgba(199,178,147,0.35)';
 
   return (
     <View style={styles.shell}>
       <View style={[styles.wrap, { width: size, height: size }]}>
-        <Animated.View
+        {/* Static glow: map annotations are drawn natively, so an endless per-pin animation is costly and unreliable. */}
+        <View
           style={[
             styles.pulse,
-            {
-              backgroundColor: glowColor,
-              width: size,
-              height: size,
-              borderRadius: size / 2,
-              opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.55, 0] }),
-              transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1.6] }) }],
-            },
+            { backgroundColor: glowColor, width: size, height: size, borderRadius: size / 2, opacity: 0.4, transform: [{ scale: 1.25 }] },
           ]}
         />
         <View style={[styles.ring, { width: size, height: size, borderRadius: size / 2, borderColor: ringColor }]} />

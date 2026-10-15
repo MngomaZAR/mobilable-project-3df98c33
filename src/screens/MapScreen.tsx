@@ -15,7 +15,7 @@ import { MapAvatarPin } from '../components/MapAvatarPin';
 import { useAppData } from '../store/AppDataContext';
 import { useTheme } from '../store/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
-import { haversineDistanceKm, validateSouthAfricanLocation } from '../utils/geo';
+import { cityCenter, DEFAULT_LAUNCH_COORDINATES, haversineDistanceKm, validateSouthAfricanLocation } from '../utils/geo';
 import { backendDb } from '../services/backendGateway';
 import { useRoadRoute } from '../hooks/useRoadRoute';
 import { useServiceAccess } from '../hooks/useServiceAccess';
@@ -33,7 +33,7 @@ const MAP_STYLES = {
 };
 
 const SCREEN_HEIGHT = Dimensions.get('window').height;
-const SHEET_COLLAPSED = 100;
+const SHEET_COLLAPSED = 132; // fits handle + title + one-line subtitle with breathing room
 
 const formatAccuracy = (a?: number | null) => {
   if (!a) return 'Approximate';
@@ -69,7 +69,8 @@ const MapScreen: React.FC = () => {
   const role = getEffectiveRole(currentUser);
   const isClientFacing = role === 'client';
   const [mapHeight, setMapHeight] = useState(SCREEN_HEIGHT);
-  const sheetHalf = mapHeight * 0.38;
+  // On short screens (landscape) 38% is smaller than the collapsed strip, so keep half-open clearly above collapsed.
+  const sheetHalf = Math.max(mapHeight * 0.38, SHEET_COLLAPSED + 48);
   const sheetFull = mapHeight * 0.82;
 
   const [userMarker, setUserMarker] = useState<MapMarker | null>(null);
@@ -135,6 +136,21 @@ const MapScreen: React.FC = () => {
   }), [snapTo, sheetY, mapHeight, sheetHalf, sheetFull]);
 
   useEffect(() => { snapTo(mapHeight - SHEET_COLLAPSED); }, [mapHeight, snapTo]);
+
+  // Floating buttons ride 16pt above the sheet's top edge and fade out when the sheet is fully open.
+  const fabAnimatedStyle = useMemo(() => ({
+    bottom: 0,
+    opacity: sheetY.interpolate({
+      inputRange: [
+        Math.min(mapHeight - sheetFull, mapHeight - sheetHalf),
+        Math.min(mapHeight - sheetHalf, mapHeight - SHEET_COLLAPSED),
+        mapHeight - SHEET_COLLAPSED,
+      ],
+      outputRange: [0, 1, 1],
+      extrapolate: 'clamp' as const,
+    }),
+    transform: [{ translateY: Animated.add(sheetY, new Animated.Value(-mapHeight - 16)) }],
+  }), [sheetY, mapHeight, sheetHalf, sheetFull]);
 
   // Real-time online presence sync
   useEffect(() => {
@@ -299,11 +315,12 @@ const MapScreen: React.FC = () => {
     [filteredMarkers]
   );
 
+  // GPS fix -> the user's own city -> launch city. Never the first pin (that put a Johannesburg test profile on screen for a Durban user).
   const mapCenter = useMemo(() => {
     if (userCoords) return [userCoords.lng, userCoords.lat];
-    if (filteredMarkers[0]) return [filteredMarkers[0].longitude, filteredMarkers[0].latitude];
-    return [18.4241, -33.9249]; // Cape Town default
-  }, [filteredMarkers, userCoords]);
+    const base = cityCenter(currentUser?.city) ?? DEFAULT_LAUNCH_COORDINATES;
+    return [base.longitude, base.latitude];
+  }, [currentUser?.city, userCoords]);
 
   const requestLocation = useCallback(async () => {
     const now = Date.now();
@@ -436,7 +453,7 @@ const MapScreen: React.FC = () => {
           mapStyle={MAP_STYLE_URL}
           logoEnabled={false}
           attributionEnabled
-          attributionPosition={{ top: insets.top + 130, left: 16 }}
+          attributionPosition={{ bottom: SHEET_COLLAPSED + 12, left: 12 }}
           compassEnabled
         >
           <MapLibreGL.Camera
@@ -549,7 +566,7 @@ const MapScreen: React.FC = () => {
       </SafeAreaView>
 
       {/* Floating action buttons */}
-      <View style={[s.fabColumn, { bottom: SHEET_COLLAPSED + insets.bottom + 20 }]}>
+      <Animated.View style={[s.fabColumn, fabAnimatedStyle]}>
         <TouchableOpacity accessibilityRole="button" accessibilityLabel="Locate me" style={[s.fab, { backgroundColor: panelBackground, borderColor: panelBorder }]} onPress={requestLocation} disabled={requesting}>
           <Ionicons name={requesting ? 'hourglass' : 'locate'} size={22} color={colors.accent} />
         </TouchableOpacity>
@@ -563,16 +580,17 @@ const MapScreen: React.FC = () => {
             </TouchableOpacity>
           </>
         ) : null}
-      </View>
+      </Animated.View>
 
       {/* Gesture-driven bottom sheet */}
       <Animated.View
         testID="talent-map-sheet"
         style={[s.bottomSheet, { height: mapHeight, backgroundColor: panelBackground, borderColor: panelBorder, transform: [{ translateY: sheetY }] }]}
-        {...panResponder.panHandlers}
       >
         {/* Drag handle */}
-        <View style={s.dragHandle} />
+        <View {...panResponder.panHandlers} style={s.dragZone} testID="talent-map-sheet-handle">
+          <View style={s.dragHandle} />
+        </View>
 
         <View style={[s.sheetInner, { paddingBottom: Math.max(insets.bottom, 16) }]}>
           {selectedMarker ? (
@@ -763,8 +781,8 @@ const MapScreen: React.FC = () => {
               <Text style={[s.sheetTitle, { color: colors.text }]}>
                 Nearby {isClientFacing ? 'Talent' : 'Availability'}
               </Text>
-              <Text style={[s.sheetSub, { color: colors.textSecondary }]}>
-                {onlineProfiles.size} available now • Tap a card or map pin to view details
+              <Text numberOfLines={1} style={[s.sheetSub, { color: colors.textSecondary }]}>
+                {onlineProfiles.size} online · {nearbyTalent.length} nearby · tap a pin for details
               </Text>
               <TouchableOpacity style={[s.primaryBtn, { marginTop: 12, backgroundColor: primaryButtonColor }]} onPress={requestLocation} disabled={requesting}>
                 <Ionicons name="navigate" size={18} color={primaryButtonText} style={{ marginRight: 8 }} />
@@ -874,7 +892,8 @@ const s = StyleSheet.create({
   userPinCore: { width: 16, height: 16, borderRadius: 8, backgroundColor: '#2563eb', borderWidth: 3, borderColor: '#fff' },
   userPinRing: { position: 'absolute', width: 26, height: 26, borderRadius: 13, borderWidth: 2, borderColor: '#3b82f6' },
   bottomSheet: { position: 'absolute', left: 0, right: 0, height: SCREEN_HEIGHT, borderTopLeftRadius: 28, borderTopRightRadius: 28, borderTopWidth: 1, shadowColor: '#000', shadowOpacity: 0.22, shadowRadius: 20, shadowOffset: { width: 0, height: -8 }, elevation: 16 },
-  dragHandle: { width: 52, height: 5, borderRadius: 4, backgroundColor: '#b3a48d', alignSelf: 'center', marginTop: 12, marginBottom: 6 },
+  dragZone: { paddingTop: 4, paddingBottom: 12 },
+  dragHandle: { width: 52, height: 5, borderRadius: 4, backgroundColor: '#b3a48d', alignSelf: 'center', marginTop: 8 },
   sheetInner: { paddingHorizontal: 22, paddingTop: 10 },
   sheetHeader: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 16 },
   sheetAvatar: { width: 54, height: 54, borderRadius: 27, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(223, 196, 150, 0.35)' },

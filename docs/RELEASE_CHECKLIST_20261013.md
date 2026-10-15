@@ -1,6 +1,6 @@
 # Papzii release and deployment checklist
 
-Last reviewed: 13 October 2026. Operator: PAPZ (Pty) Ltd, 2025/188861/07.
+Last reviewed: 15 October 2026. Operator: PAPZ (Pty) Ltd, 2025/188861/07.
 Passing a source test does not mean a native build, payment settlement or store approval passed.
 
 ## Current completeness assessment
@@ -13,12 +13,22 @@ runtime scanning passed across 147 files. Neither check proves authenticated
 live journeys or device usability.
 
 All nine gates below remain open until their acceptance evidence exists.
-Latest frontend regression is 39 suites / 385 tests; published web/policy
-checks total 24. New iOS 43 and Android 6 candidates are building/queued, not
-confirmed distributed. The operator confirmed no payout arrangement exists.
+Latest frontend regression is 42 suites / 396 tests; published web/policy
+checks total 24. iOS build 44 and Android build 7 from commit
+`3e817cf4918d988d7ab9563ee7e63ecb1b34a0ae` are building/queued; beta
+submissions are scheduled but neither build is confirmed distributed. The
+operator confirmed no payout arrangement exists.
 Implementation status, provider configuration, device acceptance and public
 store approval must be tracked separately; no aggregate completion claim is
 appropriate yet.
+
+The 15 October frontend fix replaces no-op API channel dependence for shared
+foreground state with a ten-second active-app refresh, immediate refresh on
+resume, and guarded account-scoped results. Booking request actions now use the
+shared server status command, prevent duplicate actions, preserve failed offers
+for retry, and distinguish dismissing an offer from declining the booking.
+Three new suites cover these behaviors. These client changes are pushed, but
+production static web and native builds have not yet been refreshed.
 
 | Gate | Responsible role | Current evidence | Required next action |
 | --- | --- | --- | --- |

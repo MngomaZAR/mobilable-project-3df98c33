@@ -10,6 +10,7 @@ import { apiClient } from '../config/apiClient';
 import { getApiAccessToken } from '../config/apiSession';
 import { createBookingRequest, updateBookingStatusInDb } from '../services/bookingService';
 import { startForegroundRefresh } from '../services/foregroundRefresh';
+import { clearedSessionState } from './sessionState';
 import { BUCKETS, environment } from '../config/environment';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
@@ -366,6 +367,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [state]);
 
   const setState = useCallback((payload: Partial<AppState>) => dispatch({ type: 'SET_STATE', payload }), []);
+  const clearSessionState = useCallback(() => setState(clearedSessionState(stateRef.current)), [setState]);
   const setLoading = (payload: boolean) => dispatch({ type: 'SET_LOADING', payload });
   const setSaving = (payload: boolean) => dispatch({ type: 'SET_SAVING', payload });
   const setAuthenticating = (payload: boolean) => dispatch({ type: 'SET_AUTHENTICATING', payload });
@@ -783,6 +785,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       ]);
       if (walletRes.error) throw walletRes.error;
       if (ledgerRes.error) throw ledgerRes.error;
+      if (stateRef.current.currentUser?.id !== targetUserId) return;
       setState({
         creditsWallet: (walletRes.data as CreditsWallet | null) ?? { user_id: targetUserId, balance: 0 },
         creditsLedger: (ledgerRes.data as CreditsLedgerEntry[]) ?? [],
@@ -879,7 +882,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         .or(`subscriber_id.eq.${targetUserId},creator_id.eq.${targetUserId}`)
         .order('created_at', { ascending: false });
       if (error) throw error;
-      setState({ subscriptions: data ?? [] });
+      if (stateRef.current.currentUser?.id === targetUserId) setState({ subscriptions: data ?? [] });
     } catch (err) {
       logError('fetch_subscriptions', err);
     }
@@ -931,7 +934,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
               fetchCredits(session.user.id),
             ]);
           } else {
-            setState({ currentUser: null, bookings: [], conversations: [] });
+            clearSessionState();
             await Promise.all([fetchPhotographers(), fetchModels()]);
           }
         }
@@ -945,13 +948,16 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
 
     load();
-  }, [fetchBookings, fetchConversations, fetchCredits, fetchPhotographers, fetchProfile, fetchModels, fetchSubscriptions]);
+  }, [clearSessionState, fetchBookings, fetchConversations, fetchCredits, fetchPhotographers, fetchProfile, fetchModels, fetchSubscriptions]);
 
   useEffect(() => {
     if (!hasBackendProvider) return;
     const { data } = backendDb.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
         try {
+          if (stateRef.current.currentUser?.id !== session.user.id) {
+            clearSessionState();
+          }
           let profile = await fetchProfile(session.user.id);
           
           // Handle OAuth sign-ups where profile doesn't exist yet
@@ -981,13 +987,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           logError('auth_session_change', eventErr);
         }
       } else {
-        setState({ currentUser: null,  subscriptions: [],
-  tips: [],
-  earnings: [],
-  mediaAssets: [],
-  creditsWallet: null,
-  creditsLedger: [],
-  notifications: [], messages: {} });
+        clearSessionState();
       }
     });
 
@@ -1210,7 +1210,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       backendDb.removeChannel(subscriptionsChannel);
       backendDb.removeChannel(messagesChannel);
     };
-  }, [fetchBookings, fetchConversations, fetchEarnings, fetchModels, fetchNotifications, fetchPhotographers, fetchProfile, fetchSubscriptions]);
+  }, [clearSessionState, fetchBookings, fetchConversations, fetchEarnings, fetchModels, fetchNotifications, fetchPhotographers, fetchProfile, fetchSubscriptions]);
 
   useEffect(() => {
     const persist = async () => {
@@ -1611,6 +1611,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }))
       );
 
+      if (stateRef.current.currentUser?.id !== currentUserId) return;
       const prevForChat = stateRef.current.messages[chatId] ?? [];
       const combined = dedupeById([...prevForChat, ...parsedMessages]);
       setState({ messages: { ...stateRef.current.messages, [chatId]: combined } });
@@ -2203,7 +2204,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     try {
       const user = await getCurrentAuthenticatedUser();
       if (!user?.id) {
-        setState({ currentUser: null });
+        clearSessionState();
         return null;
       }
 
@@ -2221,7 +2222,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setError(formatErrorMessage(err, 'Unable to validate your current session.'));
       return null;
     }
-  }, [fetchProfile]);
+  }, [clearSessionState, fetchProfile]);
 
   const signInWithOAuth = useCallback(async (provider: 'google' | 'apple') => {
     setState({ authenticating: true, error: null });

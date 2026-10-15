@@ -187,3 +187,30 @@ versions. The actionable team checklist is `RELEASE_CHECKLIST_20261013.md`.
 EAS upload exclusions now explicitly omit environment files, private key formats,
 credentials.json and internal documentation. Do not deploy the local QA web
 export: it targets the private localhost API tunnel.
+
+## 15 October 2026 follow-up
+
+The production API still reports unavailable checkout, refund execution, creator
+payout execution, video and instant dispatch. Its deployed revision remains
+`5e3dfc384fb3f38edc2566e9129a342af011267d`; no server code or financial
+capability was changed in this follow-up. The operator confirmed creator
+payouts are not arranged, so paid public bookings remain disabled.
+
+EAS reports iOS build 44 and Android build 7 finished from source revision
+`3e817cf4918d988d7ab9563ee7e63ecb1b34a0ae`, with artifacts available and
+internal beta submissions completed. These binaries include foreground booking
+and account refresh, but predate the session-isolation fix below. They are not
+public store approvals or candidates for a public paid launch. The sanitized
+EAS receipt is in `docs/store-history-20261015.json`.
+
+Current source clears private account state when authentication is lost or
+changes, and prevents delayed wallet, subscription and message reads from
+writing data after an account boundary changes. `npm run check:launch` passed
+(43 suites, 397 tests, source/schema/route audits and web export); targeted
+typecheck, lint and session-isolation regression test passed after the final
+change. Backend API unit tests passed (360; 41 isolated-database tests skipped
+because no explicit test database was configured). This is source-level proof,
+not device acceptance. The exact revision still needs fresh internal builds and
+real-device journeys. Public review remains blocked by live settlement/refund
+acceptance, creator onboarding/consent, physical device QA, advertised feature
+acceptance and the store review process.

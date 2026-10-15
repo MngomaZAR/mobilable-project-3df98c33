@@ -1,0 +1,871 @@
+{
+  "checkedAt": "2026-10-15T06:55:31.667Z",
+  "scope": "Read-only EAS build/submission receipts and App Store Connect status; no build or submission triggered.",
+  "projectId": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+  "builds": [
+    {
+      "id": "9987a078-e72d-4b06-84d6-458be522cd55",
+      "platform": "IOS",
+      "status": "FINISHED",
+      "appVersion": "1.0.0",
+      "appBuildVersion": "44",
+      "gitCommitHash": "3e817cf4918d988d7ab9563ee7e63ecb1b34a0ae",
+      "buildProfile": "beta-testing",
+      "createdAt": "2026-10-15T06:37:45.069Z",
+      "completedAt": "2026-10-15T06:43:54.210Z",
+      "artifactAvailable": true
+    },
+    {
+      "id": "db5ce03f-be32-49f6-85d6-9d19161e813a",
+      "platform": "ANDROID",
+      "status": "FINISHED",
+      "appVersion": "1.0.0",
+      "appBuildVersion": "7",
+      "gitCommitHash": "3e817cf4918d988d7ab9563ee7e63ecb1b34a0ae",
+      "buildProfile": "beta-testing",
+      "createdAt": "2026-10-15T06:36:14.441Z",
+      "completedAt": "2026-10-15T06:53:06.017Z",
+      "artifactAvailable": true
+    },
+    {
+      "id": "2e46575a-ea6f-4c0a-adde-d5c917e2c8fe",
+      "platform": "IOS",
+      "status": "FINISHED",
+      "appVersion": "1.0.0",
+      "appBuildVersion": "43",
+      "gitCommitHash": "9832f9077d654e6a925451cfa3be7115d26d1b2c",
+      "buildProfile": "beta-testing",
+      "createdAt": "2026-10-13T17:23:51.042Z",
+      "completedAt": "2026-10-13T17:29:48.263Z",
+      "artifactAvailable": true
+    },
+    {
+      "id": "9cccfbba-27b0-4a7a-aa8f-865053f1bebe",
+      "platform": "ANDROID",
+      "status": "FINISHED",
+      "appVersion": "1.0.0",
+      "appBuildVersion": "6",
+      "gitCommitHash": "9832f9077d654e6a925451cfa3be7115d26d1b2c",
+      "buildProfile": "beta-testing",
+      "createdAt": "2026-10-13T17:22:22.753Z",
+      "completedAt": "2026-10-13T18:02:34.414Z",
+      "artifactAvailable": true
+    },
+    {
+      "id": "bbd7496e-0aef-4924-b891-7b21ffcf06ec",
+      "platform": "IOS",
+      "status": "FINISHED",
+      "appVersion": "1.0.0",
+      "appBuildVersion": "42",
+      "gitCommitHash": "ae6657699771fa7ff025c7b329026c6859d6ae37",
+      "buildProfile": "beta-testing",
+      "createdAt": "2026-10-13T12:50:09.608Z",
+      "completedAt": "2026-10-13T12:56:22.822Z",
+      "artifactAvailable": true
+    },
+    {
+      "id": "0d1e6ff9-caa5-4b2d-ae9b-9cb2a70d618e",
+      "platform": "ANDROID",
+      "status": "FINISHED",
+      "appVersion": "1.0.0",
+      "appBuildVersion": "5",
+      "gitCommitHash": "ae6657699771fa7ff025c7b329026c6859d6ae37",
+      "buildProfile": "beta-testing",
+      "createdAt": "2026-10-13T12:49:08.214Z",
+      "completedAt": "2026-10-13T13:13:42.330Z",
+      "artifactAvailable": true
+    },
+    {
+      "id": "86de4fe4-9d56-4b09-9cf8-ff15e017eb4e",
+      "platform": "ANDROID",
+      "status": "FINISHED",
+      "appVersion": "1.0.0",
+      "appBuildVersion": "4",
+      "gitCommitHash": "200d60599c92c800ab29bba6eb8b4a4a1b7cfdf6",
+      "buildProfile": "beta-testing",
+      "createdAt": "2026-10-04T14:45:07.506Z",
+      "completedAt": "2026-10-04T15:03:32.119Z",
+      "artifactAvailable": true
+    },
+    {
+      "id": "4bac4c43-00a3-4774-a901-5d132596b567",
+      "platform": "IOS",
+      "status": "FINISHED",
+      "appVersion": "1.0.0",
+      "appBuildVersion": "41",
+      "gitCommitHash": "200d60599c92c800ab29bba6eb8b4a4a1b7cfdf6",
+      "buildProfile": "beta-testing",
+      "createdAt": "2026-10-04T14:45:03.191Z",
+      "completedAt": "2026-10-04T14:51:21.321Z",
+      "artifactAvailable": true
+    },
+    {
+      "id": "bbc79d22-981a-47eb-b157-d556f627ad79",
+      "platform": "ANDROID",
+      "status": "FINISHED",
+      "appVersion": "1.0.0",
+      "appBuildVersion": "3",
+      "gitCommitHash": "871ec85ac00af86108b3b3525515bbb8d8814cad",
+      "buildProfile": "beta-testing",
+      "createdAt": "2026-10-04T13:43:34.265Z",
+      "completedAt": "2026-10-04T14:02:04.204Z",
+      "artifactAvailable": true
+    },
+    {
+      "id": "c022e24b-4a3d-42f9-bbb5-08cc5d3fcf2f",
+      "platform": "IOS",
+      "status": "FINISHED",
+      "appVersion": "1.0.0",
+      "appBuildVersion": "40",
+      "gitCommitHash": "871ec85ac00af86108b3b3525515bbb8d8814cad",
+      "buildProfile": "beta-testing",
+      "createdAt": "2026-10-04T13:43:29.820Z",
+      "completedAt": "2026-10-04T13:49:22.384Z",
+      "artifactAvailable": true
+    },
+    {
+      "id": "8c597ce1-c96f-468c-a58a-50786df7c714",
+      "platform": "ANDROID",
+      "status": "FINISHED",
+      "appVersion": "1.0.0",
+      "appBuildVersion": "2",
+      "gitCommitHash": "deccc7a710918e96d9a01567d036a0ccfafb7151",
+      "buildProfile": "beta-testing",
+      "createdAt": "2026-10-04T10:33:14.611Z",
+      "completedAt": "2026-10-04T10:51:34.466Z",
+      "artifactAvailable": true
+    },
+    {
+      "id": "71aed777-dd74-4446-af71-e42689ba86e3",
+      "platform": "IOS",
+      "status": "FINISHED",
+      "appVersion": "1.0.0",
+      "appBuildVersion": "39",
+      "gitCommitHash": "deccc7a710918e96d9a01567d036a0ccfafb7151",
+      "buildProfile": "beta-testing",
+      "createdAt": "2026-10-04T10:33:09.900Z",
+      "completedAt": "2026-10-04T10:39:31.399Z",
+      "artifactAvailable": true
+    },
+    {
+      "id": "920ce9c5-d40e-48b4-92a5-f1952b7727ed",
+      "platform": "ANDROID",
+      "status": "FINISHED",
+      "appVersion": "1.0.0",
+      "appBuildVersion": "13",
+      "gitCommitHash": "0fe95564e949d05a0ccd6227813326f9e2e2868c",
+      "buildProfile": "production",
+      "createdAt": "2026-09-23T14:04:35.766Z",
+      "completedAt": "2026-09-23T15:20:45.821Z",
+      "artifactAvailable": true
+    },
+    {
+      "id": "453b777d-465d-488d-9b08-859e77bd3c9f",
+      "platform": "IOS",
+      "status": "FINISHED",
+      "appVersion": "1.0.0",
+      "appBuildVersion": "38",
+      "gitCommitHash": "0f302a3dcfff8fd4ef3cf514347125b6d33bbdeb",
+      "buildProfile": "production-ios-local",
+      "createdAt": "2026-09-23T13:47:06.219Z",
+      "completedAt": "2026-09-23T13:53:21.206Z",
+      "artifactAvailable": true
+    },
+    {
+      "id": "48644ee7-4841-4d30-b7e0-85fe7cb4c965",
+      "platform": "ANDROID",
+      "status": "FINISHED",
+      "appVersion": "1.0.0",
+      "appBuildVersion": "12",
+      "gitCommitHash": "034ee419abfd64d48ad1d12e4d8b171973a1a7ad",
+      "buildProfile": "production",
+      "createdAt": "2026-09-22T11:24:13.030Z",
+      "completedAt": "2026-09-22T11:43:44.969Z",
+      "artifactAvailable": true
+    },
+    {
+      "id": "e3a2334d-910e-45d1-97d3-44db5bcf1246",
+      "platform": "IOS",
+      "status": "ERRORED",
+      "gitCommitHash": "034ee419abfd64d48ad1d12e4d8b171973a1a7ad",
+      "buildProfile": "production",
+      "createdAt": "2026-09-22T11:24:13.030Z",
+      "completedAt": "2026-09-22T11:25:21.591Z",
+      "artifactAvailable": false
+    },
+    {
+      "id": "beb1ced8-3ef6-45f1-b9b7-d0051127837c",
+      "platform": "IOS",
+      "status": "ERRORED",
+      "appVersion": "1.0.0",
+      "appBuildVersion": "13",
+      "gitCommitHash": "109aee7755dd20963a5a230266d41ccd27def3b7",
+      "buildProfile": "production-ios-local",
+      "createdAt": "2026-09-22T10:33:37.782Z",
+      "completedAt": "2026-09-22T10:34:41.586Z",
+      "artifactAvailable": false
+    },
+    {
+      "id": "df0f8c0f-9249-4a75-bc5a-47e724f54566",
+      "platform": "IOS",
+      "status": "ERRORED",
+      "appVersion": "1.0.0",
+      "appBuildVersion": "12",
+      "gitCommitHash": "109aee7755dd20963a5a230266d41ccd27def3b7",
+      "buildProfile": "production-ios-local",
+      "createdAt": "2026-09-22T10:28:31.906Z",
+      "completedAt": "2026-09-22T10:30:38.689Z",
+      "artifactAvailable": false
+    },
+    {
+      "id": "9db4e7fe-e456-4fb8-aaaa-36fcdfb2941b",
+      "platform": "IOS",
+      "status": "ERRORED",
+      "appVersion": "1.0.0",
+      "appBuildVersion": "11",
+      "gitCommitHash": "109aee7755dd20963a5a230266d41ccd27def3b7",
+      "buildProfile": "production-ios-local",
+      "createdAt": "2026-09-22T10:25:59.492Z",
+      "completedAt": "2026-09-22T10:27:52.736Z",
+      "artifactAvailable": false
+    },
+    {
+      "id": "18f1bc02-3d2d-4a20-95c1-e00da7d258c9",
+      "platform": "ANDROID",
+      "status": "FINISHED",
+      "appVersion": "1.0.0",
+      "appBuildVersion": "11",
+      "gitCommitHash": "ee0c8ae61a86477b65ad3502f2e10f57d48a0e7c",
+      "buildProfile": "production",
+      "createdAt": "2026-09-22T10:16:44.835Z",
+      "completedAt": "2026-09-22T10:34:34.103Z",
+      "artifactAvailable": true
+    },
+    {
+      "id": "717ceec4-96ee-462b-9976-4e49b545c617",
+      "platform": "IOS",
+      "status": "ERRORED",
+      "gitCommitHash": "ee0c8ae61a86477b65ad3502f2e10f57d48a0e7c",
+      "buildProfile": "production",
+      "createdAt": "2026-09-22T10:16:44.835Z",
+      "completedAt": "2026-09-22T10:18:05.228Z",
+      "artifactAvailable": false
+    },
+    {
+      "id": "72036777-8ed0-449c-ab81-feb15622d612",
+      "platform": "IOS",
+      "status": "ERRORED",
+      "gitCommitHash": "10be590b0d341bf8cea0d4635850c01c9c86af14",
+      "buildProfile": "production",
+      "createdAt": "2026-09-22T10:13:16.753Z",
+      "completedAt": "2026-09-22T10:14:26.138Z",
+      "artifactAvailable": false
+    },
+    {
+      "id": "862aaae6-561e-425f-bd40-0d1cca2d29e3",
+      "platform": "ANDROID",
+      "status": "ERRORED",
+      "gitCommitHash": "10be590b0d341bf8cea0d4635850c01c9c86af14",
+      "buildProfile": "production",
+      "createdAt": "2026-09-22T10:13:16.753Z",
+      "completedAt": "2026-09-22T10:14:54.400Z",
+      "artifactAvailable": false
+    },
+    {
+      "id": "094f0516-7679-483a-936e-03fbdbda711e",
+      "platform": "ANDROID",
+      "status": "FINISHED",
+      "appVersion": "1.0.0",
+      "appBuildVersion": "9",
+      "gitCommitHash": "5912c7b4c56399d56541e41c230bf45595fad4db",
+      "buildProfile": "production",
+      "createdAt": "2026-06-18T15:20:44.133Z",
+      "completedAt": "2026-06-18T16:45:32.746Z",
+      "artifactAvailable": true
+    },
+    {
+      "id": "5c9b4e7e-39f3-4f71-8937-ba2d9abd96b3",
+      "platform": "IOS",
+      "status": "FINISHED",
+      "appVersion": "1.0.0",
+      "appBuildVersion": "37",
+      "gitCommitHash": "5912c7b4c56399d56541e41c230bf45595fad4db",
+      "buildProfile": "production",
+      "createdAt": "2026-06-18T15:20:43.435Z",
+      "completedAt": "2026-06-18T15:32:03.597Z",
+      "artifactAvailable": true
+    },
+    {
+      "id": "9c50f5ee-8a95-4aaa-a5df-6e3ad460a816",
+      "platform": "IOS",
+      "status": "FINISHED",
+      "appVersion": "1.0.0",
+      "appBuildVersion": "36",
+      "gitCommitHash": "5912c7b4c56399d56541e41c230bf45595fad4db",
+      "buildProfile": "production",
+      "createdAt": "2026-06-18T15:19:40.475Z",
+      "completedAt": "2026-06-18T15:26:05.879Z",
+      "artifactAvailable": true
+    },
+    {
+      "id": "d0ac56be-7503-41fc-a13b-be87a2f9fdf8",
+      "platform": "IOS",
+      "status": "FINISHED",
+      "appVersion": "1.0.0",
+      "appBuildVersion": "35",
+      "gitCommitHash": "7ef037a8a34eddb4f09eec301840a5621bee0175",
+      "buildProfile": "production",
+      "createdAt": "2026-06-18T14:36:41.188Z",
+      "completedAt": "2026-06-18T14:42:51.671Z",
+      "artifactAvailable": true
+    },
+    {
+      "id": "6582b813-e4ad-49da-94b6-7a5993d8c88b",
+      "platform": "ANDROID",
+      "status": "FINISHED",
+      "appVersion": "1.0.0",
+      "appBuildVersion": "8",
+      "gitCommitHash": "8b999e8a75e4b8457dc0e5f5ba94b424da925db7",
+      "buildProfile": "production",
+      "createdAt": "2026-06-18T13:44:55.550Z",
+      "completedAt": "2026-06-18T14:44:08.461Z",
+      "artifactAvailable": true
+    },
+    {
+      "id": "e5531839-f95b-433f-bab4-4581a3d3d9c5",
+      "platform": "IOS",
+      "status": "FINISHED",
+      "appVersion": "1.0.0",
+      "appBuildVersion": "33",
+      "gitCommitHash": "8b999e8a75e4b8457dc0e5f5ba94b424da925db7",
+      "buildProfile": "production",
+      "createdAt": "2026-06-18T13:44:53.249Z",
+      "completedAt": "2026-06-18T13:57:05.660Z",
+      "artifactAvailable": true
+    },
+    {
+      "id": "468491a4-b6ec-40e1-b65b-c0ec437ae458",
+      "platform": "IOS",
+      "status": "FINISHED",
+      "appVersion": "1.0.0",
+      "appBuildVersion": "34",
+      "gitCommitHash": "8b999e8a75e4b8457dc0e5f5ba94b424da925db7",
+      "buildProfile": "production",
+      "createdAt": "2026-06-18T13:44:33.868Z",
+      "completedAt": "2026-06-18T13:51:02.836Z",
+      "artifactAvailable": true
+    }
+  ],
+  "submissions": {
+    "exitCode": 2,
+    "reason": "unsupported_cli_command"
+  },
+  "submissionTargets": [
+    {
+      "id": "fb428b54-3972-4967-a127-a510ce602cbc",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "5c32e1f0-cbba-485b-aa3b-e8086c425039",
+      "status": "IN_PROGRESS",
+      "platform": "ANDROID",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "androidConfig": {
+        "track": "internal",
+        "releaseStatus": "COMPLETED"
+      }
+    },
+    {
+      "id": "2d66c1ad-614f-4abc-8fa9-4b03b44f7744",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "f8e9b40e-f49c-4a94-889b-c4c9d2935362",
+      "status": "FINISHED",
+      "platform": "ANDROID",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "androidConfig": {
+        "track": "internal",
+        "releaseStatus": "COMPLETED"
+      }
+    },
+    {
+      "id": "8b7c2efc-abaf-4da7-bb2e-822f7abacb12",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "37d320e4-4185-4fca-9442-134092375801",
+      "status": "FINISHED",
+      "platform": "ANDROID",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "androidConfig": {
+        "track": "internal",
+        "releaseStatus": "DRAFT"
+      }
+    },
+    {
+      "id": "cbfae5a4-beca-4f6a-b172-93dd576df956",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "9058d4f2-9214-472f-a75b-ab6690939d6b",
+      "status": "FINISHED",
+      "platform": "ANDROID",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "androidConfig": {
+        "track": "internal",
+        "releaseStatus": "DRAFT"
+      }
+    },
+    {
+      "id": "99e7358d-aed2-4ae7-bd2e-9f5fc060002f",
+      "status": "FINISHED",
+      "platform": "ANDROID",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "androidConfig": {
+        "track": "internal",
+        "releaseStatus": "DRAFT"
+      }
+    },
+    {
+      "id": "ea1f7933-68e3-4c63-9aaf-c858a69e4234",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "02782156-552e-49d9-8baa-88925802d5cc",
+      "status": "FINISHED",
+      "platform": "ANDROID",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "androidConfig": {
+        "track": "internal",
+        "releaseStatus": "DRAFT"
+      }
+    },
+    {
+      "id": "669d2b70-1689-401e-94f7-e61fe58ffdbe",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "ee8e12fd-14d6-4f43-8a98-a84335ff6d89",
+      "status": "ERRORED",
+      "platform": "ANDROID",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "androidConfig": {
+        "track": "internal",
+        "releaseStatus": "DRAFT"
+      },
+      "error": {
+        "errorCode": "SUBMISSION_SERVICE_ANDROID_UNKNOWN_ERROR"
+      },
+      "failureCategory": "provider_error_requires_private_log_review"
+    },
+    {
+      "id": "094be3d5-a1f5-4530-a585-b6bc265bd759",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "5f78f0a2-f3d3-4dc9-a9a7-f5ab45a2f391",
+      "status": "ERRORED",
+      "platform": "ANDROID",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "androidConfig": {
+        "track": "internal",
+        "releaseStatus": "DRAFT"
+      },
+      "error": {
+        "errorCode": "SUBMISSION_SERVICE_ANDROID_UNKNOWN_ERROR"
+      },
+      "failureCategory": "provider_error_requires_private_log_review"
+    },
+    {
+      "id": "fea42e52-de19-4638-a541-148356af5fe2",
+      "status": "ERRORED",
+      "platform": "ANDROID",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "androidConfig": {
+        "track": "internal",
+        "releaseStatus": "DRAFT"
+      },
+      "error": {
+        "errorCode": "SUBMISSION_SERVICE_ANDROID_UNKNOWN_ERROR"
+      },
+      "failureCategory": "provider_error_requires_private_log_review"
+    },
+    {
+      "id": "2f0adac6-6062-473a-8211-84d04b60ae69",
+      "status": "ERRORED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "bff50394-65a5-482a-8a9c-6494da037697",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "cbc06ad9-c2c9-4824-822d-fc0753fe14e6",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "8dbf4186-5573-48fa-97f9-bb8b8614b054",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "7dd77c4a-45e2-4d16-8018-c50f30ef89a3",
+      "status": "ERRORED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "286d10e6-e676-41c1-9149-efb1a7383a79",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "3cdd9b2b-b0f6-483f-80db-33555a8b6f2a",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "e199d146-accb-4a91-82f6-b86806822f83",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "e269861b-c8f1-4917-8f1f-96acd36929ae",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "4adf6a0c-3af0-43c7-a714-05c6c7e10f4b",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "b53fa0cb-9396-46ad-8886-5a40d0693907",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "6589918f-b95c-4159-b489-40acdaed3a67",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "ec43b3e1-7aee-48d5-bedc-caa768b60390",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    },
+    {
+      "id": "851b0c98-39c2-4c41-b97f-1c3c5eefd05f",
+      "status": "FINISHED",
+      "platform": "IOS",
+      "app": {
+        "id": "f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+        "name": "papzi",
+        "ownerAccount": {
+          "id": "0c37d603-9e30-4bd7-9986-1cb74bb4163f",
+          "name": "papz"
+        }
+      },
+      "iosConfig": {
+        "ascAppIdentifier": "6760396864"
+      }
+    }
+  ],
+  "appStoreStatus": {
+    "exitCode": 2,
+    "reason": "unsupported_cli_command"
+  },
+  "warning": "FINISHED build status is not evidence of upload, tester availability, successful user journeys or public approval. Google Play production state is not provided by EAS submit:status."
+}

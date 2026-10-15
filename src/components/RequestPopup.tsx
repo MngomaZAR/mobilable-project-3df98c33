@@ -1,49 +1,34 @@
-import React, { useCallback, useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated, Dimensions, Vibration } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, Vibration } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../store/ThemeContext';
-
-const { width } = Dimensions.get('window');
 
 interface RequestPopupProps {
   visible: boolean;
   requestData: any | null;
   onAccept: () => void;
   onDecline: () => void;
+  onDismiss: () => void;
+  busy?: boolean;
 }
 
-export const RequestPopup: React.FC<RequestPopupProps> = ({ visible, requestData, onAccept, onDecline }) => {
-  const { colors, isDark } = useTheme();
-  const [progress, setProgress] = useState(new Animated.Value(100));
+export const RequestPopup: React.FC<RequestPopupProps> = ({ visible, requestData, onAccept, onDecline, onDismiss, busy = false }) => {
+  const { colors } = useTheme();
+  const progress = useRef(new Animated.Value(100)).current;
   const slideAnim = useRef(new Animated.Value(-200)).current;
   const timeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
-  const handleDecline = useCallback(() => {
-    clearTimeout(timeoutRef.current);
-    Animated.timing(slideAnim, {
-      toValue: -200,
-      duration: 300,
-      useNativeDriver: true,
-    }).start(() => onDecline());
-  }, [onDecline, slideAnim]);
-
-  const handleAccept = useCallback(() => {
-    clearTimeout(timeoutRef.current);
-    Animated.timing(slideAnim, {
-      toValue: -200,
-      duration: 300,
-      useNativeDriver: true,
-    }).start(() => onAccept());
-  }, [onAccept, slideAnim]);
+  const dismissRef = useRef(onDismiss);
+  dismissRef.current = onDismiss;
 
   useEffect(() => {
-    if (visible && requestData) {
+    if (visible && requestData && !busy) {
       // Vibrate to alert user
       Vibration.vibrate([0, 500, 200, 500]);
       
       // Slide down
       Animated.spring(slideAnim, {
-        toValue: 50,
+        toValue: 0,
         useNativeDriver: true,
         friction: 8,
       }).start();
@@ -52,16 +37,19 @@ export const RequestPopup: React.FC<RequestPopupProps> = ({ visible, requestData
       progress.setValue(100);
 
       // Start progress bar descending from 100 to 0 over 15 seconds
-      Animated.timing(progress, {
+      if (requestData.is_instant) Animated.timing(progress, {
         toValue: 0,
         duration: 15000,
         useNativeDriver: false,
       }).start();
 
-      // Auto decline after 15s
-      timeoutRef.current = setTimeout(() => {
-        handleDecline();
+      // Hiding an offer must never decline a booking on the server.
+      if (requestData.is_instant) timeoutRef.current = setTimeout(() => {
+        dismissRef.current();
       }, 15000);
+    } else if (busy) {
+      clearTimeout(timeoutRef.current);
+      progress.stopAnimation();
     } else {
       Animated.timing(slideAnim, {
         toValue: -200,
@@ -72,7 +60,7 @@ export const RequestPopup: React.FC<RequestPopupProps> = ({ visible, requestData
     }
     
     return () => clearTimeout(timeoutRef.current);
-  }, [visible, requestData, handleDecline, progress, slideAnim]);
+  }, [visible, requestData?.id, requestData?.is_instant, busy, progress, slideAnim]);
 
   if (!requestData) return null;
 
@@ -92,24 +80,27 @@ export const RequestPopup: React.FC<RequestPopupProps> = ({ visible, requestData
       </View>
 
       <Text style={[styles.details, { color: colors.textSecondary }]}>
-        <Ionicons name="location" size={14} color={colors.textSecondary} /> {requestData.distance || '2.4 km'} away
+        {requestData.booking_date || 'Scheduled booking'}
       </Text>
       <Text style={[styles.package, { color: colors.textSecondary }]}>
         Package: {requestData.package_type}
       </Text>
 
       <View style={styles.actionRow}>
-        <TouchableOpacity style={[styles.declineBtn, { borderColor: colors.border }]} onPress={handleDecline}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Decline booking request" disabled={busy} style={[styles.declineBtn, { borderColor: colors.border }]} onPress={onDecline}>
           <Text style={[styles.declineText, { color: colors.text }]}>Decline</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.acceptBtn, { backgroundColor: colors.accent }]} onPress={handleAccept}>
-          <Text style={styles.acceptText}>Accept</Text>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Accept booking request" disabled={busy} style={[styles.acceptBtn, { backgroundColor: colors.accent }]} onPress={onAccept}>
+          <Text style={styles.acceptText}>{busy ? 'Saving...' : 'Accept'}</Text>
         </TouchableOpacity>
       </View>
 
-      <View style={styles.progressBarBg}>
+      <TouchableOpacity accessibilityRole="button" disabled={busy} onPress={onDismiss} style={styles.dismissBtn}>
+        <Text style={{ color: colors.textSecondary }}>Later</Text>
+      </TouchableOpacity>
+      {requestData.is_instant && <View style={styles.progressBarBg}>
         <Animated.View style={[styles.progressBarFill, { width: widthInterpolated, backgroundColor: colors.accent }]} />
-      </View>
+      </View>}
     </Animated.View>
   );
 };
@@ -119,8 +110,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 0,
     left: 20,
-    width: width - 40,
-    borderRadius: 20,
+    right: 20,
+    borderRadius: 8,
     padding: 20,
     paddingBottom: 0,
     shadowColor: '#000',
@@ -190,8 +181,9 @@ const styles = StyleSheet.create({
   acceptText: {
     fontSize: 16,
     fontWeight: '800',
-    color: '#fff',
+    color: '#111827',
   },
+  dismissBtn: { alignItems: 'center', paddingBottom: 16, minHeight: 44 },
   progressBarBg: {
     height: 4,
     backgroundColor: 'transparent',

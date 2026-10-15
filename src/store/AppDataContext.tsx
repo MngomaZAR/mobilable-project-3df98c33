@@ -9,6 +9,7 @@ import { invokeBackendFunction } from '../config/backendFunctions';
 import { apiClient } from '../config/apiClient';
 import { getApiAccessToken } from '../config/apiSession';
 import { createBookingRequest, updateBookingStatusInDb } from '../services/bookingService';
+import { startForegroundRefresh } from '../services/foregroundRefresh';
 import { BUCKETS, environment } from '../config/environment';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
@@ -578,7 +579,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           row.client = profilesMap[row.client_id];
           return mapBookingRow(row as BookingRow);
         });
-        setState({ bookings });
+        if (stateRef.current.currentUser?.id === targetUserId) setState({ bookings });
       } catch (err: any) {
         const message = formatErrorMessage(err, `Error loading bookings: ${err?.message || 'Unknown error'}`);
         if (!/failed to fetch|network/i.test(message) && stateRef.current.bookings.length === 0) {
@@ -708,7 +709,10 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const conversationIds = [...new Set(
         (myParticipants ?? []).map((r: any) => r.conversation_id).filter(Boolean)
       )];
-      if (!conversationIds.length) { setState({ conversations: [] }); return; }
+      if (!conversationIds.length) {
+        if (stateRef.current.currentUser?.id === targetUserId) setState({ conversations: [] });
+        return;
+      }
 
       // Step 2: Get conversations
       const { data: convRows, error: p2 } = await backendDb
@@ -750,7 +754,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         };
       });
 
-      setState({ conversations });
+      if (stateRef.current.currentUser?.id === targetUserId) setState({ conversations });
     } catch (err: any) {
       logError('fetch_conversations', err);
     }
@@ -803,7 +807,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         .order('created_at', { ascending: false })
         .limit(50);
       if (error) throw error;
-      setState({ notifications: (data ?? []) as NotificationEvent[] });
+      if (stateRef.current.currentUser?.id === targetUserId) setState({ notifications: (data ?? []) as NotificationEvent[] });
     } catch (err) {
       logError('fetch_notifications', err);
     }
@@ -858,7 +862,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (!hasBackendProvider) return;
     try {
       const data = await fetchCreatorEarnings(userId);
-      setState({ earnings: data });
+      if (stateRef.current.currentUser?.id === userId) setState({ earnings: data });
     } catch (err) {
       logError('fetch_earnings', err);
     }
@@ -880,6 +884,23 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       logError('fetch_subscriptions', err);
     }
   }, []);
+
+  useEffect(() => {
+    const userId = state.currentUser?.id;
+    if (!hasBackendProvider || environment.backendProvider !== 'api' || !userId) return;
+    let discoveryRefreshedAt = 0;
+    return startForegroundRefresh(async () => {
+      if (stateRef.current.currentUser?.id !== userId) return;
+      await Promise.all([
+        fetchBookings(userId), fetchConversations(userId), fetchNotifications(userId),
+        fetchEarnings(userId),
+      ]);
+      if (Date.now() - discoveryRefreshedAt >= 60000) {
+        await Promise.all([fetchPhotographers(), fetchModels()]);
+        discoveryRefreshedAt = Date.now();
+      }
+    }, (error) => logError('foreground_sync', error));
+  }, [state.currentUser?.id, fetchBookings, fetchConversations, fetchNotifications, fetchEarnings, fetchPhotographers, fetchModels]);
 
   const persistDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -2297,6 +2318,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         fetchEarnings(userId || ''),
         fetchSubscriptions(userId),
         fetchCredits(userId),
+        fetchNotifications(userId),
         fetchPosts({ reset: true })
       ]);
     } catch (err) {
@@ -2304,7 +2326,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     } finally {
       setLoading(false);
     }
-  }, [fetchBookings, fetchConversations, fetchCredits, fetchEarnings, fetchSubscriptions, fetchModels, fetchPhotographers, fetchPosts, revalidateSession]);
+  }, [fetchBookings, fetchConversations, fetchCredits, fetchEarnings, fetchNotifications, fetchSubscriptions, fetchModels, fetchPhotographers, fetchPosts, revalidateSession]);
 
   const resetState = useCallback(async () => {
     setSaving(true);

@@ -3,6 +3,23 @@
 Last reviewed: 13 October 2026. Operator: PAPZ (Pty) Ltd, 2025/188861/07.
 Passing a source test does not mean a native build, payment settlement or store approval passed.
 
+## Current completeness assessment
+
+This is a deployed restricted pilot, not a fully configured public marketplace.
+The read-only production audit at 17:31 UTC on 13 October confirmed healthy API,
+schema contract and routing, but five unavailable capabilities: checkout,
+refund execution, bank payouts, video service and instant dispatch. Source
+runtime scanning passed across 147 files. Neither check proves authenticated
+live journeys or device usability.
+
+All nine gates below remain open until their acceptance evidence exists.
+Latest frontend regression is 39 suites / 385 tests; published web/policy
+checks total 24. New iOS 43 and Android 6 candidates are building/queued, not
+confirmed distributed. The operator confirmed no payout arrangement exists.
+Implementation status, provider configuration, device acceptance and public
+store approval must be tracked separately; no aggregate completion claim is
+appropriate yet.
+
 | Gate | Responsible role | Current evidence | Required next action |
 | --- | --- | --- | --- |
 | 1. UI and device experience | Frontend / QA | 382 frontend tests; 10 phone/desktop browser chat and map checks passed | Run the complete browser suite and exact candidate on iOS, Android and tablet; inspect safe areas, keyboard, sheet dragging, scrolling and all controls |

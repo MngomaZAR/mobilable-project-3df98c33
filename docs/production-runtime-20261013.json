@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-10-13T11:46:47.376Z",
+  "checkedAt": "2026-10-13T17:31:28.077Z",
   "readOnly": true,
   "api": "https://papzii-api.129.151.188.15.nip.io",
   "corePassed": true,
@@ -13,7 +13,7 @@
     },
     "version": {
       "status": 200,
-      "revision": "0fb2e585b803718df0acf21b8f5beda1dc5e6ced",
+      "revision": "5e3dfc384fb3f38edc2566e9129a342af011267d",
       "environment": "production"
     },
     "contract": {

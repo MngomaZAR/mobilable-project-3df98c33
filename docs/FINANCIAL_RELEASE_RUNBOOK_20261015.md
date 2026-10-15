@@ -124,6 +124,10 @@ Before the next feature-complete beta build:
    callbacks, payment history, cancellation, full and partial refunds,
    idempotent retry/read-back, and the actual client/provider/admin UI. Do not
    repeat already-passed cases unless the build or integration changed.
+   The current source exposes accepted sandbox refund capability only when
+   `APP_ENV=qa`; production readiness continues to reject sandbox refunds. The
+   QA server must also have the sandbox refund flag, matching acceptance record,
+   and isolated database configured before a refund can execute.
 4. For creator payouts, use an approved Stitch sandbox if PAPZ obtains one. If
    none exists, use the isolated provider simulator only to verify UI, idempotent
    API commands, ledger states, webhook verification and failure recovery; label

@@ -54,7 +54,9 @@ async def checked_release_capabilities(settings: Settings) -> dict:
             services = await service_capabilities(settings)
         except Exception:
             services = {}
-    financial['refund_execution'] = financial.get('refund_execution') is True and not settings.payfast_sandbox
+    financial['refund_execution'] = financial.get('refund_execution') is True and (
+        not settings.payfast_sandbox or settings.app_env == 'qa'
+    )
     financial['creator_payout_execution'] = financial.get('creator_payout_execution') is True and config.stitch_mode == 'live'
     return release_capabilities(settings, financial, services)
 

@@ -28,6 +28,23 @@ class ReleaseAcceptanceTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('payment_refund_execution', result['blockers'])
         self.assertIn('bank_payout_execution', result['blockers'])
 
+    async def test_accepted_sandbox_refunds_are_available_only_in_qa(self):
+        qa = self.settings(sandbox=True).model_copy(update={'app_env': 'qa'})
+        with patch('app.readiness.FinancialConfig.from_env', return_value=FinancialConfig(stitch_mode='sandbox')), \
+                patch('app.readiness.financial_capabilities', AsyncMock(return_value={
+                    'refund_execution': True, 'creator_payout_execution': False})):
+            result = await checked_release_capabilities(qa)
+        self.assertTrue(result['capabilities']['payment_refund_execution'])
+        self.assertFalse(result['capabilities']['bank_payout_execution'])
+
+    async def test_sandbox_refunds_remain_blocked_outside_qa(self):
+        development = self.settings(sandbox=True).model_copy(update={'app_env': 'development'})
+        with patch('app.readiness.FinancialConfig.from_env', return_value=FinancialConfig(stitch_mode='sandbox')), \
+                patch('app.readiness.financial_capabilities', AsyncMock(return_value={
+                    'refund_execution': True, 'creator_payout_execution': False})):
+            result = await checked_release_capabilities(development)
+        self.assertIn('payment_refund_execution', result['blockers'])
+
     async def test_unavailable_acceptance_database_fails_closed_without_private_errors(self):
         with patch('app.readiness.financial_capabilities', AsyncMock(side_effect=RuntimeError('private database credentials'))):
             result = await checked_release_capabilities(self.settings())

@@ -70,6 +70,7 @@ type CreatePostInput = {
 type FetchPostsOptions = {
   reset?: boolean;
   attempt?: number;
+  preserveExisting?: boolean;
 };
 
 type AppDataContextValue = {
@@ -595,7 +596,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     []
   );
 
-  const fetchPosts = useCallback(async ({ reset = true, attempt = 0 }: FetchPostsOptions = {}): Promise<{ hasMore: boolean }> => {
+  const fetchPosts = useCallback(async ({ reset = true, attempt = 0, preserveExisting = false }: FetchPostsOptions = {}): Promise<{ hasMore: boolean }> => {
     if (!hasBackendProvider) return { hasMore: false };
     setError(null);
     try {
@@ -650,7 +651,12 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
 
       if (reset) {
-        setState({ posts: mapped });
+        if (preserveExisting) {
+          const refreshedIds = new Set(mapped.map((post) => post.id));
+          setState({ posts: [...mapped, ...stateRef.current.posts.filter((post) => !refreshedIds.has(post.id))] });
+        } else {
+          setState({ posts: mapped });
+        }
       } else {
         const prevPosts = stateRef.current.posts;
         const seen = new Set(prevPosts.map(p => p.id));
@@ -662,7 +668,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if ((isRecoverableAbort(err) || isTimeoutError(err)) && attempt + 1 < MAX_FETCH_POSTS_ATTEMPTS) {
           console.warn(`fetch_posts retrying (attempt ${attempt + 1}) after abort`);
           await sleep(600);
-          return fetchPosts({ reset, attempt: attempt + 1 });
+          return fetchPosts({ reset, attempt: attempt + 1, preserveExisting });
         }
         const hasUsablePosts = stateRef.current.posts.length > 0 || initialState.posts.length > 0;
         if (hasUsablePosts && (isRecoverableAbort(err) || isTimeoutError(err) || /failed to fetch|network/i.test(getErrorMessage(err)))) {
@@ -892,18 +898,24 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const userId = state.currentUser?.id;
     if (!hasBackendProvider || environment.backendProvider !== 'api' || !userId) return;
     let discoveryRefreshedAt = 0;
+    let accountDataRefreshedAt = 0;
     return startForegroundRefresh(async () => {
       if (stateRef.current.currentUser?.id !== userId) return;
+      const now = Date.now();
       await Promise.all([
         fetchBookings(userId), fetchConversations(userId), fetchNotifications(userId),
         fetchEarnings(userId),
       ]);
-      if (Date.now() - discoveryRefreshedAt >= 60000) {
+      if (now - discoveryRefreshedAt >= 60000) {
         await Promise.all([fetchPhotographers(), fetchModels()]);
-        discoveryRefreshedAt = Date.now();
+        discoveryRefreshedAt = now;
+      }
+      if (now - accountDataRefreshedAt >= 60000) {
+        await Promise.all([fetchSubscriptions(userId), fetchCredits(userId)]);
+        accountDataRefreshedAt = now;
       }
     }, (error) => logError('foreground_sync', error));
-  }, [state.currentUser?.id, fetchBookings, fetchConversations, fetchNotifications, fetchEarnings, fetchPhotographers, fetchModels]);
+  }, [state.currentUser?.id, fetchBookings, fetchConversations, fetchNotifications, fetchEarnings, fetchPhotographers, fetchModels, fetchSubscriptions, fetchCredits]);
 
   const persistDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 

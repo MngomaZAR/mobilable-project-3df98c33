@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert, Animated, Easing, Platform, StyleSheet, Text,
-  TextInput, TouchableOpacity, View, PanResponder, Dimensions, Keyboard, ScrollView, Image,
+  TextInput, TouchableOpacity, View, PanResponder, Keyboard, ScrollView, Image, useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
@@ -17,6 +17,8 @@ import { useTheme } from '../store/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { haversineDistanceKm, validateSouthAfricanLocation } from '../utils/geo';
 import { backendDb } from '../services/backendGateway';
+import { startForegroundRefresh } from '../services/foregroundRefresh';
+import { environment } from '../config/environment';
 import { useRoadRoute } from '../hooks/useRoadRoute';
 import { useServiceAccess } from '../hooks/useServiceAccess';
 import * as Haptics from 'expo-haptics';
@@ -32,7 +34,6 @@ const MAP_STYLES = {
   dark: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
 };
 
-const SCREEN_HEIGHT = Dimensions.get('window').height;
 const SHEET_COLLAPSED = 136;
 const CITY_CENTERS: Record<string, [number, number]> = {
   durban: [31.0218, -29.8587],
@@ -70,13 +71,17 @@ const MapScreen: React.FC = () => {
   const serviceAccess = useServiceAccess();
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
   const navigation = useNavigation<StackNavigationProp<RootStackParamList, 'Root'>>();
   const currentUser = state.currentUser;
   const role = getEffectiveRole(currentUser);
   const isClientFacing = role === 'client';
-  const [mapHeight, setMapHeight] = useState(SCREEN_HEIGHT);
+  const [mapHeight, setMapHeight] = useState(windowHeight);
+  const collapsedSheetHeight = Math.min(SHEET_COLLAPSED, mapHeight * 0.32);
+  const sheetHeight = mapHeight * 0.82;
   const sheetHalf = mapHeight * 0.38;
-  const sheetFull = mapHeight * 0.82;
+  const halfSheetOffset = sheetHeight - sheetHalf;
+  const collapsedSheetOffset = sheetHeight - collapsedSheetHeight;
 
   const [userMarker, setUserMarker] = useState<MapMarker | null>(null);
   const [userCoords, setUserCoords] = useState<{ lat: number; lng: number; timestamp: number } | null>(null);
@@ -103,11 +108,13 @@ const MapScreen: React.FC = () => {
   const [heatmapSummary, setHeatmapSummary] = useState<{ demand: number; supply: number } | null>(null);
 
   // Bottom sheet gesture
-  const sheetY = useRef(new Animated.Value(SCREEN_HEIGHT - SHEET_COLLAPSED)).current;
-  const currentSheetY = useRef(SCREEN_HEIGHT - SHEET_COLLAPSED);
+  const sheetY = useRef(new Animated.Value(collapsedSheetOffset)).current;
+  const currentSheetY = useRef(collapsedSheetOffset);
+  const [sheetExpanded, setSheetExpanded] = useState(false);
 
   const snapTo = useCallback((targetY: number, velocity = 0) => {
     currentSheetY.current = targetY;
+    setSheetExpanded(targetY < collapsedSheetOffset - 1);
     Animated.spring(sheetY, {
       toValue: targetY,
       velocity,
@@ -115,48 +122,55 @@ const MapScreen: React.FC = () => {
       friction: 12,
       useNativeDriver: true,
     }).start();
-  }, [sheetY]);
+  }, [collapsedSheetOffset, sheetY]);
 
   const panResponder = useMemo(() => PanResponder.create({
     onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 5,
     onPanResponderGrant: () => {
-      sheetY.stopAnimation();
+      sheetY.stopAnimation(value => { currentSheetY.current = value; });
     },
     onPanResponderMove: (_, g) => {
       const newY = currentSheetY.current + g.dy;
-      const clamped = Math.max(mapHeight - sheetFull, Math.min(mapHeight - SHEET_COLLAPSED, newY));
+      const clamped = Math.max(0, Math.min(collapsedSheetOffset, newY));
       sheetY.setValue(clamped);
     },
     onPanResponderRelease: (_, g) => {
       const y = currentSheetY.current + g.dy;
       const vy = g.vy;
       // Snap to nearest
-      if (vy < -0.5 || y < mapHeight - sheetHalf - 50) {
-        snapTo(mapHeight - sheetFull, vy);
-      } else if (vy > 0.5 || y > mapHeight - sheetHalf + 50) {
-        snapTo(mapHeight - SHEET_COLLAPSED, vy);
+      if (vy < -0.5 || y < halfSheetOffset - 50) {
+        snapTo(0, vy);
+      } else if (vy > 0.5 || y > halfSheetOffset + 50) {
+        snapTo(collapsedSheetOffset, vy);
       } else {
-        snapTo(mapHeight - sheetHalf, vy);
+        snapTo(halfSheetOffset, vy);
       }
     },
-  }), [snapTo, sheetY, mapHeight, sheetHalf, sheetFull]);
+  }), [snapTo, sheetY, collapsedSheetOffset, halfSheetOffset]);
 
-  useEffect(() => { snapTo(mapHeight - SHEET_COLLAPSED); }, [mapHeight, snapTo]);
+  useEffect(() => { snapTo(collapsedSheetOffset); }, [collapsedSheetOffset, snapTo]);
 
   // Real-time online presence sync
   useEffect(() => {
     if (!currentUser?.id) return;
     let active = true;
-    // Initial load of online profiles
+    const profileIds = [...new Set([
+      ...state.photographers.map((profile) => profile.id),
+      ...state.models.map((profile) => profile.id),
+      currentUser.id,
+    ].filter(Boolean))];
+
     const loadOnline = async () => {
-      const { data, error } = await backendDb
-        .from('profiles')
-        .select('id, availability_status');
-      if (!active) return;
-      if (error) {
-        console.warn('Online presence unavailable:', error.message);
+      if (!profileIds.length) {
+        setOnlineProfiles(new Set());
         return;
       }
+      const { data, error } = await backendDb
+        .from('profiles')
+        .select('id, availability_status')
+        .in('id', profileIds);
+      if (!active) return;
+      if (error) throw error;
       if (data) {
         const online = data
           .filter((r: any) => isAvailabilityOnline(r.availability_status))
@@ -164,9 +178,18 @@ const MapScreen: React.FC = () => {
         setOnlineProfiles(new Set(online));
       }
     };
-    loadOnline();
 
-    // Subscribe to realtime changes on profiles availability status
+    // The hosted API lane has no database change stream, so poll only discoverable profiles.
+    if (environment.backendProvider === 'api') {
+      const stopPolling = startForegroundRefresh(
+        loadOnline,
+        (error) => console.warn('Online presence unavailable:', error),
+        15000,
+      );
+      return () => { active = false; stopPolling(); };
+    }
+
+    void loadOnline().catch((error) => console.warn('Online presence unavailable:', error));
     const channel = backendDb
       .channel('online-presence')
       .on('postgres_changes', {
@@ -186,7 +209,7 @@ const MapScreen: React.FC = () => {
       .subscribe();
 
     return () => { active = false; backendDb.removeChannel(channel); };
-  }, [currentUser?.id]);
+  }, [currentUser?.id, state.models, state.photographers]);
 
   // Pulse animation for user pin
   useEffect(() => {
@@ -485,7 +508,7 @@ const MapScreen: React.FC = () => {
               coordinate={[marker.longitude, marker.latitude]}
               onSelected={() => {
                 setSelectedMarker(marker);
-                snapTo(mapHeight - sheetHalf);
+                snapTo(halfSheetOffset);
               }}
             >
               <MapAvatarPin
@@ -575,18 +598,18 @@ const MapScreen: React.FC = () => {
 
       {/* Floating action buttons */}
       <Animated.View style={[s.fabColumn, {
-        bottom: SHEET_COLLAPSED + 12,
-        transform: [{ translateY: Animated.subtract(sheetY, mapHeight - SHEET_COLLAPSED) }],
+        bottom: collapsedSheetHeight + 12,
+        transform: [{ translateY: Animated.subtract(sheetY, collapsedSheetOffset) }],
       }]}>
         <TouchableOpacity accessibilityRole="button" accessibilityLabel="Locate me" style={[s.fab, { backgroundColor: panelBackground, borderColor: panelBorder }]} onPress={requestLocation} disabled={requesting}>
           <Ionicons name={requesting ? 'hourglass' : 'locate'} size={22} color={colors.accent} />
         </TouchableOpacity>
         {!isClientFacing ? (
           <>
-            <TouchableOpacity style={[s.fab, { backgroundColor: panelBackground, borderColor: panelBorder }]} onPress={cycleMapStyle}>
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Change map style" style={[s.fab, { backgroundColor: panelBackground, borderColor: panelBorder }]} onPress={cycleMapStyle}>
               <Ionicons name="layers" size={22} color={colors.text} />
             </TouchableOpacity>
-            <TouchableOpacity style={[s.fab, { backgroundColor: panelBackground, borderColor: panelBorder }]} onPress={() => navigation.navigate('Notifications')}>
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Open notifications" style={[s.fab, { backgroundColor: panelBackground, borderColor: panelBorder }]} onPress={() => navigation.navigate('Notifications')}>
               <Ionicons name="notifications-outline" size={22} color={colors.text} />
             </TouchableOpacity>
           </>
@@ -596,13 +619,27 @@ const MapScreen: React.FC = () => {
       {/* Gesture-driven bottom sheet */}
       <Animated.View
         testID="talent-map-sheet"
-        style={[s.bottomSheet, { height: mapHeight, backgroundColor: panelBackground, borderColor: panelBorder, transform: [{ translateY: sheetY }] }]}
+        style={[s.bottomSheet, { height: sheetHeight, backgroundColor: panelBackground, borderColor: panelBorder, transform: [{ translateY: sheetY }] }]}
       >
-        <View testID="talent-panel-handle" accessibilityRole="adjustable" accessibilityLabel="Talent panel" style={s.dragHandleArea} {...panResponder.panHandlers}>
+        <TouchableOpacity
+          testID="talent-panel-handle"
+          accessibilityRole="button"
+          accessibilityLabel={sheetExpanded ? 'Collapse talent panel' : 'Expand talent panel'}
+          accessibilityHint="Swipe up to expand or down to collapse the talent panel."
+          accessibilityState={{ expanded: sheetExpanded }}
+          onPress={() => snapTo(currentSheetY.current < halfSheetOffset ? collapsedSheetOffset : 0)}
+          style={s.dragHandleArea}
+          {...panResponder.panHandlers}
+        >
           <View style={s.dragHandle} />
-        </View>
+        </TouchableOpacity>
 
-        <View style={[s.sheetInner, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+        <ScrollView
+          style={s.sheetScroll}
+          contentContainerStyle={[s.sheetInner, { paddingBottom: Math.max(insets.bottom, 16) }]}
+          showsVerticalScrollIndicator
+          keyboardShouldPersistTaps="handled"
+        >
           {selectedMarker ? (
             /* SELECTED TALENT VIEW */
             <>
@@ -799,12 +836,7 @@ const MapScreen: React.FC = () => {
                 <Text style={[s.primaryBtnText, { color: primaryButtonText }]}>{requesting ? 'Finding location...' : 'Find Talent Near Me'}</Text>
               </TouchableOpacity>
               {nearbyTalent.length > 0 ? (
-                <ScrollView
-                  style={[s.nearbyList, { maxHeight: mapHeight * 0.42 }]}
-                  contentContainerStyle={s.nearbyListContent}
-                  showsVerticalScrollIndicator={false}
-                  keyboardShouldPersistTaps="handled"
-                >
+                <View style={s.nearbyList}>
                   {nearbyTalent.slice(0, 6).map((marker) => {
                     const isOnline = onlineProfiles.has(marker.sourceId ?? '');
                     const distanceLabel = distanceOrigin
@@ -820,7 +852,7 @@ const MapScreen: React.FC = () => {
                           onPress={() => {
                             Keyboard.dismiss();
                             setSelectedMarker(marker);
-                            snapTo(mapHeight - sheetHalf);
+                            snapTo(halfSheetOffset);
                           }}
                           activeOpacity={0.85}
                         >
@@ -860,7 +892,7 @@ const MapScreen: React.FC = () => {
                             onPress={() => {
                               Keyboard.dismiss();
                               setSelectedMarker(marker);
-                              snapTo(mapHeight - sheetHalf);
+                              snapTo(halfSheetOffset);
                             }}
                           >
                             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
@@ -869,7 +901,7 @@ const MapScreen: React.FC = () => {
                       </View>
                     );
                   })}
-                </ScrollView>
+                </View>
               ) : (
                 <View style={[s.emptyNearbyState, { backgroundColor: panelCard, borderColor: panelBorder }]}>
                   <Ionicons name="search" size={18} color={colors.textMuted} />
@@ -878,7 +910,7 @@ const MapScreen: React.FC = () => {
               )}
             </>
           )}
-        </View>
+        </ScrollView>
       </Animated.View>
     </View>
   );
@@ -901,10 +933,11 @@ const s = StyleSheet.create({
   userPulse: { position: 'absolute', width: 32, height: 32, borderRadius: 16, backgroundColor: '#3b82f6' },
   userPinCore: { width: 16, height: 16, borderRadius: 8, backgroundColor: '#2563eb', borderWidth: 3, borderColor: '#fff' },
   userPinRing: { position: 'absolute', width: 26, height: 26, borderRadius: 13, borderWidth: 2, borderColor: '#3b82f6' },
-  bottomSheet: { position: 'absolute', left: 0, right: 0, height: SCREEN_HEIGHT, borderTopLeftRadius: 28, borderTopRightRadius: 28, borderTopWidth: 1, shadowColor: '#000', shadowOpacity: 0.22, shadowRadius: 20, shadowOffset: { width: 0, height: -8 }, elevation: 16 },
-  dragHandleArea: { minHeight: 32, justifyContent: 'center' },
+  bottomSheet: { position: 'absolute', left: 0, right: 0, bottom: 0, borderTopLeftRadius: 28, borderTopRightRadius: 28, borderTopWidth: 1, shadowColor: '#000', shadowOpacity: 0.22, shadowRadius: 20, shadowOffset: { width: 0, height: -8 }, elevation: 16 },
+  dragHandleArea: { minHeight: 44, justifyContent: 'center' },
   dragHandle: { width: 52, height: 5, borderRadius: 4, backgroundColor: '#b3a48d', alignSelf: 'center' },
-  sheetInner: { paddingHorizontal: 22, paddingTop: 10 },
+  sheetScroll: { flex: 1 },
+  sheetInner: { flexGrow: 1, paddingHorizontal: 22, paddingTop: 10 },
   sheetHeader: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 16 },
   sheetAvatar: { width: 54, height: 54, borderRadius: 27, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(223, 196, 150, 0.35)' },
   sheetInfo: { flex: 1 },
@@ -926,8 +959,7 @@ const s = StyleSheet.create({
   ghostBtnText: { fontWeight: '700', fontSize: 14 },
   trackBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#efe2c6', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#e4c98b' },
   disabledBtn: { opacity: 0.62 },
-  nearbyList: { marginTop: 14, maxHeight: SCREEN_HEIGHT * 0.42 },
-  nearbyListContent: { gap: 10, paddingBottom: 8 },
+  nearbyList: { marginTop: 14, gap: 10 },
   nearbyCard: { borderRadius: 20, borderWidth: 1, flexDirection: 'row', alignItems: 'center', padding: 10, gap: 10 },
   nearbyPressArea: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
   nearbyAvatarWrap: { position: 'relative' },

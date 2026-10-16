@@ -38,6 +38,15 @@ class ReleaseAcceptanceTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result['capabilities']['payment_refund_execution'])
         self.assertFalse(result['capabilities']['bank_payout_execution'])
 
+    async def test_sandbox_creator_payouts_are_available_in_qa_only(self):
+        with patch('app.readiness.FinancialConfig.from_env', return_value=FinancialConfig(stitch_mode='sandbox')), \
+                patch('app.readiness.financial_capabilities', AsyncMock(return_value={
+                    'refund_execution': False, 'creator_payout_execution': True})):
+            qa = await checked_release_capabilities(self.settings(sandbox=True, app_env='qa'))
+            production = await checked_release_capabilities(self.settings(sandbox=True, app_env='production'))
+        self.assertTrue(qa['capabilities']['bank_payout_execution'])
+        self.assertFalse(production['capabilities']['bank_payout_execution'])
+
     async def test_sandbox_refunds_remain_blocked_outside_qa(self):
         development = self.settings(sandbox=True, app_env='development')
         with patch('app.readiness.FinancialConfig.from_env', return_value=FinancialConfig(stitch_mode='sandbox')), \

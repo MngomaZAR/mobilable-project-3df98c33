@@ -19,7 +19,7 @@ jest.mock('../src/config/environment', () => ({ environment: { backendProvider: 
 jest.mock('../src/config/apiClient', () => ({ apiClient: { post: jest.fn() } }));
 jest.mock('../src/config/apiSession', () => ({ getApiAccessToken: async () => 'synthetic-token' }));
 
-const completeDocuments = [{ doc_type: 'id_book', status: 'pending' }, { doc_type: 'selfie', status: 'pending' }];
+const completeDocuments = [{ doc_type: 'id_book', status: 'pending' }, { doc_type: 'selfie', status: 'pending' }, { doc_type: 'proof_of_address', status: 'pending' }];
 beforeEach(() => {
   jest.clearAllMocks();
   mockDocuments.mockResolvedValue({ data: [], error: null });
@@ -71,7 +71,7 @@ test('a failed submission keeps uploaded documents and can retry without duplica
   await waitFor(() => expect(screen.getByRole('button', { name: 'Submit for Review' })).toBeEnabled());
   fireEvent.press(screen.getByRole('button', { name: 'Submit for Review' }));
   await waitFor(() => expect(screen.getByText('Submission interrupted')).toBeTruthy());
-  expect(screen.getAllByText('Document uploaded')).toHaveLength(2);
+  expect(screen.getAllByText('Document uploaded')).toHaveLength(3);
   fireEvent.press(screen.getByRole('button', { name: 'Submit for Review' }));
   fireEvent.press(screen.getByRole('button', { name: 'Submit for Review' }));
   await waitFor(() => expect(screen.getByText('Documents submitted for review.')).toBeTruthy());

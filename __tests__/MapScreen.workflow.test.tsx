@@ -25,13 +25,19 @@ jest.mock('expo-location', () => ({ hasServicesEnabledAsync: async () => true, r
   getCurrentPositionAsync: async () => ({ coords: { latitude: -26.2041, longitude: 28.0473, accuracy: 10 }, timestamp: 1 }), Accuracy: { Highest: 1 } }));
 
 let context: any;
+const mockProfileScope = jest.fn();
 beforeEach(() => {
   jest.clearAllMocks(); mockDispatch = false;
+  mockProfileScope.mockResolvedValue({ data: [{ id: 'photographer', availability_status: 'online' }], error: null });
   jest.spyOn(Animated, 'loop').mockReturnValue({ start: jest.fn(), stop: jest.fn(), reset: jest.fn() } as any);
   const channel = { on: jest.fn(), subscribe: jest.fn() };
   channel.on.mockReturnValue(channel); channel.subscribe.mockReturnValue(channel);
   (backendDb.channel as jest.Mock).mockReturnValue(channel);
-  (backendDb.from as jest.Mock).mockReturnValue({ select: async () => ({ data: [{ id: 'photographer', availability_status: 'online' }], error: null }) });
+  (backendDb.from as jest.Mock).mockReturnValue({
+    select: () => ({
+      in: mockProfileScope,
+    }),
+  });
   context = { state: { currentUser: { id: 'client', role: 'client' }, bookings: [], models: [],
     profiles: [
       { id: 'photographer', role: 'photographer', kyc_status: 'approved', age_verified: true },
@@ -45,6 +51,7 @@ afterEach(() => jest.restoreAllMocks());
 test('map booking opens server-priced scheduling without GPS, presence or a database mutation', async () => {
   const screen = render(<MapScreen />);
   await act(async () => {});
+  expect(mockProfileScope).toHaveBeenCalledWith('id', ['photographer', 'client']);
   fireEvent.press(screen.getByRole('button', { name: 'Book Photo Creator' }));
   expect(mockNavigate).toHaveBeenCalledWith('BookingForm', { photographerId: 'photographer', serviceType: 'photography', timeMode: 'schedule' });
   expect(backendDb.from).not.toHaveBeenCalledWith('bookings');
@@ -100,13 +107,22 @@ test('pending schedules are not labeled instant and paid-out shoots are not acti
   expect(screen.queryByRole('button', { name: 'View active booking' })).toBeNull();
 });
 
-test('the native sheet uses measured map height rather than covering tabs or falling below the viewport', async () => {
+test('the native sheet stays bottom-anchored within the measured map viewport', async () => {
   const screen = render(<MapScreen />);
   await act(async () => {});
   fireEvent(screen.getByTestId('native-talent-map'), 'layout', { nativeEvent: { layout: { height: 620, width: 390 } } });
-  expect(screen.getByTestId('talent-map-sheet')).toHaveStyle({ height: 620 });
+  expect(screen.getByTestId('talent-map-sheet')).toHaveStyle({ height: 508.4, bottom: 0 });
   fireEvent(screen.getByTestId('native-talent-map'), 'layout', { nativeEvent: { layout: { height: 310, width: 844 } } });
-  expect(screen.getByTestId('talent-map-sheet')).toHaveStyle({ height: 310 });
+  expect(screen.getByTestId('talent-map-sheet')).toHaveStyle({ height: 254.2, bottom: 0 });
+});
+
+test('the map panel handle is an accessible tap target for expanding and collapsing', async () => {
+  const screen = render(<MapScreen />);
+  await act(async () => {});
+  fireEvent.press(screen.getByRole('button', { name: 'Expand talent panel' }));
+  expect(screen.getByRole('button', { name: 'Collapse talent panel' })).toBeTruthy();
+  fireEvent.press(screen.getByRole('button', { name: 'Collapse talent panel' }));
+  expect(screen.getByRole('button', { name: 'Expand talent panel' })).toBeTruthy();
 });
 
 test('unapproved and synthetic talent cannot appear on the map', async () => {

@@ -204,7 +204,7 @@ async def main():
             await check(client, f"{role} missing identity documents denied", "POST", "/kyc/submit", 409, actor, {})
             await check(client, f"{role} cannot bypass document review", "POST", "/functions/admin-review", 409, admin, {"action": "decide_verification", "user_id": actor["id"], "decision": "approved"})
             documents = []
-            for doc_type in ["passport", "selfie"]:
+            for doc_type in ["passport", "selfie", "proof_of_address"]:
                 uploaded = (await check(client, f"{role} private {doc_type} upload", "POST", "/storage/upload", 200, actor, {"bucket": "kyc-documents", "contentType": "image/png", "base64": base64.b64encode(TEST_IMAGE).decode()})).json()
                 document = (await check(client, f"{role} records {doc_type}", "POST", "/kyc/documents", 200, actor, {"doc_type": doc_type, "storage_path": uploaded["storageRef"]})).json()["document"]
                 documents.append(document)
@@ -224,6 +224,19 @@ async def main():
             await check(client, f"{role} old access rejected", "GET", "/auth/me", 401, actor)
             await check(client, f"{role} rotated access works", "GET", "/auth/me", 200, {"token": rotated["session"]["access_token"]})
         command = booking(client_actor, provider, f"role-booking-{secrets.token_hex(8)}")
+        conn = await asyncpg.connect(os.environ["DATABASE_URL"])
+        try:
+            await conn.execute("UPDATE profiles SET age_verified=false WHERE id=$1", client_actor["id"])
+        finally:
+            await conn.close()
+        try:
+            await check(client, "Unverified client cannot request a booking", "POST", "/bookings/quote", 409, client_actor, command)
+        finally:
+            conn = await asyncpg.connect(os.environ["DATABASE_URL"])
+            try:
+                await conn.execute("UPDATE profiles SET age_verified=true WHERE id=$1", client_actor["id"])
+            finally:
+                await conn.close()
         created = (await check(client, "Client requests photographer", "POST", "/bookings", 200, client_actor, command)).json()
         retried = (await check(client, "Booking retry is idempotent", "POST", "/bookings", 200, client_actor, command)).json()
         assert created["id"] == retried["id"] and float(created["total_amount"]) == 1400

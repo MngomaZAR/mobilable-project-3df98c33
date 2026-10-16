@@ -5,12 +5,13 @@ export const startForegroundRefresh = (
   refresh: () => Promise<void>,
   onError: (error: unknown) => void,
   intervalMs = 10000,
+  random: () => number = Math.random,
 ) => {
   let disposed = false;
   let inFlight = false;
   let failures = 0;
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const active = () => AppState.currentState === 'active';
+  const active = () => AppState.currentState !== 'background' && AppState.currentState !== 'inactive';
   const clearTimer = () => { clearTimeout(timer); timer = undefined; };
   const run = async () => {
     clearTimer();
@@ -25,7 +26,9 @@ export const startForegroundRefresh = (
     } finally {
       inFlight = false;
       if (!disposed && active()) {
-        timer = setTimeout(() => { void run(); }, Math.min(intervalMs * 2 ** failures, 60000));
+        const backoff = Math.min(intervalMs * 2 ** failures, 60000);
+        const delay = failures ? Math.round(backoff * (0.5 + random() * 0.5)) : intervalMs;
+        timer = setTimeout(() => { void run(); }, delay);
       }
     }
   };

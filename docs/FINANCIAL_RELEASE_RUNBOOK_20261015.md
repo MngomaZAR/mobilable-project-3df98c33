@@ -115,8 +115,8 @@ build configuration. The QA update script preserves the public base URL and
 reconnects the API container to the proxy network.
 
 This is infrastructure/client-targeting progress, not financial acceptance.
-The QA container currently has no PayFast merchant credentials, refund
-acceptance record, Stitch payout credentials, SMTP credentials, LiveKit
+The QA container currently has no PayFast sandbox API credentials, Stitch payout
+sandbox credentials, SMTP credentials, LiveKit
 credentials, canary tester IDs, or instant-dispatch setting. Consequently QA
 checkout/refunds, payouts, account recovery, video and canary-only dispatch are
 not currently enabled. Production has live-mode PayFast and some operational
@@ -145,10 +145,14 @@ Before calling the internal lane feature-complete:
    callbacks, payment history, cancellation, full and partial refunds,
    idempotent retry/read-back, and the actual client/provider/admin UI. Do not
    repeat already-passed cases unless the build or integration changed.
-   The current source exposes accepted sandbox refund capability only when
-   `APP_ENV=qa`; production readiness continues to reject sandbox refunds. The
-   QA server must also have the sandbox refund flag, matching acceptance record,
-   and isolated database configured before a refund can execute.
+   The source exposes provider sandbox refund and payout execution only when
+   `APP_ENV=qa`, the corresponding feature flag and provider credentials are
+   configured, and Stitch secrets pass validation. QA sandbox calls do not need
+   production acceptance rows; production still requires immutable provider- and
+   account-bound live evidence. Use only provider-issued sandbox credentials and
+   the isolated QA database. The QA checkout callback, refund history/read-back,
+   webhook and ledger must still be verified against actual provider sandbox
+   responses; code tests and mocked gateways are not that evidence.
 4. For creator payouts, use an approved Stitch sandbox if PAPZ obtains one. If
    none exists, use the isolated provider simulator only to verify UI, idempotent
    API commands, ledger states, webhook verification and failure recovery; label

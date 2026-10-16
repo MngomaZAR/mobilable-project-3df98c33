@@ -36,6 +36,15 @@ test('refreshes immediately, pauses in background and resumes immediately', asyn
   expect(remove).toHaveBeenCalledTimes(1);
 });
 
+test('allows initial refresh while native app state is not available yet', async () => {
+  Object.defineProperty(AppState, 'currentState', { configurable: true, value: 'unknown' });
+  const refresh = jest.fn(async () => {});
+  const stop = startForegroundRefresh(refresh, jest.fn());
+  await flush();
+  expect(refresh).toHaveBeenCalledTimes(1);
+  stop();
+});
+
 test('does not overlap slow requests or schedule work after disposal', async () => {
   let resolve!: () => void;
   const refresh = jest.fn(() => new Promise<void>(done => { resolve = done; }));
@@ -53,7 +62,7 @@ test('does not overlap slow requests or schedule work after disposal', async () 
 test('backs off failures and restores normal polling after recovery', async () => {
   const refresh = jest.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValue(undefined);
   const error = jest.fn();
-  const stop = startForegroundRefresh(refresh, error);
+  const stop = startForegroundRefresh(refresh, error, 10000, () => 1);
   await flush();
   expect(error).toHaveBeenCalledTimes(1);
   jest.advanceTimersByTime(19999);
@@ -64,5 +73,17 @@ test('backs off failures and restores normal polling after recovery', async () =
   jest.advanceTimersByTime(10000);
   await flush();
   expect(refresh).toHaveBeenCalledTimes(3);
+  stop();
+});
+
+test('jitter keeps outage retries within the lower half of exponential backoff', async () => {
+  const refresh = jest.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValue(undefined);
+  const stop = startForegroundRefresh(refresh, jest.fn(), 10000, () => 0);
+  await flush();
+  jest.advanceTimersByTime(9999);
+  expect(refresh).toHaveBeenCalledTimes(1);
+  jest.advanceTimersByTime(1);
+  await flush();
+  expect(refresh).toHaveBeenCalledTimes(2);
   stop();
 });

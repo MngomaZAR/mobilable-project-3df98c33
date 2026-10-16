@@ -19,9 +19,12 @@ jobs:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
       EXPO_PUBLIC_API_BASE_URL: https://papzii-qa.129.151.188.15.nip.io
       EXPO_PUBLIC_BACKEND_PROVIDER: api
+      EXPO_PUBLIC_APP_ENV: qa
       EXPO_PUBLIC_STORE_TARGET: internal
+      EXPO_PUBLIC_RESTRICTED_BETA: "true"
       EXPO_PUBLIC_DIGITAL_BILLING_PROVIDER: disabled
       EXPO_PUBLIC_DISABLE_DIGITAL_PURCHASES: "true"
+      EAS_BUILD_PROFILE: internal-qa
     steps:
       - uses: actions/checkout@v4
 
@@ -42,7 +45,7 @@ jobs:
         run: npm ci --no-audit --no-fund --omit=optional
 
       - name: Verify isolated QA API contract and routing
-        run: npm run validate:env:release
+        run: node scripts/eas-release-gate.mjs
 
       - name: Build restricted QA binary
         run: npx eas-cli@latest build --platform "${{ inputs.platform }}" --profile internal-qa --auto-submit-with-profile beta-testing --non-interactive --wait --message "Papzii internal QA, $GITHUB_SHA"

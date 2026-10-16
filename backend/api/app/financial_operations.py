@@ -355,7 +355,7 @@ async def _ready(conn, settings, config, kind):
     configured = (config.payfast_refunds_enabled and settings.payfast_merchant_id and settings.payfast_passphrase) if kind == 'refund' else (
         config.stitch_payouts_enabled and config.stitch_client_id and config.stitch_client_secret
         and config.stitch_webhook_secret and config.bank_encryption_key)
-    if not configured or not evidence_id or mode not in ('sandbox', 'live'):
+    if not configured or mode not in ('sandbox', 'live'):
         return False
     if kind == 'payout':
         try:
@@ -364,6 +364,12 @@ async def _ready(conn, settings, config, kind):
                 return False
         except (HTTPException, ValueError):
             return False
+    # QA uses provider-owned sandbox credentials and endpoints. It can exercise
+    # real provider protocols without requiring production acceptance records.
+    if settings.app_env == 'qa' and mode == 'sandbox':
+        return True
+    if not evidence_id:
+        return False
     return bool(await conn.fetchval('''SELECT EXISTS(SELECT 1 FROM financial_provider_acceptance
         WHERE id=$1 AND provider=$2 AND operation_kind=$3 AND provider_account=$4 AND mode=$5
         AND revoked_at IS NULL AND accepted_at<=now())''', evidence_id, provider, kind, account, mode))

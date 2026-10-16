@@ -173,6 +173,9 @@ async def require_open_booking_parties(conn, *user_ids: str) -> None:
         raise HTTPException(status_code=403, detail="Active stored booking parties are required.")
     for user_id in sorted(set(user_ids)):
         await require_open_account(conn, user_id)
+        profile = await conn.fetchrow("SELECT age_verified FROM profiles WHERE id=$1 FOR SHARE", user_id)
+        if not profile or profile.get("age_verified") is not True:
+            raise HTTPException(status_code=409, detail="Complete the 18+ age verification before requesting or accepting a booking.")
 
 
 async def quote_booking(settings: Settings, command: BookingInput, user: dict[str, Any]) -> dict[str, Any]:

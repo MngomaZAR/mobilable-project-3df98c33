@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { BlurView } from 'expo-blur';
 import {
   ActivityIndicator,
+  AppState,
   Alert,
   FlatList,
   Image,
@@ -21,7 +22,7 @@ import { AnimatedHeart } from './AnimatedHeart';
 import { useTheme } from '../store/ThemeContext';
 import { useAppData } from '../store/AppDataContext';
 import { useMessaging } from '../store/MessagingContext';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { FeedSkeleton } from '../components/Skeleton';
@@ -94,6 +95,8 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
   const [forYouRankedPostIds, setForYouRankedPostIds] = useState<string[]>([]);
 
   const lastTapRef = useRef<number | null>(null);
+  const feedOffsetRef = useRef(0);
+  const feedLoadedRef = useRef(false);
   const loadMoreInFlightRef = useRef(false);
   const trackedImpressionsRef = useRef<Set<string>>(new Set());
   const queueRecommendationEventRef = useRef<(event: { post_id: string; event_type: 'impression' | 'open' | 'like' | 'comment' | 'share' | 'unlock' | 'skip' | 'hide' | 'booking_conversion'; dwell_ms?: number; metadata?: Record<string, any> }) => void>(() => {});
@@ -242,6 +245,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
     try {
       await Promise.all([fetchProfiles(), fetchPosts({ reset: true })]);
     } finally {
+      feedLoadedRef.current = true;
       setLoading(false);
       setRefreshing(false);
     }
@@ -250,6 +254,24 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
   useEffect(() => {
     loadFeed();
   }, [loadFeed]);
+
+  useFocusEffect(useCallback(() => {
+    if (environment.backendProvider !== 'api') return undefined;
+    let inFlight = false;
+    const refreshLatest = async () => {
+      if (['background', 'inactive'].includes(String(AppState.currentState))
+          || feedOffsetRef.current > 32 || inFlight) return;
+      inFlight = true;
+      try {
+        await Promise.all([fetchProfiles(), fetchPosts({ reset: true, preserveExisting: true })]);
+      } finally {
+        inFlight = false;
+      }
+    };
+    if (feedLoadedRef.current) void refreshLatest();
+    const timer = setInterval(() => { void refreshLatest(); }, 30000);
+    return () => clearInterval(timer);
+  }, [fetchPosts, fetchProfiles]));
 
   useEffect(() => {
     if (!forYouOnly) return;
@@ -761,6 +783,8 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
           renderItem={renderItem}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           contentContainerStyle={styles.listContent}
+          onScroll={(event) => { feedOffsetRef.current = event.nativeEvent.contentOffset.y; }}
+          scrollEventThrottle={250}
           ListHeaderComponent={renderHeader}
           onEndReached={loadMore}
           onEndReachedThreshold={0.6}

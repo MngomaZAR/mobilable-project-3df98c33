@@ -81,3 +81,11 @@ test('internal QA build targets the dedicated QA API and keeps purchases disable
   assert.doesNotThrow(() => assertRestrictedTestingConfig(env));
   assert.throws(() => assertRestrictedTestingConfig({ ...env, EXPO_PUBLIC_API_BASE_URL: 'https://papzii-api.example.com' }));
 });
+
+test('manual QA build workflow runs the restricted-profile release gate', () => {
+  const workflow = fs.readFileSync(new URL('../../.github/workflows/eas-build-internal-qa.yml', import.meta.url), 'utf8');
+  assert.match(workflow, /EAS_BUILD_PROFILE:\s*internal-qa/);
+  assert.match(workflow, /EXPO_PUBLIC_APP_ENV:\s*qa/);
+  assert.match(workflow, /EXPO_PUBLIC_RESTRICTED_BETA:\s*"true"/);
+  assert.match(workflow, /run:\s*node scripts\/eas-release-gate\.mjs/);
+});

@@ -299,11 +299,12 @@ class FinancialTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(financial.zar('1.10'), Decimal('1.10'))
 
     async def test_capabilities_require_real_matching_independent_acceptance(self):
-        self.assertEqual(await financial.capabilities(self.settings, self.config), {'refund_execution': False, 'creator_payout_execution': False})
+        production = self.settings.model_copy(update={'app_env': 'production'})
+        self.assertEqual(await financial.capabilities(production, self.config), {'refund_execution': False, 'creator_payout_execution': False})
         configured = replace(self.config, payfast_refunds_enabled=True, refund_acceptance_id='evidence')
-        self.assertFalse((await financial.capabilities(self.settings, configured))['refund_execution'])
+        self.assertFalse((await financial.capabilities(production, configured))['refund_execution'])
         self.store.acceptance = ('evidence', 'payfast', 'refund', 'different-merchant', 'sandbox')
-        self.assertFalse((await financial.capabilities(self.settings, configured))['refund_execution'])
+        self.assertFalse((await financial.capabilities(production, configured))['refund_execution'])
 
     async def test_qa_provider_sandboxes_are_executable_without_production_acceptance(self):
         qa = self.settings.model_copy(update={

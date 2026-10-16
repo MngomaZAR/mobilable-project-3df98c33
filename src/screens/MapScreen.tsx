@@ -322,9 +322,8 @@ const MapScreen: React.FC = () => {
   const mapCenter = useMemo(() => {
     if (userCoords) return [userCoords.lng, userCoords.lat];
     if (cityCenter) return cityCenter;
-    if (filteredMarkers[0]) return [filteredMarkers[0].longitude, filteredMarkers[0].latitude];
-    return [18.4241, -33.9249]; // Cape Town default
-  }, [cityCenter, filteredMarkers, userCoords]);
+    return [31.0218, -29.8587]; // Durban (launch city); never the first pin, which put a Johannesburg test profile on screen
+  }, [cityCenter, userCoords]);
 
   const requestLocation = useCallback(async () => {
     const now = Date.now();

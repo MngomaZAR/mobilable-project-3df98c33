@@ -35,6 +35,7 @@ const MAP_STYLES = {
 };
 
 const SHEET_COLLAPSED = 136;
+const SHEET_MAX_HEIGHT = 560;
 const CITY_CENTERS: Record<string, [number, number]> = {
   durban: [31.0218, -29.8587],
   johannesburg: [28.0473, -26.2041],
@@ -77,9 +78,11 @@ const MapScreen: React.FC = () => {
   const role = getEffectiveRole(currentUser);
   const isClientFacing = role === 'client';
   const [mapHeight, setMapHeight] = useState(windowHeight);
-  const collapsedSheetHeight = Math.min(SHEET_COLLAPSED, mapHeight * 0.32);
-  const sheetHeight = mapHeight * 0.82;
-  const sheetHalf = mapHeight * 0.38;
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const visibleMapHeight = Math.max(1, mapHeight - keyboardHeight);
+  const collapsedSheetHeight = Math.min(SHEET_COLLAPSED, visibleMapHeight * 0.32);
+  const sheetHeight = Math.min(SHEET_MAX_HEIGHT, Math.max(collapsedSheetHeight, visibleMapHeight * 0.78));
+  const sheetHalf = Math.min(sheetHeight * 0.62, visibleMapHeight * 0.42);
   const halfSheetOffset = sheetHeight - sheetHalf;
   const collapsedSheetOffset = sheetHeight - collapsedSheetHeight;
 
@@ -111,6 +114,20 @@ const MapScreen: React.FC = () => {
   const sheetY = useRef(new Animated.Value(collapsedSheetOffset)).current;
   const currentSheetY = useRef(collapsedSheetOffset);
   const [sheetExpanded, setSheetExpanded] = useState(false);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSubscription = Keyboard.addListener(showEvent, event => {
+      setKeyboardHeight(Math.min(mapHeight, Math.max(0, event.endCoordinates?.height ?? 0)));
+    });
+    const hideSubscription = Keyboard.addListener(hideEvent, () => setKeyboardHeight(0));
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, [mapHeight]);
 
   const snapTo = useCallback((targetY: number, velocity = 0) => {
     currentSheetY.current = targetY;
@@ -598,7 +615,7 @@ const MapScreen: React.FC = () => {
 
       {/* Floating action buttons */}
       <Animated.View style={[s.fabColumn, {
-        bottom: collapsedSheetHeight + 12,
+        bottom: keyboardHeight + collapsedSheetHeight + 12,
         transform: [{ translateY: Animated.subtract(sheetY, collapsedSheetOffset) }],
       }]}>
         <TouchableOpacity accessibilityRole="button" accessibilityLabel="Locate me" style={[s.fab, { backgroundColor: panelBackground, borderColor: panelBorder }]} onPress={requestLocation} disabled={requesting}>
@@ -619,7 +636,7 @@ const MapScreen: React.FC = () => {
       {/* Gesture-driven bottom sheet */}
       <Animated.View
         testID="talent-map-sheet"
-        style={[s.bottomSheet, { height: sheetHeight, backgroundColor: panelBackground, borderColor: panelBorder, transform: [{ translateY: sheetY }] }]}
+        style={[s.bottomSheet, { bottom: keyboardHeight, height: sheetHeight, backgroundColor: panelBackground, borderColor: panelBorder, transform: [{ translateY: sheetY }] }]}
       >
         <TouchableOpacity
           testID="talent-panel-handle"
@@ -627,7 +644,10 @@ const MapScreen: React.FC = () => {
           accessibilityLabel={sheetExpanded ? 'Collapse talent panel' : 'Expand talent panel'}
           accessibilityHint="Swipe up to expand or down to collapse the talent panel."
           accessibilityState={{ expanded: sheetExpanded }}
-          onPress={() => snapTo(currentSheetY.current < halfSheetOffset ? collapsedSheetOffset : 0)}
+          onPress={() => {
+            Keyboard.dismiss();
+            snapTo(currentSheetY.current < halfSheetOffset ? collapsedSheetOffset : 0);
+          }}
           style={s.dragHandleArea}
           {...panResponder.panHandlers}
         >
@@ -639,6 +659,8 @@ const MapScreen: React.FC = () => {
           contentContainerStyle={[s.sheetInner, { paddingBottom: Math.max(insets.bottom, 16) }]}
           showsVerticalScrollIndicator
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          onScrollBeginDrag={Keyboard.dismiss}
         >
           {selectedMarker ? (
             /* SELECTED TALENT VIEW */

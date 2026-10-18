@@ -1,5 +1,5 @@
 import React from 'react';
-import { Animated } from 'react-native';
+import { Animated, Keyboard } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import MapScreen from '../src/screens/MapScreen';
 import { useAppData } from '../src/store/AppDataContext';
@@ -26,8 +26,14 @@ jest.mock('expo-location', () => ({ hasServicesEnabledAsync: async () => true, r
 
 let context: any;
 const mockProfileScope = jest.fn();
+let keyboardListeners: Record<string, (event?: any) => void>;
 beforeEach(() => {
   jest.clearAllMocks(); mockDispatch = false;
+  keyboardListeners = {};
+  jest.spyOn(Keyboard, 'addListener').mockImplementation((event: string, listener: any) => {
+    keyboardListeners[event] = listener;
+    return { remove: jest.fn() } as any;
+  });
   mockProfileScope.mockResolvedValue({ data: [{ id: 'photographer', availability_status: 'online' }], error: null });
   jest.spyOn(Animated, 'loop').mockReturnValue({ start: jest.fn(), stop: jest.fn(), reset: jest.fn() } as any);
   const channel = { on: jest.fn(), subscribe: jest.fn() };
@@ -107,13 +113,25 @@ test('pending schedules are not labeled instant and paid-out shoots are not acti
   expect(screen.queryByRole('button', { name: 'View active booking' })).toBeNull();
 });
 
-test('the native sheet stays bottom-anchored within the measured map viewport', async () => {
+test('the native sheet stays within the measured map viewport instead of covering it', async () => {
   const screen = render(<MapScreen />);
   await act(async () => {});
   fireEvent(screen.getByTestId('native-talent-map'), 'layout', { nativeEvent: { layout: { height: 620, width: 390 } } });
-  expect(screen.getByTestId('talent-map-sheet')).toHaveStyle({ height: 508.4, bottom: 0 });
+  expect(screen.getByTestId('talent-map-sheet')).toHaveStyle({ height: 483.6, bottom: 0 });
   fireEvent(screen.getByTestId('native-talent-map'), 'layout', { nativeEvent: { layout: { height: 310, width: 844 } } });
-  expect(screen.getByTestId('talent-map-sheet')).toHaveStyle({ height: 254.2, bottom: 0 });
+  expect(screen.getByTestId('talent-map-sheet')).toHaveStyle({ height: 241.8, bottom: 0 });
+});
+
+test('the map sheet and map controls move above the keyboard', async () => {
+  const screen = render(<MapScreen />);
+  await act(async () => {});
+  fireEvent(screen.getByTestId('native-talent-map'), 'layout', { nativeEvent: { layout: { height: 620, width: 390 } } });
+  const onShow = keyboardListeners.keyboardDidShow ?? keyboardListeners.keyboardWillShow;
+  act(() => onShow({ endCoordinates: { height: 260 } }));
+  expect(screen.getByTestId('talent-map-sheet')).toHaveStyle({ height: 280.8, bottom: 260 });
+  const onHide = keyboardListeners.keyboardDidHide ?? keyboardListeners.keyboardWillHide;
+  act(() => onHide());
+  expect(screen.getByTestId('talent-map-sheet')).toHaveStyle({ height: 483.6, bottom: 0 });
 });
 
 test('the map panel handle is an accessible tap target for expanding and collapsing', async () => {

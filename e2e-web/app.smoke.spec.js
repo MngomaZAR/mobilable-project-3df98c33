@@ -16,6 +16,18 @@ test.describe('PAPZI Web Smoke', () => {
       failedRequests.push(`${req.method()} ${req.url()} :: ${req.failure()?.errorText || 'request failed'}`);
     });
 
+    // The unauthenticated shell requests discovery data before sign-in. This is
+    // a UI smoke test served from localhost, not an API-origin acceptance test:
+    // production intentionally permits only the Papzii HTTPS web origins.
+    await page.route(/\/data\/(?:photographers|models)(?:\?|$)/, async (route) => {
+      if (route.request().method() !== 'POST') return route.continue();
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ data: [] }),
+      });
+    });
+
     test.setTimeout(90_000);
 
     await page.goto('/', { waitUntil: 'load' });

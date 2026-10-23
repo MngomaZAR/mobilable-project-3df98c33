@@ -10,7 +10,10 @@
 
 ## Current repair
 
-This worktree is on `codex/map-keyboard-layout`. It contains an uncommitted repair to `src/screens/MapScreen.tsx` and `__tests__/MapScreen.workflow.test.tsx`.
+This worktree is on `codex/map-keyboard-layout`. The map keyboard repair in
+`src/screens/MapScreen.tsx` and `__tests__/MapScreen.workflow.test.tsx` was
+committed as `82ad43a` and is followed by the release-verification repair
+`ff1e2a1`.
 
 Problem: the map talent sheet and floating controls overlapped the bottom navigation and keyboard. The repair makes sheet sizing viewport-aware, caps the expanded sheet height, moves the sheet and controls above the keyboard, and dismisses the keyboard when the sheet is dragged or its handle is pressed.
 

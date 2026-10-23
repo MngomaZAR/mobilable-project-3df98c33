@@ -1,4 +1,5 @@
 import unittest
+from unittest import mock
 
 from pydantic import ValidationError
 
@@ -7,7 +8,7 @@ from app.config import Settings
 
 class CorsOriginTests(unittest.TestCase):
     def test_default_is_exact_public_web_origins(self):
-        with unittest.mock.patch.dict("os.environ", {}, clear=True):
+        with mock.patch.dict("os.environ", {}, clear=True):
             origins = Settings(_env_file=None).allowed_cors_origins
         self.assertEqual(origins, ["https://papzii.co.za", "https://www.papzii.co.za"])
 

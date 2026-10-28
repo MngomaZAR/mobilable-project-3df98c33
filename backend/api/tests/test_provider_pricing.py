@@ -10,7 +10,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from app.booking_engine import BookingInput, calculate_quote, create_booking, fingerprint, quote_booking, transition_booking
+from app import builtin_functions
+from app.booking_engine import BookingInput, calculate_quote, create_booking, fingerprint, load_provider, quote_booking, transition_booking
 from app.config import Settings, get_settings
 from app.provider_settings import ReplaceModelServices, booking_options, replace_model_services, router
 
@@ -38,6 +39,14 @@ def service(rate="1800.50", active=True, **overrides):
 
 
 class PricingTests(unittest.TestCase):
+    def test_default_quote_splits_thirty_seventy(self):
+        configured = Settings(_env_file=None, DATABASE_URL="postgresql://unused")
+        self.assertEqual(configured.commission_rate, 0.30)
+        quote = calculate_quote(configured, booking(), provider())
+        self.assertEqual(quote["total_amount"], Decimal("1400.00"))
+        self.assertEqual(quote["commission_amount"], Decimal("420.00"))
+        self.assertEqual(quote["payout_amount"], Decimal("980.00"))
+
     def test_legacy_photographer_catalogue_without_customization(self):
         self.assertEqual(len(booking_options(provider(), "photographer")["packages"]), 5)
         quote = calculate_quote(settings(), booking(), provider())
@@ -202,6 +211,7 @@ class MemoryConnection:
         self.role = role
         self.verified = True
         self.age_verified = True
+        self.client_age_verified = True
         self.has_model = True
         self.accounts = {owner: {"id": owner, "metadata": {}} for owner in ("client", "creator", "victim")}
         self.creator = provider()
@@ -234,6 +244,8 @@ class MemoryConnection:
         self.calls.append((sql, args))
         if "FROM api_users" in sql:
             return deepcopy(self.accounts.get(args[0]))
+        if sql.startswith("SELECT age_verified FROM profiles"):
+            return {"age_verified": self.client_age_verified if args[0] == "client" else self.age_verified}
         if "FROM profiles" in sql:
             return {"id": args[0], "role": self.role, "verified": self.verified, "kyc_status": "approved" if self.verified else "pending", "age_verified": self.age_verified}
         if "FROM models" in sql or "FROM photographers" in sql:
@@ -266,6 +278,22 @@ class MemoryConnection:
 
 
 class PersistenceTests(unittest.IsolatedAsyncioTestCase):
+    async def test_legacy_verified_flag_cannot_bypass_identity_review(self):
+        conn = MemoryConnection("photographer")
+        original_fetchrow = conn.fetchrow
+
+        async def fetchrow(sql, *args):
+            row = await original_fetchrow(sql, *args)
+            if "FROM profiles" in sql:
+                return {**row, "verified": True, "kyc_status": "pending"}
+            return row
+
+        conn.fetchrow = fetchrow
+        with self.assertRaises(HTTPException) as error:
+            await load_provider(conn, booking())
+        self.assertEqual(error.exception.status_code, 409)
+        self.assertFalse(any("FROM photographers" in sql for sql, _ in conn.calls))
+
     async def test_booking_quotes_and_creation_require_open_stored_parties(self):
         for function in (quote_booking, create_booking):
             for owner in ("client", "creator"):
@@ -354,6 +382,17 @@ class PersistenceTests(unittest.IsolatedAsyncioTestCase):
                 await quote_booking(settings(), booking(), {"id": "client"})
         with self.assertRaises(HTTPException):
             await quote_booking(settings(), booking(), {"id": "creator"})
+
+    async def test_quotes_and_booking_creation_require_server_verified_adult_client(self):
+        for function in (quote_booking, create_booking):
+            conn = MemoryConnection("photographer")
+            conn.client_age_verified = False
+            with self.subTest(function=function.__name__), patch("app.booking_engine.connect", new=AsyncMock(return_value=conn)), self.assertRaises(HTTPException) as error:
+                await function(settings(), booking(), {"id": "client"})
+            self.assertEqual(error.exception.status_code, 409)
+            self.assertIn("18+ age verification", error.exception.detail)
+            self.assertFalse(conn.bookings)
+            self.assertFalse(any("INSERT INTO job_outbox" in sql for sql, _ in conn.calls))
 
     async def test_booking_saves_service_snapshot_and_replays_after_changes_or_start(self):
         conn = MemoryConnection()

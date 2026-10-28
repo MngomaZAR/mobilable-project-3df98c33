@@ -9,6 +9,8 @@ import { invokeBackendFunction } from '../config/backendFunctions';
 import { apiClient } from '../config/apiClient';
 import { getApiAccessToken } from '../config/apiSession';
 import { createBookingRequest, updateBookingStatusInDb } from '../services/bookingService';
+import { startForegroundRefresh } from '../services/foregroundRefresh';
+import { clearedSessionState } from './sessionState';
 import { BUCKETS, environment } from '../config/environment';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
@@ -68,6 +70,7 @@ type CreatePostInput = {
 type FetchPostsOptions = {
   reset?: boolean;
   attempt?: number;
+  preserveExisting?: boolean;
 };
 
 type AppDataContextValue = {
@@ -365,6 +368,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [state]);
 
   const setState = useCallback((payload: Partial<AppState>) => dispatch({ type: 'SET_STATE', payload }), []);
+  const clearSessionState = useCallback(() => setState(clearedSessionState(stateRef.current)), [setState]);
   const setLoading = (payload: boolean) => dispatch({ type: 'SET_LOADING', payload });
   const setSaving = (payload: boolean) => dispatch({ type: 'SET_SAVING', payload });
   const setAuthenticating = (payload: boolean) => dispatch({ type: 'SET_AUTHENTICATING', payload });
@@ -578,7 +582,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           row.client = profilesMap[row.client_id];
           return mapBookingRow(row as BookingRow);
         });
-        setState({ bookings });
+        if (stateRef.current.currentUser?.id === targetUserId) setState({ bookings });
       } catch (err: any) {
         const message = formatErrorMessage(err, `Error loading bookings: ${err?.message || 'Unknown error'}`);
         if (!/failed to fetch|network/i.test(message) && stateRef.current.bookings.length === 0) {
@@ -592,7 +596,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     []
   );
 
-  const fetchPosts = useCallback(async ({ reset = true, attempt = 0 }: FetchPostsOptions = {}): Promise<{ hasMore: boolean }> => {
+  const fetchPosts = useCallback(async ({ reset = true, attempt = 0, preserveExisting = false }: FetchPostsOptions = {}): Promise<{ hasMore: boolean }> => {
     if (!hasBackendProvider) return { hasMore: false };
     setError(null);
     try {
@@ -647,7 +651,12 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
 
       if (reset) {
-        setState({ posts: mapped });
+        if (preserveExisting) {
+          const refreshedIds = new Set(mapped.map((post) => post.id));
+          setState({ posts: [...mapped, ...stateRef.current.posts.filter((post) => !refreshedIds.has(post.id))] });
+        } else {
+          setState({ posts: mapped });
+        }
       } else {
         const prevPosts = stateRef.current.posts;
         const seen = new Set(prevPosts.map(p => p.id));
@@ -659,7 +668,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if ((isRecoverableAbort(err) || isTimeoutError(err)) && attempt + 1 < MAX_FETCH_POSTS_ATTEMPTS) {
           console.warn(`fetch_posts retrying (attempt ${attempt + 1}) after abort`);
           await sleep(600);
-          return fetchPosts({ reset, attempt: attempt + 1 });
+          return fetchPosts({ reset, attempt: attempt + 1, preserveExisting });
         }
         const hasUsablePosts = stateRef.current.posts.length > 0 || initialState.posts.length > 0;
         if (hasUsablePosts && (isRecoverableAbort(err) || isTimeoutError(err) || /failed to fetch|network/i.test(getErrorMessage(err)))) {
@@ -708,7 +717,10 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const conversationIds = [...new Set(
         (myParticipants ?? []).map((r: any) => r.conversation_id).filter(Boolean)
       )];
-      if (!conversationIds.length) { setState({ conversations: [] }); return; }
+      if (!conversationIds.length) {
+        if (stateRef.current.currentUser?.id === targetUserId) setState({ conversations: [] });
+        return;
+      }
 
       // Step 2: Get conversations
       const { data: convRows, error: p2 } = await backendDb
@@ -750,7 +762,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         };
       });
 
-      setState({ conversations });
+      if (stateRef.current.currentUser?.id === targetUserId) setState({ conversations });
     } catch (err: any) {
       logError('fetch_conversations', err);
     }
@@ -779,6 +791,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       ]);
       if (walletRes.error) throw walletRes.error;
       if (ledgerRes.error) throw ledgerRes.error;
+      if (stateRef.current.currentUser?.id !== targetUserId) return;
       setState({
         creditsWallet: (walletRes.data as CreditsWallet | null) ?? { user_id: targetUserId, balance: 0 },
         creditsLedger: (ledgerRes.data as CreditsLedgerEntry[]) ?? [],
@@ -803,7 +816,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         .order('created_at', { ascending: false })
         .limit(50);
       if (error) throw error;
-      setState({ notifications: (data ?? []) as NotificationEvent[] });
+      if (stateRef.current.currentUser?.id === targetUserId) setState({ notifications: (data ?? []) as NotificationEvent[] });
     } catch (err) {
       logError('fetch_notifications', err);
     }
@@ -858,7 +871,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (!hasBackendProvider) return;
     try {
       const data = await fetchCreatorEarnings(userId);
-      setState({ earnings: data });
+      if (stateRef.current.currentUser?.id === userId) setState({ earnings: data });
     } catch (err) {
       logError('fetch_earnings', err);
     }
@@ -875,11 +888,34 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         .or(`subscriber_id.eq.${targetUserId},creator_id.eq.${targetUserId}`)
         .order('created_at', { ascending: false });
       if (error) throw error;
-      setState({ subscriptions: data ?? [] });
+      if (stateRef.current.currentUser?.id === targetUserId) setState({ subscriptions: data ?? [] });
     } catch (err) {
       logError('fetch_subscriptions', err);
     }
   }, []);
+
+  useEffect(() => {
+    const userId = state.currentUser?.id;
+    if (!hasBackendProvider || environment.backendProvider !== 'api' || !userId) return;
+    let discoveryRefreshedAt = 0;
+    let accountDataRefreshedAt = 0;
+    return startForegroundRefresh(async () => {
+      if (stateRef.current.currentUser?.id !== userId) return;
+      const now = Date.now();
+      await Promise.all([
+        fetchBookings(userId), fetchConversations(userId), fetchNotifications(userId),
+        fetchEarnings(userId),
+      ]);
+      if (now - discoveryRefreshedAt >= 60000) {
+        await Promise.all([fetchPhotographers(), fetchModels()]);
+        discoveryRefreshedAt = now;
+      }
+      if (now - accountDataRefreshedAt >= 60000) {
+        await Promise.all([fetchSubscriptions(userId), fetchCredits(userId)]);
+        accountDataRefreshedAt = now;
+      }
+    }, (error) => logError('foreground_sync', error));
+  }, [state.currentUser?.id, fetchBookings, fetchConversations, fetchNotifications, fetchEarnings, fetchPhotographers, fetchModels, fetchSubscriptions, fetchCredits]);
 
   const persistDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -910,7 +946,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
               fetchCredits(session.user.id),
             ]);
           } else {
-            setState({ currentUser: null, bookings: [], conversations: [] });
+            clearSessionState();
             await Promise.all([fetchPhotographers(), fetchModels()]);
           }
         }
@@ -924,13 +960,16 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
 
     load();
-  }, [fetchBookings, fetchConversations, fetchCredits, fetchPhotographers, fetchProfile, fetchModels, fetchSubscriptions]);
+  }, [clearSessionState, fetchBookings, fetchConversations, fetchCredits, fetchPhotographers, fetchProfile, fetchModels, fetchSubscriptions]);
 
   useEffect(() => {
     if (!hasBackendProvider) return;
     const { data } = backendDb.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
         try {
+          if (stateRef.current.currentUser?.id !== session.user.id) {
+            clearSessionState();
+          }
           let profile = await fetchProfile(session.user.id);
           
           // Handle OAuth sign-ups where profile doesn't exist yet
@@ -960,13 +999,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           logError('auth_session_change', eventErr);
         }
       } else {
-        setState({ currentUser: null,  subscriptions: [],
-  tips: [],
-  earnings: [],
-  mediaAssets: [],
-  creditsWallet: null,
-  creditsLedger: [],
-  notifications: [], messages: {} });
+        clearSessionState();
       }
     });
 
@@ -1189,7 +1222,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       backendDb.removeChannel(subscriptionsChannel);
       backendDb.removeChannel(messagesChannel);
     };
-  }, [fetchBookings, fetchConversations, fetchEarnings, fetchModels, fetchNotifications, fetchPhotographers, fetchProfile, fetchSubscriptions]);
+  }, [clearSessionState, fetchBookings, fetchConversations, fetchEarnings, fetchModels, fetchNotifications, fetchPhotographers, fetchProfile, fetchSubscriptions]);
 
   useEffect(() => {
     const persist = async () => {
@@ -1590,6 +1623,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }))
       );
 
+      if (stateRef.current.currentUser?.id !== currentUserId) return;
       const prevForChat = stateRef.current.messages[chatId] ?? [];
       const combined = dedupeById([...prevForChat, ...parsedMessages]);
       setState({ messages: { ...stateRef.current.messages, [chatId]: combined } });
@@ -2182,7 +2216,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     try {
       const user = await getCurrentAuthenticatedUser();
       if (!user?.id) {
-        setState({ currentUser: null });
+        clearSessionState();
         return null;
       }
 
@@ -2200,7 +2234,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setError(formatErrorMessage(err, 'Unable to validate your current session.'));
       return null;
     }
-  }, [fetchProfile]);
+  }, [clearSessionState, fetchProfile]);
 
   const signInWithOAuth = useCallback(async (provider: 'google' | 'apple') => {
     setState({ authenticating: true, error: null });
@@ -2297,6 +2331,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         fetchEarnings(userId || ''),
         fetchSubscriptions(userId),
         fetchCredits(userId),
+        fetchNotifications(userId),
         fetchPosts({ reset: true })
       ]);
     } catch (err) {
@@ -2304,7 +2339,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     } finally {
       setLoading(false);
     }
-  }, [fetchBookings, fetchConversations, fetchCredits, fetchEarnings, fetchSubscriptions, fetchModels, fetchPhotographers, fetchPosts, revalidateSession]);
+  }, [fetchBookings, fetchConversations, fetchCredits, fetchEarnings, fetchNotifications, fetchSubscriptions, fetchModels, fetchPhotographers, fetchPosts, revalidateSession]);
 
   const resetState = useCallback(async () => {
     setSaving(true);

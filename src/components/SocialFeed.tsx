@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { BlurView } from 'expo-blur';
 import {
   ActivityIndicator,
+  AppState,
   Alert,
   FlatList,
   Image,
@@ -21,7 +22,7 @@ import { AnimatedHeart } from './AnimatedHeart';
 import { useTheme } from '../store/ThemeContext';
 import { useAppData } from '../store/AppDataContext';
 import { useMessaging } from '../store/MessagingContext';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/types';
 import { FeedSkeleton } from '../components/Skeleton';
@@ -37,6 +38,7 @@ import { environment } from '../config/environment';
 import { areDigitalPurchasesAllowed, getDigitalPurchaseRestrictionMessage } from '../config/commercePolicy';
 import { reportContent } from '../services/reportService';
 import { resolveStorageRef } from '../services/uploadService';
+import { isProviderUser } from '../utils/userRole';
 
 type SocialFeedProps = {
   onCreatePost?: () => void;
@@ -75,6 +77,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
   const { startConversationWithUser } = useMessaging();
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
+  const canCreatePost = Boolean(onCreatePost && isProviderUser(appState.currentUser));
   
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -92,6 +95,8 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
   const [forYouRankedPostIds, setForYouRankedPostIds] = useState<string[]>([]);
 
   const lastTapRef = useRef<number | null>(null);
+  const feedOffsetRef = useRef(0);
+  const feedLoadedRef = useRef(false);
   const loadMoreInFlightRef = useRef(false);
   const trackedImpressionsRef = useRef<Set<string>>(new Set());
   const queueRecommendationEventRef = useRef<(event: { post_id: string; event_type: 'impression' | 'open' | 'like' | 'comment' | 'share' | 'unlock' | 'skip' | 'hide' | 'booking_conversion'; dwell_ms?: number; metadata?: Record<string, any> }) => void>(() => {});
@@ -240,6 +245,7 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
     try {
       await Promise.all([fetchProfiles(), fetchPosts({ reset: true })]);
     } finally {
+      feedLoadedRef.current = true;
       setLoading(false);
       setRefreshing(false);
     }
@@ -248,6 +254,24 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
   useEffect(() => {
     loadFeed();
   }, [loadFeed]);
+
+  useFocusEffect(useCallback(() => {
+    if (environment.backendProvider !== 'api') return undefined;
+    let inFlight = false;
+    const refreshLatest = async () => {
+      if (['background', 'inactive'].includes(String(AppState.currentState))
+          || feedOffsetRef.current > 32 || inFlight) return;
+      inFlight = true;
+      try {
+        await Promise.all([fetchProfiles(), fetchPosts({ reset: true, preserveExisting: true })]);
+      } finally {
+        inFlight = false;
+      }
+    };
+    if (feedLoadedRef.current) void refreshLatest();
+    const timer = setInterval(() => { void refreshLatest(); }, 30000);
+    return () => clearInterval(timer);
+  }, [fetchPosts, fetchProfiles]));
 
   useEffect(() => {
     if (!forYouOnly) return;
@@ -449,13 +473,16 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
     >
       <View style={styles.headerInner}>
         <Text style={[styles.headerTitle, { color: colors.text }]}>Feed</Text>
-        <TouchableOpacity 
-          style={[styles.primaryIconButton, { backgroundColor: colors.card, borderColor: colors.border }]} 
-          onPress={onCreatePost} 
-          disabled={!onCreatePost}
-        >
-          <Ionicons name="add" size={24} color={colors.accent} />
-        </TouchableOpacity>
+        {canCreatePost ? (
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Create post"
+            style={[styles.primaryIconButton, { backgroundColor: colors.card, borderColor: colors.border }]}
+            onPress={onCreatePost}
+          >
+            <Ionicons name="add" size={24} color={colors.accent} />
+          </TouchableOpacity>
+        ) : null}
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.textRail} style={styles.textRailWrapper}>
         <TouchableOpacity 
@@ -699,10 +726,33 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
 
   const renderEmpty = () => {
     if (loading) return null;
+    const filtered = Boolean(selectedProfileId || followingOnly || forYouOnly);
     return (
       <View style={styles.emptyContainer}>
         <Ionicons name="images-outline" size={48} color={colors.textMuted} />
-        <Text style={[styles.emptyText, { color: colors.textMuted }]}>No posts yet.</Text>
+        <Text style={[styles.emptyText, { color: colors.text }]}>
+          {filtered ? 'No posts match this view' : 'No creator posts yet'}
+        </Text>
+        <Text style={[styles.emptyDetail, { color: colors.textMuted }]}>
+          {filtered ? 'Try the full feed or pull down to refresh.' : 'Approved creators can share their work here.'}
+        </Text>
+        {filtered ? (
+          <TouchableOpacity
+            accessibilityRole="button"
+            style={[styles.emptyAction, { borderColor: colors.border }]}
+            onPress={() => {
+              setSelectedProfileId(null);
+              setFollowingOnly(false);
+              setForYouOnly(false);
+            }}
+          >
+            <Text style={[styles.emptyActionText, { color: colors.text }]}>Show all posts</Text>
+          </TouchableOpacity>
+        ) : canCreatePost ? (
+          <TouchableOpacity accessibilityRole="button" style={[styles.emptyAction, { borderColor: colors.border }]} onPress={onCreatePost}>
+            <Text style={[styles.emptyActionText, { color: colors.text }]}>Create a post</Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
     );
   };
@@ -733,6 +783,8 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
           renderItem={renderItem}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           contentContainerStyle={styles.listContent}
+          onScroll={(event) => { feedOffsetRef.current = event.nativeEvent.contentOffset.y; }}
+          scrollEventThrottle={250}
           ListHeaderComponent={renderHeader}
           onEndReached={loadMore}
           onEndReachedThreshold={0.6}
@@ -778,7 +830,7 @@ const styles = StyleSheet.create({
   listContent: { padding: 16, paddingBottom: 108 },
   headerContainer: { paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth },
   headerInner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 16, paddingBottom: 10 },
-  headerTitle: { fontSize: 62, lineHeight: 64, fontWeight: '900' },
+  headerTitle: { fontSize: 38, lineHeight: 46, fontWeight: '800' },
   primaryIconButton: { width: 50, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center', borderWidth: 1 },
   textRailWrapper: { paddingLeft: 16 },
   textRail: { paddingRight: 32 },
@@ -867,6 +919,9 @@ const styles = StyleSheet.create({
   },
   emptyContainer: { alignItems: 'center', paddingVertical: 40 },
   emptyText: { marginTop: 16, fontWeight: '600', fontSize: 16 },
+  emptyDetail: { marginTop: 6, fontSize: 14, textAlign: 'center' },
+  emptyAction: { minHeight: 44, marginTop: 20, paddingHorizontal: 18, borderRadius: 8, borderWidth: 1, justifyContent: 'center' },
+  emptyActionText: { fontSize: 14, fontWeight: '700' },
   storyAvatarWrap: {
     width: 64,
     height: 64,

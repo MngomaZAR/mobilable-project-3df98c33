@@ -6,7 +6,7 @@ import { loadLocalEnv } from './lib/load-env-file.mjs';
 const storeTargets = new Set(['appstore', 'play', 'both']);
 
 export function isRestrictedTestingProfile(env) {
-  return String(env.EAS_BUILD_PROFILE || '').trim().toLowerCase() === 'beta-testing';
+  return new Set(['beta-testing', 'internal-qa']).has(String(env.EAS_BUILD_PROFILE || '').trim().toLowerCase());
 }
 
 export function assertRestrictedTestingConfig(env) {
@@ -15,7 +15,8 @@ export function assertRestrictedTestingConfig(env) {
       || env.EXPO_PUBLIC_DISABLE_DIGITAL_PURCHASES !== 'true'
       || env.EXPO_PUBLIC_DIGITAL_BILLING_PROVIDER !== 'disabled'
       || env.EXPO_PUBLIC_BACKEND_PROVIDER !== 'api'
-      || env.EXPO_PUBLIC_APP_ENV !== 'beta') {
+      || !new Set(['beta', 'qa']).has(env.EXPO_PUBLIC_APP_ENV)
+      || (env.EAS_BUILD_PROFILE === 'internal-qa' && !String(env.EXPO_PUBLIC_API_BASE_URL || '').startsWith('https://papzii-qa.'))) {
     throw new Error('Restricted testing requires hosted API mode, internal scope and all purchasing disabled.');
   }
 }

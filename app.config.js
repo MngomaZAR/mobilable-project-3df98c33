@@ -1,4 +1,13 @@
 const BRAND = require('./src/constants/brand.json');
+const { withInfoPlist } = require('@expo/config-plugins');
+
+const withForegroundLocationOnly = (config) => withInfoPlist(config, (updated) => {
+  delete updated.modResults.NSLocationAlwaysAndWhenInUseUsageDescription;
+  delete updated.modResults.NSLocationAlwaysUsageDescription;
+  updated.modResults.UIBackgroundModes = (updated.modResults.UIBackgroundModes || [])
+    .filter((mode) => mode !== 'location');
+  return updated;
+});
 
 const APP_IDS = {
   slug: 'papzi',
@@ -16,7 +25,7 @@ export default {
     version: "1.0.0",
     orientation: "portrait",
     icon: "./assets/icon.png",
-    userInterfaceStyle: "light",
+    userInterfaceStyle: "automatic",
     splash: {
       image: "./assets/splash-icon.png",
       resizeMode: "contain",
@@ -30,8 +39,7 @@ export default {
         NSCameraUsageDescription: `${BRAND.name} needs camera access for KYC verification and story creation.`,
         NSMicrophoneUsageDescription: `${BRAND.name} uses your microphone for booking calls and voice messages.`,
         NSPhotoLibraryUsageDescription: `${BRAND.name} needs photo access for profile pictures, posts, and story creation.`,
-        NSLocationWhenInUseUsageDescription: `${BRAND.name} uses your location to show nearby photographers and track bookings.`,
-        NSLocationAlwaysAndWhenInUseUsageDescription: `${BRAND.name} needs your location to track you during a live booking session.`,
+        NSLocationWhenInUseUsageDescription: `${BRAND.name} uses your location while the app is open to show nearby creators and support active bookings.`,
         ITSAppUsesNonExemptEncryption: false
       }
     },
@@ -45,8 +53,12 @@ export default {
         'ACCESS_FINE_LOCATION',
         'ACCESS_COARSE_LOCATION',
         'CAMERA',
-        'RECORD_AUDIO',
-        'READ_EXTERNAL_STORAGE'
+        'RECORD_AUDIO'
+      ],
+      blockedPermissions: [
+        'android.permission.SYSTEM_ALERT_WINDOW',
+        'android.permission.READ_EXTERNAL_STORAGE',
+        'android.permission.ACCESS_BACKGROUND_LOCATION'
       ],
       // Deep link intent filter so Android re-opens the app after OAuth redirect
       intentFilters: [
@@ -62,6 +74,7 @@ export default {
       favicon: "./assets/favicon.png"
     },
     plugins: [
+      "expo-system-ui",
       "@livekit/react-native-expo-plugin",
       "@config-plugins/react-native-webrtc",
       "expo-secure-store",
@@ -78,10 +91,11 @@ export default {
           photosPermission: "The app accesses your photos to let you share them with others."
         }
       ],
+      withForegroundLocationOnly,
       [
         "expo-location",
         {
-          locationAlwaysAndWhenInUsePermission: `Allow ${BRAND.name} to use your location.`
+          locationWhenInUsePermission: `Allow ${BRAND.name} to show nearby creators while the app is open.`
         }
       ],
       "@maplibre/maplibre-react-native"

@@ -3,7 +3,8 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { spawnSync } from 'node:child_process';
 
-const cli = process.env.PAPZI_AUDIT_EAS_CLI;
+const cli = process.env.PAPZI_AUDIT_EAS_CLI || path.join(process.env.APPDATA, 'npm/node_modules/eas-cli/bin/run');
+const auditDate = new Date().toISOString().slice(0, 10).replaceAll('-', '');
 if (!cli || !fs.existsSync(cli)) throw new Error('Set PAPZI_AUDIT_EAS_CLI to the authenticated EAS runtime.');
 const require = createRequire(cli);
 const { default: SessionManager } = require('../build/user/SessionManager.js');
@@ -17,7 +18,7 @@ const receipts = [];
 for (const metadata of keys.slice(0, 10)) {
   try {
     const key = await ReadKey.getByIdAsync(client, metadata.id);
-    const output = path.resolve(`docs/apple-store-eas-${metadata.keyIdentifier}-20261004.json`);
+    const output = path.resolve(`docs/apple-store-eas-${metadata.keyIdentifier}-${auditDate}.json`);
     // Secrets are passed only in the child environment, not arguments, files or logs.
     const child = spawnSync(process.env.PAPZI_AUDIT_PYTHON || 'python', ['scripts/audit-apple-store.py'], {
       encoding: 'utf8', timeout: 150000, maxBuffer: 2 * 1024 * 1024,

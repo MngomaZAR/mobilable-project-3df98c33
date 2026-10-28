@@ -29,7 +29,8 @@ const corePassed = results.health.status === 200 && results.health.ok && results
   results.routing.distance > 0 && results.routing.duration > 0 && results.unauthenticated.status === 401;
 const report = { checkedAt: new Date().toISOString(), readOnly: true, api: base.origin, corePassed,
   publicReleaseReady: false, deviceAndSettlementAcceptanceRequired: true, results };
-const output = process.env.PAPZI_PUBLIC_AUDIT_OUTPUT || 'docs/production-runtime-20261004.json';
+const reportDate = report.checkedAt.slice(0, 10).replaceAll('-', '');
+const output = process.env.PAPZI_PUBLIC_AUDIT_OUTPUT || `docs/production-runtime-${reportDate}.json`;
 fs.writeFileSync(output, JSON.stringify(report, null, 2) + '\n');
 console.log(JSON.stringify(report, null, 2));
 if (!corePassed) process.exitCode = 1;

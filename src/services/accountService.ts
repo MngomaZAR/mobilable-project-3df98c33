@@ -17,6 +17,15 @@ export type DeletionResult = {
 const RECEIPT_KEY = 'papzi_account_deletion_receipt';
 const SECURE_OPTIONS = { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY };
 
+export const requestCreatorEnrolment = async (role: 'photographer' | 'model') => {
+  await requireCurrentAuthenticatedUser();
+  return apiClient.post<{ role: 'photographer' | 'model'; kyc_status: string; approved: boolean }>(
+    '/functions/creator-enrolment',
+    { role, accept_creator_policy: true, policy_version: '2026-10-13' },
+    { token: await getApiAccessToken() },
+  );
+};
+
 const saveReceipt = async (receipt: string) => {
   if (Platform.OS === 'web') {
     await AsyncStorage.setItem(RECEIPT_KEY, receipt);

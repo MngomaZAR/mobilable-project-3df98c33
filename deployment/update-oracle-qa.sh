@@ -2,6 +2,8 @@
 set -euo pipefail
 umask 077
 root=/opt/papzii-qa-20261003
+qa_host=papzii-qa.129.151.188.15.nip.io
+qa_url="https://${qa_host}"
 api_image=papzii-api:launch-candidate
 worker_image=papzii-worker:launch-candidate
 artifact_dir="$root/artifacts"
@@ -14,10 +16,12 @@ fi
 if [[ "${1:-}" == '--check-only' ]]; then
     exit 0
 fi
-# Signed QA media must be reachable through the same private SSH tunnel as the API.
-# This value is never copied into production or used by native release builds.
+# The QA API is separately routed through the existing HTTPS proxy. Keep this
+# endpoint isolated from production and use only synthetic QA records here.
 sed -i '/^API_PUBLIC_URL=/d' "$root/qa.env"
-printf '%s\n' 'API_PUBLIC_URL=http://127.0.0.1:18000' >> "$root/qa.env"
+printf 'API_PUBLIC_URL=%s\n' "$qa_url" >> "$root/qa.env"
+sed -i '/^CORS_ORIGINS=/d' "$root/qa.env"
+printf 'CORS_ORIGINS=%s\n' "$qa_url" >> "$root/qa.env"
 if docker inspect papzii-osrm >/dev/null 2>&1; then
     sed -i '/^OSRM_BASE_URL=/d' "$root/qa.env"
     printf '%s\n' 'OSRM_BASE_URL=http://papzii-osrm:5000' >> "$root/qa.env"
@@ -53,6 +57,7 @@ for name in papzii-api-qa papzii-worker-qa; do
     fi
 done
 docker run -d --name papzii-api-qa --network papzii_default --env-file "$root/qa.env" -p 127.0.0.1:18000:8000 --restart unless-stopped "$api_image"
+docker network connect dokploy-network papzii-api-qa
 docker run --rm --network papzii_default --env-file "$root/qa.env" -v "$artifact_dir:/artifacts" "$api_image" python -m tests.auth_protocol
 docker run -d --name papzii-worker-qa --network papzii_default --env-file "$root/qa.env" --restart unless-stopped "$worker_image"
 for attempt in {1..30}; do

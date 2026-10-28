@@ -27,12 +27,21 @@ ALLOWED = {
     "SMTP_USER", "SMTP_PASSWORD", "SMTP_FROM", "SMTP_SSL", "RECOVERY_ENCRYPTION_KEY",
     "PAYFAST_MERCHANT_ID", "PAYFAST_MERCHANT_KEY", "PAYFAST_PASSPHRASE",
     "PAYFAST_SANDBOX", "PAYFAST_CHECKOUT_ENABLED",
+    "PAYFAST_REFUNDS_ENABLED", "FINANCIAL_REFUND_ACCEPTANCE_ID",
+    "STITCH_CLIENT_ID", "STITCH_CLIENT_SECRET", "STITCH_WEBHOOK_SECRET",
+    "STITCH_MODE", "STITCH_PAYOUTS_ENABLED", "FINANCIAL_PAYOUT_ACCEPTANCE_ID",
     "SERVICE_ACCEPTANCE_USER_IDS", "SERVICE_ACCEPTANCE_EXPIRES_AT", "PAYFAST_ACCEPTANCE_MAX_AMOUNT",
     "VIDEO_ACCEPTANCE_ID", "DISPATCH_ACCEPTANCE_ID", "INSTANT_DISPATCH_ENABLED",
     "FINANCIAL_BANK_ENCRYPTION_KEY",
+    "COMMISSION_RATE",
 }
 PAYMENT_SETTINGS = {"PAYFAST_MERCHANT_ID", "PAYFAST_MERCHANT_KEY", "PAYFAST_PASSPHRASE",
                     "PAYFAST_SANDBOX", "PAYFAST_CHECKOUT_ENABLED"}
+REFUND_SETTINGS = {"PAYFAST_REFUNDS_ENABLED", "FINANCIAL_REFUND_ACCEPTANCE_ID"}
+PAYOUT_SETTINGS = {"STITCH_CLIENT_ID", "STITCH_CLIENT_SECRET", "STITCH_WEBHOOK_SECRET",
+                   "STITCH_MODE", "STITCH_PAYOUTS_ENABLED", "FINANCIAL_PAYOUT_ACCEPTANCE_ID"}
+FINANCIAL_SETTINGS = REFUND_SETTINGS | PAYOUT_SETTINGS
+PAYOUT_SECRET_SETTINGS = {"STITCH_CLIENT_ID", "STITCH_CLIENT_SECRET", "STITCH_WEBHOOK_SECRET"}
 BANK_KEY = "FINANCIAL_BANK_ENCRYPTION_KEY"
 
 
@@ -76,7 +85,15 @@ def validate_updates(updates):
             raise ValueError("Integration setting is too large")
     if BANK_KEY in updates:
         validate_bank_key(updates[BANK_KEY])
-    for key in ("LIVEKIT_ENABLED", "SMTP_SSL", "PAYFAST_SANDBOX", "PAYFAST_CHECKOUT_ENABLED", "INSTANT_DISPATCH_ENABLED"):
+    if "COMMISSION_RATE" in updates:
+        try:
+            rate = Decimal(updates["COMMISSION_RATE"])
+        except InvalidOperation:
+            raise ValueError("Booking commission must match the approved 30 percent rate") from None
+        if not rate.is_finite() or rate != Decimal("0.30"):
+            raise ValueError("Booking commission must match the approved 30 percent rate")
+    for key in ("LIVEKIT_ENABLED", "SMTP_SSL", "PAYFAST_SANDBOX", "PAYFAST_CHECKOUT_ENABLED",
+                "PAYFAST_REFUNDS_ENABLED", "STITCH_PAYOUTS_ENABLED", "INSTANT_DISPATCH_ENABLED"):
         if key in updates and updates[key] not in {"true", "false"}:
             raise ValueError("Boolean integration settings must be explicit")
     for key, scheme in (("LIVEKIT_URL", "wss"), ("LIVEKIT_API_URL", "https")):
@@ -89,6 +106,15 @@ def validate_updates(updates):
     if set(updates) & PAYMENT_SETTINGS:
         if not PAYMENT_SETTINGS <= set(updates) or updates["PAYFAST_CHECKOUT_ENABLED"] != "false":
             raise ValueError("Merchant settings must be complete and new checkout must remain paused")
+    if set(updates) & REFUND_SETTINGS and not REFUND_SETTINGS <= set(updates):
+        raise ValueError("Refund activation requires both its feature flag and reviewed acceptance identifier")
+    if set(updates) & PAYOUT_SETTINGS and not PAYOUT_SETTINGS <= set(updates):
+        raise ValueError("Payout activation requires complete provider settings and a reviewed acceptance identifier")
+    if "STITCH_MODE" in updates and updates["STITCH_MODE"] not in {"sandbox", "live"}:
+        raise ValueError("Stitch mode must be sandbox or live")
+    for key in ("FINANCIAL_REFUND_ACCEPTANCE_ID", "FINANCIAL_PAYOUT_ACCEPTANCE_ID"):
+        if key in updates and not re.fullmatch(r"[A-Za-z0-9_-]{1,120}", updates[key]):
+            raise ValueError("Invalid financial acceptance ID")
     if 'SERVICE_ACCEPTANCE_USER_IDS' in updates:
         ids = updates['SERVICE_ACCEPTANCE_USER_IDS'].split(',')
         if len(ids) > 20 or any(not re.fullmatch(r'[A-Za-z0-9_-]{1,120}', value) for value in ids):
@@ -129,6 +155,10 @@ def configured_compose(config, api_env, worker_env, updates, admin_id=None):
             for key in PAYMENT_SETTINGS - {"PAYFAST_CHECKOUT_ENABLED"}:
                 if runtime.get("PAYFAST_MERCHANT_ID") and runtime.get(key) != updates[key]:
                     raise ValueError("Existing merchant settings require a separate reconciled rotation")
+        if set(updates) & PAYOUT_SETTINGS:
+            for key in PAYOUT_SECRET_SETTINGS:
+                if runtime.get(key) and runtime.get(key) != updates[key]:
+                    raise ValueError("Existing payout credentials require a separate reconciled rotation")
         if admin_id is not None:
             if not re.fullmatch(r"[a-zA-Z0-9_-]{1,120}", admin_id):
                 raise ValueError("Invalid verified owner identifier")
@@ -136,6 +166,35 @@ def configured_compose(config, api_env, worker_env, updates, admin_id=None):
             env["ADMIN_USER_IDS"] = ",".join(sorted(existing | {admin_id}))
         result["services"][name]["environment"] = env
     return result
+
+
+def required_financial_acceptances(env):
+    """Return exact live evidence required before a financial flag can be active."""
+    required = []
+    if env.get("PAYFAST_REFUNDS_ENABLED") == "true":
+        if env.get("PAYFAST_SANDBOX") != "false" or not env.get("PAYFAST_MERCHANT_ID"):
+            raise ValueError("Production refunds require a configured live PayFast merchant")
+        required.append(("payfast", "refund", env["PAYFAST_MERCHANT_ID"], "live",
+                         env.get("FINANCIAL_REFUND_ACCEPTANCE_ID", "")))
+    if env.get("STITCH_PAYOUTS_ENABLED") == "true":
+        if env.get("STITCH_MODE") != "live" or not env.get("STITCH_CLIENT_ID") or not env.get(BANK_KEY):
+            raise ValueError("Production payouts require live Stitch credentials and bank encryption")
+        required.append(("stitch", "payout", env["STITCH_CLIENT_ID"], "live",
+                         env.get("FINANCIAL_PAYOUT_ACCEPTANCE_ID", "")))
+    for _, _, _, _, acceptance_id in required:
+        if not re.fullmatch(r"[A-Za-z0-9_-]{1,120}", acceptance_id):
+            raise ValueError("Financial activation requires a reviewed acceptance identifier")
+    return required
+
+
+def sql_literal(value):
+    return "'" + value.replace("'", "''") + "'"
+
+
+def verify_financial_acceptances(env, exists):
+    for provider, operation, account, mode, acceptance_id in required_financial_acceptances(env):
+        if not exists(provider, operation, account, mode, acceptance_id):
+            raise ValueError("Financial activation requires matching reviewed provider evidence")
 
 
 def configure(args, payload):
@@ -182,6 +241,12 @@ def configure(args, payload):
             raise ValueError("Exactly one verified active owner account is required")
         admin_id = rows[0]
     candidate = configured_compose(config, api_env, worker_env, updates, admin_id)
+    candidate_env = candidate["services"]["api"]["environment"]
+    verify_financial_acceptances(candidate_env, lambda provider, operation, account, mode, acceptance_id: bool(
+        release.sql(user, database, "SELECT EXISTS(SELECT 1 FROM financial_provider_acceptance "
+                    f"WHERE id={sql_literal(acceptance_id)} AND provider={sql_literal(provider)} "
+                    f"AND operation_kind={sql_literal(operation)} AND provider_account={sql_literal(account)} "
+                    f"AND mode={sql_literal(mode)} AND revoked_at IS NULL AND accepted_at<=now())") == "t"))
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     root = Path("/var/backups/papzii") / f"configuration-{stamp}"
     root.mkdir(mode=0o700)

@@ -12,12 +12,16 @@ export const useServiceAccess = () => {
   const userId = state.currentUser?.id;
   const [result, setResult] = useState<(Access & { token: string }) | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [resolvedUserId, setResolvedUserId] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
-    if (environment.backendProvider !== 'api' || !userId) { setResult(null); return; }
+    if (environment.backendProvider !== 'api' || !userId) {
+      setResult(null); setLoading(false); setResolvedUserId(null); return;
+    }
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
+    setResolvedUserId(null);
     const load = async () => {
       setLoading(true);
       try {
@@ -32,7 +36,7 @@ export const useServiceAccess = () => {
       } catch (failure) {
         if (!cancelled) { setResult(null); setError(failure instanceof Error ? failure.message : 'Service access unavailable.'); }
       } finally {
-        if (!cancelled) { setLoading(false); timer = setTimeout(load, 45000); }
+        if (!cancelled) { setLoading(false); setResolvedUserId(userId); timer = setTimeout(load, 45000); }
       }
     };
     setResult(null);
@@ -43,6 +47,7 @@ export const useServiceAccess = () => {
     ? !isServiceRestricted(feature)
     : !!(userId && result?.user_id === userId && result.token === getCachedApiSession()?.access_token &&
       Date.parse(result.expires_at) > Date.now() && result.permissions[feature] && !isServiceRestricted(feature, result.token));
-  return { allowed, loading, error, retry: () => setAttempt(value => value + 1),
+  const ready = environment.backendProvider !== 'api' || !userId || resolvedUserId === userId;
+  return { allowed, loading, ready, error, retry: () => setAttempt(value => value + 1),
     controlledTest: !!(result && result.user_id === userId && result.controlled_test), paymentLimit: result?.payment_limit_zar };
 };

@@ -2,6 +2,7 @@ from functools import lru_cache
 from datetime import datetime
 from decimal import Decimal
 from ipaddress import ip_network
+from urllib.parse import urlparse
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -12,9 +13,10 @@ class Settings(BaseSettings):
     app_version: str = Field(default="0.1.0", alias="APP_VERSION")
     api_public_url: str = Field(default="", alias="API_PUBLIC_URL")
     forwarded_allow_ips: str = Field(default="127.0.0.1", alias="FORWARDED_ALLOW_IPS")
+    cors_origins: str = Field(default="https://papzii.co.za,https://www.papzii.co.za", alias="CORS_ORIGINS")
     allow_runtime_schema_changes: bool = Field(default=False, alias="ALLOW_RUNTIME_SCHEMA_CHANGES")
     admin_user_ids: str = Field(default="", alias="ADMIN_USER_IDS")
-    commission_rate: float = Field(default=0.20, alias="COMMISSION_RATE", ge=0, le=1)
+    commission_rate: float = Field(default=0.30, alias="COMMISSION_RATE", ge=0, le=1)
     payfast_sandbox: bool = Field(default=True, alias="PAYFAST_SANDBOX")
     payfast_checkout_enabled: bool = Field(default=False, alias="PAYFAST_CHECKOUT_ENABLED")
     payfast_acceptance_max_amount: Decimal = Field(default=Decimal('50.00'), alias="PAYFAST_ACCEPTANCE_MAX_AMOUNT", ge=5, le=500)
@@ -97,6 +99,23 @@ class Settings(BaseSettings):
             if network.prefixlen == 0:
                 raise ValueError("A trusted reverse proxy cannot cover every IP address.")
         return ",".join(entries)
+
+    @field_validator("cors_origins")
+    @classmethod
+    def validate_cors_origins(cls, value: str) -> str:
+        origins = [origin.strip().rstrip("/") for origin in value.split(",")]
+        for origin in origins:
+            parsed = urlparse(origin)
+            local = parsed.hostname in {"localhost", "127.0.0.1"}
+            if not origin or "*" in origin or parsed.scheme not in ({"http", "https"} if local else {"https"}):
+                raise ValueError("CORS origins must be explicit HTTPS origins or local development hosts.")
+            if not parsed.hostname or parsed.path or parsed.params or parsed.query or parsed.fragment or parsed.username or parsed.password:
+                raise ValueError("CORS origins must contain only a scheme, host and optional port.")
+        return ",".join(dict.fromkeys(origins))
+
+    @property
+    def allowed_cors_origins(self) -> list[str]:
+        return self.cors_origins.split(",")
 
     @property
     def postgres_url(self) -> str:

@@ -68,7 +68,7 @@ async function submissionTargets() {
   const session = new SessionManager({ setActor() {} });
   const client = createGraphqlClient({ accessToken: session.getAccessToken(), sessionSecret: session.getSessionSecret() });
   try {
-    const rows = await SubmissionQuery.forProjectStatusAsync(client, 'f0c1ef90-ac26-4e4c-a799-77b377e2f452', { limit: 30, offset: 0 });
+    const rows = await SubmissionQuery.allForAppAsync(client, 'f0c1ef90-ac26-4e4c-a799-77b377e2f452', { limit: 30, offset: 0 });
     return rows.map(row => ({ ...sanitize(row), failureCategory: categorizeFailure(row.error?.message) }));
   } catch {
     return { reason: 'authenticated_submission_target_query_failed' };
@@ -108,7 +108,8 @@ const report = {
     : { exitCode: currentStoreQuery.exitCode, reason: currentStoreQuery.reason },
   warning: 'FINISHED build status is not evidence of upload, tester availability, successful user journeys or public approval. Google Play production state is not provided by EAS submit:status.',
 };
-const destination = path.join(root, 'docs/store-history-20261003.json');
+const reportDate = report.checkedAt.slice(0, 10).replaceAll('-', '');
+const destination = path.join(root, `docs/store-history-${reportDate}.json`);
 fs.writeFileSync(destination, `${JSON.stringify(report, null, 2)}\n`);
 console.log(JSON.stringify({
   report: path.relative(root, destination),

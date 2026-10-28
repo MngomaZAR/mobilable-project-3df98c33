@@ -84,6 +84,6 @@ if __name__ == '__main__':
         result = audit(arguments.key_file, arguments.enable_publisher_api)
     except Exception:
         result = {'publishingPerformed': False, 'reason': 'publisher_account_check_failed'}
-    destination = Path('docs/play-publisher-status-20261004.json')
+    destination = Path(f'docs/play-publisher-status-{time.strftime("%Y%m%d", time.gmtime())}.json')
     destination.write_text(json.dumps(result, indent=2) + '\n', newline='\n')
     print(json.dumps(result, indent=2))

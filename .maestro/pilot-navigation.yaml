@@ -1,0 +1,43 @@
+appId: ${APP_ID}
+name: Papzii signed-in pilot navigation
+---
+- launchApp
+- extendedWaitUntil:
+    visible:
+      id: tab-settings
+    timeout: 30000
+- tapOn:
+    id: tab-home
+- takeScreenshot: pilot-home
+- tapOn:
+    id: tab-bookings
+- assertVisible: Your bookings
+- takeScreenshot: pilot-bookings
+- tapOn:
+    id: tab-feed
+- assertVisible: Feed
+- takeScreenshot: pilot-feed
+- tapOn:
+    id: tab-settings
+- assertVisible: Settings
+- takeScreenshot: pilot-settings
+- tapOn:
+    id: tab-map
+- assertVisible: Explore Talent|Provider Availability
+- assertVisible:
+    id: talent-panel-handle
+- assertNotVisible: Find Talent Near Me
+- takeScreenshot: pilot-map
+- swipe:
+    from:
+      id: talent-panel-handle
+    direction: UP
+    duration: 800
+- assertVisible: Find Talent Near Me
+- takeScreenshot: pilot-map-sheet-after-swipe
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible:
+      id: tab-settings
+    timeout: 30000

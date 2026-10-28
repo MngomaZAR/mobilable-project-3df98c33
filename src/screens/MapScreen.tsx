@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert, Animated, Easing, Platform, StyleSheet, Text,
-  TextInput, TouchableOpacity, View, PanResponder, Dimensions, Keyboard, ScrollView, Image,
+  TextInput, TouchableOpacity, View, PanResponder, Keyboard, ScrollView, Image, useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
@@ -17,6 +17,8 @@ import { useTheme } from '../store/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { haversineDistanceKm, validateSouthAfricanLocation } from '../utils/geo';
 import { backendDb } from '../services/backendGateway';
+import { startForegroundRefresh } from '../services/foregroundRefresh';
+import { environment } from '../config/environment';
 import { useRoadRoute } from '../hooks/useRoadRoute';
 import { useServiceAccess } from '../hooks/useServiceAccess';
 import * as Haptics from 'expo-haptics';
@@ -32,8 +34,14 @@ const MAP_STYLES = {
   dark: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
 };
 
-const SCREEN_HEIGHT = Dimensions.get('window').height;
-const SHEET_COLLAPSED = 100;
+const SHEET_COLLAPSED = 136;
+const SHEET_MAX_HEIGHT = 560;
+const CITY_CENTERS: Record<string, [number, number]> = {
+  durban: [31.0218, -29.8587],
+  johannesburg: [28.0473, -26.2041],
+  pretoria: [28.1878, -25.7479],
+  'cape town': [18.4241, -33.9249],
+};
 
 const formatAccuracy = (a?: number | null) => {
   if (!a) return 'Approximate';
@@ -64,13 +72,19 @@ const MapScreen: React.FC = () => {
   const serviceAccess = useServiceAccess();
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
   const navigation = useNavigation<StackNavigationProp<RootStackParamList, 'Root'>>();
   const currentUser = state.currentUser;
   const role = getEffectiveRole(currentUser);
   const isClientFacing = role === 'client';
-  const [mapHeight, setMapHeight] = useState(SCREEN_HEIGHT);
-  const sheetHalf = mapHeight * 0.38;
-  const sheetFull = mapHeight * 0.82;
+  const [mapHeight, setMapHeight] = useState(windowHeight);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const visibleMapHeight = Math.max(1, mapHeight - keyboardHeight);
+  const collapsedSheetHeight = Math.min(SHEET_COLLAPSED, visibleMapHeight * 0.32);
+  const sheetHeight = Math.min(SHEET_MAX_HEIGHT, Math.max(collapsedSheetHeight, visibleMapHeight * 0.78));
+  const sheetHalf = Math.min(sheetHeight * 0.62, visibleMapHeight * 0.42);
+  const halfSheetOffset = sheetHeight - sheetHalf;
+  const collapsedSheetOffset = sheetHeight - collapsedSheetHeight;
 
   const [userMarker, setUserMarker] = useState<MapMarker | null>(null);
   const [userCoords, setUserCoords] = useState<{ lat: number; lng: number; timestamp: number } | null>(null);
@@ -86,6 +100,7 @@ const MapScreen: React.FC = () => {
   const MAP_STYLE_URL = MAP_STYLES[mapStyle] ?? MAP_STYLES.light;
   const lastRequestRef = useRef<number>(0);
   const cameraRef = useRef<any>(null);
+  const annotationRefs = useRef<Record<string, { refresh?: () => void }>>({});
   const pulse = useRef(new Animated.Value(0)).current;
   const [routeProgress, setRouteProgress] = useState(0);
   const roadRoute = useRoadRoute(
@@ -96,11 +111,27 @@ const MapScreen: React.FC = () => {
   const [heatmapSummary, setHeatmapSummary] = useState<{ demand: number; supply: number } | null>(null);
 
   // Bottom sheet gesture
-  const sheetY = useRef(new Animated.Value(SCREEN_HEIGHT - SHEET_COLLAPSED)).current;
-  const currentSheetY = useRef(SCREEN_HEIGHT - SHEET_COLLAPSED);
+  const sheetY = useRef(new Animated.Value(collapsedSheetOffset)).current;
+  const currentSheetY = useRef(collapsedSheetOffset);
+  const [sheetExpanded, setSheetExpanded] = useState(false);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSubscription = Keyboard.addListener(showEvent, event => {
+      setKeyboardHeight(Math.min(mapHeight, Math.max(0, event.endCoordinates?.height ?? 0)));
+    });
+    const hideSubscription = Keyboard.addListener(hideEvent, () => setKeyboardHeight(0));
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, [mapHeight]);
 
   const snapTo = useCallback((targetY: number, velocity = 0) => {
     currentSheetY.current = targetY;
+    setSheetExpanded(targetY < collapsedSheetOffset - 1);
     Animated.spring(sheetY, {
       toValue: targetY,
       velocity,
@@ -108,48 +139,55 @@ const MapScreen: React.FC = () => {
       friction: 12,
       useNativeDriver: true,
     }).start();
-  }, [sheetY]);
+  }, [collapsedSheetOffset, sheetY]);
 
   const panResponder = useMemo(() => PanResponder.create({
     onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 5,
     onPanResponderGrant: () => {
-      sheetY.stopAnimation();
+      sheetY.stopAnimation(value => { currentSheetY.current = value; });
     },
     onPanResponderMove: (_, g) => {
       const newY = currentSheetY.current + g.dy;
-      const clamped = Math.max(mapHeight - sheetFull, Math.min(mapHeight - SHEET_COLLAPSED, newY));
+      const clamped = Math.max(0, Math.min(collapsedSheetOffset, newY));
       sheetY.setValue(clamped);
     },
     onPanResponderRelease: (_, g) => {
       const y = currentSheetY.current + g.dy;
       const vy = g.vy;
       // Snap to nearest
-      if (vy < -0.5 || y < mapHeight - sheetHalf - 50) {
-        snapTo(mapHeight - sheetFull, vy);
-      } else if (vy > 0.5 || y > mapHeight - sheetHalf + 50) {
-        snapTo(mapHeight - SHEET_COLLAPSED, vy);
+      if (vy < -0.5 || y < halfSheetOffset - 50) {
+        snapTo(0, vy);
+      } else if (vy > 0.5 || y > halfSheetOffset + 50) {
+        snapTo(collapsedSheetOffset, vy);
       } else {
-        snapTo(mapHeight - sheetHalf, vy);
+        snapTo(halfSheetOffset, vy);
       }
     },
-  }), [snapTo, sheetY, mapHeight, sheetHalf, sheetFull]);
+  }), [snapTo, sheetY, collapsedSheetOffset, halfSheetOffset]);
 
-  useEffect(() => { snapTo(mapHeight - SHEET_COLLAPSED); }, [mapHeight, snapTo]);
+  useEffect(() => { snapTo(collapsedSheetOffset); }, [collapsedSheetOffset, snapTo]);
 
   // Real-time online presence sync
   useEffect(() => {
     if (!currentUser?.id) return;
     let active = true;
-    // Initial load of online profiles
+    const profileIds = [...new Set([
+      ...state.photographers.map((profile) => profile.id),
+      ...state.models.map((profile) => profile.id),
+      currentUser.id,
+    ].filter(Boolean))];
+
     const loadOnline = async () => {
-      const { data, error } = await backendDb
-        .from('profiles')
-        .select('id, availability_status');
-      if (!active) return;
-      if (error) {
-        console.warn('Online presence unavailable:', error.message);
+      if (!profileIds.length) {
+        setOnlineProfiles(new Set());
         return;
       }
+      const { data, error } = await backendDb
+        .from('profiles')
+        .select('id, availability_status')
+        .in('id', profileIds);
+      if (!active) return;
+      if (error) throw error;
       if (data) {
         const online = data
           .filter((r: any) => isAvailabilityOnline(r.availability_status))
@@ -157,9 +195,18 @@ const MapScreen: React.FC = () => {
         setOnlineProfiles(new Set(online));
       }
     };
-    loadOnline();
 
-    // Subscribe to realtime changes on profiles availability status
+    // The hosted API lane has no database change stream, so poll only discoverable profiles.
+    if (environment.backendProvider === 'api') {
+      const stopPolling = startForegroundRefresh(
+        loadOnline,
+        (error) => console.warn('Online presence unavailable:', error),
+        15000,
+      );
+      return () => { active = false; stopPolling(); };
+    }
+
+    void loadOnline().catch((error) => console.warn('Online presence unavailable:', error));
     const channel = backendDb
       .channel('online-presence')
       .on('postgres_changes', {
@@ -179,7 +226,7 @@ const MapScreen: React.FC = () => {
       .subscribe();
 
     return () => { active = false; backendDb.removeChannel(channel); };
-  }, [currentUser?.id]);
+  }, [currentUser?.id, state.models, state.photographers]);
 
   // Pulse animation for user pin
   useEffect(() => {
@@ -244,6 +291,9 @@ const MapScreen: React.FC = () => {
 
   // Build map markers
   const baseMarkers: MapMarker[] = useMemo(() => {
+    const visibleProfiles = new Set((state.profiles ?? [])
+      .filter((profile: any) => profile.kyc_status === 'approved' && profile.age_verified === true && profile.is_test_account !== true)
+      .map((profile) => profile.id));
     let result: MapMarker[] = [];
     if (isEffectivePhotographer(role)) {
       result = state.models.map(m => ({ id: `model-${m.id}`, sourceId: m.id, title: m.name, description: 'Model', latitude: m.latitude, longitude: m.longitude, type: 'model' as const, avatarUrl: m.avatar_url, rating: m.rating }));
@@ -257,13 +307,14 @@ const MapScreen: React.FC = () => {
     }
     const seen = new Set<string>();
     return result.filter(m => {
+      if (!m.sourceId || !visibleProfiles.has(m.sourceId)) return false;
       // Missing provider locations are mapped to zero upstream, not a real pin.
       if (!Number.isFinite(m.latitude) || !Number.isFinite(m.longitude) ||
           !validateSouthAfricanLocation(m.latitude, m.longitude) || seen.has(m.id)) return false;
       seen.add(m.id);
       return true;
     });
-  }, [role, state.photographers, state.models]);
+  }, [role, state.photographers, state.models, state.profiles]);
 
   const filteredMarkers = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
@@ -271,25 +322,34 @@ const MapScreen: React.FC = () => {
     return baseMarkers.filter(m => (m.title ?? '').toLowerCase().includes(q) || (m.description ?? '').toLowerCase().includes(q));
   }, [baseMarkers, searchQuery]);
 
+  const cityCenter = useMemo(() => {
+    const city = String(currentUser?.city ?? '').trim().toLowerCase();
+    return Object.entries(CITY_CENTERS).find(([name]) => city.includes(name))?.[1] ?? null;
+  }, [currentUser?.city]);
+  const distanceOrigin = useMemo(() => userCoords
+    ? { latitude: userCoords.lat, longitude: userCoords.lng }
+    : cityCenter ? { latitude: cityCenter[1], longitude: cityCenter[0] } : null,
+  [cityCenter, userCoords]);
+
   const nearbyTalent = useMemo(() => {
     return [...filteredMarkers].sort((a, b) => {
       const aOnline = onlineProfiles.has(a.sourceId ?? '') ? 1 : 0;
       const bOnline = onlineProfiles.has(b.sourceId ?? '') ? 1 : 0;
       if (aOnline !== bOnline) return bOnline - aOnline;
-      if (userCoords) {
+      if (distanceOrigin) {
         const aDistance = haversineDistanceKm(
-          { latitude: userCoords.lat, longitude: userCoords.lng },
+          distanceOrigin,
           { latitude: a.latitude, longitude: a.longitude }
         );
         const bDistance = haversineDistanceKm(
-          { latitude: userCoords.lat, longitude: userCoords.lng },
+          distanceOrigin,
           { latitude: b.latitude, longitude: b.longitude }
         );
         return aDistance - bDistance;
       }
       return String(a.title ?? '').localeCompare(String(b.title ?? ''));
     });
-  }, [filteredMarkers, onlineProfiles, userCoords]);
+  }, [distanceOrigin, filteredMarkers, onlineProfiles]);
 
   const markers = useMemo(() => userMarker ? [userMarker, ...filteredMarkers] : filteredMarkers, [filteredMarkers, userMarker]);
 
@@ -301,9 +361,9 @@ const MapScreen: React.FC = () => {
 
   const mapCenter = useMemo(() => {
     if (userCoords) return [userCoords.lng, userCoords.lat];
-    if (filteredMarkers[0]) return [filteredMarkers[0].longitude, filteredMarkers[0].latitude];
-    return [18.4241, -33.9249]; // Cape Town default
-  }, [filteredMarkers, userCoords]);
+    if (cityCenter) return cityCenter;
+    return [31.0218, -29.8587]; // Durban (launch city); never the first pin, which put a Johannesburg test profile on screen
+  }, [cityCenter, userCoords]);
 
   const requestLocation = useCallback(async () => {
     const now = Date.now();
@@ -436,7 +496,7 @@ const MapScreen: React.FC = () => {
           mapStyle={MAP_STYLE_URL}
           logoEnabled={false}
           attributionEnabled
-          attributionPosition={{ top: insets.top + 130, left: 16 }}
+          attributionPosition={{ top: insets.top + (role === 'admin' && heatmapSummary ? 148 : 108), left: 16 }}
           compassEnabled
         >
           <MapLibreGL.Camera
@@ -458,14 +518,19 @@ const MapScreen: React.FC = () => {
             <MapLibreGL.PointAnnotation
               key={marker.id}
               id={`pin-${marker.id}`}
+              ref={(annotation: any) => {
+                if (annotation) annotationRefs.current[marker.id] = annotation;
+                else delete annotationRefs.current[marker.id];
+              }}
               coordinate={[marker.longitude, marker.latitude]}
               onSelected={() => {
                 setSelectedMarker(marker);
-                snapTo(mapHeight - sheetHalf);
+                snapTo(halfSheetOffset);
               }}
             >
               <MapAvatarPin
                 uri={marker.avatarUrl}
+                onImageLoad={() => annotationRefs.current[marker.id]?.refresh?.()}
                 online={onlineProfiles.has(marker.sourceId ?? '')}
                 rating={marker.rating}
                 label={isClientFacing ? marker.title : undefined}
@@ -500,12 +565,12 @@ const MapScreen: React.FC = () => {
       )}
 
       {/* Map style + locate controls */}
-      <SafeAreaView style={[s.safeOverlay, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
+      <SafeAreaView edges={['top', 'left', 'right']} style={[s.safeOverlay, { paddingTop: 8 }]} pointerEvents="box-none">
         <View style={[s.topBar, { backgroundColor: overlaySurface, borderColor: panelBorder }]}>
           <View style={s.searchBox}>
             <Ionicons name="search" size={16} color={colors.textMuted} />
             <TextInput
-              placeholder={state.currentUser?.city ? `Search near ${state.currentUser.city}` : 'Search near Durban'}
+              placeholder="Search creators by name"
               placeholderTextColor={colors.textMuted}
               value={searchQuery}
               onChangeText={setSearchQuery}
@@ -527,7 +592,7 @@ const MapScreen: React.FC = () => {
           <View style={[s.statusPill, { backgroundColor: overlaySurface, borderColor: panelBorder }]}>
             <View style={s.liveDot} />
             <Text style={[s.liveText, { color: colors.text }]}>
-              Live • {filteredMarkers.filter(m => onlineProfiles.has(m.sourceId ?? '')).length} online nearby
+              Live • {filteredMarkers.filter(m => onlineProfiles.has(m.sourceId ?? '')).length} online on map
             </Text>
           </View>
         )}
@@ -549,32 +614,54 @@ const MapScreen: React.FC = () => {
       </SafeAreaView>
 
       {/* Floating action buttons */}
-      <View style={[s.fabColumn, { bottom: SHEET_COLLAPSED + insets.bottom + 20 }]}>
+      <Animated.View style={[s.fabColumn, {
+        bottom: keyboardHeight + collapsedSheetHeight + 12,
+        transform: [{ translateY: Animated.subtract(sheetY, collapsedSheetOffset) }],
+      }]}>
         <TouchableOpacity accessibilityRole="button" accessibilityLabel="Locate me" style={[s.fab, { backgroundColor: panelBackground, borderColor: panelBorder }]} onPress={requestLocation} disabled={requesting}>
           <Ionicons name={requesting ? 'hourglass' : 'locate'} size={22} color={colors.accent} />
         </TouchableOpacity>
         {!isClientFacing ? (
           <>
-            <TouchableOpacity style={[s.fab, { backgroundColor: panelBackground, borderColor: panelBorder }]} onPress={cycleMapStyle}>
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Change map style" style={[s.fab, { backgroundColor: panelBackground, borderColor: panelBorder }]} onPress={cycleMapStyle}>
               <Ionicons name="layers" size={22} color={colors.text} />
             </TouchableOpacity>
-            <TouchableOpacity style={[s.fab, { backgroundColor: panelBackground, borderColor: panelBorder }]} onPress={() => navigation.navigate('Notifications')}>
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Open notifications" style={[s.fab, { backgroundColor: panelBackground, borderColor: panelBorder }]} onPress={() => navigation.navigate('Notifications')}>
               <Ionicons name="notifications-outline" size={22} color={colors.text} />
             </TouchableOpacity>
           </>
         ) : null}
-      </View>
+      </Animated.View>
 
       {/* Gesture-driven bottom sheet */}
       <Animated.View
         testID="talent-map-sheet"
-        style={[s.bottomSheet, { height: mapHeight, backgroundColor: panelBackground, borderColor: panelBorder, transform: [{ translateY: sheetY }] }]}
-        {...panResponder.panHandlers}
+        style={[s.bottomSheet, { bottom: keyboardHeight, height: sheetHeight, backgroundColor: panelBackground, borderColor: panelBorder, transform: [{ translateY: sheetY }] }]}
       >
-        {/* Drag handle */}
-        <View style={s.dragHandle} />
+        <TouchableOpacity
+          testID="talent-panel-handle"
+          accessibilityRole="button"
+          accessibilityLabel={sheetExpanded ? 'Collapse talent panel' : 'Expand talent panel'}
+          accessibilityHint="Swipe up to expand or down to collapse the talent panel."
+          accessibilityState={{ expanded: sheetExpanded }}
+          onPress={() => {
+            Keyboard.dismiss();
+            snapTo(currentSheetY.current < halfSheetOffset ? collapsedSheetOffset : 0);
+          }}
+          style={s.dragHandleArea}
+          {...panResponder.panHandlers}
+        >
+          <View style={s.dragHandle} />
+        </TouchableOpacity>
 
-        <View style={[s.sheetInner, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+        <ScrollView
+          style={s.sheetScroll}
+          contentContainerStyle={[s.sheetInner, { paddingBottom: Math.max(insets.bottom, 16) }]}
+          showsVerticalScrollIndicator
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          onScrollBeginDrag={Keyboard.dismiss}
+        >
           {selectedMarker ? (
             /* SELECTED TALENT VIEW */
             <>
@@ -761,30 +848,25 @@ const MapScreen: React.FC = () => {
             /* DEFAULT VIEW */
             <>
               <Text style={[s.sheetTitle, { color: colors.text }]}>
-                Nearby {isClientFacing ? 'Talent' : 'Availability'}
+                {isClientFacing ? 'Explore Talent' : 'Provider Availability'}
               </Text>
               <Text style={[s.sheetSub, { color: colors.textSecondary }]}>
-                {onlineProfiles.size} available now • Tap a card or map pin to view details
+                {nearbyTalent.filter(marker => onlineProfiles.has(marker.sourceId ?? '')).length} online on map • Tap a card or map pin to view details
               </Text>
               <TouchableOpacity style={[s.primaryBtn, { marginTop: 12, backgroundColor: primaryButtonColor }]} onPress={requestLocation} disabled={requesting}>
                 <Ionicons name="navigate" size={18} color={primaryButtonText} style={{ marginRight: 8 }} />
                 <Text style={[s.primaryBtnText, { color: primaryButtonText }]}>{requesting ? 'Finding location...' : 'Find Talent Near Me'}</Text>
               </TouchableOpacity>
               {nearbyTalent.length > 0 ? (
-                <ScrollView
-                  style={[s.nearbyList, { maxHeight: mapHeight * 0.42 }]}
-                  contentContainerStyle={s.nearbyListContent}
-                  showsVerticalScrollIndicator={false}
-                  keyboardShouldPersistTaps="handled"
-                >
+                <View style={s.nearbyList}>
                   {nearbyTalent.slice(0, 6).map((marker) => {
                     const isOnline = onlineProfiles.has(marker.sourceId ?? '');
-                    const distanceLabel = userCoords
+                    const distanceLabel = distanceOrigin
                       ? `${haversineDistanceKm(
-                          { latitude: userCoords.lat, longitude: userCoords.lng },
+                          distanceOrigin,
                           { latitude: marker.latitude, longitude: marker.longitude }
                         ).toFixed(1)} km`
-                      : 'Nearby';
+                      : 'Location unavailable';
                     return (
                       <View key={marker.id} style={[s.nearbyCard, { backgroundColor: panelCard, borderColor: panelBorder }]}>
                         <TouchableOpacity
@@ -792,7 +874,7 @@ const MapScreen: React.FC = () => {
                           onPress={() => {
                             Keyboard.dismiss();
                             setSelectedMarker(marker);
-                            snapTo(mapHeight - sheetHalf);
+                            snapTo(halfSheetOffset);
                           }}
                           activeOpacity={0.85}
                         >
@@ -832,7 +914,7 @@ const MapScreen: React.FC = () => {
                             onPress={() => {
                               Keyboard.dismiss();
                               setSelectedMarker(marker);
-                              snapTo(mapHeight - sheetHalf);
+                              snapTo(halfSheetOffset);
                             }}
                           >
                             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
@@ -841,16 +923,16 @@ const MapScreen: React.FC = () => {
                       </View>
                     );
                   })}
-                </ScrollView>
+                </View>
               ) : (
                 <View style={[s.emptyNearbyState, { backgroundColor: panelCard, borderColor: panelBorder }]}>
                   <Ionicons name="search" size={18} color={colors.textMuted} />
-                  <Text style={[s.emptyNearbyText, { color: colors.textSecondary }]}>No nearby talent matches that search yet.</Text>
+                  <Text style={[s.emptyNearbyText, { color: colors.textSecondary }]}>No creators match this search yet.</Text>
                 </View>
               )}
             </>
           )}
-        </View>
+        </ScrollView>
       </Animated.View>
     </View>
   );
@@ -873,9 +955,11 @@ const s = StyleSheet.create({
   userPulse: { position: 'absolute', width: 32, height: 32, borderRadius: 16, backgroundColor: '#3b82f6' },
   userPinCore: { width: 16, height: 16, borderRadius: 8, backgroundColor: '#2563eb', borderWidth: 3, borderColor: '#fff' },
   userPinRing: { position: 'absolute', width: 26, height: 26, borderRadius: 13, borderWidth: 2, borderColor: '#3b82f6' },
-  bottomSheet: { position: 'absolute', left: 0, right: 0, height: SCREEN_HEIGHT, borderTopLeftRadius: 28, borderTopRightRadius: 28, borderTopWidth: 1, shadowColor: '#000', shadowOpacity: 0.22, shadowRadius: 20, shadowOffset: { width: 0, height: -8 }, elevation: 16 },
-  dragHandle: { width: 52, height: 5, borderRadius: 4, backgroundColor: '#b3a48d', alignSelf: 'center', marginTop: 12, marginBottom: 6 },
-  sheetInner: { paddingHorizontal: 22, paddingTop: 10 },
+  bottomSheet: { position: 'absolute', left: 0, right: 0, bottom: 0, borderTopLeftRadius: 28, borderTopRightRadius: 28, borderTopWidth: 1, shadowColor: '#000', shadowOpacity: 0.22, shadowRadius: 20, shadowOffset: { width: 0, height: -8 }, elevation: 16 },
+  dragHandleArea: { minHeight: 44, justifyContent: 'center' },
+  dragHandle: { width: 52, height: 5, borderRadius: 4, backgroundColor: '#b3a48d', alignSelf: 'center' },
+  sheetScroll: { flex: 1 },
+  sheetInner: { flexGrow: 1, paddingHorizontal: 22, paddingTop: 10 },
   sheetHeader: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 16 },
   sheetAvatar: { width: 54, height: 54, borderRadius: 27, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(223, 196, 150, 0.35)' },
   sheetInfo: { flex: 1 },
@@ -897,8 +981,7 @@ const s = StyleSheet.create({
   ghostBtnText: { fontWeight: '700', fontSize: 14 },
   trackBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#efe2c6', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#e4c98b' },
   disabledBtn: { opacity: 0.62 },
-  nearbyList: { marginTop: 14, maxHeight: SCREEN_HEIGHT * 0.42 },
-  nearbyListContent: { gap: 10, paddingBottom: 8 },
+  nearbyList: { marginTop: 14, gap: 10 },
   nearbyCard: { borderRadius: 20, borderWidth: 1, flexDirection: 'row', alignItems: 'center', padding: 10, gap: 10 },
   nearbyPressArea: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
   nearbyAvatarWrap: { position: 'relative' },

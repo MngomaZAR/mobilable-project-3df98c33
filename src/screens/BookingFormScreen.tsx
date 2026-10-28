@@ -71,6 +71,12 @@ const BookingFormScreen: React.FC = () => {
   const [quoteLoading, setQuoteLoading] = useState(false);
   const requestRef = React.useRef({ fingerprint: '', key: uid('booking') });
 
+  React.useEffect(() => {
+    if (serviceAccess.ready && !dispatchAllowed && bookingTimeMode === 'now') {
+      setBookingTimeMode('schedule');
+    }
+  }, [serviceAccess.ready, dispatchAllowed, bookingTimeMode]);
+
   const toggleSetValue = (set: Set<string>, setter: (next: Set<string>) => void, id: string) => {
     const next = new Set(set);
     if (next.has(id)) next.delete(id);
@@ -259,8 +265,7 @@ const BookingFormScreen: React.FC = () => {
   const estimatedRate = usesApi && !currentQuote ? 'Quote pending' : `R${estimatedTotalAmount.toLocaleString('en-ZA')}`;
   const intensityMultiplier = useMemo(() => 1 + ((intensityLevel - 1) * 0.15) + ((fanoutCount - 1) * 0.05), [fanoutCount, intensityLevel]);
   const previewQuoteTotal = estimatedTotalAmount;
-  const commissionAmount = currentQuote?.commission_amount ?? Math.round(estimatedTotalAmount * 0.20);
-  const vatAmount = 0;
+  const commissionAmount = currentQuote?.commission_amount ?? Math.round(estimatedTotalAmount * 0.30);
   const photographerPayout = currentQuote?.payout_amount ?? (estimatedTotalAmount - commissionAmount);
 
   if (!talent) {
@@ -627,10 +632,6 @@ const BookingFormScreen: React.FC = () => {
           <Text style={styles.breakdownLabel}>Platform fee</Text>
           <Text style={[styles.breakdownValue, { color: '#ef4444' }]}>-R{commissionAmount.toLocaleString('en-ZA')}</Text>
         </View>
-        {!usesApi ? <View style={styles.breakdownRow}>
-          <Text style={styles.breakdownLabel}>VAT (15% on fee)</Text>
-          <Text style={[styles.breakdownValue, { color: '#ef4444' }]}>-R{vatAmount.toLocaleString('en-ZA')}</Text>
-        </View> : null}
         <View style={[styles.breakdownRow, styles.breakdownTotal]}>
         <Text style={[styles.breakdownLabel, { fontWeight: '800', color: '#f8fafc' }]}>Talent payout</Text>
           <Text style={[styles.breakdownValue, { color: '#16a34a', fontWeight: '800' }]}>R{photographerPayout.toLocaleString('en-ZA')}</Text>

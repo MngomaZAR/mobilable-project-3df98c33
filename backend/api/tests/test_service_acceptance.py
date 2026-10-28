@@ -145,6 +145,30 @@ class ServiceGateTests(unittest.IsolatedAsyncioTestCase):
         self.assertLessEqual(datetime.fromisoformat(allowed['expires_at']), config.service_acceptance_expires_at)
         self.assertNotIn(config.livekit_api_secret, str(allowed))
 
+    async def test_qa_exposes_configured_provider_sandbox_and_services_without_canary_allowlist(self):
+        config = settings(APP_ENV='qa', SERVICE_ACCEPTANCE_USER_IDS='', SERVICE_ACCEPTANCE_EXPIRES_AT=None,
+                          PAYFAST_SANDBOX=True, PAYFAST_CHECKOUT_ENABLED=True)
+        public = {'capabilities': {'payment_checkout_configured': True, 'payment_checkout_enabled': True,
+                  'payment_refund_execution': True, 'bank_payout_execution': True,
+                  'video_call_service': False, 'instant_dispatch_service': False}}
+        with patch('app.readiness.checked_release_capabilities', AsyncMock(return_value=public)):
+            access = await account_service_access(config, 'qa-client')
+        self.assertEqual(access['permissions'], {'checkout': True, 'payouts': True, 'video': True, 'dispatch': True})
+        self.assertFalse(access['controlled_test'])
+        self.assertIsNone(access['payment_limit_zar'])
+
+    async def test_qa_without_provider_or_service_configuration_does_not_advertise_features(self):
+        config = settings(APP_ENV='qa', SERVICE_ACCEPTANCE_USER_IDS='', SERVICE_ACCEPTANCE_EXPIRES_AT=None,
+                          PAYFAST_SANDBOX=True, PAYFAST_CHECKOUT_ENABLED=False, LIVEKIT_ENABLED=False,
+                          LIVEKIT_API_KEY='', LIVEKIT_API_SECRET='', INSTANT_DISPATCH_ENABLED=False,
+                          OSRM_BASE_URL='')
+        public = {'capabilities': {'payment_checkout_configured': False, 'payment_checkout_enabled': False,
+                  'payment_refund_execution': False, 'bank_payout_execution': False,
+                  'video_call_service': False, 'instant_dispatch_service': False}}
+        with patch('app.readiness.checked_release_capabilities', AsyncMock(return_value=public)):
+            access = await account_service_access(config, 'qa-client')
+        self.assertEqual(access['permissions'], {'checkout': False, 'payouts': False, 'video': False, 'dispatch': False})
+
     async def test_public_gate_needs_real_accepted_record(self):
         with patch.object(acceptance, 'capabilities', AsyncMock(return_value={'video_call_service': False})):
             with self.assertRaises(HTTPException) as error:

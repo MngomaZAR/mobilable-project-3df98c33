@@ -1,0 +1,22 @@
+http:
+  routers:
+    papzii-qa-http:
+      rule: Host(`papzii-qa.129.151.188.15.nip.io`)
+      entryPoints:
+        - web
+      middlewares:
+        - redirect-to-https
+      service: papzii-qa-service
+    papzii-qa-https:
+      rule: Host(`papzii-qa.129.151.188.15.nip.io`)
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: letsencrypt
+      service: papzii-qa-service
+  services:
+    papzii-qa-service:
+      loadBalancer:
+        servers:
+          - url: http://papzii-api-qa:8000
+        passHostHeader: true

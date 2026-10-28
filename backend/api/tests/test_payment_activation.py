@@ -50,8 +50,14 @@ class PaymentActivationTests(unittest.IsolatedAsyncioTestCase):
     def test_readiness_distinguishes_configuration_from_activation(self):
         result = release_capabilities(self.settings())
         self.assertTrue(result["capabilities"]["payment_checkout_configured"])
+        self.assertTrue(result["capabilities"]["booking_commission_30_configured"])
         self.assertIn("payment_checkout_enabled", result["blockers"])
         self.assertFalse(result["required_capabilities_available"])
+
+    def test_non_thirty_percent_commission_blocks_public_readiness(self):
+        configured = self.settings().model_copy(update={"commission_rate": 0.20})
+        result = release_capabilities(configured)
+        self.assertIn("booking_commission_30_configured", result["blockers"])
 
     def test_plain_http_callbacks_are_not_ready(self):
         settings = self.settings().model_copy(update={"api_public_url": "http://api.unit.invalid"})

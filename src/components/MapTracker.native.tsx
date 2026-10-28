@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { BookingStatus } from '../types';
 import { MapLibreGL, isMapLibreNativeAvailable } from './MapLibreWrapper';
+import { useRoadRoute } from '../hooks/useRoadRoute';
 
 type Coordinate = {
   latitude: number;
@@ -18,6 +19,7 @@ export const MapTracker: React.FC<Props> = ({ client, photographer, status }) =>
   const { width } = useWindowDimensions();
   const cameraRef = useRef<any>(null);
   const [seconds, setSeconds] = useState(0);
+  const roadRoute = useRoadRoute(photographer, client);
 
   const centerLat = (client.latitude + photographer.latitude) / 2;
   const centerLng = (client.longitude + photographer.longitude) / 2;
@@ -27,12 +29,10 @@ export const MapTracker: React.FC<Props> = ({ client, photographer, status }) =>
     properties: {},
     geometry: {
       type: 'LineString',
-      coordinates: [
-        [client.longitude, client.latitude],
-        [photographer.longitude, photographer.latitude],
-      ],
+      coordinates: roadRoute.coordinates,
     },
-  }), [client.latitude, client.longitude, photographer.latitude, photographer.longitude]);
+  }), [roadRoute.coordinates]);
+  const hasRoadRoute = roadRoute.status === 'ready' && roadRoute.coordinates.length >= 2;
 
   useEffect(() => {
     if (!isMapLibreNativeAvailable) return;
@@ -77,7 +77,7 @@ export const MapTracker: React.FC<Props> = ({ client, photographer, status }) =>
     <View style={[styles.container, { height: Math.min(440, width < 480 ? 280 : 360) }]}>
       <MapLibreGL.MapView
         style={StyleSheet.absoluteFill}
-        {...{ styleURL: "https://tiles.openfreemap.org/styles/liberty" } as any}
+        mapStyle="https://tiles.openfreemap.org/styles/liberty"
         logoEnabled={false}
         attributionEnabled={false}
       >
@@ -86,8 +86,7 @@ export const MapTracker: React.FC<Props> = ({ client, photographer, status }) =>
           centerCoordinate={[centerLng, centerLat]}
           zoomLevel={10}
         />
-        {/* Line between client and photographer */}
-        <MapLibreGL.ShapeSource id="route-source" shape={lineFeature}>
+        {hasRoadRoute ? <MapLibreGL.ShapeSource id="route-source" shape={lineFeature}>
           <MapLibreGL.LineLayer
             id="route-glow"
             style={{
@@ -106,10 +105,9 @@ export const MapTracker: React.FC<Props> = ({ client, photographer, status }) =>
               lineWidth: 4,
               lineCap: 'round',
               lineJoin: 'round',
-              lineDasharray: [2, 6],
             }}
           />
-        </MapLibreGL.ShapeSource>
+        </MapLibreGL.ShapeSource> : null}
         {/* Photographer pin */}
         <MapLibreGL.PointAnnotation
           id="photographer-pin"
@@ -127,6 +125,13 @@ export const MapTracker: React.FC<Props> = ({ client, photographer, status }) =>
           <View style={[styles.pin, { backgroundColor: '#2563eb' }]} />
         </MapLibreGL.PointAnnotation>
       </MapLibreGL.MapView>
+      {!hasRoadRoute ? (
+        <View style={styles.routeUnavailable} pointerEvents="none">
+          <Text style={styles.routeUnavailableText}>
+            {roadRoute.status === 'loading' ? 'Finding road route...' : 'Road route unavailable'}
+          </Text>
+        </View>
+      ) : null}
       <View style={styles.timerOverlay}>
         <Text style={styles.timerText}>{formatTimer(seconds)}</Text>
         <Text style={styles.timerPlus}>+</Text>
@@ -162,6 +167,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 10,
     borderRadius: 18,
+  },
+  routeUnavailable: {
+    position: 'absolute',
+    top: 16,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(15, 23, 42, 0.82)',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  routeUnavailableText: {
+    color: '#f8fafc',
+    fontSize: 13,
+    fontWeight: '700',
   },
   timerText: {
     color: '#f5e7cc',

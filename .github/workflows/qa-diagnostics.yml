@@ -1,0 +1,50 @@
+name: Diagnose Oracle QA runtime
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - codex/submit-play-qa-fix
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    env:
+      ORACLE_SSH_USER: ${{ secrets.ORACLE_SSH_USER }}
+      ORACLE_SSH_PRIVATE_KEY: ${{ secrets.ORACLE_SSH_PRIVATE_KEY }}
+      ORACLE_KNOWN_HOSTS: ${{ secrets.ORACLE_KNOWN_HOSTS }}
+    steps:
+      - name: Capture redacted QA runtime evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$ORACLE_SSH_USER" && test -n "$ORACLE_SSH_PRIVATE_KEY" && test -n "$ORACLE_KNOWN_HOSTS"
+          key="$RUNNER_TEMP/oracle-key"
+          hosts="$RUNNER_TEMP/oracle-hosts"
+          trap 'rm -f "$key" "$hosts"' EXIT
+          umask 077
+          printf '%s\n' "$ORACLE_SSH_PRIVATE_KEY" > "$key"
+          printf '%s\n' "$ORACLE_KNOWN_HOSTS" > "$hosts"
+          options=(-i "$key" -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$hosts" -o ConnectTimeout=15)
+          ssh "${options[@]}" "$ORACLE_SSH_USER@129.151.188.15" 'bash -s' <<'REMOTE'
+          set -u
+          echo "== disk =="
+          df -h / /opt 2>/dev/null || true
+          echo "== containers =="
+          docker ps -a --format "table {{.Names}}\t{{.Status}}\t{{.Image}}" | grep -E "papzii-(api-qa|worker-qa|postgres|osrm)" || true
+          echo "== qa api state =="
+          docker inspect papzii-api-qa --format 'status={{.State.Status}} restarts={{.RestartCount}} image={{.Config.Image}}' 2>/dev/null || true
+          echo "== postgres readiness =="
+          docker exec papzii-postgres pg_isready 2>&1 || true
+          echo "== qa health contract =="
+          curl -sS -i --max-time 15 http://127.0.0.1:18000/health/contract 2>&1 || true
+          echo "== qa api recent errors (emails and bearer-like tokens redacted) =="
+          docker logs --since 30m --tail 240 papzii-api-qa 2>&1 \
+            | sed -E 's/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/[redacted-email]/g; s/(Bearer )[A-Za-z0-9._~-]+/\1[redacted-token]/g; s/(password|secret|token|key)[=:][^ ,}]*/\1=[redacted]/Ig' \
+            | tail -n 240 || true
+          REMOTE

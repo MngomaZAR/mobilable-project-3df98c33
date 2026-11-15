@@ -120,6 +120,31 @@ export const SocialFeed: React.FC<SocialFeedProps> = ({ onCreatePost, onViewPost
 
   useEffect(() => {
     let mounted = true;
+    const loadBlockedUsers = async () => {
+      const userId = appState.currentUser?.id;
+      if (!userId) {
+        setBlockedUserIds(new Set());
+        return;
+      }
+      try {
+        const { data, error } = await backendDb
+          .from('user_blocks')
+          .select('blocked_id')
+          .eq('blocker_id', userId);
+        if (error) throw error;
+        if (mounted) {
+          setBlockedUserIds(new Set((data ?? []).map((row: { blocked_id: string }) => row.blocked_id)));
+        }
+      } catch {
+        // A failed block read must not prevent the feed from loading.
+      }
+    };
+    loadBlockedUsers();
+    return () => { mounted = false; };
+  }, [appState.currentUser?.id]);
+
+  useEffect(() => {
+    let mounted = true;
     const loadStories = async () => {
       try {
         const { data, error } = await backendDb

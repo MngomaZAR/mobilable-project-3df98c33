@@ -2,9 +2,6 @@ import { invokeBackendFunction } from "../config/backendFunctions";
 
 type CreatePayfastCheckoutInput = {
   bookingId: string;
-  returnUrl: string;
-  cancelUrl: string;
-  notifyUrl: string;
 };
 
 type CreatePayfastCheckoutResult = {
@@ -30,17 +27,9 @@ const validateSignedPayfastUrl = (paymentUrl: string) => {
   }
 };
 
-export const createPayfastCheckoutLink = async ({
-  bookingId,
-  returnUrl,
-  cancelUrl,
-  notifyUrl,
-}: CreatePayfastCheckoutInput): Promise<CreatePayfastCheckoutResult> => {
+export const createPayfastCheckoutLink = async ({ bookingId }: CreatePayfastCheckoutInput): Promise<CreatePayfastCheckoutResult> => {
   const { data, error } = await invokeBackendFunction("payfast-handler", {
     booking_id: bookingId,
-    return_url: returnUrl,
-    cancel_url: cancelUrl,
-    notify_url: notifyUrl,
   });
 
   if (error) {

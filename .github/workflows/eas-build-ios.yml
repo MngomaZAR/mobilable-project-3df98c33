@@ -31,14 +31,14 @@ jobs:
       - name: Setup EAS
         uses: expo/expo-github-action@v8
         with:
-          eas-version: latest
+          eas-version: 27.10.0
           token: ${{ secrets.EXPO_TOKEN }}
 
       - name: Install dependencies
         run: npm ci --no-audit --no-fund --omit=optional
 
       - name: Validate release env
-        run: npx eas-cli@latest env:exec production "npm run validate:env:release" --non-interactive
+        run: npx eas-cli@27.10.0 env:exec production "npm run validate:env:release" --non-interactive
 
       - name: Build iOS (production profile)
-        run: npx eas-cli build --platform ios --profile production --non-interactive
+        run: npx eas-cli@27.10.0 build --platform ios --profile production --non-interactive

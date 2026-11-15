@@ -1,0 +1,62 @@
+name: EAS Store-Signed Play Internal QA
+
+# Builds the restricted QA app with store distribution signing, verifies the
+# exact artifact, and submits it to the Google Play internal testing track.
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - release/testflight-2026-06
+    paths:
+      - .github/workflows/eas-build-play-qa.yml
+
+jobs:
+  build_and_submit_android:
+    runs-on: ubuntu-latest
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      EXPO_PUBLIC_API_BASE_URL: https://papzii-qa.129.151.188.15.nip.io
+      EXPO_PUBLIC_BACKEND_PROVIDER: api
+      EXPO_PUBLIC_APP_ENV: qa
+      EXPO_PUBLIC_STORE_TARGET: internal
+      EXPO_PUBLIC_RESTRICTED_BETA: "true"
+      EXPO_PUBLIC_DIGITAL_BILLING_PROVIDER: disabled
+      EXPO_PUBLIC_DISABLE_DIGITAL_PURCHASES: "true"
+      EAS_BUILD_PROFILE: testflight-qa
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate required secret
+        run: test -n "$EXPO_TOKEN" || (echo "Missing EXPO_TOKEN" && exit 1)
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: 27.10.0
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund --omit=optional
+
+      - name: Verify restricted QA configuration
+        run: node scripts/eas-release-gate.mjs
+
+      - name: Build store-signed QA Android bundle
+        run: eas build --platform android --profile testflight-qa --non-interactive --wait --json > "$RUNNER_TEMP/build.json"
+
+      - name: Verify exact store artifact
+        id: artifact
+        run: |
+          BUILD_ID="$(jq -r 'if type == "array" then .[0].id else .id end' "$RUNNER_TEMP/build.json")"
+          test -n "$BUILD_ID" && test "$BUILD_ID" != "null" || { echo "EAS did not return a build ID"; cat "$RUNNER_TEMP/build.json"; exit 1; }
+          eas build:view "$BUILD_ID" --json > "$RUNNER_TEMP/store-build.json"
+          STORE_BUILD_ID="$BUILD_ID" STORE_SOURCE_REVISION="$GITHUB_SHA" STORE_PLATFORM=android \
+            node scripts/assert-store-build.mjs "$RUNNER_TEMP/store-build.json"
+          echo "build_id=$BUILD_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Submit verified QA bundle to Google Play internal testing
+        run: eas submit --platform android --profile beta-testing --id "${{ steps.artifact.outputs.build_id }}" --non-interactive

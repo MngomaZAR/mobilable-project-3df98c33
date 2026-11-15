@@ -6,8 +6,10 @@ export function assertStoreBuild(build, { id, platform, revision }) {
   if (!/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/.test(id || '') || !/^[a-f0-9]{40}$/.test(revision || '') || !['ios', 'android'].includes(platform)) throw new Error('A specific build ID, platform and full source revision are required.');
   if (build?.id !== id || build?.status !== 'FINISHED') throw new Error('The selected build is not the finished requested artifact.');
   if (build.platform !== platform.toUpperCase() || build.gitCommitHash !== revision) throw new Error('The artifact platform/source does not match the checked-out tested source.');
-  const profiles = platform === 'ios' ? ['production', 'production-ios-local'] : ['production'];
-  if (!profiles.includes(build.buildProfile)) throw new Error('Only a store-signed production profile may be submitted.');
+  const profiles = platform === 'ios'
+    ? ['production', 'production-ios-local', 'beta-testing', 'testflight-qa']
+    : ['production', 'beta-testing'];
+  if (!profiles.includes(build.buildProfile)) throw new Error('Only an approved store-distributed profile may be submitted.');
   if (build.project?.id && build.project.id !== 'f0c1ef90-ac26-4e4c-a799-77b377e2f452') throw new Error('The artifact belongs to a different EAS project.');
   return { id, platform, revision, profile: build.buildProfile, status: build.status };
 }

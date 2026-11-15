@@ -7,6 +7,9 @@ const candidate = { id: options.id, platform: 'IOS', status: 'FINISHED', gitComm
 test('exact finished tested production artifact is accepted', () => {
   assert.equal(assertStoreBuild(candidate, options).id, options.id);
 });
+test('store-signed TestFlight QA artifact is accepted', () => {
+  assert.equal(assertStoreBuild({ ...candidate, buildProfile: 'testflight-qa' }, options).profile, 'testflight-qa');
+});
 test('different source/platform/status/project/profile and missing ID fail closed', () => {
   for (const override of [{ gitCommitHash: 'b'.repeat(40) }, { platform: 'ANDROID' }, { status: 'ERRORED' }, { buildProfile: 'preview' }, { id: 'other' }, { project: { id: 'other' } }]) {
     assert.throws(() => assertStoreBuild({ ...candidate, ...override }, options));

@@ -1,0 +1,45 @@
+name: EAS Submit iOS Internal QA
+
+# Submit the exact restricted QA IPA to TestFlight after the Apple account
+# agreements are active. Public production submission remains separately gated.
+on:
+  workflow_dispatch:
+    inputs:
+      build_id:
+        description: Finished internal-qa iOS EAS build ID from this source revision
+        required: true
+        type: string
+
+jobs:
+  submit_ios_internal_qa:
+    runs-on: ubuntu-latest
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      STORE_BUILD_ID: ${{ inputs.build_id }}
+      STORE_PLATFORM: ios
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate required secrets
+        run: test -n "$EXPO_TOKEN" || (echo "Missing EXPO_TOKEN" && exit 1)
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: 27.10.0
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund --omit=optional
+
+      - name: Verify exact restricted QA artifact
+        run: |
+          eas build:view "$STORE_BUILD_ID" --json > "$RUNNER_TEMP/store-build.json"
+          STORE_SOURCE_REVISION="$(git rev-parse HEAD)" node scripts/assert-store-build.mjs "$RUNNER_TEMP/store-build.json"
+
+      - name: Submit the verified QA artifact to TestFlight
+        run: eas submit --platform ios --profile beta-testing --id "$STORE_BUILD_ID" --non-interactive

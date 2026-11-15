@@ -49,9 +49,9 @@ jobs:
       - name: Verify exact store artifact
         run: |
           eas build:view "$STORE_BUILD_ID" --json > "$RUNNER_TEMP/store-build.json"
+          node scripts/assert-store-build.mjs "$RUNNER_TEMP/store-build.json"
           git fetch --no-tags --depth=1 origin "$STORE_SOURCE_REVISION"
           git checkout --detach "$STORE_SOURCE_REVISION"
-          node scripts/assert-store-build.mjs "$RUNNER_TEMP/store-build.json"
 
       - name: Submit verified QA bundle to Google Play internal testing
         run: eas submit --platform android --profile beta-testing --id "$STORE_BUILD_ID" --non-interactive

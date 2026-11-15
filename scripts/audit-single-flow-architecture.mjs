@@ -20,9 +20,9 @@ const requiredChecks = [
     includes: 'invokeBackendFunction("payfast-handler"',
   },
   {
-    name: 'Payment screen uses canonical notify URL helper',
+    name: 'Payment screen delegates callback URL ownership to the backend',
     file: 'src/screens/PaymentScreen.tsx',
-    includes: 'getDefaultPayfastNotifyUrl()',
+    includes: 'createPayfastCheckoutLink({ bookingId })',
   },
 ];
 

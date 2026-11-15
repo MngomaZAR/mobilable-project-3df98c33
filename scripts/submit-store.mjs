@@ -18,9 +18,9 @@ try {
   if (command('git', ['status', '--porcelain', '--untracked-files=normal']).trim()) throw new Error('Commit the candidate changes before selecting its store artifact.');
   command(process.execPath, ['scripts/validate-env.mjs', '--mode=release'], { stdio: 'inherit' });
   const cliOptions = { shell: process.platform === 'win32' };
-  const build = JSON.parse(command(npx, ['eas-cli@24.10.0', 'build:view', id, '--json'], cliOptions));
+  const build = JSON.parse(command(npx, ['eas-cli@27.10.0', 'build:view', id, '--json'], cliOptions));
   console.log(JSON.stringify(assertStoreBuild(build, { id, platform, revision })));
-  command(npx, ['eas-cli@24.10.0', 'submit', '--platform', platform, '--profile', 'production', '--id', id,
+  command(npx, ['eas-cli@27.10.0', 'submit', '--platform', platform, '--profile', 'production', '--id', id,
     '--non-interactive', '--wait'], { ...cliOptions, stdio: 'inherit', timeout: 3600000 });
 } catch (error) {
   console.error(error.message);

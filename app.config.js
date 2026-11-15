@@ -35,6 +35,27 @@ export default {
     ios: {
       supportsTablet: true,
       bundleIdentifier: APP_IDS.bundleIdentifier,
+      runtimeVersion: { policy: "fingerprint" },
+      privacyManifests: {
+        NSPrivacyAccessedAPITypes: [
+          {
+            NSPrivacyAccessedAPIType: "NSPrivacyAccessedAPICategoryFileTimestamp",
+            NSPrivacyAccessedAPITypeReasons: ["0A2A.1", "3B52.1", "C617.1"]
+          },
+          {
+            NSPrivacyAccessedAPIType: "NSPrivacyAccessedAPICategoryDiskSpace",
+            NSPrivacyAccessedAPITypeReasons: ["E174.1", "85F4.1"]
+          },
+          {
+            NSPrivacyAccessedAPIType: "NSPrivacyAccessedAPICategorySystemBootTime",
+            NSPrivacyAccessedAPITypeReasons: ["35F9.1"]
+          },
+          {
+            NSPrivacyAccessedAPIType: "NSPrivacyAccessedAPICategoryUserDefaults",
+            NSPrivacyAccessedAPITypeReasons: ["CA92.1"]
+          }
+        ]
+      },
       infoPlist: {
         NSCameraUsageDescription: `${BRAND.name} needs camera access for KYC verification and story creation.`,
         NSMicrophoneUsageDescription: `${BRAND.name} uses your microphone for booking calls and voice messages.`,
@@ -119,6 +140,10 @@ export default {
       EXPO_PUBLIC_STORE_TARGET: process.env.EXPO_PUBLIC_STORE_TARGET || "development",
       EXPO_PUBLIC_DIGITAL_BILLING_PROVIDER: process.env.EXPO_PUBLIC_DIGITAL_BILLING_PROVIDER || "external",
       EXPO_PUBLIC_DISABLE_DIGITAL_PURCHASES: process.env.EXPO_PUBLIC_DISABLE_DIGITAL_PURCHASES || "false"
+    },
+    updates: {
+      url: "https://u.expo.dev/f0c1ef90-ac26-4e4c-a799-77b377e2f452",
+      checkAutomatically: "ON_LOAD"
     }
   }
 };

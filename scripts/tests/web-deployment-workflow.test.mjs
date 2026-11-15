@@ -19,7 +19,7 @@ test('web export shares the existing EAS environment with full release validatio
 test('web deployment is explicit, least-privilege and pinned', () => {
   assert.deepEqual(Object.keys(workflow.on), ['workflow_dispatch']);
   assert.deepEqual(workflow.permissions, { contents: 'read' });
-  assert.equal(steps.find(step => step.uses === 'expo/expo-github-action@v8').with['eas-version'], '24.10.0');
+  assert.equal(steps.find(step => step.uses === 'expo/expo-github-action@v8').with['eas-version'], '27.10.0');
   assert.equal(steps.find(step => step.run?.startsWith('eas deploy ')).run,
     'eas deploy --prod --environment production --non-interactive');
 });

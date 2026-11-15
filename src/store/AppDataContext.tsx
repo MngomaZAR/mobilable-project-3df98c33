@@ -670,12 +670,9 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
           await sleep(600);
           return fetchPosts({ reset, attempt: attempt + 1, preserveExisting });
         }
-        const hasUsablePosts = stateRef.current.posts.length > 0 || initialState.posts.length > 0;
+        const hasUsablePosts = stateRef.current.posts.length > 0;
         if (hasUsablePosts && (isRecoverableAbort(err) || isTimeoutError(err) || /failed to fetch|network/i.test(getErrorMessage(err)))) {
           console.warn('Feed network timed out, using cached posts.');
-          if (stateRef.current.posts.length === 0) {
-            setState({ posts: initialState.posts });
-          }
           setError(null);
         } else {
           logError('fetch_posts', err);

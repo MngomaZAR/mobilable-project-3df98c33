@@ -974,7 +974,9 @@ const s = StyleSheet.create({
   metricItem: { flex: 1, borderRadius: 16, paddingHorizontal: 10, paddingVertical: 13, alignItems: 'center', borderWidth: 1, minHeight: 82 },
   metricLabel: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 6 },
   metricValue: { fontSize: 14, fontWeight: '800', textAlign: 'center', textTransform: 'capitalize' },
-  sheetActions: { flexDirection: 'row', gap: 12 },
+  // Actions must wrap on narrow phones; a fixed row made the final control
+  // inaccessible when a selected profile exposed three actions.
+  sheetActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   primaryBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#d7b46a', borderRadius: 16, paddingVertical: 16, shadowColor: '#d7b46a', shadowOpacity: 0.26, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 6 },
   primaryBtnText: { color: '#fff', fontWeight: '800', fontSize: 16 },
   ghostBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderRadius: 16, paddingVertical: 14, gap: 6, backgroundColor: 'rgba(255,255,255,0.06)' },

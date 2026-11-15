@@ -44,6 +44,13 @@ else
     docker build -t "$api_image" -f "$root/backend/api/Dockerfile" "$root"
     docker build -t "$worker_image" -f "$root/backend/worker/Dockerfile" "$root"
 fi
+# Keep the QA server's reported revision aligned with the immutable candidate
+# used for the containers. This prevents a stale APP_VERSION from masking a
+# correct image during device acceptance.
+if [[ -n "${QA_SOURCE_REVISION:-}" ]]; then
+    sed -i '/^APP_VERSION=/d' "$root/qa.env"
+    printf 'APP_VERSION=%s\n' "$QA_SOURCE_REVISION" >> "$root/qa.env"
+fi
 docker run --rm --network papzii_default --env-file "$root/qa.env" "$api_image" python -m app.migrate
 docker run --rm --network papzii_default --env-file "$root/qa.env" "$api_image" python -m unittest discover -s tests -p 'test_*.py' -v
 if [[ "${1:-}" == '--build-only' ]]; then

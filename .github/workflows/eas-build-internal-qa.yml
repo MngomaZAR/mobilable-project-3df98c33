@@ -38,7 +38,7 @@ jobs:
 
       - uses: expo/expo-github-action@v8
         with:
-          eas-version: latest
+          eas-version: 27.10.0
           token: ${{ secrets.EXPO_TOKEN }}
 
       - name: Install dependencies
@@ -48,4 +48,4 @@ jobs:
         run: node scripts/eas-release-gate.mjs
 
       - name: Build restricted QA binary
-        run: npx eas-cli@latest build --platform "${{ inputs.platform }}" --profile internal-qa --auto-submit-with-profile beta-testing --non-interactive --wait --message "Papzii internal QA, $GITHUB_SHA"
+        run: npx eas-cli@27.10.0 build --platform "${{ inputs.platform }}" --profile internal-qa --auto-submit-with-profile beta-testing --non-interactive --wait --message "Papzii internal QA, $GITHUB_SHA"

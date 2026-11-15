@@ -82,6 +82,24 @@ test('internal QA build targets the dedicated QA API and keeps purchases disable
   assert.throws(() => assertRestrictedTestingConfig({ ...env, EXPO_PUBLIC_API_BASE_URL: 'https://papzii-api.example.com' }));
 });
 
+test('store-signed TestFlight QA profile targets the dedicated QA API', () => {
+  const config = JSON.parse(fs.readFileSync(new URL('../../eas.json', import.meta.url), 'utf8'));
+  const profile = config.build['testflight-qa'];
+  assert.equal(profile.extends, 'beta-testing');
+  assert.equal(profile.distribution, 'store');
+  assert.equal(profile.environment, 'production');
+  assert.equal(profile.env.EXPO_PUBLIC_APP_ENV, 'qa');
+  assert.match(profile.env.EXPO_PUBLIC_API_BASE_URL, /^https:\/\/papzii-qa\./);
+  const env = {
+    ...beta,
+    EAS_BUILD_PROFILE: 'testflight-qa',
+    EXPO_PUBLIC_APP_ENV: 'qa',
+    EXPO_PUBLIC_API_BASE_URL: profile.env.EXPO_PUBLIC_API_BASE_URL,
+  };
+  assert.equal(isRestrictedTestingProfile(env), true);
+  assert.doesNotThrow(() => assertRestrictedTestingConfig(env));
+});
+
 test('manual QA build workflow runs the restricted-profile release gate', () => {
   const workflow = fs.readFileSync(new URL('../../.github/workflows/eas-build-internal-qa.yml', import.meta.url), 'utf8');
   assert.match(workflow, /EAS_BUILD_PROFILE:\s*internal-qa/);

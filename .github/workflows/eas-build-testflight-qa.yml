@@ -4,6 +4,11 @@ name: EAS Store-Signed TestFlight QA
 # verifies the exact artifact before submitting it to TestFlight.
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - release/testflight-2026-06
+    paths:
+      - .github/workflows/eas-build-testflight-qa.yml
 
 jobs:
   build_and_submit_ios:

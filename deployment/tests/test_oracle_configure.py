@@ -84,8 +84,20 @@ class ConfigurationSafetyTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             configure.validate_updates({'SERVICE_ACCEPTANCE_USER_IDS': 'client'})
 
-    def test_cannot_change_release_or_financial_acceptance(self):
-        for key in ("DATABASE_URL", "API_PUBLIC_URL", "ADMIN_USER_IDS", "APP_ENV", "PAYFAST_SANDBOX", "FINANCIAL_PAYOUT_ACCEPTANCE_ID", "ALLOW_RUNTIME_SCHEMA_CHANGES", "EXPO_PUBLIC_API_KEY"):
+    def test_approved_commission_is_exact_and_does_not_enable_money_movement(self):
+        self.assertEqual(configure.validate_updates({"COMMISSION_RATE": "0.30"}), {"COMMISSION_RATE": "0.30"})
+        for rate in ("0.2", "0.7", "NaN", "Infinity", "invalid"):
+            with self.subTest(rate=rate), self.assertRaises(ValueError):
+                configure.validate_updates({"COMMISSION_RATE": rate})
+        original = {"services": {"api": {"image": "api"}, "worker": {"image": "worker"}}}
+        env = {"DATABASE_URL": "same", "COMMISSION_RATE": "0.20", "PAYFAST_CHECKOUT_ENABLED": "false"}
+        result = configure.configured_compose(original, env, env, {"COMMISSION_RATE": "0.30"})
+        for name in ("api", "worker"):
+            self.assertEqual(result["services"][name]["environment"]["COMMISSION_RATE"], "0.30")
+            self.assertEqual(result["services"][name]["environment"]["PAYFAST_CHECKOUT_ENABLED"], "false")
+
+    def test_cannot_change_release_or_unrelated_runtime_settings(self):
+        for key in ("DATABASE_URL", "API_PUBLIC_URL", "ADMIN_USER_IDS", "APP_ENV", "ALLOW_RUNTIME_SCHEMA_CHANGES", "EXPO_PUBLIC_API_KEY"):
             with self.subTest(key=key), self.assertRaises(ValueError):
                 configure.validate_updates({key: "value"})
 
@@ -140,6 +152,37 @@ class ConfigurationSafetyTests(unittest.TestCase):
                   "PAYFAST_CHECKOUT_ENABLED": "false"}
         with self.assertRaises(ValueError):
             configure.configured_compose(config, env, env, values)
+
+    def test_financial_provider_settings_are_complete_and_payout_credentials_do_not_rotate(self):
+        refunds = {"PAYFAST_REFUNDS_ENABLED": "true", "FINANCIAL_REFUND_ACCEPTANCE_ID": "refund-proof"}
+        payouts = {"STITCH_CLIENT_ID": "client", "STITCH_CLIENT_SECRET": "secret",
+                   "STITCH_WEBHOOK_SECRET": "whsec_MTIzNDU2Nzg5MDEyMzQ1Ng==", "STITCH_MODE": "live",
+                   "STITCH_PAYOUTS_ENABLED": "true", "FINANCIAL_PAYOUT_ACCEPTANCE_ID": "payout-proof"}
+        self.assertEqual(configure.validate_updates(refunds), refunds)
+        self.assertEqual(configure.validate_updates(payouts), payouts)
+        with self.assertRaises(ValueError):
+            configure.validate_updates({"PAYFAST_REFUNDS_ENABLED": "true"})
+        with self.assertRaises(ValueError):
+            configure.validate_updates({**payouts, "STITCH_MODE": "invalid"})
+        original = {"services": {"api": {"image": "api"}, "worker": {"image": "worker"}}}
+        env = {"DATABASE_URL": "same", **payouts}
+        with self.assertRaises(ValueError):
+            configure.configured_compose(original, env, env, {**payouts, "STITCH_CLIENT_SECRET": "replacement"})
+
+    def test_live_financial_flags_require_exact_evidence(self):
+        env = {"PAYFAST_REFUNDS_ENABLED": "true", "PAYFAST_SANDBOX": "false",
+               "PAYFAST_MERCHANT_ID": "merchant", "FINANCIAL_REFUND_ACCEPTANCE_ID": "refund-proof",
+               "STITCH_PAYOUTS_ENABLED": "true", "STITCH_MODE": "live", "STITCH_CLIENT_ID": "client",
+               "FINANCIAL_BANK_ENCRYPTION_KEY": base64.urlsafe_b64encode(b'K' * 32).decode(),
+               "FINANCIAL_PAYOUT_ACCEPTANCE_ID": "payout-proof"}
+        required = configure.required_financial_acceptances(env)
+        self.assertEqual(required, [("payfast", "refund", "merchant", "live", "refund-proof"),
+                                    ("stitch", "payout", "client", "live", "payout-proof")])
+        configure.verify_financial_acceptances(env, lambda *args: True)
+        with self.assertRaises(ValueError):
+            configure.verify_financial_acceptances(env, lambda *args: False)
+        with self.assertRaises(ValueError):
+            configure.required_financial_acceptances({**env, "PAYFAST_SANDBOX": "true"})
 
     def test_preserves_persistent_recovery_encryption_key(self):
         config = {"services": {"api": {"image": "api"}, "worker": {"image": "worker"}}}

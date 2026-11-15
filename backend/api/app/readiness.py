@@ -2,7 +2,7 @@ from .config import Settings
 from .auth_security import recovery_configured
 from .financial_operations import FinancialConfig, capabilities as financial_capabilities
 from .service_acceptance import capabilities as service_capabilities
-from .service_acceptance import canary_user, secure_endpoint
+from .service_acceptance import canary_user, configured as service_configured
 from datetime import UTC, datetime, timedelta
 
 
@@ -15,6 +15,7 @@ def release_capabilities(settings: Settings, financial: dict | None = None, serv
         "object_storage_configured": bool(settings.minio_endpoint and settings.minio_access_key and settings.minio_secret_key),
         "payment_checkout_configured": bool(settings.payfast_merchant_id and settings.payfast_merchant_key and settings.payfast_passphrase and settings.api_public_url.startswith("https://")),
         "payment_checkout_enabled": settings.payfast_checkout_enabled,
+        "booking_commission_30_configured": abs(settings.commission_rate - 0.30) < 0.000001,
         "admin_access_configured": bool(settings.admin_user_ids.strip()),
         "payment_refund_execution": financial.get('refund_execution') is True,
         "bank_payout_execution": financial.get('creator_payout_execution') is True,
@@ -53,8 +54,12 @@ async def checked_release_capabilities(settings: Settings) -> dict:
             services = await service_capabilities(settings)
         except Exception:
             services = {}
-    financial['refund_execution'] = financial.get('refund_execution') is True and not settings.payfast_sandbox
-    financial['creator_payout_execution'] = financial.get('creator_payout_execution') is True and config.stitch_mode == 'live'
+    financial['refund_execution'] = financial.get('refund_execution') is True and (
+        not settings.payfast_sandbox or settings.app_env == 'qa'
+    )
+    financial['creator_payout_execution'] = financial.get('creator_payout_execution') is True and (
+        config.stitch_mode == 'live' or (settings.app_env == 'qa' and config.stitch_mode == 'sandbox')
+    )
     return release_capabilities(settings, financial, services)
 
 
@@ -62,12 +67,9 @@ async def account_service_access(settings: Settings, user_id: str) -> dict:
     readiness = await checked_release_capabilities(settings)
     public = readiness['capabilities']
     test_access = canary_user(settings, user_id)
-    video_configured = False
-    try:
-        secure_endpoint(settings.livekit_url, 'wss')
-        video_configured = bool(settings.livekit_api_key and settings.livekit_api_secret)
-    except ValueError:
-        pass
+    qa_sandbox_checkout = settings.app_env == 'qa' and settings.payfast_sandbox and settings.payfast_checkout_enabled
+    video_configured = service_configured(settings, 'video_call_service')
+    dispatch_configured = service_configured(settings, 'instant_dispatch_service')
     expires = datetime.now(UTC) + timedelta(seconds=60)
     if test_access:
         expires = min(expires, settings.service_acceptance_expires_at)
@@ -76,10 +78,12 @@ async def account_service_access(settings: Settings, user_id: str) -> dict:
         'expires_at': expires.isoformat(), 'controlled_test': test_access,
         'permissions': {
             'checkout': bool(public['payment_checkout_configured'] and (
-                test_access or (public['payment_checkout_enabled'] and public['payment_refund_execution'] and public['bank_payout_execution']))),
+                test_access or (qa_sandbox_checkout and public['payment_checkout_enabled'])
+                or (public['payment_checkout_enabled'] and public['payment_refund_execution'] and public['bank_payout_execution']))),
             'payouts': public['bank_payout_execution'],
-            'video': public['video_call_service'] or (test_access and video_configured),
-            'dispatch': public['instant_dispatch_service'] or (test_access and bool(settings.osrm_base_url)),
+            'video': public['video_call_service'] or (settings.app_env == 'qa' and video_configured) or (test_access and video_configured),
+            'dispatch': public['instant_dispatch_service'] or (settings.app_env == 'qa' and dispatch_configured)
+                or (test_access and dispatch_configured),
         },
         'payment_limit_zar': str(settings.payfast_acceptance_max_amount) if test_access else None,
     }

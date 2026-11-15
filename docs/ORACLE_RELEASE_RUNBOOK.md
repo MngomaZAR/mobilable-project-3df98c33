@@ -21,6 +21,33 @@ financial, native-device or app-store acceptance.
 
 ## Promotion Procedure
 
+### GitHub Oracle Promotion
+
+`Deploy Backend to Oracle` is a manual workflow for this existing host. Supply
+the full candidate commit after both `CI` and `Build Backend Images` succeed
+for that commit. The production environment must supply `ORACLE_SSH_USER`,
+`ORACLE_SSH_PRIVATE_KEY` and `ORACLE_KNOWN_HOSTS`. Host identity must come from
+the existing verified connection; do not disable host checking or replace it
+with an unverified scan during deployment.
+
+The workflow resolves immutable API/worker digests, uploads the deployment
+helpers, restores a production backup for rehearsal, then uses the existing
+guarded promotion helper. Resolved environments and private receipts stay on
+Oracle. It verifies the public serving revision after promotion. It does not
+activate checkout, refunds, payouts or public store distribution.
+
+The wrapper refuses a duplicate candidate directory so a failed attempt cannot
+silently overwrite previous evidence. Inspect its private receipt/logs before
+retrying. The staging directory is under `/tmp`; the root-owned candidate copy
+is under `/opt/papzii/releases/<revision>`.
+
+As of 13 October, the older `papzi` micro instance at `84.12.74.134` is accessible
+but has no Docker/backend installation. It is not a substitute for
+`papzi-prod-a1` at `129.151.188.15`. Production instance OCID:
+`ocid1.instance.oc1.af-johannesburg-1.anvg4ljrgboq5pqckfd46ilaj33fimlcwsuacks7j7sluhsie7chn6rtws6q`.
+
+### Direct Guarded Promotion
+
 1. Verify CI/protocol results for the exact backend revision and both GHCR digests.
    Run `python -m unittest discover -s deployment/tests -v` for release-helper guards.
 2. On Oracle, run `deployment/oracle_release.py` as root with `--revision`,

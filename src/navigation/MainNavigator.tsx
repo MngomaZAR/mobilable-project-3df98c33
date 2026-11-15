@@ -124,6 +124,7 @@ const TabsNavigator = () => {
       <Tab.Navigator
         initialRouteName={isClient ? 'Map' : 'Home'}
         screenOptions={({ route }) => ({
+          tabBarButtonTestID: `tab-${route.name.toLowerCase()}`,
           tabBarIcon: ({ focused, color, size }) => tabBarIcon(route.name, focused, color, size, homeIcon),
           tabBarActiveTintColor: colors.accent,
           tabBarInactiveTintColor: colors.textMuted,

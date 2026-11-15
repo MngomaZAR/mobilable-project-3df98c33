@@ -1,7 +1,8 @@
 module.exports = {
   project: {
     android: {
-      packageName: 'com.saicts.papzi',
+      // Keep local React Native commands aligned with the EAS/Play identity.
+      packageName: 'com.papziiii.paparazzi',
     },
   },
 };

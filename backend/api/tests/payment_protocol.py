@@ -95,7 +95,7 @@ async def main():
             await check('Completion retry is idempotent', 'PATCH', f'/bookings/{booking_id}', 200, provider, {'status': 'completed'})
             await check('Completed booking stops location sharing', 'GET', f'/bookings/{booking_id}/location', 409, client_actor)
             ledger = await conn.fetchrow('SELECT amount,status FROM earnings WHERE booking_id=$1', booking_id)
-            assert float(ledger['amount']) == 1120 and ledger['status'] == 'pending'
+            assert float(ledger['amount']) == 980 and ledger['status'] == 'pending'
             assert await conn.fetchval('SELECT count(*) FROM payout_requests WHERE booking_id=$1', booking_id) == 1
             review = (await check('Client submits completed booking review', 'POST', '/reviews', 200, client_actor, {'booking_id': booking_id, 'rating': 5, 'comment': 'Synthetic QA review'})).json()
             assert review['moderation_status'] == 'pending'

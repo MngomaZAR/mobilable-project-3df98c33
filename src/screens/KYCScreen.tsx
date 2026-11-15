@@ -26,7 +26,7 @@ const emptyDocuments = (): DocumentState => ({ id_book: null, passport: null, dr
 const DOC_SLOTS = [
   { key: 'id_book' as DocType,          label: 'SA ID / Passport',   icon: 'card-outline',   hint: 'Clear photo of your green ID book or passport', required: true  },
   { key: 'selfie' as DocType,           label: 'Selfie with ID',     icon: 'person-outline', hint: 'Hold your ID next to your face in good light',   required: true  },
-  { key: 'proof_of_address' as DocType, label: 'Proof of Address',   icon: 'home-outline',   hint: 'Utility bill or bank statement under 3 months',  required: false },
+  { key: 'proof_of_address' as DocType, label: 'Proof of Address',   icon: 'home-outline',   hint: 'Utility bill or bank statement under 3 months',  required: true  },
 ];
 
 const KYCScreen: React.FC = () => {

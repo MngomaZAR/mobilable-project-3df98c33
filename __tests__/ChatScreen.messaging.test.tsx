@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert, StyleSheet } from 'react-native';
+import { Alert, AppState, StyleSheet } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import ChatScreen from '../src/screens/ChatScreen';
 import { uploadBlurredPreview, uploadImage } from '../src/services/uploadService';
@@ -22,7 +22,11 @@ jest.mock('../src/services/reportService', () => ({ reportContent: jest.fn() }))
 jest.mock('../src/components/HowItWorksCard', () => () => null);
 jest.mock('../src/components/Skeleton', () => ({ ChatSkeleton: () => null }));
 jest.mock('../src/components/AnimatedBubble', () => ({ AnimatedBubble: require('react-native').View }));
-jest.mock('@react-navigation/native', () => ({ useRoute: () => ({ params: mockRouteParams }), useNavigation: () => mockNavigation }));
+jest.mock('@react-navigation/native', () => ({
+  useRoute: () => ({ params: mockRouteParams }),
+  useNavigation: () => mockNavigation,
+  useFocusEffect: (callback: () => void) => require('react').useEffect(callback, [callback]),
+}));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0 }), SafeAreaView: require('react-native').View }));
 jest.mock('@expo/vector-icons', () => {
   const React = require('react');
@@ -56,6 +60,14 @@ test('conversation title overrides the navigator logo header', async () => {
   render(<ChatScreen />);
   await waitFor(() => expect(mockMessaging.markMessagesRead).toHaveBeenCalled());
   expect(mockNavigation.setOptions).toHaveBeenCalledWith({ title: 'Nandi - Friday shoot', headerTitle: 'Nandi - Friday shoot' });
+});
+
+test('focused API chat refreshes incoming messages without reopening the thread', async () => {
+  Object.defineProperty(AppState, 'currentState', { configurable: true, value: 'active' });
+  render(<ChatScreen />);
+  await waitFor(() => expect(mockMessaging.fetchMessages).toHaveBeenCalledTimes(1));
+  await act(async () => { jest.advanceTimersByTime(5000); });
+  expect(mockMessaging.fetchMessages).toHaveBeenCalledTimes(2);
 });
 
 test('a thread deep link without a title has an explicit conversation header', async () => {

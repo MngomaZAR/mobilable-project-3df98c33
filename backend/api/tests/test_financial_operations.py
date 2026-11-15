@@ -299,11 +299,40 @@ class FinancialTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(financial.zar('1.10'), Decimal('1.10'))
 
     async def test_capabilities_require_real_matching_independent_acceptance(self):
-        self.assertEqual(await financial.capabilities(self.settings, self.config), {'refund_execution': False, 'creator_payout_execution': False})
+        production = self.settings.model_copy(update={'app_env': 'production'})
+        self.assertEqual(await financial.capabilities(production, self.config), {'refund_execution': False, 'creator_payout_execution': False})
         configured = replace(self.config, payfast_refunds_enabled=True, refund_acceptance_id='evidence')
-        self.assertFalse((await financial.capabilities(self.settings, configured))['refund_execution'])
+        self.assertFalse((await financial.capabilities(production, configured))['refund_execution'])
         self.store.acceptance = ('evidence', 'payfast', 'refund', 'different-merchant', 'sandbox')
-        self.assertFalse((await financial.capabilities(self.settings, configured))['refund_execution'])
+        self.assertFalse((await financial.capabilities(production, configured))['refund_execution'])
+
+    async def test_qa_provider_sandboxes_are_executable_without_production_acceptance(self):
+        qa = self.settings.model_copy(update={
+            'app_env': 'qa',
+            'payfast_merchant_key': 'unit-key',
+        })
+        configured = replace(self.config, payfast_refunds_enabled=True, stitch_payouts_enabled=True)
+
+        capabilities = await financial.capabilities(qa, configured)
+
+        self.assertEqual(capabilities, {'refund_execution': True, 'creator_payout_execution': True})
+        self.assertEqual(await financial.capabilities(qa.model_copy(update={'app_env': 'production'}), configured),
+                         {'refund_execution': False, 'creator_payout_execution': False})
+
+    async def test_qa_sandbox_execution_requires_provider_credentials_and_explicit_flags(self):
+        qa = self.settings.model_copy(update={'app_env': 'qa', 'payfast_merchant_key': ''})
+        configured = replace(self.config, payfast_refunds_enabled=True, stitch_payouts_enabled=True)
+        self.assertEqual(await financial.capabilities(qa, configured),
+                         {'refund_execution': True, 'creator_payout_execution': True})
+
+        qa = qa.model_copy(update={'payfast_passphrase': ''})
+        self.assertEqual(await financial.capabilities(qa, configured),
+                         {'refund_execution': False, 'creator_payout_execution': True})
+
+        qa = qa.model_copy(update={'payfast_passphrase': 'unit phrase'})
+        not_enabled = replace(configured, stitch_payouts_enabled=False, payfast_refunds_enabled=False)
+        self.assertEqual(await financial.capabilities(qa, not_enabled),
+                         {'refund_execution': False, 'creator_payout_execution': False})
 
     async def test_identical_concurrent_replay_has_one_reservation(self):
         results = await asyncio.gather(*(self.operation() for _ in range(15)))

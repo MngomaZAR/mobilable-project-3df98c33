@@ -1,0 +1,19 @@
+appId: ${APP_ID}
+name: Papzii sign-in with an authorized test account
+---
+- launchApp
+- assertVisible:
+    id: auth-email
+- tapOn:
+    id: auth-email
+- inputText: ${TEST_EMAIL}
+- tapOn:
+    id: auth-password
+- inputText: ${TEST_PASSWORD}
+- hideKeyboard
+- tapOn:
+    id: auth-submit
+- extendedWaitUntil:
+    visible:
+      id: tab-settings
+    timeout: 30000

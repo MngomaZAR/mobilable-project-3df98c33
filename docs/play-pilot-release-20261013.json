@@ -1,0 +1,24 @@
+{
+  "package": "com.papziiii.paparazzi",
+  "versionCode": "5",
+  "track": "internal",
+  "publicReleasePerformed": false,
+  "checkedAt": "2026-10-13T13:20:04Z",
+  "previousInternalReleases": [
+    {
+      "versionCodes": [
+        "5"
+      ],
+      "status": "draft"
+    },
+    {
+      "versionCodes": [
+        "4"
+      ],
+      "status": "completed"
+    }
+  ],
+  "commitAttempted": true,
+  "commitAccepted": true,
+  "releaseStatus": "completed"
+}

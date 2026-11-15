@@ -1,12 +1,12 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
-import { Alert, FlatList, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View, Image } from 'react-native';
+import { Alert, AppState, FlatList, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View, Image } from 'react-native';
 import { AnimatedBubble } from '../components/AnimatedBubble';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
+import { RouteProp, useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useAuth } from '../store/AuthContext';
 import { useMessaging } from '../store/MessagingContext';
@@ -66,6 +66,24 @@ const ChatScreen: React.FC = () => {
     setText('');
     setReplyTo(null);
   }, [chatId, currentUser?.id]);
+
+  useFocusEffect(useCallback(() => {
+    if (!isApiMessaging || !chatId || !currentUser?.id) return undefined;
+    let inFlight = false;
+    const interval = setInterval(async () => {
+      if (AppState.currentState !== 'active' || inFlight) return;
+      inFlight = true;
+      try {
+        await fetchMessages(chatId);
+        await markMessagesRead(chatId);
+      } catch {
+        // The initial load and manual refresh own the visible error state.
+      } finally {
+        inFlight = false;
+      }
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [isApiMessaging, chatId, currentUser?.id, fetchMessages, markMessagesRead]));
 
 
   const otherAvatar = route.params?.avatarUrl ?? PLACEHOLDER_IMAGE;

@@ -796,8 +796,8 @@ const makeStyles = (colors: Colors, isDark: boolean) =>
     },
     headerTitle: {
       color: colors.text,
-      fontSize: 66,
-      lineHeight: 70,
+      fontSize: 38,
+      lineHeight: 46,
       fontWeight: '900',
     },
     profileSection: {

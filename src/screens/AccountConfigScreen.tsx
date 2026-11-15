@@ -22,11 +22,13 @@ import { useTheme } from '../store/ThemeContext';
 import { AppUser } from '../types';
 import { PLACEHOLDER_AVATAR } from '../utils/constants';
 import { getTalentTableForRole, isProviderUser } from '../utils/userRole';
+import { requestCreatorEnrolment } from '../services/accountService';
+import { LEGAL_CONTENT } from '../constants/LegalContent';
 
 
 
 const AccountConfigScreen: React.FC = () => {
-  const { state, currentUser, updateProfile, updateProfilePicture, updateProviderSettings, saving } = useAppData();
+  const { state, currentUser, updateProfile, updateProfilePicture, updateProviderSettings, refresh, saving } = useAppData();
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
@@ -40,6 +42,9 @@ const AccountConfigScreen: React.FC = () => {
   const [website, setWebsite] = useState(currentUser?.website || currentUser?.contact_details?.website || '');
   
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [creatorRole, setCreatorRole] = useState<'photographer' | 'model'>('photographer');
+  const [acceptCreatorPolicy, setAcceptCreatorPolicy] = useState(false);
+  const [applying, setApplying] = useState(false);
   const [tierId, setTierId] = useState<string | null>(null);
   const [cameraSet, setCameraSet] = useState<Set<string>>(new Set());
   const [lensSet, setLensSet] = useState<Set<string>>(new Set());
@@ -47,6 +52,21 @@ const AccountConfigScreen: React.FC = () => {
   const [extrasSet, setExtrasSet] = useState<Set<string>>(new Set());
 
   const s = makeStyles(colors, isDark);
+
+  const applyAsCreator = async () => {
+    if (!acceptCreatorPolicy || applying) return;
+    setApplying(true);
+    try {
+      await updateProfile({ full_name: fullName.trim(), city: city.trim() });
+      await requestCreatorEnrolment(creatorRole);
+      await refresh();
+      navigation.navigate('KYC');
+    } catch (error) {
+      Alert.alert('Creator application', error instanceof Error ? error.message : 'Your application could not be saved. Please retry.');
+    } finally {
+      setApplying(false);
+    }
+  };
 
   useEffect(() => {
     setFullName(currentUser?.full_name || '');
@@ -269,6 +289,36 @@ const AccountConfigScreen: React.FC = () => {
           </View>
         </View>
 
+        {currentUser?.role === 'client' && (
+          <View style={s.section}>
+            <Text style={s.sectionTitle}>CREATOR APPLICATION</Text>
+            <View accessibilityRole="radiogroup" style={s.pillRow}>
+              {(['photographer', 'model'] as const).map(role => (
+                <TouchableOpacity key={role} accessibilityRole="radio" accessibilityState={{ checked: creatorRole === role }}
+                  accessibilityLabel={role === 'photographer' ? 'Photographer' : 'Model'}
+                  onPress={() => setCreatorRole(role)} style={[s.pill, creatorRole === role && s.pillActive]}>
+                  <Text style={[s.pillText, creatorRole === role && s.pillTextActive]}>{role === 'photographer' ? 'Photographer' : 'Model'}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Read Creator Policy"
+              onPress={() => navigation.navigate('Legal', { title: 'Creator Policy', content: LEGAL_CONTENT.CREATOR_POLICY })} style={s.policyLink}>
+              <Text style={{ color: colors.accent }}>Creator Policy</Text>
+            </TouchableOpacity>
+            <TouchableOpacity accessibilityRole="checkbox" accessibilityState={{ checked: acceptCreatorPolicy }}
+              accessibilityLabel="I accept the Creator Policy" onPress={() => setAcceptCreatorPolicy(value => !value)} style={s.consentRow}>
+              <Ionicons name={acceptCreatorPolicy ? 'checkbox' : 'square-outline'} size={22} color={colors.accent} />
+              <Text style={{ color: colors.text, flex: 1 }}>I accept the Creator Policy and apply for identity review.</Text>
+            </TouchableOpacity>
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Apply as a creator"
+              accessibilityState={{ disabled: !acceptCreatorPolicy || applying }} disabled={!acceptCreatorPolicy || applying}
+              onPress={() => void applyAsCreator()} style={[s.applyButton, { opacity: !acceptCreatorPolicy || applying ? 0.5 : 1 }]}>
+              {applying ? <ActivityIndicator color={colors.bg} /> : <Ionicons name="person-add-outline" size={20} color={colors.bg} />}
+              <Text style={{ color: colors.bg, fontWeight: '700' }}>Apply as a creator</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {isProviderUser(currentUser) && (
           <View style={s.section}>
             <Text style={s.sectionTitle}>BOOKING READINESS</Text>
@@ -457,6 +507,9 @@ const makeStyles = (colors: any, isDark: boolean) =>
       color: colors.textMuted,
       marginBottom: 12,
     },
+    policyLink: { minHeight: 44, justifyContent: 'center' },
+    consentRow: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 48, marginBottom: 12 },
+    applyButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, minHeight: 48, padding: 12, borderRadius: 8, backgroundColor: colors.accent },
     sectionTitle: {
       fontSize: 12,
       fontWeight: '600',

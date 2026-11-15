@@ -90,8 +90,8 @@ async def submit_kyc(request: Request, settings: Annotated[Settings, Depends(get
             if not profile or not profile["age_verified"]:
                 raise HTTPException(status_code=409, detail="Complete your age declaration first.")
             types = {row["doc_type"] for row in await conn.fetch("SELECT doc_type FROM kyc_documents WHERE user_id=$1", user["id"])}
-            if "selfie" not in types or not types & {"id_book", "passport", "drivers_license"}:
-                raise HTTPException(status_code=409, detail="Upload identity and selfie documents before submission.")
+            if "selfie" not in types or not types & {"id_book", "passport", "drivers_license"} or "proof_of_address" not in types:
+                raise HTTPException(status_code=409, detail="Upload identity, selfie and proof-of-address documents before submission.")
             await conn.execute("UPDATE profiles SET kyc_status='submitted',verified=false,updated_at=now() WHERE id=$1", user["id"])
             await conn.execute("UPDATE kyc_documents SET status='submitted',updated_at=now() WHERE user_id=$1", user["id"])
             await conn.execute("UPDATE api_users SET metadata=metadata||$2::jsonb WHERE id=$1", user["id"], json.dumps({"kyc_status": "submitted"}))
@@ -131,8 +131,10 @@ async def decide_identity(settings: Settings, user_id: str, decision: str):
                 raise HTTPException(status_code=404, detail="User not found.")
             if decision == "approved":
                 approved = {row["doc_type"] for row in await conn.fetch("SELECT doc_type FROM kyc_documents WHERE user_id=$1 AND status='approved' FOR UPDATE", user_id)}
-                if not profile["age_verified"] or "selfie" not in approved or not approved & {"id_book", "passport", "drivers_license"}:
-                    raise HTTPException(status_code=409, detail="Review and approve identity and selfie documents first.")
+                if (not profile["age_verified"] or "selfie" not in approved
+                        or not approved & {"id_book", "passport", "drivers_license"}
+                        or "proof_of_address" not in approved):
+                    raise HTTPException(status_code=409, detail="Review and approve identity, selfie and proof-of-address documents first.")
             row = await conn.fetchrow("UPDATE profiles SET kyc_status=$2,verified=$3,updated_at=now() WHERE id=$1 RETURNING *", user_id, decision, decision == "approved")
             await conn.execute("UPDATE api_users SET metadata=metadata||$2::jsonb WHERE id=$1", user_id, json.dumps({"kyc_status": decision}))
             return {"profile": dict(row)}

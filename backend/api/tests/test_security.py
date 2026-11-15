@@ -110,8 +110,8 @@ class SecurityTests(unittest.TestCase):
         command = BookingInput(photographer_id="p", package_id="essential", start_datetime=start, end_datetime=start + timedelta(hours=1), user_latitude=-29.85, user_longitude=31.03, idempotency_key="retry-key")
         quote = calculate_quote(self.settings, command, {"latitude": -29.85, "longitude": 31.03})
         self.assertEqual(quote["total_amount"], money(1400))
-        self.assertEqual(quote["commission_amount"], money(280))
-        self.assertEqual(quote["payout_amount"], money(1120))
+        self.assertEqual(quote["commission_amount"], money(420))
+        self.assertEqual(quote["payout_amount"], money(980))
         self.assertEqual(fingerprint(command), fingerprint(command.model_copy(update={"idempotency_key": "other-key"})))
         with self.assertRaises(ValidationError):
             BookingInput(**{**command.model_dump(), "model_id": "model"})

@@ -7,8 +7,9 @@ import { apiClient } from '../src/config/apiClient';
 
 jest.mock('../src/store/AppDataContext', () => ({ useAppData: jest.fn() }));
 let mockDispatchAllowed = false;
+let mockAccessLoading = false;
 let mockTimeMode: 'now' | 'schedule' | undefined;
-jest.mock('../src/hooks/useServiceAccess', () => ({ useServiceAccess: () => ({ allowed: () => mockDispatchAllowed }) }));
+jest.mock('../src/hooks/useServiceAccess', () => ({ useServiceAccess: () => ({ allowed: () => mockDispatchAllowed, loading: mockAccessLoading, ready: !mockAccessLoading }) }));
 jest.mock('../src/store/MessagingContext', () => ({ useMessaging: () => ({ startConversationWithUser: jest.fn() }) }));
 jest.mock('../src/config/environment', () => ({ environment: { backendProvider: 'api' } }));
 jest.mock('../src/config/apiSession', () => ({ getApiAccessToken: async () => 'synthetic-unit-token' }));
@@ -36,7 +37,7 @@ let profileQuery: { select: jest.Mock; eq: jest.Mock; maybeSingle: jest.Mock };
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockDispatchAllowed = false; mockTimeMode = undefined;
+  mockDispatchAllowed = false; mockAccessLoading = false; mockTimeMode = undefined;
   profileQuery = { select: jest.fn(), eq: jest.fn(), maybeSingle: jest.fn() };
   profileQuery.select.mockReturnValue(profileQuery);
   profileQuery.eq.mockReturnValue(profileQuery);
@@ -78,24 +79,34 @@ test('verification lookup failure stays disabled without declaring the creator u
   expect(screen.queryByText(blocked)).toBeNull();
 });
 
-test('instant entry from a map keeps its mode but cannot quote without account authorization', async () => {
+test('unauthorized instant deep link falls back to the supported scheduled flow', async () => {
   mockTimeMode = 'now';
   profileQuery.maybeSingle.mockResolvedValue({ data: { id: creatorId, verified: true, age_verified: true }, error: null });
   const screen = render(<BookingFormScreen />);
   await waitFor(() => expect(screen.getByText('Published package')).toBeTruthy());
-  expect(screen.getByText('Now (dispatch)')).toBeTruthy();
-  expect(screen.getByText('Instant matching is not available for this account.')).toBeTruthy();
-  expect(apiClient.post).not.toHaveBeenCalled();
-  fireEvent.press(screen.getByText('Schedule'));
+  expect(screen.queryByText('Now (dispatch)')).toBeNull();
+  expect(screen.queryByText('Instant matching is not available for this account.')).toBeNull();
   expect(screen.getByText('Pick a date and time slot below')).toBeTruthy();
+  expect(apiClient.post).not.toHaveBeenCalled();
 });
 
 test('authorized instant entry retains its selection through verification loading', async () => {
-  mockDispatchAllowed = true; mockTimeMode = 'now';
+  mockDispatchAllowed = true; mockAccessLoading = true; mockTimeMode = 'now';
   profileQuery.maybeSingle.mockResolvedValue({ data: { id: creatorId, verified: true, age_verified: true }, error: null });
   const screen = render(<BookingFormScreen />);
   await waitFor(() => expect(screen.getByText('Published package')).toBeTruthy());
   expect(screen.getByText('Now (dispatch)')).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Book an available creator now' })).toBeTruthy();
   expect(screen.queryByText('Instant matching is not available for this account.')).toBeNull();
+});
+
+test('instant entry switches to scheduled mode after access resolves unavailable', async () => {
+  mockAccessLoading = true; mockTimeMode = 'now';
+  profileQuery.maybeSingle.mockResolvedValue({ data: { id: creatorId, verified: true, age_verified: true }, error: null });
+  const screen = render(<BookingFormScreen />);
+  expect(screen.getByText('Now (dispatch)')).toBeTruthy();
+  mockAccessLoading = false;
+  screen.rerender(<BookingFormScreen />);
+  await waitFor(() => expect(screen.queryByText('Now (dispatch)')).toBeNull());
+  expect(screen.getByText('Pick a date and time slot below')).toBeTruthy();
 });

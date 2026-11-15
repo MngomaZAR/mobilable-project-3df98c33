@@ -16,6 +16,7 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 REQUIRED_CAPABILITIES = {
     "road_routing_configured", "object_storage_configured",
     "payment_checkout_configured", "payment_checkout_enabled",
+    "booking_commission_30_configured",
     "admin_access_configured", "payment_refund_execution",
     "bank_payout_execution", "account_recovery_email",
     "video_call_service", "instant_dispatch_service",

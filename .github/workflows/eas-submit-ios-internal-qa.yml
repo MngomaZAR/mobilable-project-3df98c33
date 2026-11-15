@@ -9,6 +9,10 @@ on:
         description: Finished internal-qa iOS EAS build ID from this source revision
         required: true
         type: string
+      source_revision:
+        description: Git commit used to create the finished EAS build
+        required: true
+        type: string
 
 jobs:
   submit_ios_internal_qa:
@@ -16,6 +20,7 @@ jobs:
     env:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
       STORE_BUILD_ID: ${{ inputs.build_id }}
+      STORE_SOURCE_REVISION: ${{ inputs.source_revision }}
       STORE_PLATFORM: ios
     steps:
       - uses: actions/checkout@v4
@@ -39,7 +44,9 @@ jobs:
       - name: Verify exact restricted QA artifact
         run: |
           eas build:view "$STORE_BUILD_ID" --json > "$RUNNER_TEMP/store-build.json"
-          STORE_SOURCE_REVISION="$(git rev-parse HEAD)" node scripts/assert-store-build.mjs "$RUNNER_TEMP/store-build.json"
+          git fetch --no-tags --depth=1 origin "$STORE_SOURCE_REVISION"
+          git checkout --detach "$STORE_SOURCE_REVISION"
+          node scripts/assert-store-build.mjs "$RUNNER_TEMP/store-build.json"
 
       - name: Submit the verified QA artifact to TestFlight
         run: eas submit --platform ios --profile beta-testing --id "$STORE_BUILD_ID" --non-interactive

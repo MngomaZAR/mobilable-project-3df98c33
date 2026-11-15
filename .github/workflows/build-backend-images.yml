@@ -6,7 +6,7 @@ on:
     paths:
       - "backend/**"
       - "scripts/ci-backend.sh"
-      - "deployment/docker-compose.yml"
+      - "deployment/**"
       - ".github/workflows/build-backend-images.yml"
   workflow_dispatch: {}
 

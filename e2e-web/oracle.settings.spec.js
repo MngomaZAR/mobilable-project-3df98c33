@@ -38,7 +38,15 @@ for (const role of ['client', 'photographer', 'model', 'admin']) {
     ];
     for (const [label, heading] of routes) {
       await page.getByText(label, { exact: true }).last().click();
-      await expect(page.getByText(heading, { exact: true }).last()).toBeVisible();
+      if (heading === 'Payout Methods') {
+        await expect(page.getByText(/^(Payout Methods|Payouts unavailable)$/).last()).toBeVisible();
+        if (await page.getByText('Payouts unavailable', { exact: true }).isVisible()) {
+          await expect(page.getByRole('alert')).toContainText('No money will be processed.');
+          await expect(page.getByRole('alert')).toContainText('unavailable in this testing build');
+        }
+      } else {
+        await expect(page.getByText(heading, { exact: true }).last()).toBeVisible();
+      }
       if (heading === 'Services & Rates') {
         await expect(page.getByText('Adult Content', { exact: true })).toHaveCount(0);
         await expect(page.getByText('Adult Content (18+)', { exact: true })).toHaveCount(0);

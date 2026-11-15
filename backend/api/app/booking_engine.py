@@ -155,7 +155,8 @@ async def load_provider(conn, command: BookingInput, include_pricing: bool = Tru
     provider_id = command.photographer_id or command.model_id
     profile = await conn.fetchrow("SELECT id, role, verified, kyc_status, age_verified FROM profiles WHERE id=$1", provider_id)
     expected_role = "photographer" if command.photographer_id else "model"
-    if not profile or profile["role"] != expected_role or not (profile["verified"] or profile["kyc_status"] == "approved") or not profile["age_verified"]:
+    if (not profile or profile["role"] != expected_role or profile["verified"] is not True
+            or profile["kyc_status"] != "approved" or profile["age_verified"] is not True):
         raise HTTPException(status_code=409, detail="This creator is not verified for bookings.")
     table = "photographers" if command.photographer_id else "models"
     row = await conn.fetchrow(f"SELECT * FROM {table} WHERE id=$1 FOR SHARE", provider_id)
@@ -172,6 +173,9 @@ async def require_open_booking_parties(conn, *user_ids: str) -> None:
         raise HTTPException(status_code=403, detail="Active stored booking parties are required.")
     for user_id in sorted(set(user_ids)):
         await require_open_account(conn, user_id)
+        profile = await conn.fetchrow("SELECT age_verified FROM profiles WHERE id=$1 FOR SHARE", user_id)
+        if not profile or profile.get("age_verified") is not True:
+            raise HTTPException(status_code=409, detail="Complete the 18+ age verification before requesting or accepting a booking.")
 
 
 async def quote_booking(settings: Settings, command: BookingInput, user: dict[str, Any]) -> dict[str, Any]:

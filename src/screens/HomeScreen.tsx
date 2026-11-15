@@ -774,8 +774,32 @@ const HomeScreen: React.FC = () => {
         />
       </View>
 
-      {visibleTalent.length === 0 && (
-        <Text style={styles.empty}>No {discoveryMode} match these filters.</Text>
+      {!loading && visibleTalent.length === 0 && (
+        <View style={styles.emptyState}>
+          <Text style={[styles.empty, { color: colors.textSecondary }]}>
+            {category !== 'All Categories' || maxHourlyRate !== null || location.trim()
+              ? `No verified ${discoveryMode} match these filters.`
+              : `No verified ${discoveryMode} are available yet.`}
+          </Text>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={category !== 'All Categories' || maxHourlyRate !== null || location.trim() ? 'Clear discovery filters' : 'Retry creator discovery'}
+            style={[styles.emptyAction, { borderColor: colors.border }]}
+            onPress={() => {
+              if (category !== 'All Categories' || maxHourlyRate !== null || location.trim()) {
+                setCategory('All Categories');
+                setMaxHourlyRate(null);
+                setLocation('');
+              } else {
+                void refresh();
+              }
+            }}
+          >
+            <Text style={[styles.emptyActionText, { color: colors.text }]}>
+              {category !== 'All Categories' || maxHourlyRate !== null || location.trim() ? 'Clear filters' : 'Try again'}
+            </Text>
+          </TouchableOpacity>
+        </View>
       )}
 
       {/* Advanced Filters Modal */}
@@ -1721,7 +1745,8 @@ const styles = StyleSheet.create({
   },
   buttonGhost: {
     flex: 1,
-    backgroundColor: '#e2e8f0',
+    backgroundColor: 'transparent', // was a fixed light grey: white text on it vanished in dark mode
+    borderWidth: 1,
     paddingVertical: 13,
     borderRadius: 16,
     alignItems: 'center',
@@ -1752,6 +1777,9 @@ const styles = StyleSheet.create({
     marginTop: 16,
     color: '#475569',
   },
+  emptyState: { alignItems: 'center', paddingHorizontal: 20, paddingVertical: 20 },
+  emptyAction: { marginTop: 12, minHeight: 44, paddingHorizontal: 18, borderWidth: 1, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  emptyActionText: { fontSize: 14, fontWeight: '700' },
   // Models section
   modelsSection: { marginBottom: 24 },
   modelsScroll: { paddingVertical: 8, paddingRight: 16 },

@@ -10,12 +10,14 @@ import { useTheme } from '../store/ThemeContext';
 import { useServiceAccess } from '../hooks/useServiceAccess';
 import { createPayfastCheckoutLink } from '../services/paymentService';
 import { fetchBookingById } from '../services/bookingService';
-import { getDefaultPayfastNotifyUrl } from '../config/commercePolicy';
 
 type Route = RouteProp<RootStackParamList, 'Payment'>;
 type Navigation = StackNavigationProp<RootStackParamList, 'Payment'>;
 const SUCCESS_URL = 'papzi://payfast/success';
 const CANCEL_URL = 'papzi://payfast/cancel';
+// PayFast can retry ITNs after the checkout redirect. Keep polling long enough
+// for a delayed notification without asking the user to pay a second time.
+const PAYMENT_CONFIRMATION_WINDOW_MS = 5 * 60 * 1000;
 
 const PaymentScreen: React.FC = () => {
   const { params } = useRoute<Route>();
@@ -35,7 +37,7 @@ const PaymentScreen: React.FC = () => {
   const canPay = booking?.client_id === state.currentUser?.id && booking?.status === 'accepted' && booking?.payment_status === 'unpaid';
 
   const beginVerification = useCallback(() => {
-    deadline.current = Date.now() + 45000;
+    deadline.current = Date.now() + PAYMENT_CONFIRMATION_WINDOW_MS;
     setVerifying(true);
     setMessage('Waiting for payment confirmation.');
   }, []);
@@ -81,7 +83,7 @@ const PaymentScreen: React.FC = () => {
     submitting.current = true;
     setLoading(true);
     try {
-      const result = await createPayfastCheckoutLink({ bookingId, returnUrl: SUCCESS_URL, cancelUrl: CANCEL_URL, notifyUrl: getDefaultPayfastNotifyUrl() });
+      const result = await createPayfastCheckoutLink({ bookingId });
       setPaymentUrl(result.paymentUrl);
       setMessage('Checkout opened. Payment remains unconfirmed.');
     } catch (error) {

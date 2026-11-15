@@ -7,10 +7,11 @@ services:
       APP_ENV: ${APP_ENV:-production}
       APP_VERSION: ${APP_VERSION:-0.1.0}
       API_PUBLIC_URL: ${API_PUBLIC_URL}
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://papzii.co.za,https://www.papzii.co.za}
       FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-127.0.0.1}
       ALLOW_RUNTIME_SCHEMA_CHANGES: "false"
       ADMIN_USER_IDS: ${ADMIN_USER_IDS:-}
-      COMMISSION_RATE: ${COMMISSION_RATE:-0.20}
+      COMMISSION_RATE: ${COMMISSION_RATE:-0.30}
       OSRM_BASE_URL: ${OSRM_BASE_URL:-}
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}

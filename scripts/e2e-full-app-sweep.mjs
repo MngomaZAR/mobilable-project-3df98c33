@@ -9,6 +9,13 @@ const URL = process.env.SUPABASE_URL || process.env.EXPO_PUBLIC_SUPABASE_URL || 
 const ANON = process.env.SUPABASE_ANON_KEY || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
 const SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
+// This legacy suite creates fixtures; it must never run against hosted user data.
+const fixtureHost = URL ? new globalThis.URL(URL).hostname : '';
+if (process.env.PAPZII_ALLOW_LOCAL_SUPABASE_FIXTURES !== 'true'
+    || !['127.0.0.1', 'localhost', '[::1]'].includes(fixtureHost)) {
+  throw new Error('Legacy Supabase sweep requires explicit local fixtures. Use the Oracle QA Playwright/protocol suites for the current API.');
+}
+
 const screensDir = path.join(process.cwd(), 'src', 'screens');
 const results = [];
 const warnings = [];

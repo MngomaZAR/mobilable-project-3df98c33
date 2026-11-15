@@ -1,0 +1,57 @@
+{
+  "checkedAt": "2026-10-15T07:04:25.024Z",
+  "readOnly": true,
+  "api": "https://papzii-api.129.151.188.15.nip.io",
+  "corePassed": true,
+  "publicReleaseReady": false,
+  "deviceAndSettlementAcceptanceRequired": true,
+  "results": {
+    "health": {
+      "status": 200,
+      "ok": true,
+      "environment": "production"
+    },
+    "version": {
+      "status": 200,
+      "revision": "5e3dfc384fb3f38edc2566e9129a342af011267d",
+      "environment": "production"
+    },
+    "contract": {
+      "status": 200,
+      "ok": true
+    },
+    "readiness": {
+      "status": 200,
+      "required_capabilities_available": false,
+      "blockers": [
+        "payment_checkout_enabled",
+        "payment_refund_execution",
+        "bank_payout_execution",
+        "video_call_service",
+        "instant_dispatch_service"
+      ],
+      "capabilities": {
+        "road_routing_configured": true,
+        "object_storage_configured": true,
+        "payment_checkout_configured": true,
+        "payment_checkout_enabled": false,
+        "booking_commission_30_configured": true,
+        "admin_access_configured": true,
+        "payment_refund_execution": false,
+        "bank_payout_execution": false,
+        "account_recovery_email": true,
+        "video_call_service": false,
+        "instant_dispatch_service": false
+      }
+    },
+    "routing": {
+      "status": 200,
+      "road_route_points": 122,
+      "distance": 3.73,
+      "duration": 450.7
+    },
+    "unauthenticated": {
+      "status": 401
+    }
+  }
+}

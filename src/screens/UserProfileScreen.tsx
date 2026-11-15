@@ -75,7 +75,7 @@ const UserProfileScreen: React.FC = () => {
   const isModel = profile?.role === 'model';
   const isOwnProfile = state.currentUser?.id === userId;
   const isFollowing = state.follows?.some(item => item.follower_id === state.currentUser?.id && item.following_id === userId) ?? false;
-  const verified = Boolean(profile?.verified || profile?.kyc_status === 'approved');
+  const verified = profile?.verified === true && profile?.kyc_status === 'approved' && profile?.age_verified === true;
   const rate = Number(talent?.hourly_rate);
   const canBook = Boolean(talent && verified && profile?.age_verified && !isOwnProfile);
   const summary = reviewResult?.id === userId ? reviewResult.summary : null;

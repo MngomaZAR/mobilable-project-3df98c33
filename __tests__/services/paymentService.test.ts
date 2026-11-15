@@ -19,14 +19,11 @@ describe('Payment Service', () => {
 
     const result = await createPayfastCheckoutLink({
       bookingId: 'bk_123',
-      returnUrl: 'exp://return',
-      cancelUrl: 'exp://cancel',
-      notifyUrl: 'exp://notify',
     });
 
     expect(result.paymentUrl).toBe(mockPaymentUrl);
     expect(result.paymentId).toBe('pf_123');
-    expect(invokeBackendFunction).toHaveBeenCalledWith('payfast-handler', expect.any(Object));
+    expect(invokeBackendFunction).toHaveBeenCalledWith('payfast-handler', { booking_id: 'bk_123' });
   });
 
   it('should throw an error if the URL is missing a signature', async () => {
@@ -40,9 +37,6 @@ describe('Payment Service', () => {
     await expect(
       createPayfastCheckoutLink({
         bookingId: 'bk_123',
-        returnUrl: 'exp://return',
-        cancelUrl: 'exp://cancel',
-        notifyUrl: 'exp://notify',
       })
     ).rejects.toThrow('Payment service returned an invalid signature');
   });
@@ -56,9 +50,6 @@ describe('Payment Service', () => {
     await expect(
       createPayfastCheckoutLink({
         bookingId: 'bk_123',
-        returnUrl: 'exp://return',
-        cancelUrl: 'exp://cancel',
-        notifyUrl: 'exp://notify',
       })
     ).rejects.toThrow('Edge function timeout');
   });

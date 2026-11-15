@@ -20,7 +20,7 @@ class TestFlightScopeTests(unittest.TestCase):
         return build, {}, [], report
 
     def test_processing_or_other_build_cannot_be_prepared(self):
-        for number, processing in [('38', 'VALID'), ('42', 'VALID'), ('39', 'PROCESSING'), ('40', 'PROCESSING'), ('41', 'PROCESSING')]:
+        for number, processing in [('38', 'VALID'), ('44', 'VALID'), ('39', 'PROCESSING'), ('40', 'PROCESSING'), ('41', 'PROCESSING'), ('42', 'PROCESSING'), ('43', 'PROCESSING')]:
             state = self.state()
             state[0]['attributes']['processingState'] = processing
             state[3]['processingState'] = processing
@@ -57,7 +57,7 @@ class TestFlightScopeTests(unittest.TestCase):
 
     def test_notes_do_not_claim_financial_acceptance(self):
         for notes in release.BUILD_NOTES.values():
-            self.assertIn('disabled', notes)
+            self.assertTrue('disabled' in notes or 'unavailable' in notes)
             self.assertIn('Do not enter bank details', notes)
         self.assertIn('paused for general use', release.BUILD_NOTES['40'])
         self.assertIn('time-limited accounts', release.BUILD_NOTES['40'])
@@ -65,6 +65,8 @@ class TestFlightScopeTests(unittest.TestCase):
     def test_new_build_must_be_valid_and_unexpired(self):
         report = self.state()[3]
         release.require_authorized_build('41', report)
+        release.require_authorized_build('42', report)
+        release.require_authorized_build('43', report)
         report['expired'] = True
         with self.assertRaises(ValueError):
             release.require_authorized_build('41', report)

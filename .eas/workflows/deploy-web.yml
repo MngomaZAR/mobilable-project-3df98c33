@@ -5,7 +5,9 @@ name: Deploy Web (Continuous)
 
 on:
   push:
-    branches: ['main']
+    # The tested release candidate lives here. Keeping this explicit prevents a
+    # stale `main` commit from being deployed ahead of the mobile release.
+    branches: ['release/testflight-2026-06']
   workflow_dispatch: {}
 
 jobs:

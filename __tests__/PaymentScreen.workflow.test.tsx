@@ -62,7 +62,7 @@ test('payment polling times out once despite booking-cache refreshes', async () 
   try {
     const view = render(<PaymentScreen />);
     await act(async () => fireEvent.press(view.getByRole('button', { name: 'Check payment status' })));
-    for (let index = 0; index < 15; index++) {
+    for (let index = 0; index < 101; index++) {
       mockBooking = { ...mockBooking };
       view.rerender(<PaymentScreen />);
       await act(async () => { await jest.advanceTimersByTimeAsync(3000); });

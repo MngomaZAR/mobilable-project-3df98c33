@@ -22,3 +22,10 @@ tools
 service-account*.json
 backend
 deployment
+.env
+.env.*
+*.pem
+*.key
+*.p8
+credentials.json
+docs

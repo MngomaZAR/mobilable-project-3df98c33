@@ -579,8 +579,8 @@ const PhotographerDashboardScreen: React.FC = () => {
             </View>
             <View style={s.earningsRow}><Text style={s.earningsLabel}>Gross Revenue</Text><Text style={s.earningsValue}>R{earnings.total.toLocaleString('en-ZA')}</Text></View>
             <View style={s.earningsRow}><Text style={s.earningsLabel}>Platform Fee (30%)</Text><Text style={[s.earningsValue, { color: '#ef4444' }]}>-R{earnings.commission.toLocaleString('en-ZA')}</Text></View>
-            <View style={[s.earningsRow, s.earningsTotalRow]}><Text style={s.earningsTotalLabel}>Your Net Pay</Text><Text style={s.earningsTotalValue}>R{earnings.net.toLocaleString('en-ZA')}</Text></View>
-            <Text style={s.earningsMeta}>{earnings.count} completed session{earnings.count !== 1 ? 's' : ''} | Payout within 5 business days</Text>
+            <View style={[s.earningsRow, s.earningsTotalRow]}><Text style={s.earningsTotalLabel}>Your Recorded Share</Text><Text style={s.earningsTotalValue}>R{earnings.net.toLocaleString('en-ZA')}</Text></View>
+            <Text style={s.earningsMeta}>{earnings.count} completed session{earnings.count !== 1 ? 's' : ''} | Check payout status in the full report</Text>
             <TouchableOpacity style={s.earningsCTA} onPress={() => { setShowEarningsDetail(false); navigation.navigate('EarningsDashboard'); }}>
               <Text style={s.earningsCTAText}>Full Earnings Report</Text>
             </TouchableOpacity>

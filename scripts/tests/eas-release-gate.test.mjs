@@ -1,6 +1,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { assertRestrictedTestingConfig, isRestrictedTestingProfile, shouldValidateRelease } from '../eas-release-gate.mjs';
+
+test('restricted beta automatically releases only to internal Android testers', () => {
+  const config = JSON.parse(fs.readFileSync(new URL('../../eas.json', import.meta.url), 'utf8'));
+  assert.equal(config.submit['beta-testing'].android.track, 'internal');
+  assert.equal(config.submit['beta-testing'].android.releaseStatus, 'completed');
+  assert.equal(config.submit.production.android.releaseStatus, 'draft');
+  assert.equal(config.build['beta-testing'].env.EXPO_PUBLIC_RESTRICTED_BETA, 'true');
+  assert.equal(config.build['beta-testing'].env.EXPO_PUBLIC_DIGITAL_BILLING_PROVIDER, 'disabled');
+});
 
 test('development build is not a public release', () => {
   assert.equal(shouldValidateRelease({ EAS_BUILD_PROFILE: 'development' }), false);
@@ -49,4 +59,33 @@ test('restricted beta cannot enable purchasing, change scope, or use legacy back
   assert.throws(() => assertRestrictedTestingConfig({ ...beta, EXPO_PUBLIC_STORE_TARGET: 'both' }));
   assert.throws(() => assertRestrictedTestingConfig({ ...beta, EXPO_PUBLIC_DIGITAL_BILLING_PROVIDER: 'external' }));
   assert.equal(isRestrictedTestingProfile({ EAS_BUILD_PROFILE: 'production' }), false);
+});
+
+test('internal QA build targets the dedicated QA API and keeps purchases disabled', () => {
+  const config = JSON.parse(fs.readFileSync(new URL('../../eas.json', import.meta.url), 'utf8'));
+  const profile = config.build['internal-qa'];
+  assert.equal(profile.extends, 'beta-testing');
+  assert.equal(profile.environment, 'preview');
+  assert.equal(profile.env.EXPO_PUBLIC_APP_ENV, 'qa');
+  assert.match(profile.env.EXPO_PUBLIC_API_BASE_URL, /^https:\/\/papzii-qa\./);
+  assert.equal(profile.env.EXPO_PUBLIC_STORE_TARGET, 'internal');
+  assert.equal(profile.env.EXPO_PUBLIC_DISABLE_DIGITAL_PURCHASES, 'true');
+  assert.equal(profile.env.EXPO_PUBLIC_DIGITAL_BILLING_PROVIDER, 'disabled');
+  const env = {
+    ...beta,
+    EAS_BUILD_PROFILE: 'internal-qa',
+    EXPO_PUBLIC_APP_ENV: 'qa',
+    EXPO_PUBLIC_API_BASE_URL: profile.env.EXPO_PUBLIC_API_BASE_URL,
+  };
+  assert.equal(isRestrictedTestingProfile(env), true);
+  assert.doesNotThrow(() => assertRestrictedTestingConfig(env));
+  assert.throws(() => assertRestrictedTestingConfig({ ...env, EXPO_PUBLIC_API_BASE_URL: 'https://papzii-api.example.com' }));
+});
+
+test('manual QA build workflow runs the restricted-profile release gate', () => {
+  const workflow = fs.readFileSync(new URL('../../.github/workflows/eas-build-internal-qa.yml', import.meta.url), 'utf8');
+  assert.match(workflow, /EAS_BUILD_PROFILE:\s*internal-qa/);
+  assert.match(workflow, /EXPO_PUBLIC_APP_ENV:\s*qa/);
+  assert.match(workflow, /EXPO_PUBLIC_RESTRICTED_BETA:\s*"true"/);
+  assert.match(workflow, /run:\s*node scripts\/eas-release-gate\.mjs/);
 });

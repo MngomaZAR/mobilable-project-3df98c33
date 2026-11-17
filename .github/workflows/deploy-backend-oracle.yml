@@ -76,7 +76,8 @@ jobs:
           trap 'rm -f "$key" "$hosts"' EXIT
           printf '%s\n' "$ORACLE_SSH_PRIVATE_KEY" > "$key"
           printf '%s\n' "$ORACLE_KNOWN_HOSTS" > "$hosts"
-          target="$ORACLE_SSH_USER@129.151.188.15"
+          target="$ORACLE_SSH_USER@${{ secrets.ORACLE_DEPLOY_HOST }}"
+          test -n "${{ secrets.ORACLE_DEPLOY_HOST }}" || { echo 'ORACLE_DEPLOY_HOST is required'; exit 1; }
           options=(-i "$key" -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$hosts" -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=4)
           stage="/tmp/papzii-candidate-$REVISION-$GITHUB_RUN_ID"
           ssh "${options[@]}" "$target" "sudo -n install -d -m 700 -o '$ORACLE_SSH_USER' '$stage'"
@@ -86,7 +87,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          base='https://papzii-api.129.151.188.15.nip.io'
+          base='${{ secrets.ORACLE_API_BASE_URL }}'
+          test -n "$base" || { echo 'ORACLE_API_BASE_URL is required'; exit 1; }
           curl -fsS --connect-timeout 10 --max-time 30 "$base/version" | jq -e --arg sha "$REVISION" '.version == $sha'
           curl -fsS --connect-timeout 10 --max-time 30 "$base/health" | jq -e '.status == "ok"'
           echo "Backend promoted to $REVISION. Mobile and paid-service acceptance remain separate." >> "$GITHUB_STEP_SUMMARY"

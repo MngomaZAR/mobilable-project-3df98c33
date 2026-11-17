@@ -1,0 +1,121 @@
+# Constrained QA profile for the 1 GB Oracle Always Free E2 Micro.
+# It intentionally runs only the API, Postgres and MinIO. Enable the worker,
+# NATS, Typesense and self-hosted routing on a larger A1 host, not here.
+x-operational-environment: &operational-environment
+  APP_ENV: qa
+  APP_VERSION: ${APP_VERSION:?Set the verified source revision}
+  API_PUBLIC_URL: ${API_PUBLIC_URL:?Set the public HTTPS API URL}
+  CORS_ORIGINS: ${CORS_ORIGINS:?Set explicit HTTPS origins}
+  ALLOW_RUNTIME_SCHEMA_CHANGES: "false"
+  ADMIN_USER_IDS: ${ADMIN_USER_IDS:-}
+  COMMISSION_RATE: ${COMMISSION_RATE:-0.30}
+  FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-127.0.0.1}
+  DATABASE_URL: postgresql://${POSTGRES_USER:-papzii}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-papzii}
+  MINIO_ENDPOINT: http://minio:9000
+  MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:?Set MINIO_ACCESS_KEY}
+  MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:?Set MINIO_SECRET_KEY}
+  MINIO_BUCKET_MEDIA: ${MINIO_BUCKET_MEDIA:-papzi-media}
+  OSRM_BASE_URL: ${OSRM_BASE_URL:-}
+  PAYFAST_SANDBOX: "true"
+  PAYFAST_CHECKOUT_ENABLED: ${PAYFAST_CHECKOUT_ENABLED:-false}
+  PAYFAST_REFUNDS_ENABLED: ${PAYFAST_REFUNDS_ENABLED:-false}
+  FINANCIAL_REFUND_ACCEPTANCE_ID: ${FINANCIAL_REFUND_ACCEPTANCE_ID:-}
+  STITCH_PAYOUTS_ENABLED: "false"
+  LIVEKIT_ENABLED: ${LIVEKIT_ENABLED:-false}
+  INSTANT_DISPATCH_ENABLED: "false"
+  SMTP_HOST: ${SMTP_HOST:-}
+  SMTP_PORT: ${SMTP_PORT:-587}
+  SMTP_USER: ${SMTP_USER:-}
+  SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+  SMTP_FROM: ${SMTP_FROM:-}
+  SMTP_SSL: ${SMTP_SSL:-false}
+  RECOVERY_ENCRYPTION_KEY: ${RECOVERY_ENCRYPTION_KEY:-}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    mem_limit: 320m
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-papzii}
+      POSTGRES_USER: ${POSTGRES_USER:-papzii}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    volumes:
+      - papzii-qa-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-papzii} -d ${POSTGRES_DB:-papzii}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    image: ${PAPZI_API_IMAGE:?Set the tested GHCR API image digest}
+    restart: "no"
+    mem_limit: 192m
+    command: ["python", "-m", "app.migrate"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-papzii}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-papzii}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    image: ${PAPZI_API_IMAGE:?Set the tested GHCR API image digest}
+    restart: unless-stopped
+    mem_limit: 320m
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+    environment:
+      <<: *operational-environment
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      minio:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${API_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5).read()\""]
+      interval: 20s
+      timeout: 8s
+      retries: 5
+      start_period: 30s
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    mem_limit: 64m
+    environment:
+      ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL}
+      API_PUBLIC_HOST: ${API_PUBLIC_HOST:?Set API_PUBLIC_HOST}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./oracle-always-free-qa.Caddyfile:/etc/caddy/Caddyfile:ro
+      - papzii-qa-caddy-data:/data
+      - papzii-qa-caddy-config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+
+  minio:
+    image: quay.io/minio/minio:latest
+    restart: unless-stopped
+    mem_limit: 180m
+    command: ["server", "/data"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:?Set MINIO_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:?Set MINIO_SECRET_KEY}
+    volumes:
+      - papzii-qa-minio:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 20s
+      timeout: 8s
+      retries: 5
+
+volumes:
+  papzii-qa-postgres:
+  papzii-qa-minio:
+  papzii-qa-caddy-data:
+  papzii-qa-caddy-config:

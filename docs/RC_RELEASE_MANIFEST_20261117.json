@@ -1,0 +1,31 @@
+{
+  "project": "Papzii",
+  "purpose": "Verified release-candidate audit",
+  "branch": "codex/rc-gates-20261117",
+  "base_pr": 32,
+  "base_commit": "621e8111650980a99b3088fe0a59a326392bc0a0",
+  "audit_date": "2026-11-17",
+  "environment": "Oracle Always Free QA candidate",
+  "candidate_api_url": "https://papzii-qa.84.12.74.134.nip.io",
+  "commit_sha_policy": "The deployed backend must expose the immutable commit SHA at /health before G1 begins.",
+  "gates": {
+    "G0_runtime": "FAILED",
+    "G1_identity_access": "NOT_TESTED",
+    "G2_booking": "NOT_TESTED",
+    "G3_payments": "NOT_TESTED",
+    "G4_refunds_settlement": "NOT_TESTED",
+    "G5_dispatch_video": "NOT_TESTED",
+    "G6_kyc_safety": "NOT_TESTED",
+    "G7_mobile": "NOT_TESTED",
+    "G8_operations": "NOT_TESTED"
+  },
+  "evidence": {
+    "dns": "papzii-qa.84.12.74.134.nip.io resolved to 84.12.74.134",
+    "tcp": "84.12.74.134:22 accepted TCP; ports 80, 443 and 8000 did not",
+    "ssh": "Connection timed out during banner exchange",
+    "health": "No HTTP response received from the candidate URL"
+  },
+  "release_decision": "DO_NOT_RELEASE",
+  "store_submission": "NOT_ATTEMPTED",
+  "live_money": "NOT_ATTEMPTED"
+}

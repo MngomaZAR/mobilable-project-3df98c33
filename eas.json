@@ -13,7 +13,6 @@
       "channel": "preview",
       "env": {
         "EAS_BUILD_NO_EXPO_GO_WARNING": "true",
-        "EXPO_PUBLIC_API_BASE_URL": "https://papzii-qa.129.151.188.15.nip.io",
         "EXPO_PUBLIC_BACKEND_PROVIDER": "api",
         "EXPO_PUBLIC_STORE_TARGET": "internal",
         "EXPO_PUBLIC_DIGITAL_BILLING_PROVIDER": "external",
@@ -27,7 +26,6 @@
         "EAS_BUILD_NO_EXPO_GO_WARNING": "true",
         "EXPO_IOS_BUNDLE_IDENTIFIER": "com.papzi.app",
         "EXPO_ANDROID_PACKAGE": "com.papziiii.paparazzi",
-        "EXPO_PUBLIC_API_BASE_URL": "https://papzii-api.129.151.188.15.nip.io",
         "EXPO_PUBLIC_ROUTING_PROVIDER": "osrm",
         "EXPO_PUBLIC_BACKEND_PROVIDER": "api",
         "EXPO_PUBLIC_STORE_TARGET": "both",
@@ -66,7 +64,6 @@
       "channel": "internal-qa",
       "env": {
         "EXPO_PUBLIC_APP_ENV": "qa",
-        "EXPO_PUBLIC_API_BASE_URL": "https://papzii-qa.129.151.188.15.nip.io",
         "EXPO_PUBLIC_STORE_TARGET": "internal",
         "EXPO_PUBLIC_RESTRICTED_BETA": "true",
         "EXPO_PUBLIC_BACKEND_PROVIDER": "api",
@@ -81,7 +78,6 @@
       "channel": "beta-testing",
       "env": {
         "EXPO_PUBLIC_APP_ENV": "qa",
-        "EXPO_PUBLIC_API_BASE_URL": "https://papzii-qa.129.151.188.15.nip.io",
         "EXPO_PUBLIC_STORE_TARGET": "internal",
         "EXPO_PUBLIC_RESTRICTED_BETA": "true",
         "EXPO_PUBLIC_BACKEND_PROVIDER": "api",

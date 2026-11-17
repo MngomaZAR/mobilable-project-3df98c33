@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-      EXPO_PUBLIC_API_BASE_URL: https://papzii-qa.129.151.188.15.nip.io
+      EXPO_PUBLIC_API_BASE_URL: ${{ vars.PAPZII_QA_API_URL }}
       EXPO_PUBLIC_BACKEND_PROVIDER: api
       EXPO_PUBLIC_APP_ENV: qa
       EXPO_PUBLIC_STORE_TARGET: internal
@@ -28,8 +28,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Validate required secret
-        run: test -n "$EXPO_TOKEN" || (echo "Missing EXPO_TOKEN" && exit 1)
+      - name: Validate release inputs
+        run: |
+          test -n "$EXPO_TOKEN" || (echo "Missing EXPO_TOKEN" && exit 1)
+          [[ "$EXPO_PUBLIC_API_BASE_URL" =~ ^https://papzii-qa\. ]] || (echo "PAPZII_QA_API_URL must be a hosted QA HTTPS URL" && exit 1)
 
       - uses: actions/setup-node@v4
         with:

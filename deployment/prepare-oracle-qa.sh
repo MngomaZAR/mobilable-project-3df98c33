@@ -7,7 +7,7 @@ test -d "$root/backend/api" || { echo 'Candidate source directory is missing'; e
 test "$(curl -fsS -H 'Authorization: Bearer Oracle' http://169.254.169.254/opc/v2/instance/ | python3 -c 'import sys,json; print(json.load(sys.stdin)["compartmentId"])')" = 'ocid1.tenancy.oc1..aaaaaaaabs56xuwbrgbc6almcvkshzkmb4arpw5rytwglbumfobw3bjsbuba'
 
 docker inspect papzii-api | python3 -c '
-import json,sys
+import json,os,sys
 from urllib.parse import urlsplit,urlunsplit
 env=dict(item.split("=",1) for item in json.load(sys.stdin)[0]["Config"]["Env"] if "=" in item)
 url=urlsplit(env["DATABASE_URL"])
@@ -16,7 +16,10 @@ env["NEON_DATABASE_URL"]=""
 env["APP_ENV"]="qa"
 env["ALLOW_RUNTIME_SCHEMA_CHANGES"]="false"
 env["ADMIN_USER_IDS"]="qa-admin-20261003"
-env["API_PUBLIC_URL"]="https://papzii-qa.129.151.188.15.nip.io"
+qa_host = os.environ.get("QA_PUBLIC_HOST", "papzii-qa.84.12.74.134.nip.io")
+if not qa_host or "." not in qa_host:
+    raise ValueError("QA_PUBLIC_HOST must be a real public hostname")
+env["API_PUBLIC_URL"]="https://" + qa_host
 for key in ("PAYFAST_MERCHANT_ID","PAYFAST_MERCHANT_KEY","PAYFAST_PASSPHRASE","EXPO_ACCESS_TOKEN",
             "SMTP_HOST","SMTP_USER","SMTP_PASSWORD","SMTP_FROM","RECOVERY_ENCRYPTION_KEY",
             "LIVEKIT_URL","LIVEKIT_API_KEY","LIVEKIT_API_SECRET"):

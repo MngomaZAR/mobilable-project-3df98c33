@@ -2,7 +2,7 @@
 set -euo pipefail
 umask 077
 root=/opt/papzii-qa-20261003
-qa_host=papzii-qa.129.151.188.15.nip.io
+qa_host="${QA_PUBLIC_HOST:-papzii-qa.84.12.74.134.nip.io}"
 qa_url="https://${qa_host}"
 api_image=papzii-api:launch-candidate
 worker_image=papzii-worker:launch-candidate

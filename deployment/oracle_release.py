@@ -149,7 +149,8 @@ def rehearse(args):
     if "http://papzii-api:8000" not in route:
         raise ValueError("Public HTTPS route is not bound to the stable API container name")
     public_url = env["API_PUBLIC_URL"]
-    if urlsplit(public_url).scheme != "https" or urlsplit(public_url).hostname != "papzii-api.129.151.188.15.nip.io":
+    public_host = urlsplit(public_url).hostname or ""
+    if urlsplit(public_url).scheme != "https" or not public_host.startswith("papzii-api.") or not public_host.endswith(".nip.io"):
         raise ValueError("Unexpected public API destination")
     for image, service in ((args.api_image, "api"), (args.worker_image, "worker")):
         command(["docker", "pull", image])

@@ -22,6 +22,20 @@ ACCESS_TOKEN_TTL = timedelta(hours=12)
 REFRESH_TOKEN_TTL = timedelta(days=30)
 
 
+def _account_service_error(error: asyncpg.PostgresError) -> HTTPException:
+    """Return a stable client error when the auth database is unavailable or stale."""
+    schema_errors = (
+        asyncpg.exceptions.UndefinedColumnError,
+        asyncpg.exceptions.UndefinedTableError,
+        asyncpg.exceptions.UndefinedObjectError,
+    )
+    if isinstance(error, schema_errors):
+        detail = "Account service is not ready. Apply the backend database migrations and retry."
+    else:
+        detail = "Account service is temporarily unavailable. Please retry shortly."
+    return HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=detail)
+
+
 def _now() -> datetime:
     return datetime.now(UTC)
 
@@ -162,6 +176,8 @@ async def create_session(settings: Settings, user: asyncpg.Record | dict[str, An
                 token_digest(access_token), token_digest(refresh_token), user_id,
                 expires_at, refresh_expires_at,
             )
+    except asyncpg.PostgresError as error:
+        raise _account_service_error(error) from error
     finally:
         await conn.close()
     return {
@@ -213,6 +229,8 @@ async def local_sign_up(settings: Settings, payload: dict[str, Any]) -> dict[str
                 )
     except asyncpg.UniqueViolationError as error:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email is already registered.") from error
+    except asyncpg.PostgresError as error:
+        raise _account_service_error(error) from error
     finally:
         await conn.close()
     session = await create_session(settings, user)
@@ -230,6 +248,8 @@ async def local_sign_in(settings: Settings, payload: dict[str, Any]) -> dict[str
             "SELECT id, email, password_hash, metadata, created_at FROM api_users WHERE email = $1",
             email,
         )
+    except asyncpg.PostgresError as error:
+        raise _account_service_error(error) from error
     finally:
         await conn.close()
     stored = user["password_hash"] if user else f"pbkdf2_sha256${HASH_ITERATIONS}$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"

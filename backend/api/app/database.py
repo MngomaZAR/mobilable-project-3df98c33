@@ -617,7 +617,19 @@ async def execute_rpc(settings: Settings, name: str, params: dict[str, Any]) -> 
 
 
 async def schema_contract_status(settings: Settings, required_columns: dict[str, list[str]]) -> dict[str, Any]:
-    conn = await connect(settings)
+    try:
+        conn = await connect(settings)
+    except HTTPException:
+        raise
+    except asyncpg.PostgresError:
+        return {
+            "provider": "postgres",
+            "ok": False,
+            "error": "database_unavailable",
+            "missingTables": [],
+            "missingColumns": {},
+            "tables": {},
+        }
     try:
         table_names = list(required_columns.keys())
         table_rows = await conn.fetch(
@@ -668,6 +680,15 @@ async def schema_contract_status(settings: Settings, required_columns: dict[str,
             "missingTables": missing_tables,
             "missingColumns": missing_columns,
             "tables": table_status,
+        }
+    except asyncpg.PostgresError:
+        return {
+            "provider": "postgres",
+            "ok": False,
+            "error": "database_unavailable",
+            "missingTables": [],
+            "missingColumns": {},
+            "tables": {},
         }
     finally:
         await conn.close()

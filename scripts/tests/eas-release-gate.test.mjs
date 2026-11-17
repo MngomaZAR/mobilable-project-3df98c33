@@ -67,7 +67,7 @@ test('internal QA build targets the dedicated QA API and keeps purchases disable
   assert.equal(profile.extends, 'beta-testing');
   assert.equal(profile.environment, 'preview');
   assert.equal(profile.env.EXPO_PUBLIC_APP_ENV, 'qa');
-  assert.match(profile.env.EXPO_PUBLIC_API_BASE_URL, /^https:\/\/papzii-qa\./);
+  assert.equal(profile.env.EXPO_PUBLIC_API_BASE_URL, undefined);
   assert.equal(profile.env.EXPO_PUBLIC_STORE_TARGET, 'internal');
   assert.equal(profile.env.EXPO_PUBLIC_DISABLE_DIGITAL_PURCHASES, 'true');
   assert.equal(profile.env.EXPO_PUBLIC_DIGITAL_BILLING_PROVIDER, 'disabled');
@@ -75,7 +75,7 @@ test('internal QA build targets the dedicated QA API and keeps purchases disable
     ...beta,
     EAS_BUILD_PROFILE: 'internal-qa',
     EXPO_PUBLIC_APP_ENV: 'qa',
-    EXPO_PUBLIC_API_BASE_URL: profile.env.EXPO_PUBLIC_API_BASE_URL,
+    EXPO_PUBLIC_API_BASE_URL: 'https://papzii-qa.example.test',
   };
   assert.equal(isRestrictedTestingProfile(env), true);
   assert.doesNotThrow(() => assertRestrictedTestingConfig(env));
@@ -89,12 +89,12 @@ test('store-signed TestFlight QA profile targets the dedicated QA API', () => {
   assert.equal(profile.distribution, 'store');
   assert.equal(profile.environment, 'production');
   assert.equal(profile.env.EXPO_PUBLIC_APP_ENV, 'qa');
-  assert.match(profile.env.EXPO_PUBLIC_API_BASE_URL, /^https:\/\/papzii-qa\./);
+  assert.equal(profile.env.EXPO_PUBLIC_API_BASE_URL, undefined);
   const env = {
     ...beta,
     EAS_BUILD_PROFILE: 'testflight-qa',
     EXPO_PUBLIC_APP_ENV: 'qa',
-    EXPO_PUBLIC_API_BASE_URL: profile.env.EXPO_PUBLIC_API_BASE_URL,
+    EXPO_PUBLIC_API_BASE_URL: 'https://papzii-qa.example.test',
   };
   assert.equal(isRestrictedTestingProfile(env), true);
   assert.doesNotThrow(() => assertRestrictedTestingConfig(env));
@@ -104,6 +104,7 @@ test('manual QA build workflow runs the restricted-profile release gate', () => 
   const workflow = fs.readFileSync(new URL('../../.github/workflows/eas-build-internal-qa.yml', import.meta.url), 'utf8');
   assert.match(workflow, /EAS_BUILD_PROFILE:\s*internal-qa/);
   assert.match(workflow, /EXPO_PUBLIC_APP_ENV:\s*qa/);
+  assert.match(workflow, /PAPZII_QA_API_URL/);
   assert.match(workflow, /EXPO_PUBLIC_RESTRICTED_BETA:\s*"true"/);
   assert.match(workflow, /run:\s*node scripts\/eas-release-gate\.mjs/);
 });

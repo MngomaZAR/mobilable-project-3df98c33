@@ -1,14 +1,14 @@
 http:
   routers:
     papzii-qa-http:
-      rule: Host(`papzii-qa.129.151.188.15.nip.io`)
+      rule: Host(`papzii-qa.84.12.74.134.nip.io`)
       entryPoints:
         - web
       middlewares:
         - redirect-to-https
       service: papzii-qa-service
     papzii-qa-https:
-      rule: Host(`papzii-qa.129.151.188.15.nip.io`)
+      rule: Host(`papzii-qa.84.12.74.134.nip.io`)
       entryPoints:
         - websecure
       tls:

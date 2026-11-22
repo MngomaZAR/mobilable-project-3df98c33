@@ -31,6 +31,16 @@ const readResponseBody = async (response: Response) => {
   }
 };
 
+export const responseErrorMessage = (status: number, detail: unknown): string => {
+  if (status >= 500) {
+    return 'Service is temporarily unavailable. Please try again.';
+  }
+  if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail)) return detail.map(item => item?.msg ?? 'Invalid request').join('; ');
+  if (detail && typeof detail === 'object' && 'message' in detail) return String(detail.message);
+  return `Request failed (${status})`;
+};
+
 export const hasApiBackend = Boolean(apiBaseUrl);
 
 export const apiRequest = async <T>(path: string, options: ApiRequestOptions = {}): Promise<T> => {
@@ -61,10 +71,7 @@ export const apiRequest = async <T>(path: string, options: ApiRequestOptions = {
     const body = await readResponseBody(response);
     if (!response.ok) {
       const detail = body && typeof body === 'object' && 'detail' in body ? (body as { detail?: unknown }).detail : null;
-      const message = typeof detail === 'string' ? detail
-        : Array.isArray(detail) ? detail.map(item => item?.msg ?? 'Invalid request').join('; ')
-        : detail && typeof detail === 'object' && 'message' in detail ? String(detail.message)
-        : `Request failed (${response.status})`;
+      const message = responseErrorMessage(response.status, detail);
       throw new ApiClientError(message, response.status, body);
     }
     return body as T;

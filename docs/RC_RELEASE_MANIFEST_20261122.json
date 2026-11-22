@@ -1,0 +1,45 @@
+{
+  "project": "Papzii",
+  "purpose": "Sequential release-candidate hardening",
+  "branch": "codex/rc-hardening-20261122",
+  "base_branch": "codex/rc-gates-20261117",
+  "environment": "Supabase security containment plus Oracle RC runtime gate",
+  "commit_sha_policy": "Use the immutable commit produced by this branch after CI passes.",
+  "gates": {
+    "security_rpc_containment": "VERIFIED",
+    "function_search_paths": "VERIFIED",
+    "payment_completion_guard": "VERIFIED",
+    "payment_integrity": "BLOCKED",
+    "g0_runtime": "FAILED",
+    "g1_identity_access": "NOT_TESTED",
+    "g2_booking": "NOT_TESTED",
+    "g3_payments": "NOT_TESTED",
+    "g4_refunds_settlement": "NOT_TESTED",
+    "g5_dispatch_video": "NOT_TESTED",
+    "g6_kyc_safety": "NOT_TESTED",
+    "g7_mobile": "NOT_TESTED",
+    "g8_operations": "NOT_TESTED"
+  },
+  "supabase_project": "mizdvqhvspkjayffaqqd",
+  "dependency_failure_response": {
+    "status": "VERIFIED",
+    "evidence": "FastAPI asyncpg boundary and mobile 5xx mapping; backend focused suite 18 passed"
+  },
+  "backend_pr_ci": {
+    "status": "VERIFIED",
+    "evidence": "PR run 45073572845 passed the isolated PostgreSQL protocol suite; CI run 45073572772 passed frontend and deployment-safety jobs"
+  },
+  "runtime_recheck": {
+    "qa_health": "TIMEOUT",
+    "legacy_health": "TIMEOUT",
+    "public_domain_health": "WEB_SHELL_NOT_API_JSON",
+    "ssh": {
+      "129.151.188.15": "TIMEOUT",
+      "84.12.74.134": "RESCUE_VM_REACHABLE_NO_PAPZII_SERVICE"
+    },
+    "local_oci_profile": "DIFFERENT_TENANCY_NOT_AUTHORIZED_FOR_TARGET_OCIDS"
+  },
+  "release_decision": "DO_NOT_RELEASE",
+  "store_submission": "NOT_ATTEMPTED",
+  "live_money": "NOT_ATTEMPTED"
+}

@@ -90,5 +90,5 @@ jobs:
           base='${{ secrets.ORACLE_API_BASE_URL }}'
           test -n "$base" || { echo 'ORACLE_API_BASE_URL is required'; exit 1; }
           curl -fsS --connect-timeout 10 --max-time 30 "$base/version" | jq -e --arg sha "$REVISION" '.version == $sha'
-          curl -fsS --connect-timeout 10 --max-time 30 "$base/health" | jq -e '.status == "ok"'
+          curl -fsS --connect-timeout 10 --max-time 30 "$base/health" | jq -e --arg sha "$REVISION" '.status == "ok" and .commit_sha == $sha'
           echo "Backend promoted to $REVISION. Mobile and paid-service acceptance remain separate." >> "$GITHUB_STEP_SUMMARY"

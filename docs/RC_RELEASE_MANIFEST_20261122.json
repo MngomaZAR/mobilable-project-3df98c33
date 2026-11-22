@@ -32,7 +32,12 @@
   "runtime_recheck": {
     "qa_health": "TIMEOUT",
     "legacy_health": "TIMEOUT",
-    "public_domain_health": "WEB_SHELL_NOT_API_JSON"
+    "public_domain_health": "WEB_SHELL_NOT_API_JSON",
+    "ssh": {
+      "129.151.188.15": "TIMEOUT",
+      "84.12.74.134": "RESCUE_VM_REACHABLE_NO_PAPZII_SERVICE"
+    },
+    "local_oci_profile": "DIFFERENT_TENANCY_NOT_AUTHORIZED_FOR_TARGET_OCIDS"
   },
   "release_decision": "DO_NOT_RELEASE",
   "store_submission": "NOT_ATTEMPTED",

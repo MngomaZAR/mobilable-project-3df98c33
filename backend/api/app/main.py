@@ -124,6 +124,7 @@ class HealthResponse(BaseModel):
     status: str
     service: str
     environment: str
+    commit_sha: str
 
 
 class VersionResponse(BaseModel):
@@ -213,7 +214,12 @@ def raise_upstream_unreachable(provider: str, url: str, error: httpx.RequestErro
 
 @app.get("/health", response_model=HealthResponse, tags=["system"])
 async def health(settings: Annotated[Settings, Depends(get_settings)]) -> HealthResponse:
-    return HealthResponse(status="ok", service=settings.app_name, environment=settings.app_env)
+    return HealthResponse(
+        status="ok",
+        service=settings.app_name,
+        environment=settings.app_env,
+        commit_sha=settings.app_version,
+    )
 
 
 @app.get("/version", response_model=VersionResponse, tags=["system"])

@@ -8,6 +8,7 @@
   "gates": {
     "security_rpc_containment": "VERIFIED",
     "function_search_paths": "VERIFIED",
+    "payment_completion_guard": "VERIFIED",
     "payment_integrity": "BLOCKED",
     "g0_runtime": "FAILED",
     "g1_identity_access": "NOT_TESTED",

@@ -1,10 +1,13 @@
 import asyncio
 import json
+import logging
 from pathlib import Path
 from contextlib import asynccontextmanager
 from typing import Annotated, Any, NoReturn
 from urllib.parse import urlencode
+from uuid import uuid4
 
+import asyncpg
 import httpx
 from fastapi import Body, Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -52,6 +55,9 @@ from .contracts import router as contracts_router
 from .admin_moderation import router as admin_moderation_router, handle_content_review
 from .financial_operations import create_financial_router
 from .video_calls import handle_video_webhook
+
+
+logger = logging.getLogger("papzi.api")
 
 
 REQUIRED_SCHEMA_COLUMNS = {
@@ -177,6 +183,43 @@ async def financial_user(request: Request, settings: Annotated[Settings, Depends
 
 
 app.include_router(create_financial_router(get_settings, financial_user))
+
+
+def request_id_for(request: Request) -> str:
+    supplied = request.headers.get("x-request-id", "").strip()
+    if supplied and len(supplied) <= 80 and all(char.isalnum() or char in "._-" for char in supplied):
+        return supplied
+    return uuid4().hex
+
+
+@app.middleware("http")
+async def request_id_middleware(request: Request, call_next):
+    request_id = request_id_for(request)
+    request.state.request_id = request_id
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = request_id
+    return response
+
+
+@app.exception_handler(asyncpg.PostgresError)
+async def handle_database_error(request: Request, error: asyncpg.PostgresError):
+    request_id = getattr(request.state, "request_id", uuid4().hex)
+    logger.error(
+        "database dependency failure request_id=%s method=%s path=%s error=%s",
+        request_id,
+        request.method,
+        request.url.path,
+        type(error).__name__,
+        exc_info=(type(error), error, error.__traceback__),
+    )
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={
+            "detail": "Service temporarily unavailable. Please try again.",
+            "request_id": request_id,
+        },
+        headers={"X-Request-ID": request_id, "Retry-After": "5"},
+    )
 
 
 @app.middleware('http')

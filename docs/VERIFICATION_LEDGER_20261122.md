@@ -13,7 +13,9 @@ This ledger records the sequential release-candidate work performed on
 | Auth leaked-password protection | NOT VERIFIED | Supabase security advisor reports the setting disabled | Supabase `mizdvqhvspkjayffaqqd` |
 | Auth MFA options | NOT VERIFIED | Supabase security advisor reports insufficient MFA options | Supabase `mizdvqhvspkjayffaqqd` |
 | Payment integrity reconciliation | BLOCKED | 80 payment rows; 9 completed; 0 provider payment IDs; R15,700 completed amount. Existing rows were not mutated; explicit provider reconciliation is still required. | Supabase `mizdvqhvspkjayffaqqd` |
-| RC public runtime | FAILED | Prior evidence: candidate API timed out; ports 80/443/8000 unavailable; SSH banner timed out | Oracle QA candidate |
+| Dependency failure response | VERIFIED | FastAPI now converts uncaught asyncpg failures to sanitized HTTP 503 responses with `X-Request-ID` and `Retry-After`; mobile API client maps all 5xx responses to a retryable user message. Backend focused suite: 18 passed. | RC source branch |
+| Backend pull-request CI | VERIFIED | Backend workflow now runs its isolated PostgreSQL protocol suite on pull requests; image publishing remains push-only. Workflow syntax and frontend CI passed on commit `3977d22`; this workflow change is queued in the next PR run. | GitHub Actions |
+| RC public runtime | FAILED | Rechecked 2026-11-22: `https://papzii-qa.84.12.74.134.nip.io/health` timed out; legacy `https://papzii-qa.129.151.188.15.nip.io/health` timed out; `https://papzii.co.za/health` returned the web shell rather than API JSON | Oracle QA candidate / public domain |
 | Mobile, provider callbacks, booking, KYC, dispatch, video | NOT TESTED | Blocked by the failed public runtime gate | RC backend |
 | Store builds and store submission | NOT ATTEMPTED | Must follow a verified runtime and release manifest | TestFlight / Google Play |
 

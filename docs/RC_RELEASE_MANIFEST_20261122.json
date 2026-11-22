@@ -21,6 +21,19 @@
     "g8_operations": "NOT_TESTED"
   },
   "supabase_project": "mizdvqhvspkjayffaqqd",
+  "dependency_failure_response": {
+    "status": "VERIFIED",
+    "evidence": "FastAPI asyncpg boundary and mobile 5xx mapping; backend focused suite 18 passed"
+  },
+  "backend_pr_ci": {
+    "status": "PENDING_RECHECK",
+    "evidence": "Backend workflow changed to run PostgreSQL protocol tests on pull requests; image publishing remains push-only"
+  },
+  "runtime_recheck": {
+    "qa_health": "TIMEOUT",
+    "legacy_health": "TIMEOUT",
+    "public_domain_health": "WEB_SHELL_NOT_API_JSON"
+  },
   "release_decision": "DO_NOT_RELEASE",
   "store_submission": "NOT_ATTEMPTED",
   "live_money": "NOT_ATTEMPTED"

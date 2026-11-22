@@ -8,6 +8,12 @@ on:
       - "scripts/ci-backend.sh"
       - "deployment/**"
       - ".github/workflows/build-backend-images.yml"
+  pull_request:
+    paths:
+      - "backend/**"
+      - "scripts/ci-backend.sh"
+      - "deployment/**"
+      - ".github/workflows/build-backend-images.yml"
   workflow_dispatch: {}
 
 permissions:
@@ -63,6 +69,7 @@ jobs:
             ${{ runner.temp }}/*report.json
             ${{ runner.temp }}/papzi-*.log
   build:
+    if: github.event_name != 'pull_request'
     needs: test
     runs-on: ubuntu-latest
     strategy:

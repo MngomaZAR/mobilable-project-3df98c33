@@ -26,8 +26,8 @@
     "evidence": "FastAPI asyncpg boundary and mobile 5xx mapping; backend focused suite 18 passed"
   },
   "backend_pr_ci": {
-    "status": "PENDING_RECHECK",
-    "evidence": "Backend workflow changed to run PostgreSQL protocol tests on pull requests; image publishing remains push-only"
+    "status": "VERIFIED",
+    "evidence": "PR run 45073572845 passed the isolated PostgreSQL protocol suite; CI run 45073572772 passed frontend and deployment-safety jobs"
   },
   "runtime_recheck": {
     "qa_health": "TIMEOUT",

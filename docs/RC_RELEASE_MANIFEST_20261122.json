@@ -1,0 +1,26 @@
+{
+  "project": "Papzii",
+  "purpose": "Sequential release-candidate hardening",
+  "branch": "codex/rc-hardening-20261122",
+  "base_branch": "codex/rc-gates-20261117",
+  "environment": "Supabase security containment plus Oracle RC runtime gate",
+  "commit_sha_policy": "Use the immutable commit produced by this branch after CI passes.",
+  "gates": {
+    "security_rpc_containment": "VERIFIED",
+    "function_search_paths": "VERIFIED",
+    "payment_integrity": "BLOCKED",
+    "g0_runtime": "FAILED",
+    "g1_identity_access": "NOT_TESTED",
+    "g2_booking": "NOT_TESTED",
+    "g3_payments": "NOT_TESTED",
+    "g4_refunds_settlement": "NOT_TESTED",
+    "g5_dispatch_video": "NOT_TESTED",
+    "g6_kyc_safety": "NOT_TESTED",
+    "g7_mobile": "NOT_TESTED",
+    "g8_operations": "NOT_TESTED"
+  },
+  "supabase_project": "mizdvqhvspkjayffaqqd",
+  "release_decision": "DO_NOT_RELEASE",
+  "store_submission": "NOT_ATTEMPTED",
+  "live_money": "NOT_ATTEMPTED"
+}
